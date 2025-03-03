@@ -7,9 +7,9 @@ from aiogram.fsm.state import StatesGroup, State
 import subprocess
 import sys
 import matplobblib
+import os
 
 from app import keyboards as kb
-
 
 async def update_library(library_name):
     try:
@@ -89,7 +89,12 @@ async def ask(message: Message, state: FSMContext):
 ##################################################################################################
 # UPDATE
 ##################################################################################################
+ADMIN_USER_ID = int(os.getenv('ADMIN_USER_ID'))
+
 @router.message(Command('update'))
 async def update(message: Message):
-    await update_library('matplobblib')
-    await message.reply(f'Библиотека успешно обновлена!', reply_markup=kb.help)
+    if message.from_user.id != ADMIN_USER_ID:
+        await message.reply("У вас нет прав на использование этой команды.", reply_markup=kb.help)
+    else:
+        await update_library('matplobblib')
+        await message.reply('Библиотека успешно обновлена!', reply_markup=kb.help)

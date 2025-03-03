@@ -1,7 +1,7 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
 import matplobblib
 
-commands = ['/start','/ask','/update']
+commands = ['/start','/ask']
 
 help = ReplyKeyboardMarkup(
     keyboard=[[KeyboardButton(text=i)] for i in commands],
