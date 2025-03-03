@@ -92,4 +92,4 @@ async def ask(message: Message, state: FSMContext):
 @router.message(Command('update'))
 async def update(message: Message):
     await update_library('matplobblib')
-    await message.reply(f'Библиотека успешно обновлена!')
+    await message.reply(f'Библиотека успешно обновлена!', reply_markup=kb.help)
