@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from flask import Flask
 from aiogram import Bot, Dispatcher, BaseMiddleware
 from aiogram.types import Update
+import time
+import requests
 
 from app.handlers import router
 
@@ -29,6 +31,8 @@ class UserLoggingMiddleware(BaseMiddleware):
 
 
 PORT = int(os.getenv("PORT", 5000))
+# URL для keep-alive пинга, можно указать публичный URL вашего сервиса
+KEEP_ALIVE_URL = os.getenv("KEEP_ALIVE_URL", f"http://localhost:{PORT}")
 
 # Создаем Flask-приложение
 fl = Flask(__name__)
@@ -36,6 +40,18 @@ fl = Flask(__name__)
 @fl.route('/')
 def index():
     return "Hello, Render.com!"
+
+# Функция, которая периодически отправляет GET-запросы на указанный URL
+def keep_alive():
+    while True:
+        try:
+            response = requests.get(KEEP_ALIVE_URL)
+            logging.info(f"Keep-alive ping sent. Status: {response.status_code}")
+        except Exception as e:
+            logging.error(f"Keep-alive ping failed: {e}")
+        # Пингуем каждые 4 минуты (240 секунд)
+        time.sleep(240)
+
 
 # Асинхронная функция для запуска бота
 async def main():
@@ -53,6 +69,10 @@ if __name__ == '__main__':
     # Запускаем Flask в отдельном потоке
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
+    
+    # Запускаем keep-alive пинги в отдельном потоке
+    keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
+    keep_alive_thread.start()
     
     try:
         # Запускаем асинхронного бота в основном потоке
