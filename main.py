@@ -1,5 +1,7 @@
 import asyncio
 import logging
+from dotenv import load_dotenv
+import os
 
 from aiogram import Bot, Dispatcher, F
 
@@ -8,8 +10,10 @@ from app.handlers import router
 # from app.database.models import async_main
 
 logging.basicConfig(level=logging.INFO)
+load_dotenv()
 
-BOT_TOKEN = '7916061881:AAG0k6Tsy4krx9hMNjwhofCrF8g2N7nZQ8Q'
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+
 
 
 async def main():
