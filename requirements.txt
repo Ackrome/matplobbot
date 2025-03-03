@@ -1,3 +1,4 @@
+Requests==2.32.3
 aiogram==3.18.0
 Flask==3.1.0
 matplobblib==0.2.76
