@@ -1,11 +1,33 @@
 version: '3.8'
-
 services:
-  matplobbot:
+  telegram-bot:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: matplobbot
-    env_file:
-      - .env
-    restart: unless-stopped
+      dockerfile: Dockerfile.bot
+    container_name: telegram-bot
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN} 
+      - ADMIN_USER_ID=${ADMIN_USER_ID}
+    volumes:
+      - bot_db_data:/app/db_data  # Именованный volume для хранения БД
+      - bot_logs:/app/logs        # Именованный volume для логов бота
+
+  fastapi-stats:
+    build:
+      context: .
+      dockerfile: fastapi_stats_app/Dockerfile # Путь к Dockerfile для FastAPI приложения
+    container_name: fastapi-stats-app
+    ports:
+      - "9583:9583"
+    volumes:
+      - bot_db_data:/app/db_data  # Используем тот же volume, что и бот, для доступа к БД
+      - bot_logs:/app/logs        # Используем тот же volume для доступа к логам бота
+      - ./fastapi_stats_app:/app  # Опционально: для live reload во время разработки
+    environment:
+      # Здесь можно будет добавить переменные окружения для FastAPI, если понадобятся
+      WATCHFILES_FORCE_POLLING: "true" # Может помочь с live reload в Docker
+    depends_on:
+      - telegram-bot # FastAPI сервис запустится после бота (полезно, чтобы БД уже могла существовать)
+volumes:
+  bot_db_data:
+  bot_logs: # Добавляем именованный volume для логов

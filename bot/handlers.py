@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import F, Router
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
@@ -12,7 +14,7 @@ import pkg_resources
 
 # from main import logging
 
-from app import keyboards as kb
+import keyboards as kb
 
 async def update_library_async(library_name):
     try:
@@ -125,12 +127,12 @@ async def update(message: Message):
 
     status_msg = await message.answer("Начинаю обновление библиотеки `matplobblib`...")
     # Можно добавить 
-    await message.answer_chat_action("typing")
+    # await message.answer_chat_action("typing")
     success, status_message_text = await update_library_async('matplobblib')
     if success:
         # Перезагрузка модуля matplobblib, если это необходимо для немедленного применения изменений
         import importlib
         importlib.reload(matplobblib) # Может быть сложным и иметь побочные эффекты
-        await status_msg.edit_text(status_message_text, reply_markup=kb.help)
+        await status_msg.edit_text(status_message_text) # Убран reply_markup
     else:
-        await status_msg.edit_text(status_message_text, reply_markup=kb.help)
+        await status_msg.edit_text(status_message_text) # Убран reply_markup

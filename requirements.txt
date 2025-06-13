@@ -1,5 +1,7 @@
+# Aiogram для Telegram-бота
 Requests==2.32.3
 aiogram==3.18.0
 matplobblib==0.2.116
 python-dotenv==1.0.1
 dotenv==0.9.9
+aiosqlite
