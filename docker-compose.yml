@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  matplobbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: matplobbot
+    env_file:
+      - .env
+    restart: unless-stopped

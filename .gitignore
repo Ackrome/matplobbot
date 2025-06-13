@@ -1,2 +1,7 @@
 .env
-app/__pycache__
+**/__pycache__/
+idea.md
+venv/
+*.log
+.idea/
+# Добавьте .vscode/ если используете VSCode

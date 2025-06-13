@@ -4,23 +4,32 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
-import subprocess
+import asyncio
 import sys
 import matplobblib
 import os
+import pkg_resources
+
+# from main import logging
 
 from app import keyboards as kb
 
-async def update_library(library_name):
+async def update_library_async(library_name):
     try:
-        # Выполняем команду pip install --upgrade для обновления библиотеки
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", library_name])
-        print(f"Библиотека '{library_name}' успешно обновлена!")
-    except subprocess.CalledProcessError as e:
-        print(f"Ошибка при обновлении библиотеки '{library_name}': {e}")
+        process = await asyncio.create_subprocess_exec(
+        sys.executable, "-m", "pip", "install", "--upgrade", library_name,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE)
+        stdout, stderr = await process.communicate()
+        if process.returncode == 0:
+            print(f"Библиотека '{library_name}' успешно обновлена! {stdout.decode()}")
+            return True, f"Библиотека '{library_name}' успешно обновлена! Текущая версия: {pkg_resources.get_distribution('matplobblib').version}"
+        else:
+            print(f"Ошибка при обновлении библиотеки '{library_name}': {stderr.decode()}")
+            return False, f"Ошибка при обновлении библиотеки '{library_name}': {stderr.decode()}"
     except Exception as e:
         print(f"Произошла непредвиденная ошибка: {e}")
-
+        return False, f"Произошла непредвиденная ошибка: {e}"
 router = Router()
 
 
@@ -112,6 +121,16 @@ ADMIN_USER_ID = int(os.getenv('ADMIN_USER_ID'))
 async def update(message: Message):
     if message.from_user.id != ADMIN_USER_ID:
         await message.reply("У вас нет прав на использование этой команды.", reply_markup=kb.help)
+        return
+
+    status_msg = await message.answer("Начинаю обновление библиотеки `matplobblib`...")
+    # Можно добавить 
+    await message.answer_chat_action("typing")
+    success, status_message_text = await update_library_async('matplobblib')
+    if success:
+        # Перезагрузка модуля matplobblib, если это необходимо для немедленного применения изменений
+        import importlib
+        importlib.reload(matplobblib) # Может быть сложным и иметь побочные эффекты
+        await status_msg.edit_text(status_message_text, reply_markup=kb.help)
     else:
-        await update_library('matplobblib')
-        await message.reply('Библиотека успешно обновлена!', reply_markup=kb.help)
+        await status_msg.edit_text(status_message_text, reply_markup=kb.help)
