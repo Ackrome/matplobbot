@@ -22,7 +22,7 @@ services:
     volumes:
       - bot_db_data:/app/db_data  # Используем тот же volume, что и бот, для доступа к БД
       - bot_logs:/app/logs        # Используем тот же volume для доступа к логам бота
-      - ./fastapi_stats_app:/app  # Опционально: для live reload во время разработки
+      - ./fastapi_stats_app:/app_root/fastapi_stats_module  # Опционально: для live reload во время разработки
     environment:
       # Здесь можно будет добавить переменные окружения для FastAPI, если понадобятся
       WATCHFILES_FORCE_POLLING: "true" # Может помочь с live reload в Docker

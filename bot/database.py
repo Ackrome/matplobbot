@@ -1,6 +1,7 @@
 import aiosqlite
 import datetime
 import logging
+import json
 import os
 
 DB_DIR = "/app/db_data"  # Путь внутри контейнера, где будет храниться БД
@@ -24,9 +25,17 @@ async def init_db():
                 user_id INTEGER PRIMARY KEY,
                 username TEXT,
                 full_name TEXT NOT NULL,
-                avatar_pic_url TEXT
+                avatar_pic_url TEXT,
+                settings TEXT DEFAULT '{}' -- Новое поле для хранения настроек в JSON
             )
         ''')
+        # Проверяем, существует ли столбец 'settings' (для обновления существующих БД)
+        cursor = await db.execute("PRAGMA table_info(users);")
+        columns = await cursor.fetchall()
+        column_names = [col[1] for col in columns]
+        if 'settings' not in column_names:
+            await db.execute("ALTER TABLE users ADD COLUMN settings TEXT DEFAULT '{}';")
+            logger.info("Добавлен столбец 'settings' в таблицу 'users'.")
         await db.execute('''
             CREATE TABLE IF NOT EXISTS user_actions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,3 +72,28 @@ async def log_user_action(user_id: int, username: str | None, full_name: str, av
             await db.commit()
         except Exception as e:
             logger.error(f"Ошибка при записи действия пользователя в БД: {e}", exc_info=True)
+
+async def get_user_settings_db(user_id: int) -> dict:
+    """
+    Получает настройки пользователя из БД.
+    Возвращает пустой словарь, если пользователь не найден или настройки отсутствуют/некорректны.
+    """
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute("SELECT settings FROM users WHERE user_id = ?", (user_id,))
+        result = await cursor.fetchone()
+        if result and result[0]:
+            try:
+                return json.loads(result[0])
+            except json.JSONDecodeError:
+                logger.error(f"Ошибка декодирования JSON настроек для пользователя {user_id}: {result[0]}")
+                return {} # Возвращаем пустой словарь при ошибке декодирования
+        return {} # Возвращаем пустой словарь, если пользователь не найден или поле settings пустое
+
+async def update_user_settings_db(user_id: int, settings: dict):
+    """
+    Обновляет настройки пользователя в БД.
+    """
+    async with aiosqlite.connect(DB_NAME) as db:
+        settings_json = json.dumps(settings)
+        await db.execute("UPDATE users SET settings = ? WHERE user_id = ?", (settings_json, user_id))
+        await db.commit()

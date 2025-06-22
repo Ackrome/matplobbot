@@ -1,0 +1,1 @@
+# c:/Users/ivant/Desktop/proj/matplobbot/fastapi_stats_app/routers/__init__.py

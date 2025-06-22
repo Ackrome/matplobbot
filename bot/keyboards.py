@@ -4,7 +4,7 @@ import matplobblib
 
 logger = logging.getLogger(__name__)
 
-commands = ['/ask','/update']
+commands = ['/ask','/update','/settings','/help']
 
 logger.debug(f"Генерация клавиатуры 'help' с командами: {commands}")
 help = ReplyKeyboardMarkup(
