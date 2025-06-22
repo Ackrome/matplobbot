@@ -1,6 +1,7 @@
 import logging
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
@@ -58,12 +59,16 @@ async def get_user_settings(user_id: int) -> dict:
 async def comand_start(message: Message):
     await message.answer(
         f'Привет, {message.from_user.full_name}!',
-        reply_markup=kb.help
+        reply_markup=kb.get_main_reply_keyboard(message.from_user.id)
     )
     
 @router.message(Command('help'))
 async def comand_help(message: Message):
-    await message.answer('Вы просите помощи? Не нужно. ее не будет.')
+    await message.answer(
+        'Это бот для поиска примеров кода по библиотеке matplobblib.\n\n'
+        'Нажмите на кнопку, чтобы выполнить команду:',
+        reply_markup=kb.get_help_inline_keyboard(message.from_user.id)
+    )
 
 ##################################################################################################
 # ASK
@@ -77,13 +82,13 @@ class Search(StatesGroup):
 @router.message(Command('ask'))
 async def ask(message: Message, state: FSMContext):
     await state.set_state(Search.submodule)
-    await message.answer('Введите ваш вопрос', reply_markup=kb.submodules)
+    await message.answer('Введите ваш вопрос', reply_markup=kb.get_submodules_reply_keyboard(message.from_user.id))
 
 @router.message(Search.submodule)
 async def process_submodule(message: Message, state: FSMContext):
     # Проверяем, что введённый подмодуль является ожидаемым
     if message.text not in matplobblib.submodules:
-        await message.answer("Неверный выбор. Попробуйте еще раз.", reply_markup=kb.submodules)
+        await message.answer("Неверный выбор. Попробуйте еще раз.", reply_markup=kb.get_submodules_reply_keyboard(message.from_user.id))
         return
     await state.update_data(submodule=message.text)
     # Импортируем модуль для получения списка тем
@@ -95,7 +100,7 @@ async def process_submodule(message: Message, state: FSMContext):
     code_dictionary = getattr(module, dict_name)
     topics = list(code_dictionary.keys())
     await state.set_state(Search.topic)
-    await message.answer("Введите тему", reply_markup=kb.topics_dict[message.text][0])
+    await message.answer("Введите тему", reply_markup=kb.get_topics_reply_keyboard(message.from_user.id, message.text))
 
 @router.message(Search.topic)
 async def process_topic(message: Message, state: FSMContext):
@@ -109,11 +114,11 @@ async def process_topic(message: Message, state: FSMContext):
     topics = list(code_dictionary.keys())
     # Если тема не входит в ожидаемые, просим попробовать снова
     if message.text not in topics:
-        await message.answer("Неверный выбор. Попробуйте еще раз.", reply_markup=kb.topics_dict[submodule][0])
+        await message.answer("Неверный выбор. Попробуйте еще раз.", reply_markup=kb.get_topics_reply_keyboard(message.from_user.id, submodule))
         return
     await state.update_data(topic=message.text)
     await state.set_state(Search.code)
-    await message.answer("Выберите задачу", reply_markup=kb.topics_dict[submodule][1][message.text])
+    await message.answer("Выберите задачу", reply_markup=kb.get_codes_reply_keyboard(message.from_user.id, submodule, message.text))
 
 @router.message(Search.code)
 async def process_code(message: Message, state: FSMContext):
@@ -130,7 +135,7 @@ async def process_code(message: Message, state: FSMContext):
     possible_codes = list(code_dictionary[topic].keys())
     # Если выбранная задача не входит в ожидаемые, просим повторить выбор
     if message.text not in possible_codes:
-        await message.answer("Неверный выбор. Попробуйте еще раз.", reply_markup=kb.topics_dict[submodule][1][topic])
+        await message.answer("Неверный выбор. Попробуйте еще раз.", reply_markup=kb.get_codes_reply_keyboard(message.from_user.id, submodule, topic))
         return
     await state.update_data(code=message.text)
     data = await state.get_data()
@@ -139,13 +144,9 @@ async def process_code(message: Message, state: FSMContext):
     if len(repl) > 4096:
         await message.answer('Сообщение будет отправлено в нескольких частях')
         for x in range(0, len(repl), 4096):
-            await message.answer(f'''```python\n{repl[x:x+4096]}\n```''',
-                                 parse_mode='markdown',
-                                 reply_markup=kb.help)
+            await message.answer(f'''```python\n{repl[x:x+4096]}\n```''', parse_mode='markdown', reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
     else:
-        await message.answer(f'''```python\n{repl}\n```''',
-                             parse_mode='markdown',
-                             reply_markup=kb.help)
+        await message.answer(f'''```python\n{repl}\n```''', parse_mode='markdown', reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
     await state.clear()
 ##################################################################################################
 # UPDATE
@@ -155,7 +156,7 @@ ADMIN_USER_ID = int(os.getenv('ADMIN_USER_ID'))
 @router.message(Command('update'))
 async def update(message: Message):
     if message.from_user.id != ADMIN_USER_ID:
-        await message.reply("У вас нет прав на использование этой команды.", reply_markup=kb.help)
+        await message.reply("У вас нет прав на использование этой команды.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
         return
 
     status_msg = await message.answer("Начинаю обновление библиотеки `matplobblib`...")
@@ -210,3 +211,65 @@ async def cq_toggle_docstring(callback: CallbackQuery):
     keyboard = await get_settings_keyboard(user_id) # Теперь асинхронный вызов
     await callback.message.edit_reply_markup(reply_markup=keyboard.as_markup())
     await callback.answer("Настройка 'Показывать описание' обновлена.")
+
+##################################################################################################
+# HELP COMMAND CALLBACKS
+##################################################################################################
+
+@router.callback_query(F.data == "help_cmd_ask")
+async def cq_help_cmd_ask(callback: CallbackQuery, state: FSMContext):
+    """Handler for '/ask' button from help menu."""
+    await callback.answer()
+    # Повторяем логику команды /ask
+    await state.set_state(Search.submodule)
+    await callback.message.answer('Введите ваш вопрос', reply_markup=kb.get_submodules_reply_keyboard(callback.from_user.id))
+
+@router.callback_query(F.data == "help_cmd_settings")
+async def cq_help_cmd_settings(callback: CallbackQuery):
+    """Handler for '/settings' button from help menu."""
+    await callback.answer()
+    # Повторяем логику команды /settings
+    keyboard = await get_settings_keyboard(callback.from_user.id)
+    await callback.message.answer(
+        "⚙️ Настройки пользователя:",
+        reply_markup=keyboard.as_markup()
+    )
+
+@router.callback_query(F.data == "help_cmd_update")
+async def cq_help_cmd_update(callback: CallbackQuery):
+    """Handler for '/update' button from help menu."""
+    if callback.from_user.id != ADMIN_USER_ID:
+        await callback.answer("У вас нет прав на использование этой команды.", show_alert=True)
+        return
+
+    await callback.answer("Начинаю обновление...")
+    
+    # Повторяем логику команды /update
+    status_msg = await callback.message.answer("Начинаю обновление библиотеки `matplobblib`...")
+    success, status_message_text = await update_library_async('matplobblib')
+    if success:
+        import importlib
+        importlib.reload(matplobblib)
+        await status_msg.edit_text(status_message_text)
+    else:
+        await status_msg.edit_text(status_message_text)
+
+@router.callback_query(F.data == "help_cmd_help")
+async def cq_help_cmd_help(callback: CallbackQuery):
+    """Handler for '/help' button from help menu. Edits the message."""
+    try:
+        # Пытаемся отредактировать сообщение, чтобы обновить его до актуального состояния
+        await callback.message.edit_text(
+            'Это бот для поиска примеров кода по библиотеке matplobblib.\n\n'
+            'Нажмите на кнопку, чтобы выполнить команду:',
+            reply_markup=kb.get_help_inline_keyboard(callback.from_user.id)
+        )
+        await callback.answer()
+    except TelegramBadRequest as e:
+        # Если сообщение не изменилось, Telegram выдаст ошибку.
+        # Мы просто отвечаем на колбэк, чтобы убрать "часики" с кнопки.
+        if "message is not modified" in e.message:
+            await callback.answer("Вы уже в меню помощи.")
+        else:
+            # Перевыбрасываем другие, непредвиденные ошибки
+            raise

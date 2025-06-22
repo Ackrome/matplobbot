@@ -4,4 +4,3 @@ idea.md
 venv/
 *.log
 .idea/
-# Добавьте .vscode/ если используете VSCode

@@ -1,53 +1,119 @@
 import logging
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 import matplobblib
+import os # Import os to access environment variables like ADMIN_USER_ID
 
 logger = logging.getLogger(__name__)
 
-commands = ['/ask','/update','/settings','/help']
+# Define base commands that are always available
+BASE_COMMANDS = ['/ask', '/settings', '/help']
 
-logger.debug(f"Генерация клавиатуры 'help' с командами: {commands}")
-help = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text=i)] for i in commands],
-    resize_keyboard=True,
-    input_field_placeholder='Что выберем, хозяин?',
-    one_time_keyboard=True
-)
-logger.debug(f"Генерация клавиатуры 'submodules'. Базовые команды: {commands}, подмодули matplobblib: {matplobblib.submodules}")
-submodules = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text=i)] for i in matplobblib.submodules + commands],
-    resize_keyboard=True,
-    input_field_placeholder='Что выберем, хозяин?',
-    one_time_keyboard=True
-)
+# Pre-generate data structure for topics and codes, not actual ReplyKeyboards.
+# This structure will be used by functions to build keyboards dynamically.
+# topics_data = {submodule_name: {'topics': [list_of_topics], 'codes': {topic_name: [list_of_codes]}}}
+topics_data = dict()
 
-logger.info("Начало генерации клавиатур 'topics_dict'.")
-topics_dict = dict()
-for el in range(len(matplobblib.submodules)):
-    submodule_name = matplobblib.submodules[el]
-    logger.debug(f"Обработка подмодуля: {submodule_name} для topics_dict.")
+logger.info("Начало генерации данных для клавиатур тем и задач.")
+for submodule_name in matplobblib.submodules:
+    logger.debug(f"Обработка подмодуля: {submodule_name} для topics_data.")
     try:
         module = matplobblib._importlib.import_module(f'matplobblib.{submodule_name}')
-        module_topics = list(module.themes_list_dicts_full.keys())
+        # We need to get keys from themes_list_dicts_full for topics and codes
+        # regardless of show_docstring, as the keyboard structure should be consistent.
+        # The content (code with/without docstring) is handled in handlers.py.
+        module_full_dict = module.themes_list_dicts_full # Assuming this always exists and has all keys
+
+        module_topics = list(module_full_dict.keys())
         logger.debug(f"Темы для {submodule_name}: {module_topics}")
 
-        topics_keyboard = ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text=i)] for i in module_topics + commands],
-            resize_keyboard=True,
-            input_field_placeholder='Что выберем, хозяин?',
-            one_time_keyboard=True
-        )
-        sub_topics_keyboards = {
-            key: ReplyKeyboardMarkup(
-                keyboard=[[KeyboardButton(text=i)] for i in list(module.themes_list_dicts_full[key].keys()) + commands],
-                resize_keyboard=True,
-                input_field_placeholder='Что выберем, хозяин?',
-                one_time_keyboard=True
-            ) for key in module_topics
+        sub_topics_codes = {
+            topic_key: list(module_full_dict[topic_key].keys())
+            for topic_key in module_topics
         }
-        topics_dict[submodule_name] = [topics_keyboard, sub_topics_keyboards]
-        logger.debug(f"Успешно сгенерированы клавиатуры для подмодуля: {submodule_name}")
+        topics_data[submodule_name] = {
+            'topics': module_topics,
+            'codes': sub_topics_codes
+        }
+        logger.debug(f"Успешно сгенерированы данные для подмодуля: {submodule_name}")
     except Exception as e:
-        logger.error(f"Ошибка генерации клавиатур для подмодуля {submodule_name}: {e}", exc_info=True)
+        logger.error(f"Ошибка генерации данных для подмодуля {submodule_name}: {e}", exc_info=True)
 
-logger.info("Завершение генерации клавиатур 'topics_dict'.")
+logger.info("Завершение генерации данных для клавиатур тем и задач.")
+
+
+# Function to get the main ReplyKeyboardMarkup (used for /start, after /code)
+def get_main_reply_keyboard(user_id: int) -> ReplyKeyboardMarkup:
+    current_commands = list(BASE_COMMANDS)
+    admin_id = os.getenv('ADMIN_USER_ID')
+    if admin_id and user_id == int(admin_id):
+        current_commands.append('/update')
+
+    keyboard_buttons = [[KeyboardButton(text=cmd)] for cmd in current_commands]
+    return ReplyKeyboardMarkup(
+        keyboard=keyboard_buttons,
+        resize_keyboard=True,
+        input_field_placeholder='Что выберем, хозяин?',
+        one_time_keyboard=True
+    )
+
+# Function to get the submodules ReplyKeyboardMarkup
+def get_submodules_reply_keyboard(user_id: int) -> ReplyKeyboardMarkup:
+    current_commands = list(BASE_COMMANDS)
+    admin_id = os.getenv('ADMIN_USER_ID')
+    if admin_id and user_id == int(admin_id):
+        current_commands.append('/update')
+
+    keyboard_buttons = [[KeyboardButton(text=i)] for i in matplobblib.submodules + current_commands]
+    return ReplyKeyboardMarkup(
+        keyboard=keyboard_buttons,
+        resize_keyboard=True,
+        input_field_placeholder='Что выберем, хозяин?',
+        one_time_keyboard=True
+    )
+
+# Function to get the topics ReplyKeyboardMarkup for a specific submodule
+def get_topics_reply_keyboard(user_id: int, submodule_name: str) -> ReplyKeyboardMarkup:
+    current_commands = list(BASE_COMMANDS)
+    admin_id = os.getenv('ADMIN_USER_ID')
+    if admin_id and user_id == int(admin_id):
+        current_commands.append('/update')
+
+    topics = topics_data.get(submodule_name, {}).get('topics', [])
+    keyboard_buttons = [[KeyboardButton(text=i)] for i in topics + current_commands]
+    return ReplyKeyboardMarkup(
+        keyboard=keyboard_buttons,
+        resize_keyboard=True,
+        input_field_placeholder='Что выберем, хозяин?',
+        one_time_keyboard=True
+    )
+
+# Function to get the codes ReplyKeyboardMarkup for a specific submodule and topic
+def get_codes_reply_keyboard(user_id: int, submodule_name: str, topic_name: str) -> ReplyKeyboardMarkup:
+    current_commands = list(BASE_COMMANDS)
+    admin_id = os.getenv('ADMIN_USER_ID')
+    if admin_id and user_id == int(admin_id):
+        current_commands.append('/update')
+
+    codes = topics_data.get(submodule_name, {}).get('codes', {}).get(topic_name, [])
+    keyboard_buttons = [[KeyboardButton(text=i)] for i in codes + current_commands]
+    return ReplyKeyboardMarkup(
+        keyboard=keyboard_buttons,
+        resize_keyboard=True,
+        input_field_placeholder='Что выберем, хозяин?',
+        one_time_keyboard=True
+    )
+
+
+# Function to get the help InlineKeyboardMarkup
+def get_help_inline_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    inline_keyboard_rows = [
+        [InlineKeyboardButton(text="❓ /ask - Начать поиск", callback_data="help_cmd_ask")],
+        [InlineKeyboardButton(text="⚙️ /settings - Настройки", callback_data="help_cmd_settings")],
+        [InlineKeyboardButton(text="ℹ️ /help - Эта справка", callback_data="help_cmd_help")],
+    ]
+    admin_id = os.getenv('ADMIN_USER_ID')
+    if admin_id and user_id == int(admin_id):
+        # Insert the update button before the help button
+        inline_keyboard_rows.insert(2, [InlineKeyboardButton(text="🔄 /update - Обновить (admin)", callback_data="help_cmd_update")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard_rows)
