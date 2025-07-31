@@ -2,7 +2,7 @@ import logging
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, ReplyKeyboardRemove, FSInputFile
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -14,6 +14,12 @@ import sys
 import matplobblib
 import os
 import pkg_resources
+import io
+import contextlib
+import tempfile # Для создания временных директорий
+import shutil   # Для удаления временных директорий
+import glob # Для поиска файлов по шаблону
+import traceback
 
 # from main import logging
 
@@ -172,6 +178,222 @@ async def update(message: Message):
         await status_msg.edit_text(status_message_text) # Убран reply_markup
 
 ##################################################################################################
+# EXECUTE
+##################################################################################################
+class Execution(StatesGroup):
+    code = State()
+EXECUTE_HELP_TEXT = (
+    "Пожалуйста, отправьте код Python для выполнения. Если ваш код генерирует изображения (например, с помощью `matplotlib.pyplot.savefig`), они будут отправлены вам.\n\n"
+    "**Поддерживаемый вывод:**\n"
+    "1.  **Текстовый вывод** (stdout/stderr).\n"
+    "2.  **Изображения**, сохраненные в файл (png, jpg, jpeg, gif).\n"
+    "3.  **Форматированный текст** (Markdown/HTML).\n\n"
+    "**Пример с Matplotlib:**\n"
+    "```python\n"
+    "import matplotlib.pyplot as plt\n"
+    "plt.plot([1, 2, 3], [1, 4, 9])\n"
+    "plt.savefig('my_plot.png')\n"
+    "plt.close()\n"
+    "```\n\n"
+    "**Пример с форматированным текстом:**\n"
+    "Функции `display`, `Markdown`, `HTML` доступны без импорта.\n"
+    "```python\n"
+    "display(Markdown('# Заголовок 1\\n## Заголовок 2\\n*Курсив*'))\n"
+    "```"
+)
+
+@router.message(Command('execute'))
+async def execute_command(message: Message, state: FSMContext):
+    """Handles the /execute command"""#, admin-only."""
+    # if message.from_user.id != ADMIN_USER_ID:
+    #     await message.reply("У вас нет прав на использование этой команды.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
+    #     return
+
+    await state.set_state(Execution.code)
+    await message.answer(
+        EXECUTE_HELP_TEXT,
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode='markdown'
+    )
+
+@router.message(Execution.code)
+async def process_execution(message: Message, state: FSMContext):
+    """Executes the received Python code and sends back the output, including images and rich display objects."""
+    await state.clear()
+    code_to_execute = message.text
+    output_capture = io.StringIO()
+    execution_error = None
+    temp_dir = None
+    original_cwd = os.getcwd() # Сохраняем текущую рабочую директорию
+    rich_outputs = []
+
+    # 1. Подготовка изолированного окружения (globals) для выполнения кода
+    exec_globals = { 
+        "asyncio": asyncio,
+        "message": message,
+        "os": os,
+        "sys": sys,
+        "__builtins__": __builtins__,
+    }
+    def convert_html_to_telegram_html(html_content: str) -> str:
+        """Converts generic HTML to Telegram-supported HTML."""
+        # Headers to bold
+        for i in range(1, 7):
+            html_content = html_content.replace(f'<h{i}>', '<b>').replace(f'</h{i}>', '</b>')
+
+        # Paragraphs to newlines
+        html_content = html_content.replace('<p>', '').replace('</p>', '\n')
+
+        # Lists
+        html_content = html_content.replace('<ul>', '').replace('</ul>', '')
+        html_content = html_content.replace('<ol>', '').replace('</ol>', '')
+        html_content = html_content.replace('<li>', '• ').replace('</li>', '\n')
+
+        # Other replacements
+        html_content = html_content.replace('<em>', '<i>').replace('</em>', '</i>')
+        html_content = html_content.replace('<strong>', '<b>').replace('</strong>', '</b>')
+
+        # Clean up extra newlines and spaces
+        lines = [line.strip() for line in html_content.split('\n')]
+        return '\n'.join(filter(None, lines))
+
+    # 2. Попытка импорта "rich display" библиотек и внедрение кастомных функций
+    try:
+        from IPython.display import display as ipython_display, Markdown, HTML
+        import markdown
+
+        def custom_display(*objs, **kwargs):
+            """Перехватывает вызовы display, обрабатывает Markdown/HTML и делегирует остальное."""
+            for obj in objs:
+                if isinstance(obj, Markdown):
+                    html_content = markdown.markdown(obj.data, extensions=['fenced_code'])
+                    tg_html = convert_html_to_telegram_html(html_content)
+                    rich_outputs.append({'type': 'html', 'content': tg_html})
+                elif isinstance(obj, HTML):
+                    tg_html = convert_html_to_telegram_html(obj.data)
+                    rich_outputs.append({'type': 'html', 'content': tg_html})
+                else:
+                    # Для других объектов используем стандартный display,
+                    # который выведет их текстовое представление в stdout (который мы перехватываем)
+                    # For other objects, capture their string representation.
+                    # This avoids unexpected behavior from ipython_display outside an IPython kernel.
+                    output_capture.write(repr(obj) + '\n')
+
+        # Внедряем наши функции и классы в окружение для выполнения 
+        exec_globals['display'] = custom_display 
+        exec_globals['Markdown'] = Markdown
+        exec_globals['HTML'] = HTML
+
+    except ImportError:
+        logging.warning("IPython или markdown не установлены. Rich display отключен для /execute.")
+        pass
+
+    # 3. Выполнение кода пользователя в контролируемом окружении
+    try:
+        temp_dir = tempfile.mkdtemp()
+        os.chdir(temp_dir)
+
+        with contextlib.redirect_stdout(output_capture), contextlib.redirect_stderr(output_capture):
+            local_scope = {} # Словарь для получения результата exec (самой функции)
+            wrapped_code = f"async def __exec_code():\n"
+            wrapped_code += "".join([f"    {line}\n" for line in code_to_execute.splitlines()])
+            
+            exec(wrapped_code, exec_globals, local_scope)
+            await local_scope["__exec_code"]()
+            
+    except Exception:
+        execution_error = f"--- ОШИБКА ВЫПОЛНЕНИЯ ---\n{traceback.format_exc()}"
+    finally:
+        os.chdir(original_cwd)
+
+        # --- Отправка результатов ---
+        if execution_error:
+            await message.answer(f"```\n{execution_error}\n```", parse_mode='markdown')
+
+        # Отправляем rich-вывод (HTML)
+        for output in rich_outputs: 
+            content_to_send = output['content'] # This is the raw HTML or Markdown string
+            parse_mode = None # Default to no parse mode, will be set based on type
+
+            if output['type'] == 'markdown':
+                # Convert Markdown to HTML first
+                content_to_send = markdown.markdown(content_to_send, extensions=['fenced_code'])
+                # Then apply Telegram-specific HTML conversion for basic tags
+                content_to_send = convert_html_to_telegram_html(content_to_send)
+                parse_mode = 'HTML'
+            elif output['type'] == 'html':
+                # For explicit HTML objects, try to send raw HTML and let Telegram parse it.
+                # convert_html_to_telegram_html is NOT applied here, relying on Telegram's parser.
+                parse_mode = 'HTML'
+
+            if content_to_send:
+                try:
+                    await message.answer(content_to_send, parse_mode=parse_mode)
+                except TelegramBadRequest as e:
+                    logging.warning(f"TelegramBadRequest when sending rich output (type: {output['type']}): {e}. Attempting to send as file.")
+                    # If Telegram HTML fails, save as .html file and send
+                    file_name = f"output_{output['type']}_{len(rich_outputs)}.html"
+                    file_path = os.path.join(temp_dir, file_name)
+                    
+                    # Ensure the content written to file is the original, full HTML
+                    # For markdown, this would be the markdown-converted HTML
+                    # For HTML, this would be the raw HTML from obj.data
+                    content_to_write = output['content'] # Original content
+                    if output['type'] == 'markdown':
+                        content_to_write = markdown.markdown(content_to_write, extensions=['fenced_code'])
+
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write(content_to_write)
+                    try:
+                        await message.answer_document(
+                            document=FSInputFile(file_path),
+                            caption=f"Вывод ({output['type']}) был отправлен как файл, так как он слишком сложен для отображения в Telegram."
+                        )
+                    except Exception as file_e:
+                        logging.error(f"Failed to send rich output as file {file_path}: {file_e}")
+                        await message.answer(f"Не удалось отправить rich-вывод как файл: {file_e}")
+                except Exception as e:
+                    logging.error(f"Unexpected error when sending rich output: {e}")
+                    await message.answer(f"Произошла ошибка при отправке rich-вывода: {e}")
+
+        # Ищем и отправляем сгенерированные изображения 
+        image_files = [] 
+        if temp_dir: 
+            for ext in ['*.png', '*.jpg', '*.jpeg', '*.gif']:
+                image_files.extend(glob.glob(os.path.join(temp_dir, ext)))
+            
+            for img_path in image_files:
+                try:
+                    await message.answer_photo(photo=FSInputFile(img_path))
+                except Exception as e:
+                    logging.error(f"Failed to send photo {img_path}: {e}")
+                    await message.answer(f"Не удалось отправить изображение {os.path.basename(img_path)}: {e}")
+
+        # Отправляем текстовый вывод, если он есть
+        text_output = output_capture.getvalue()
+        if text_output:
+            if len(text_output) > 4096:
+                await message.answer('Текстовый вывод слишком длинный, отправляю частями.')
+                for x in range(0, len(text_output), 4096):
+                    await message.answer(f"```\n{text_output[x:x+4096]}\n```", parse_mode='markdown')
+            else:
+                await message.answer(f"```\n{text_output}\n```", parse_mode='markdown')
+
+        # Сообщение, если не было ни вывода, ни картинок, ни ошибок
+        if not execution_error and not image_files and not text_output and not rich_outputs:
+            await message.answer("Код выполнен успешно без какого-либо вывода.")
+
+        # Очищаем временную директорию
+        if temp_dir and os.path.exists(temp_dir):
+            try:
+                shutil.rmtree(temp_dir)
+            except Exception as e:
+                logging.error(f"Ошибка при удалении временной директории {temp_dir}: {e}")
+
+        # Возвращаем основную клавиатуру
+        await message.answer("Выполнение завершено.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
+
+##################################################################################################
 # SETTINGS
 ##################################################################################################
 
@@ -253,6 +475,22 @@ async def cq_help_cmd_update(callback: CallbackQuery):
         await status_msg.edit_text(status_message_text)
     else:
         await status_msg.edit_text(status_message_text)
+
+@router.callback_query(F.data == "help_cmd_execute")
+async def cq_help_cmd_execute(callback: CallbackQuery, state: FSMContext):
+    """Handler for '/execute' button from help menu."""
+    #if callback.from_user.id != ADMIN_USER_ID:
+        #await callback.answer("У вас нет прав на использование этой команды.", show_alert=True)
+        #return
+
+    await callback.answer()
+    # Повторяем логику команды /execute
+    await state.set_state(Execution.code)
+    await callback.message.answer(
+        EXECUTE_HELP_TEXT,
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode='markdown'
+    )
 
 @router.callback_query(F.data == "help_cmd_help")
 async def cq_help_cmd_help(callback: CallbackQuery):
