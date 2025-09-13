@@ -2,7 +2,7 @@ import logging
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, ReplyKeyboardRemove, FSInputFile
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, FSInputFile
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -25,6 +25,8 @@ import traceback
 
 import keyboards as kb
 
+SEARCH_RESULTS_PER_PAGE = 10
+
 async def update_library_async(library_name):
     try:
         process = await asyncio.create_subprocess_exec(
@@ -44,6 +46,10 @@ async def update_library_async(library_name):
 
 
 router = Router()
+
+# Cache for search results to avoid long callback_data
+# {user_id: {'query': str, 'results': list}}
+user_search_results_cache = {}
 
 # --- User Settings Defaults ---
 # Эти настройки используются по умолчанию, если для пользователя нет записи в БД
@@ -83,6 +89,7 @@ class Search(StatesGroup):
     submodule = State()
     topic = State()
     code = State()
+    query = State()
 
 
 @router.message(Command('ask'))
@@ -145,14 +152,20 @@ async def process_code(message: Message, state: FSMContext):
         return
     await state.update_data(code=message.text)
     data = await state.get_data()
-    await message.answer(f'Ваш запрос: \n{submodule} \n{topic} \n{data["code"]}')
+    code_path = f'{submodule}.{topic}.{data["code"]}'
+
+    await message.answer(f'Ваш запрос: \n{submodule} \n{topic} \n{data["code"]}', reply_markup=ReplyKeyboardRemove())
     repl = code_dictionary[topic][data["code"]]
+    
     if len(repl) > 4096:
         await message.answer('Сообщение будет отправлено в нескольких частях')
         for x in range(0, len(repl), 4096):
-            await message.answer(f'''```python\n{repl[x:x+4096]}\n```''', parse_mode='markdown', reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
+            await message.answer(f'''```python\n{repl[x:x+4096]}\n```''', parse_mode='markdown')
     else:
-        await message.answer(f'''```python\n{repl}\n```''', parse_mode='markdown', reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
+        await message.answer(f'''```python\n{repl}\n```''', parse_mode='markdown')
+    
+    await message.answer("Что делаем дальше?", reply_markup=kb.get_code_action_keyboard(code_path))
+    await message.answer("Или выберите другую команду.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
     await state.clear()
 ##################################################################################################
 # UPDATE
@@ -204,7 +217,7 @@ EXECUTE_HELP_TEXT = (
 
 @router.message(Command('execute'))
 async def execute_command(message: Message, state: FSMContext):
-    """Handles the /execute command"""#, admin-only."""
+    # """Handles the /execute command, admin-only."""
     # if message.from_user.id != ADMIN_USER_ID:
     #     await message.reply("У вас нет прав на использование этой команды.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
     #     return
@@ -217,10 +230,10 @@ async def execute_command(message: Message, state: FSMContext):
     )
 
 @router.message(Execution.code)
-async def process_execution(message: Message, state: FSMContext):
+async def process_execution_from_user(message: Message, state: FSMContext):
     """Executes the received Python code and sends back the output, including images and rich display objects."""
     await state.clear()
-    code_to_execute = message.text
+    await _execute_code_and_send_results(message, message.text)
     output_capture = io.StringIO()
     execution_error = None
     temp_dir = None
@@ -228,6 +241,14 @@ async def process_execution(message: Message, state: FSMContext):
     rich_outputs = []
 
     # 1. Подготовка изолированного окружения (globals) для выполнения кода
+
+async def _execute_code_and_send_results(message: Message, code_to_execute: str):
+    """Helper function to execute code and send results back to the user."""
+    output_capture = io.StringIO()
+    execution_error = None
+    temp_dir = None
+    original_cwd = os.getcwd()
+    rich_outputs = []
     exec_globals = { 
         "asyncio": asyncio,
         "message": message,
@@ -393,6 +414,241 @@ async def process_execution(message: Message, state: FSMContext):
         # Возвращаем основную клавиатуру
         await message.answer("Выполнение завершено.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
 
+##################################################################################################
+# SEARCH & FAVORITES
+##################################################################################################
+
+async def get_search_results_keyboard(user_id: int, page: int = 0) -> InlineKeyboardMarkup | None:
+    """Создает инлайн-клавиатуру для страницы результатов поиска с пагинацией."""
+    search_data = user_search_results_cache.get(user_id)
+    if not search_data or not search_data.get('results'):
+        return None
+
+    results = search_data['results']
+    builder = InlineKeyboardBuilder()
+    
+    start = page * SEARCH_RESULTS_PER_PAGE
+    end = start + SEARCH_RESULTS_PER_PAGE
+    page_items = results[start:end]
+
+    for i, result in enumerate(page_items):
+        global_index = start + i
+        builder.row(InlineKeyboardButton(
+            text=f"▶️ {result['path']}", 
+            callback_data=f"show_search_idx:{global_index}"
+        ))
+
+    # Pagination controls
+    total_pages = (len(results) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
+    if total_pages > 1:
+        pagination_buttons = []
+        if page > 0:
+            pagination_buttons.append(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"search_page:{page - 1}"))
+        
+        pagination_buttons.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop"))
+
+        if end < len(results):
+            pagination_buttons.append(InlineKeyboardButton(text="Вперед ➡️", callback_data=f"search_page:{page + 1}"))
+        
+        builder.row(*pagination_buttons)
+
+    return builder.as_markup()
+
+async def perform_full_text_search(query: str) -> list[dict]:
+    """
+    Выполняет полнотекстовый поиск по всем примерам кода в matplobblib.
+    Ищет в названиях подмодулей, тем, кода и в содержимом кода.
+    """
+    query = query.lower()
+    found_items = []
+    found_paths = set() # Для избежания дубликатов
+
+    for submodule_name in matplobblib.submodules:
+        try:
+            module = matplobblib._importlib.import_module(f'matplobblib.{submodule_name}')
+            # Ищем в полном словаре (с docstrings) для получения большего контекста
+            code_dictionary = module.themes_list_dicts_full 
+            
+            for topic_name, codes in code_dictionary.items():
+                for code_name, code_content in codes.items():
+                    code_path = f"{submodule_name}.{topic_name}.{code_name}"
+                    
+                    if code_path in found_paths:
+                        continue
+
+                    # Создаем текстовый корпус для поиска
+                    search_corpus = f"{submodule_name} {topic_name} {code_name} {code_content}".lower()
+                    
+                    if query in search_corpus:
+                        found_items.append({
+                            'path': code_path,
+                            'name': code_name
+                        })
+                        found_paths.add(code_path)
+
+        except Exception as e:
+            logging.error(f"Ошибка при поиске в подмодуле {submodule_name}: {e}")
+    
+    return found_items
+
+@router.message(Command('search'))
+async def search_command(message: Message, state: FSMContext):
+    await state.set_state(Search.query)
+    await message.answer("Введите ключевые слова для поиска по примерам кода:", reply_markup=ReplyKeyboardRemove())
+
+@router.message(Search.query)
+async def process_search_query(message: Message, state: FSMContext):
+    await state.clear()
+    query = message.text
+    status_msg = await message.answer(f"Идет поиск по запросу '{query}'...")
+    results = await perform_full_text_search(query)
+
+    if not results:
+        await status_msg.edit_text(
+            f"По вашему запросу '{query}' ничего не найдено.\n"
+            "Попробуйте другие ключевые слова или воспользуйтесь командой /ask для пошагового выбора."
+        )
+        # Отправляем основную клавиатуру отдельным сообщением, так как edit_text не может ее использовать
+        await message.answer("Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
+        return
+
+    # Store query and results in cache for this user
+    user_id = message.from_user.id
+    user_search_results_cache[user_id] = {'query': query, 'results': results}
+
+    keyboard = await get_search_results_keyboard(user_id, page=0)
+    total_pages = (len(results) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
+
+    await status_msg.edit_text(
+        f"Найдено {len(results)} примеров по запросу '{query}'. Страница 1/{total_pages}:",
+        reply_markup=keyboard
+    )
+
+@router.callback_query(F.data.startswith("search_page:"))
+async def cq_search_pagination(callback: CallbackQuery):
+    """Обрабатывает нажатия на кнопки пагинации в результатах поиска."""
+    user_id = callback.from_user.id
+    search_data = user_search_results_cache.get(user_id)
+    if not search_data:
+        await callback.answer("Результаты поиска устарели. Пожалуйста, выполните поиск заново.", show_alert=True)
+        await callback.message.delete()
+        return
+
+    page = int(callback.data.split(":", 1)[1])
+    keyboard = await get_search_results_keyboard(user_id, page=page)
+    
+    results = search_data['results']
+    query = search_data['query']
+    total_pages = (len(results) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
+
+    await callback.message.edit_text(
+        f"Найдено {len(results)} примеров по запросу '{query}'. Страница {page + 1}/{total_pages}:",
+        reply_markup=keyboard
+    )
+    await callback.answer()
+
+@router.message(Command('favorites'))
+async def favorites_command(message: Message):
+    user_id = message.from_user.id
+    favs = await database.get_favorites(user_id)
+    if not favs:
+        await message.answer("У вас пока нет избранных примеров. Вы можете добавить их, нажав на кнопку '⭐ В избранное' под примером кода.")
+        return
+
+    builder = InlineKeyboardBuilder()
+    for code_path in favs:
+        builder.row(InlineKeyboardButton(text=code_path, callback_data=f"show_fav:{code_path}"))
+    
+    await message.answer("Ваши избранные примеры:", reply_markup=builder.as_markup())
+
+@router.callback_query(F.data.startswith("fav_add:"))
+async def cq_add_favorite(callback: CallbackQuery):
+    code_path = callback.data.split(":", 1)[1]
+    success = await database.add_favorite(callback.from_user.id, code_path)
+    if success:
+        await callback.answer("✅ Добавлено в избранное!", show_alert=False)
+    else:
+        await callback.answer("Уже в избранном.", show_alert=False)
+
+@router.callback_query(F.data == "noop")
+async def cq_noop(callback: CallbackQuery):
+    """Пустой обработчик для кнопок, которые не должны ничего делать (например, счетчик страниц)."""
+    await callback.answer()
+
+async def _show_code_by_path(message: Message, code_path: str, header: str):
+    """Helper function to send code to the user based on its path."""
+    try:
+        submodule, topic, code_name = code_path.split('.')
+        
+        module = matplobblib._importlib.import_module(f'matplobblib.{submodule}')
+
+        # Определяем, показывать ли docstring, на основе настроек пользователя
+        settings = await get_user_settings(message.from_user.id)
+        dict_name = 'themes_list_dicts_full' if settings.get('show_docstring', True) else 'themes_list_dicts_full_nd'
+        code_dictionary = getattr(module, dict_name)
+
+        repl = code_dictionary[topic][code_name]
+
+        await message.answer(f'{header}: \n{code_path.replace(".", " -> ")}')
+        
+        if len(repl) > 4096:
+            await message.answer('Сообщение будет отправлено в нескольких частях')
+            for x in range(0, len(repl), 4096):
+                await message.answer(f'''```python\n{repl[x:x+4096]}\n```''', parse_mode='markdown')
+        else:
+            await message.answer(f'''```python\n{repl}\n```''', parse_mode='markdown')
+        
+        await message.answer("Что делаем дальше?", reply_markup=kb.get_code_action_keyboard(code_path))
+
+    except (ValueError, KeyError, AttributeError, ImportError) as e:
+        logging.error(f"Ошибка при показе кода (path: {code_path}): {e}")
+        await message.answer("Не удалось найти или отобразить этот пример кода. Возможно, он был удален или перемещен.")
+
+@router.callback_query(F.data.startswith("show_search_idx:"))
+async def cq_show_search_result_by_index(callback: CallbackQuery):
+    """Handles clicks on search result buttons."""
+    user_id = callback.from_user.id
+    search_data = user_search_results_cache.get(user_id)
+    if not search_data:
+        await callback.answer("Результаты поиска устарели. Пожалуйста, выполните поиск заново.", show_alert=True)
+        return
+
+    try:
+        index = int(callback.data.split(":", 1)[1])
+        results = search_data['results']
+        
+        if not (0 <= index < len(results)):
+            raise IndexError("Search result index out of bounds.")
+
+        code_path = results[index]['path']
+        
+        await callback.answer() # Acknowledge the callback
+        await _show_code_by_path(callback.message, code_path, "Результат поиска")
+
+    except (ValueError, IndexError) as e:
+        logging.warning(f"Invalid search index from user {user_id}. Data: {callback.data}. Error: {e}")
+        await callback.answer("Неверный результат поиска. Возможно, он устарел.", show_alert=True)
+    except Exception as e:
+        logging.error(f"Error showing search result by index for user {user_id}: {e}", exc_info=True)
+        await callback.answer("Произошла ошибка при отображении результата.", show_alert=True)
+
+@router.callback_query(F.data.startswith("show_fav:"))
+async def cq_show_favorite(callback: CallbackQuery):
+    """Handles clicks on favorite item buttons."""
+    await callback.answer()
+    _, code_path = callback.data.split(":", 1)
+    await _show_code_by_path(callback.message, code_path, "Избранное")
+
+@router.callback_query(F.data.startswith("run_code:"))
+async def cq_run_code_from_lib(callback: CallbackQuery):
+    code_path = callback.data.split(":", 1)[1]
+    submodule, topic, code_name = code_path.split('.')
+    
+    module = matplobblib._importlib.import_module(f'matplobblib.{submodule}')
+    code_to_run = module.themes_list_dicts_full[topic][code_name] # Берем код без docstring
+
+    await callback.answer("▶️ Запускаю пример...")
+    await _execute_code_and_send_results(callback.message, code_to_run)
 ##################################################################################################
 # SETTINGS
 ##################################################################################################

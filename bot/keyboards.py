@@ -1,12 +1,13 @@
 import logging
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 import matplobblib
 import os # Import os to access environment variables like ADMIN_USER_ID
 
 logger = logging.getLogger(__name__)
 
 # Define base commands that are always available
-BASE_COMMANDS = ['/ask', '/settings', '/help', '/execute']
+BASE_COMMANDS = ['/ask', '/search', '/favorites', '/settings', '/help', '/execute']
 ADMIN_COMMANDS = ['/update']
 
 # Pre-generate data structure for topics and codes, not actual ReplyKeyboards.
@@ -109,3 +110,15 @@ def get_help_inline_keyboard(user_id: int) -> InlineKeyboardMarkup:
     
     inline_keyboard_rows.append([InlineKeyboardButton(text="ℹ️ /help - Эта справка", callback_data="help_cmd_help")])
     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard_rows)
+
+def get_code_action_keyboard(code_path: str) -> InlineKeyboardMarkup:
+    """
+    Создает инлайн-клавиатуру для действий с кодом.
+    :param code_path: Уникальный путь к коду, например "pyplot.line_plot.simple_plot"
+    """
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="▶️ Выполнить", callback_data=f"run_code:{code_path}"),
+        InlineKeyboardButton(text="⭐ В избранное", callback_data=f"fav_add:{code_path}")
+    )
+    return builder.as_markup()
