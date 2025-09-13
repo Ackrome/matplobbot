@@ -7,4 +7,4 @@ dotenv==0.9.9
 aiosqlite
 ipython
 markdown
-
+cachetools

@@ -21,6 +21,7 @@ import shutil   # Для удаления временных директори�
 import glob # Для поиска файлов по шаблону
 import traceback
 
+import hashlib
 # from main import logging
 
 import keyboards as kb
@@ -100,18 +101,10 @@ async def ask(message: Message, state: FSMContext):
 @router.message(Search.submodule)
 async def process_submodule(message: Message, state: FSMContext):
     # Проверяем, что введённый подмодуль является ожидаемым
-    if message.text not in matplobblib.submodules:
+    if message.text not in kb.topics_data:
         await message.answer("Неверный выбор. Попробуйте еще раз.", reply_markup=kb.get_submodules_reply_keyboard(message.from_user.id))
         return
     await state.update_data(submodule=message.text)
-    # Импортируем модуль для получения списка тем
-    module = matplobblib._importlib.import_module(f'matplobblib.{message.text}')
-
-    settings = await get_user_settings(message.from_user.id) # Теперь асинхронный вызов
-    # В зависимости от настроек пользователя, выбираем нужный словарь в библиотеке
-    dict_name = 'themes_list_dicts_full' if settings.get('show_docstring', True) else 'themes_list_dicts_full_nd'
-    code_dictionary = getattr(module, dict_name)
-    topics = list(code_dictionary.keys())
     await state.set_state(Search.topic)
     await message.answer("Введите тему", reply_markup=kb.get_topics_reply_keyboard(message.from_user.id, message.text))
 
@@ -119,12 +112,10 @@ async def process_submodule(message: Message, state: FSMContext):
 async def process_topic(message: Message, state: FSMContext):
     data = await state.get_data()
     submodule = data["submodule"]
-    module = matplobblib._importlib.import_module(f'matplobblib.{submodule}')
 
-    settings = await get_user_settings(message.from_user.id) # Теперь асинхронный вызов
-    dict_name = 'themes_list_dicts_full' if settings.get('show_docstring', True) else 'themes_list_dicts_full_nd'
-    code_dictionary = getattr(module, dict_name)
-    topics = list(code_dictionary.keys())
+    # Получаем список тем из предзагруженных данных для валидации
+    topics = kb.topics_data.get(submodule, {}).get('topics', [])
+
     # Если тема не входит в ожидаемые, просим попробовать снова
     if message.text not in topics:
         await message.answer("Неверный выбор. Попробуйте еще раз.", reply_markup=kb.get_topics_reply_keyboard(message.from_user.id, submodule))
@@ -138,15 +129,9 @@ async def process_code(message: Message, state: FSMContext):
     data = await state.get_data()
     submodule = data["submodule"]
     topic = data["topic"]
-    module = matplobblib._importlib.import_module(f'matplobblib.{submodule}')
 
-    settings = await get_user_settings(message.from_user.id) # Теперь асинхронный вызов
-    # В зависимости от настроек пользователя, выбираем нужный словарь в библиотеке
-    dict_name = 'themes_list_dicts_full' if settings.get('show_docstring', True) else 'themes_list_dicts_full_nd'
-    code_dictionary = getattr(module, dict_name)
-
-    possible_codes = list(code_dictionary[topic].keys())
-    # Если выбранная задача не входит в ожидаемые, просим повторить выбор
+    # Валидация из предзагруженных данных
+    possible_codes = kb.topics_data.get(submodule, {}).get('codes', {}).get(topic, [])
     if message.text not in possible_codes:
         await message.answer("Неверный выбор. Попробуйте еще раз.", reply_markup=kb.get_codes_reply_keyboard(message.from_user.id, submodule, topic))
         return
@@ -154,8 +139,14 @@ async def process_code(message: Message, state: FSMContext):
     data = await state.get_data()
     code_path = f'{submodule}.{topic}.{data["code"]}'
 
-    await message.answer(f'Ваш запрос: \n{submodule} \n{topic} \n{data["code"]}', reply_markup=ReplyKeyboardRemove())
+    # А теперь получаем код с учетом настроек пользователя
+    module = matplobblib._importlib.import_module(f'matplobblib.{submodule}')
+    settings = await get_user_settings(message.from_user.id)
+    dict_name = 'themes_list_dicts_full' if settings.get('show_docstring', True) else 'themes_list_dicts_full_nd'
+    code_dictionary = getattr(module, dict_name)
     repl = code_dictionary[topic][data["code"]]
+
+    await message.answer(f'Ваш запрос: \n{submodule} \n{topic} \n{data["code"]}', reply_markup=ReplyKeyboardRemove())
     
     if len(repl) > 4096:
         await message.answer('Сообщение будет отправлено в нескольких частях')
@@ -189,7 +180,8 @@ async def update(message: Message):
         await status_msg.edit_text(status_message_text) # Убран reply_markup
     else:
         await status_msg.edit_text(status_message_text) # Убран reply_markup
-
+    
+    await message.answer("Обновление завершено. Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
 ##################################################################################################
 # EXECUTE
 ##################################################################################################
@@ -234,13 +226,6 @@ async def process_execution_from_user(message: Message, state: FSMContext):
     """Executes the received Python code and sends back the output, including images and rich display objects."""
     await state.clear()
     await _execute_code_and_send_results(message, message.text)
-    output_capture = io.StringIO()
-    execution_error = None
-    temp_dir = None
-    original_cwd = os.getcwd() # Сохраняем текущую рабочую директорию
-    rich_outputs = []
-
-    # 1. Подготовка изолированного окружения (globals) для выполнения кода
 
 async def _execute_code_and_send_results(message: Message, code_to_execute: str):
     """Helper function to execute code and send results back to the user."""
@@ -552,23 +537,71 @@ async def favorites_command(message: Message):
     user_id = message.from_user.id
     favs = await database.get_favorites(user_id)
     if not favs:
-        await message.answer("У вас пока нет избранных примеров. Вы можете добавить их, нажав на кнопку '⭐ В избранное' под примером кода.")
+        await message.answer("У вас пока нет избранных примеров. Вы можете добавить их, нажав на кнопку '⭐ В избранное' под примером кода.", reply_markup=kb.get_main_reply_keyboard(user_id))
         return
 
     builder = InlineKeyboardBuilder()
     for code_path in favs:
-        builder.row(InlineKeyboardButton(text=code_path, callback_data=f"show_fav:{code_path}"))
+        path_hash = hashlib.sha1(code_path.encode()).hexdigest()[:16]
+        kb.code_path_cache[path_hash] = code_path
+        builder.row(
+            InlineKeyboardButton(text=f"📄 {code_path}", callback_data=f"show_fav_hash:{path_hash}"),
+            InlineKeyboardButton(text="❌ Удалить", callback_data=f"fav_del_hash:{path_hash}")
+        )
     
     await message.answer("Ваши избранные примеры:", reply_markup=builder.as_markup())
 
-@router.callback_query(F.data.startswith("fav_add:"))
+@router.callback_query(F.data.startswith("fav_hash:"))
 async def cq_add_favorite(callback: CallbackQuery):
-    code_path = callback.data.split(":", 1)[1]
+    path_hash = callback.data.split(":", 1)[1]
+    code_path = kb.code_path_cache.get(path_hash)
+    if not code_path:
+        await callback.answer("Ошибка: информация о коде устарела. Пожалуйста, запросите код заново.", show_alert=True)
+        return
+
     success = await database.add_favorite(callback.from_user.id, code_path)
     if success:
         await callback.answer("✅ Добавлено в избранное!", show_alert=False)
     else:
         await callback.answer("Уже в избранном.", show_alert=False)
+
+@router.callback_query(F.data.startswith("fav_del_hash:"))
+async def cq_delete_favorite(callback: CallbackQuery):
+    """Обрабатывает удаление примера из избранного."""
+    user_id = callback.from_user.id
+    path_hash = callback.data.split(":", 1)[1]
+    code_path = kb.code_path_cache.get(path_hash)
+
+    if not code_path:
+        await callback.answer("Ошибка: информация об избранном устарела. Пожалуйста, вызовите /favorites снова.", show_alert=True)
+        return
+
+    # Удаляем из БД
+    await database.remove_favorite(user_id, code_path)
+    await callback.answer("Пример удален из избранного.", show_alert=False)
+
+    # Обновляем сообщение со списком избранного
+    favs = await database.get_favorites(user_id)
+    if not favs:
+        await callback.message.edit_text("Ваш список избранного пуст.")
+        return
+
+    # Пересобираем клавиатуру
+    builder = InlineKeyboardBuilder()
+    for new_code_path in favs:
+        new_path_hash = hashlib.sha1(new_code_path.encode()).hexdigest()[:16]
+        kb.code_path_cache[new_path_hash] = new_code_path
+        builder.row(
+            InlineKeyboardButton(text=f"📄 {new_code_path}", callback_data=f"show_fav_hash:{new_path_hash}"),
+            InlineKeyboardButton(text="❌ Удалить", callback_data=f"fav_del_hash:{new_path_hash}")
+        )
+    
+    try:
+        await callback.message.edit_reply_markup(reply_markup=builder.as_markup())
+    except TelegramBadRequest as e:
+        if "message is not modified" not in e.message:
+            logging.error(f"Ошибка при обновлении клавиатуры избранного: {e}")
+            raise
 
 @router.callback_query(F.data == "noop")
 async def cq_noop(callback: CallbackQuery):
@@ -599,6 +632,7 @@ async def _show_code_by_path(message: Message, code_path: str, header: str):
             await message.answer(f'''```python\n{repl}\n```''', parse_mode='markdown')
         
         await message.answer("Что делаем дальше?", reply_markup=kb.get_code_action_keyboard(code_path))
+        await message.answer("Или выберите другую команду.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
 
     except (ValueError, KeyError, AttributeError, ImportError) as e:
         logging.error(f"Ошибка при показе кода (path: {code_path}): {e}")
@@ -632,20 +666,30 @@ async def cq_show_search_result_by_index(callback: CallbackQuery):
         logging.error(f"Error showing search result by index for user {user_id}: {e}", exc_info=True)
         await callback.answer("Произошла ошибка при отображении результата.", show_alert=True)
 
-@router.callback_query(F.data.startswith("show_fav:"))
+@router.callback_query(F.data.startswith("show_fav_hash:"))
 async def cq_show_favorite(callback: CallbackQuery):
     """Handles clicks on favorite item buttons."""
+    path_hash = callback.data.split(":", 1)[1]
+    code_path = kb.code_path_cache.get(path_hash)
+    if not code_path:
+        await callback.answer("Ошибка: информация об избранном устарела. Пожалуйста, вызовите /favorites снова.", show_alert=True)
+        return
+
     await callback.answer()
-    _, code_path = callback.data.split(":", 1)
     await _show_code_by_path(callback.message, code_path, "Избранное")
 
-@router.callback_query(F.data.startswith("run_code:"))
+@router.callback_query(F.data.startswith("run_hash:"))
 async def cq_run_code_from_lib(callback: CallbackQuery):
-    code_path = callback.data.split(":", 1)[1]
+    path_hash = callback.data.split(":", 1)[1]
+    code_path = kb.code_path_cache.get(path_hash)
+    if not code_path:
+        await callback.answer("Ошибка: информация о коде устарела. Пожалуйста, запросите код заново.", show_alert=True)
+        return
+
     submodule, topic, code_name = code_path.split('.')
     
     module = matplobblib._importlib.import_module(f'matplobblib.{submodule}')
-    code_to_run = module.themes_list_dicts_full[topic][code_name] # Берем код без docstring
+    code_to_run = module.themes_list_dicts_full_nd[topic][code_name] # Берем код без docstring для корректного выполнения
 
     await callback.answer("▶️ Запускаю пример...")
     await _execute_code_and_send_results(callback.message, code_to_run)
@@ -702,6 +746,22 @@ async def cq_help_cmd_ask(callback: CallbackQuery, state: FSMContext):
     await state.set_state(Search.submodule)
     await callback.message.answer('Введите ваш вопрос', reply_markup=kb.get_submodules_reply_keyboard(callback.from_user.id))
 
+@router.callback_query(F.data == "help_cmd_search")
+async def cq_help_cmd_search(callback: CallbackQuery, state: FSMContext):
+    """Handler for '/search' button from help menu."""
+    await callback.answer()
+    # Повторяем логику команды /search
+    await state.set_state(Search.query)
+    await callback.message.answer("Введите ключевые слова для поиска по примерам кода:", reply_markup=ReplyKeyboardRemove())
+
+@router.callback_query(F.data == "help_cmd_favorites")
+async def cq_help_cmd_favorites(callback: CallbackQuery):
+    """Handler for '/favorites' button from help menu."""
+    await callback.answer()
+    # Повторяем логику команды /favorites
+    # favorites_command ожидает объект Message, callback.message подходит
+    await favorites_command(callback.message)
+
 @router.callback_query(F.data == "help_cmd_settings")
 async def cq_help_cmd_settings(callback: CallbackQuery):
     """Handler for '/settings' button from help menu."""
@@ -731,6 +791,7 @@ async def cq_help_cmd_update(callback: CallbackQuery):
         await status_msg.edit_text(status_message_text)
     else:
         await status_msg.edit_text(status_message_text)
+    await callback.message.answer("Обновление завершено. Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(callback.from_user.id))
 
 @router.callback_query(F.data == "help_cmd_execute")
 async def cq_help_cmd_execute(callback: CallbackQuery, state: FSMContext):
