@@ -11,8 +11,5 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY bot/ /app/bot/
-CMD ["python", "bot/main.py"]
+# Оставим только для теста — не копируем requirements
+CMD ["echo", "LaTeX packages installed successfully"]

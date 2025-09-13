@@ -8,3 +8,4 @@ aiosqlite
 ipython
 markdown
 cachetools
+Pillow>=9.0.0

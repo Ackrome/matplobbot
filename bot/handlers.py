@@ -2,15 +2,20 @@ import logging
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, FSInputFile
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, FSInputFile, BufferedInputFile
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from PIL import Image
 
 import database
 import asyncio
 import sys
+import subprocess
+import matplotlib
+matplotlib.use('Agg') # Use a non-interactive backend for server environments
+import matplotlib.pyplot as plt
 import matplobblib
 import os
 import pkg_resources
@@ -57,6 +62,7 @@ user_search_results_cache = {}
 # или если конкретная настройка отсутствует в его записи.
 DEFAULT_SETTINGS = {
     'show_docstring': True,
+    'latex_padding': 15,
 }
 
 # Теперь эта функция асинхронная, так как обращается к БД
@@ -91,6 +97,9 @@ class Search(StatesGroup):
     topic = State()
     code = State()
     query = State()
+
+class LatexRender(StatesGroup):
+    formula = State()
 
 
 @router.message(Command('ask'))
@@ -400,6 +409,133 @@ async def _execute_code_and_send_results(message: Message, code_to_execute: str)
         await message.answer("Выполнение завершено.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
 
 ##################################################################################################
+# LATEX
+##################################################################################################
+
+LATEX_PREAMBLE = r"""
+\documentclass[12pt,varwidth=500pt]{standalone}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{graphicx}
+\usepackage{color}
+\usepackage{mhchem}
+\usepackage{xcolor}
+\begin{document}
+"""
+
+LATEX_POSTAMBLE = r"\end{document}"
+
+
+def _render_latex_sync(latex_string: str, padding: int) -> io.BytesIO:
+    """Синхронная функция для рендеринга LaTeX в PNG с использованием latex и dvipng, с добавлением отступов."""
+    
+    # Если пользователь вводит формулу без $, добавляем их для корректного рендеринга математики
+    if not latex_string.strip().startswith('$') and not latex_string.strip().startswith('\\'):
+        latex_string = f'${latex_string}$'
+
+    full_latex_code = LATEX_PREAMBLE + latex_string + LATEX_POSTAMBLE
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        tex_path = os.path.join(temp_dir, 'formula.tex')
+        log_path = os.path.join(temp_dir, 'formula.log')
+        dvi_path = os.path.join(temp_dir, 'formula.dvi')
+        png_path = os.path.join(temp_dir, 'formula.png')
+
+        with open(tex_path, 'w', encoding='utf-8') as f:
+            f.write(full_latex_code)
+
+        # --- Запуск LaTeX ---
+        process = subprocess.run(
+            ['latex', '-interaction=nonstopmode', '-output-directory', temp_dir, tex_path],
+            capture_output=True, text=True, encoding='utf-8', errors='ignore'
+        )
+
+        # --- Проверка на ошибки LaTeX ---
+        if not os.path.exists(dvi_path) or process.returncode != 0:
+            error_message = "Неизвестная ошибка LaTeX."
+            if os.path.exists(log_path):
+                with open(log_path, 'r', encoding='utf-8', errors='ignore') as log_file:
+                    log_content = log_file.read()
+                    # Поиск конкретной строки с ошибкой
+                    error_lines = [line for line in log_content.split('\n') if line.startswith('! ')]
+                    if error_lines:
+                        error_message = error_lines[0].strip()
+                    else: # Если '!' не найдено, показываем конец лога
+                        error_message = "...\n" + "\n".join(log_content.split('\n')[-20:])
+            raise ValueError(f"Ошибка компиляции LaTeX:\n{error_message}")
+
+        # --- Запуск dvipng для конвертации DVI в PNG ---
+        dvipng_process = subprocess.run(
+            ['dvipng', '-D', '300', '-T', 'tight', '-bg', 'Transparent', '-o', png_path, dvi_path],
+            capture_output=True, text=True, encoding='utf-8', errors='ignore'
+        )
+        
+        if dvipng_process.returncode != 0 or not os.path.exists(png_path):
+            raise RuntimeError(f"Ошибка dvipng: {dvipng_process.stderr}")
+
+        # --- Добавление отступов с помощью Pillow ---
+        with Image.open(png_path) as img:
+            # Создаем новое изображение с прозрачным фоном и отступами
+            new_width = img.width + 2 * padding
+            new_height = img.height + 2 * padding
+            new_img = Image.new("RGBA", (new_width, new_height), (0, 0, 0, 0))
+            
+            # Вставляем исходное изображение в центр нового
+            new_img.paste(img, (padding, padding))
+            
+            # Сохраняем результат в буфер в памяти
+            buf = io.BytesIO()
+            new_img.save(buf, format='PNG')
+            buf.seek(0)
+            return buf
+
+async def render_latex_to_image(latex_string: str, padding: int) -> io.BytesIO:
+    """Асинхронная обертка для рендеринга LaTeX, выполняемая в отдельном потоке."""
+    return await asyncio.to_thread(_render_latex_sync, latex_string, padding)
+
+@router.message(Command('latex'))
+async def latex_command(message: Message, state: FSMContext):
+    await state.set_state(LatexRender.formula)
+    await message.answer(
+        "Пожалуйста, отправьте вашу формулу в синтаксисе LaTeX (можно без внешних `$...`):",
+        reply_markup=ReplyKeyboardRemove()
+    )
+
+@router.message(LatexRender.formula)
+async def process_latex_formula(message: Message, state: FSMContext):
+    await state.clear()
+    formula = message.text
+    
+    status_msg = await message.answer("🖼️ Рендеринг формулы...")
+
+    try:
+        settings = await get_user_settings(message.from_user.id)
+        padding = settings.get('latex_padding', DEFAULT_SETTINGS['latex_padding'])
+        image_buffer = await render_latex_to_image(formula, padding)
+        
+        await status_msg.delete()
+        await message.answer_photo(
+            photo=BufferedInputFile(image_buffer.read(), filename="formula.png"),
+            caption=f"Ваша формула:\n`{formula}`",
+            parse_mode='markdown'
+        )
+        await message.answer("Готово! Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
+
+    except (ValueError, RuntimeError, FileNotFoundError) as e:
+        logging.error(f"Ошибка при рендеринге LaTeX для '{formula}': {e}", exc_info=True)
+        # Используем Markdown для форматирования ошибки
+        error_text = f"Не удалось отрендерить формулу.\n\n**Ошибка:**\n```\n{e}\n```\n\nУбедитесь, что синтаксис корректен."
+        await status_msg.edit_text(error_text, parse_mode='markdown')
+    except Exception as e:
+        logging.error(f"Непредвиденная ошибка при рендеринге LaTeX для '{formula}': {e}", exc_info=True)
+        await status_msg.edit_text(
+            f"Произошла непредвиденная ошибка: {e}"
+        )
+
+##################################################################################################
 # SEARCH & FAVORITES
 ##################################################################################################
 
@@ -443,8 +579,12 @@ async def perform_full_text_search(query: str) -> list[dict]:
     """
     Выполняет полнотекстовый поиск по всем примерам кода в matplobblib.
     Ищет в названиях подмодулей, тем, кода и в содержимом кода.
+    Поддерживает поиск по нескольким ключевым словам (все должны присутствовать).
     """
-    query = query.lower()
+    keywords = query.lower().split()
+    if not keywords:
+        return []
+
     found_items = []
     found_paths = set() # Для избежания дубликатов
 
@@ -452,19 +592,20 @@ async def perform_full_text_search(query: str) -> list[dict]:
         try:
             module = matplobblib._importlib.import_module(f'matplobblib.{submodule_name}')
             # Ищем в полном словаре (с docstrings) для получения большего контекста
-            code_dictionary = module.themes_list_dicts_full 
-            
+            code_dictionary = module.themes_list_dicts_full
+
             for topic_name, codes in code_dictionary.items():
                 for code_name, code_content in codes.items():
                     code_path = f"{submodule_name}.{topic_name}.{code_name}"
-                    
+
                     if code_path in found_paths:
                         continue
 
                     # Создаем текстовый корпус для поиска
                     search_corpus = f"{submodule_name} {topic_name} {code_name} {code_content}".lower()
-                    
-                    if query in search_corpus:
+
+                    # Проверяем, что ВСЕ ключевые слова есть в корпусе
+                    if all(keyword in search_corpus for keyword in keywords):
                         found_items.append({
                             'path': code_path,
                             'name': code_name
@@ -473,7 +614,7 @@ async def perform_full_text_search(query: str) -> list[dict]:
 
         except Exception as e:
             logging.error(f"Ошибка при поиске в подмодуле {submodule_name}: {e}")
-    
+
     return found_items
 
 @router.message(Command('search'))
@@ -735,6 +876,59 @@ async def cq_toggle_docstring(callback: CallbackQuery):
     await callback.answer("Настройка 'Показывать описание' обновлена.")
 
 ##################################################################################################
+# LATEX SETTINGS
+##################################################################################################
+
+async def get_latex_settings_keyboard(user_id: int) -> InlineKeyboardBuilder:
+    """Создает инлайн-клавиатуру для настроек LaTeX."""
+    settings = await get_user_settings(user_id)
+    builder = InlineKeyboardBuilder()
+
+    padding = settings.get('latex_padding', DEFAULT_SETTINGS['latex_padding'])
+
+    builder.row(
+        InlineKeyboardButton(text="➖", callback_data="latex_padding_decr"),
+        InlineKeyboardButton(text=f"Отступ: {padding}px", callback_data="noop"),
+        InlineKeyboardButton(text="➕", callback_data="latex_padding_incr")
+    )
+    return builder
+
+@router.message(Command('settings_latex'))
+async def command_settings_latex(message: Message):
+    """Обработчик команды /settings_latex."""
+    keyboard = await get_latex_settings_keyboard(message.from_user.id)
+    await message.answer(
+        "⚙️ Настройки рендеринга LaTeX:",
+        reply_markup=keyboard.as_markup()
+    )
+
+@router.callback_query(F.data.startswith("latex_padding_"))
+async def cq_change_latex_padding(callback: CallbackQuery):
+    """Обработчик для изменения отступа LaTeX."""
+    user_id = callback.from_user.id
+    settings = await get_user_settings(user_id)
+    current_padding = settings.get('latex_padding', DEFAULT_SETTINGS['latex_padding'])
+
+    action = callback.data.split('_')[-1]  # 'incr' or 'decr'
+    new_padding = current_padding
+
+    if action == "incr":
+        new_padding += 5
+    elif action == "decr":
+        new_padding = max(0, current_padding - 5)
+
+    if new_padding == current_padding:
+        await callback.answer("Значение отступа не изменилось.")
+        return
+
+    settings['latex_padding'] = new_padding
+    await database.update_user_settings_db(user_id, settings)
+
+    keyboard = await get_latex_settings_keyboard(user_id)
+    await callback.message.edit_reply_markup(reply_markup=keyboard.as_markup())
+    await callback.answer(f"Отступ изменен на {new_padding}px")
+
+##################################################################################################
 # HELP COMMAND CALLBACKS
 ##################################################################################################
 
@@ -761,6 +955,20 @@ async def cq_help_cmd_favorites(callback: CallbackQuery):
     # Повторяем логику команды /favorites
     # favorites_command ожидает объект Message, callback.message подходит
     await favorites_command(callback.message)
+
+@router.callback_query(F.data == "help_cmd_latex")
+async def cq_help_cmd_latex(callback: CallbackQuery, state: FSMContext):
+    """Handler for '/latex' button from help menu."""
+    await callback.answer()
+    # Повторяем логику команды /latex
+    await latex_command(callback.message, state)
+
+@router.callback_query(F.data == "help_cmd_settings_latex")
+async def cq_help_cmd_settings_latex(callback: CallbackQuery):
+    """Handler for '/settings_latex' button from help menu."""
+    await callback.answer()
+    # Повторяем логику команды /settings_latex
+    await command_settings_latex(callback.message)
 
 @router.callback_query(F.data == "help_cmd_settings")
 async def cq_help_cmd_settings(callback: CallbackQuery):

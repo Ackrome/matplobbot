@@ -9,7 +9,7 @@ import os # Import os to access environment variables like ADMIN_USER_ID
 logger = logging.getLogger(__name__)
 
 # Define base commands that are always available
-BASE_COMMANDS = ['/ask', '/search', '/favorites', '/settings', '/help', '/execute']
+BASE_COMMANDS = ['/ask', '/search', '/favorites', '/settings', '/settings_latex', '/help', '/execute', '/latex']
 ADMIN_COMMANDS = ['/update']
 
 # Cache for long code paths to use in callback_data
@@ -109,7 +109,9 @@ def get_help_inline_keyboard(user_id: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🔍 /search - Поиск по библиотеке", callback_data="help_cmd_search")],
         [InlineKeyboardButton(text="⭐ /favorites - Избранное", callback_data="help_cmd_favorites")],
         [InlineKeyboardButton(text="⚙️ /settings - Настройки", callback_data="help_cmd_settings")],
-        [InlineKeyboardButton(text="▶️ /execute - Выполнить код", callback_data="help_cmd_execute")]
+        [InlineKeyboardButton(text="📐 /settings_latex - Настройки LaTeX", callback_data="help_cmd_settings_latex")],
+        [InlineKeyboardButton(text="▶️ /execute - Выполнить код", callback_data="help_cmd_execute")],
+        [InlineKeyboardButton(text="🧮 /latex - Рендер LaTeX", callback_data="help_cmd_latex")]
     ]
     admin_id = os.getenv('ADMIN_USER_ID')
     if admin_id and user_id == int(admin_id):
