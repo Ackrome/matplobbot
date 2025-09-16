@@ -448,7 +448,7 @@ async def upload_image_to_telegraph(image_bytes: io.BytesIO, session: aiohttp.Cl
     repo_owner = "Ackrome"
     repo_name = "matplobbot"
     repo_path = f"image/latex_render/{filename}"
-    branch = "main"
+    branch = "test"
 
     api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{repo_path}"
     raw_url = f"https://raw.githubusercontent.com/{repo_owner}/{repo_name}/{branch}/{repo_path}"
