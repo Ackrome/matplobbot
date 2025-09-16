@@ -5,6 +5,7 @@ RUN apt-get update && \
     texlive-latex-base \
     texlive-latex-extra \
     texlive-fonts-recommended \
+    texlive-lang-cyrillic\
     texlive-science \
     dvipng \
     ghostscript && \
@@ -15,4 +16,4 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY bot/ /app/bot/
-CMD ["python", "bot/main.py"]
+CMD ["python", "-m", "bot.main"]

@@ -9,6 +9,14 @@ DB_NAME = os.path.join(DB_DIR, "user_actions.db")
 
 logger = logging.getLogger(__name__)
 
+# --- User Settings Defaults ---
+# Эти настройки используются по умолчанию, если для пользователя нет записи в БД
+# или если конкретная настройка отсутствует в его записи.
+DEFAULT_SETTINGS = {
+    'show_docstring': True,
+    'latex_padding': 15,
+}
+
 async def init_db():
     """Инициализирует базу данных и создает таблицу, если она не существует."""
     try:
@@ -98,6 +106,14 @@ async def get_user_settings_db(user_id: int) -> dict:
                 logger.error(f"Ошибка декодирования JSON настроек для пользователя {user_id}: {result[0]}")
                 return {} # Возвращаем пустой словарь при ошибке декодирования
         return {} # Возвращаем пустой словарь, если пользователь не найден или поле settings пустое
+
+async def get_user_settings(user_id: int) -> dict:
+    """Получает настройки для пользователя из БД, объединяя их с настройками по умолчанию."""
+    db_settings = await get_user_settings_db(user_id)
+    merged_settings = DEFAULT_SETTINGS.copy()
+    merged_settings.update(db_settings) # Настройки из БД переопределяют дефолтные
+    return merged_settings
+
 
 async def update_user_settings_db(user_id: int, settings: dict):
     """

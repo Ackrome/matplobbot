@@ -4,13 +4,13 @@ import os
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher
 
-from handlers import router
-from logger import UserLoggingMiddleware # Импортируем middleware
-from database import init_db # Импортируем функцию инициализации БД
+from .handlers import router
+from .logger import UserLoggingMiddleware # Импортируем middleware
+from .database import init_db # Импортируем функцию инициализации БД
 
 # Загрузка переменных окружения и настройка логгирования из app.logger
 load_dotenv()
-import logger # Импорт для инициализации настроек логгирования
+from . import logger # Импорт для инициализации настроек логгирования
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 

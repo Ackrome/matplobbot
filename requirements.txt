@@ -5,7 +5,12 @@ matplobblib==0.3.10
 python-dotenv==1.0.1
 dotenv==0.9.9
 aiosqlite
-ipython
+matplobblib
+matplotlib
+Pillow>=9.0.0
 markdown
 cachetools
-Pillow>=9.0.0
+ipython
+aiohttp>=3.8.0
+telegraph
+httpx

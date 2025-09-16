@@ -3,33 +3,28 @@ import logging
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, FSInputFile, BufferedInputFile
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from PIL import Image
+import aiohttp
+from telegraph import Telegraph
+from telegraph.exceptions import TelegraphException
 
-import database
 import asyncio
 import sys
-import subprocess
 import matplotlib
 matplotlib.use('Agg') # Use a non-interactive backend for server environments
-import matplotlib.pyplot as plt
 import matplobblib
 import os
 import pkg_resources
-import io
-import contextlib
-import tempfile # Для создания временных директорий
-import shutil   # Для удаления временных директорий
-import glob # Для поиска файлов по шаблону
-import traceback
-
+import re
 import hashlib
 # from main import logging
 
-import keyboards as kb
+from . import database
+from . import keyboards as kb
+from . import service
 
 SEARCH_RESULTS_PER_PAGE = 10
 
@@ -57,23 +52,6 @@ router = Router()
 # {user_id: {'query': str, 'results': list}}
 user_search_results_cache = {}
 
-# --- User Settings Defaults ---
-# Эти настройки используются по умолчанию, если для пользователя нет записи в БД
-# или если конкретная настройка отсутствует в его записи.
-DEFAULT_SETTINGS = {
-    'show_docstring': True,
-    'latex_padding': 15,
-}
-
-# Теперь эта функция асинхронная, так как обращается к БД
-async def get_user_settings(user_id: int) -> dict:
-    """Получает настройки для пользователя из БД, объединяя их с настройками по умолчанию."""
-    db_settings = await database.get_user_settings_db(user_id)
-    merged_settings = DEFAULT_SETTINGS.copy()
-    merged_settings.update(db_settings) # Настройки из БД переопределяют дефолтные
-    return merged_settings
-
-
 @router.message(CommandStart())
 async def comand_start(message: Message):
     await message.answer(
@@ -89,6 +67,28 @@ async def comand_help(message: Message):
         reply_markup=kb.get_help_inline_keyboard(message.from_user.id)
     )
 
+@router.message(StateFilter('*'), Command("cancel"))
+@router.message(StateFilter('*'), F.text.casefold() == "отмена")
+async def cancel_handler(message: Message, state: FSMContext) -> None:
+    """
+    Позволяет пользователю отменить любое действие (выйти из любого состояния).
+    """
+    current_state = await state.get_state()
+    if current_state is None:
+        await message.answer(
+            "Нет активной команды для отмены.",
+            reply_markup=kb.get_main_reply_keyboard(message.from_user.id)
+        )
+        return
+
+    logging.info(f"Cancelling state {current_state} for user {message.from_user.id}")
+    await state.clear()
+    # Убираем клавиатуру предыдущего шага и ставим основную
+    await message.answer(
+        "Действие отменено.",
+        reply_markup=kb.get_main_reply_keyboard(message.from_user.id),
+    )
+
 ##################################################################################################
 # ASK
 ##################################################################################################
@@ -98,6 +98,9 @@ class Search(StatesGroup):
     code = State()
     query = State()
 
+class MarkdownSearch(StatesGroup):
+    query = State()
+
 class LatexRender(StatesGroup):
     formula = State()
 
@@ -105,7 +108,7 @@ class LatexRender(StatesGroup):
 @router.message(Command('ask'))
 async def ask(message: Message, state: FSMContext):
     await state.set_state(Search.submodule)
-    await message.answer('Введите ваш вопрос', reply_markup=kb.get_submodules_reply_keyboard(message.from_user.id))
+    await message.answer('Выберите подмодуль', reply_markup=kb.get_submodules_reply_keyboard(message.from_user.id))
 
 @router.message(Search.submodule)
 async def process_submodule(message: Message, state: FSMContext):
@@ -150,8 +153,8 @@ async def process_code(message: Message, state: FSMContext):
 
     # А теперь получаем код с учетом настроек пользователя
     module = matplobblib._importlib.import_module(f'matplobblib.{submodule}')
-    settings = await get_user_settings(message.from_user.id)
-    dict_name = 'themes_list_dicts_full' if settings.get('show_docstring', True) else 'themes_list_dicts_full_nd'
+    settings = await database.get_user_settings(message.from_user.id)
+    dict_name = 'themes_list_dicts_full' if settings['show_docstring'] else 'themes_list_dicts_full_nd'
     code_dictionary = getattr(module, dict_name)
     repl = code_dictionary[topic][data["code"]]
 
@@ -234,267 +237,11 @@ async def execute_command(message: Message, state: FSMContext):
 async def process_execution_from_user(message: Message, state: FSMContext):
     """Executes the received Python code and sends back the output, including images and rich display objects."""
     await state.clear()
-    await _execute_code_and_send_results(message, message.text)
-
-async def _execute_code_and_send_results(message: Message, code_to_execute: str):
-    """Helper function to execute code and send results back to the user."""
-    output_capture = io.StringIO()
-    execution_error = None
-    temp_dir = None
-    original_cwd = os.getcwd()
-    rich_outputs = []
-    exec_globals = { 
-        "asyncio": asyncio,
-        "message": message,
-        "os": os,
-        "sys": sys,
-        "__builtins__": __builtins__,
-    }
-    def convert_html_to_telegram_html(html_content: str) -> str:
-        """Converts generic HTML to Telegram-supported HTML."""
-        # Headers to bold
-        for i in range(1, 7):
-            html_content = html_content.replace(f'<h{i}>', '<b>').replace(f'</h{i}>', '</b>')
-
-        # Paragraphs to newlines
-        html_content = html_content.replace('<p>', '').replace('</p>', '\n')
-
-        # Lists
-        html_content = html_content.replace('<ul>', '').replace('</ul>', '')
-        html_content = html_content.replace('<ol>', '').replace('</ol>', '')
-        html_content = html_content.replace('<li>', '• ').replace('</li>', '\n')
-
-        # Other replacements
-        html_content = html_content.replace('<em>', '<i>').replace('</em>', '</i>')
-        html_content = html_content.replace('<strong>', '<b>').replace('</strong>', '</b>')
-
-        # Clean up extra newlines and spaces
-        lines = [line.strip() for line in html_content.split('\n')]
-        return '\n'.join(filter(None, lines))
-
-    # 2. Попытка импорта "rich display" библиотек и внедрение кастомных функций
-    try:
-        from IPython.display import display as ipython_display, Markdown, HTML
-        import markdown
-
-        def custom_display(*objs, **kwargs):
-            """Перехватывает вызовы display, обрабатывает Markdown/HTML и делегирует остальное."""
-            for obj in objs:
-                if isinstance(obj, Markdown):
-                    html_content = markdown.markdown(obj.data, extensions=['fenced_code'])
-                    tg_html = convert_html_to_telegram_html(html_content)
-                    rich_outputs.append({'type': 'html', 'content': tg_html})
-                elif isinstance(obj, HTML):
-                    tg_html = convert_html_to_telegram_html(obj.data)
-                    rich_outputs.append({'type': 'html', 'content': tg_html})
-                else:
-                    # Для других объектов используем стандартный display,
-                    # который выведет их текстовое представление в stdout (который мы перехватываем)
-                    # For other objects, capture their string representation.
-                    # This avoids unexpected behavior from ipython_display outside an IPython kernel.
-                    output_capture.write(repr(obj) + '\n')
-
-        # Внедряем наши функции и классы в окружение для выполнения 
-        exec_globals['display'] = custom_display 
-        exec_globals['Markdown'] = Markdown
-        exec_globals['HTML'] = HTML
-
-    except ImportError:
-        logging.warning("IPython или markdown не установлены. Rich display отключен для /execute.")
-        pass
-
-    # 3. Выполнение кода пользователя в контролируемом окружении
-    try:
-        temp_dir = tempfile.mkdtemp()
-        os.chdir(temp_dir)
-
-        with contextlib.redirect_stdout(output_capture), contextlib.redirect_stderr(output_capture):
-            local_scope = {} # Словарь для получения результата exec (самой функции)
-            wrapped_code = f"async def __exec_code():\n"
-            wrapped_code += "".join([f"    {line}\n" for line in code_to_execute.splitlines()])
-            
-            exec(wrapped_code, exec_globals, local_scope)
-            await local_scope["__exec_code"]()
-            
-    except Exception:
-        execution_error = f"--- ОШИБКА ВЫПОЛНЕНИЯ ---\n{traceback.format_exc()}"
-    finally:
-        os.chdir(original_cwd)
-
-        # --- Отправка результатов ---
-        if execution_error:
-            await message.answer(f"```\n{execution_error}\n```", parse_mode='markdown')
-
-        # Отправляем rich-вывод (HTML)
-        for output in rich_outputs: 
-            content_to_send = output['content'] # This is the raw HTML or Markdown string
-            parse_mode = None # Default to no parse mode, will be set based on type
-
-            if output['type'] == 'markdown':
-                # Convert Markdown to HTML first
-                content_to_send = markdown.markdown(content_to_send, extensions=['fenced_code'])
-                # Then apply Telegram-specific HTML conversion for basic tags
-                content_to_send = convert_html_to_telegram_html(content_to_send)
-                parse_mode = 'HTML'
-            elif output['type'] == 'html':
-                # For explicit HTML objects, try to send raw HTML and let Telegram parse it.
-                # convert_html_to_telegram_html is NOT applied here, relying on Telegram's parser.
-                parse_mode = 'HTML'
-
-            if content_to_send:
-                try:
-                    await message.answer(content_to_send, parse_mode=parse_mode)
-                except TelegramBadRequest as e:
-                    logging.warning(f"TelegramBadRequest when sending rich output (type: {output['type']}): {e}. Attempting to send as file.")
-                    # If Telegram HTML fails, save as .html file and send
-                    file_name = f"output_{output['type']}_{len(rich_outputs)}.html"
-                    file_path = os.path.join(temp_dir, file_name)
-                    
-                    # Ensure the content written to file is the original, full HTML
-                    # For markdown, this would be the markdown-converted HTML
-                    # For HTML, this would be the raw HTML from obj.data
-                    content_to_write = output['content'] # Original content
-                    if output['type'] == 'markdown':
-                        content_to_write = markdown.markdown(content_to_write, extensions=['fenced_code'])
-
-                    with open(file_path, 'w', encoding='utf-8') as f:
-                        f.write(content_to_write)
-                    try:
-                        await message.answer_document(
-                            document=FSInputFile(file_path),
-                            caption=f"Вывод ({output['type']}) был отправлен как файл, так как он слишком сложен для отображения в Telegram."
-                        )
-                    except Exception as file_e:
-                        logging.error(f"Failed to send rich output as file {file_path}: {file_e}")
-                        await message.answer(f"Не удалось отправить rich-вывод как файл: {file_e}")
-                except Exception as e:
-                    logging.error(f"Unexpected error when sending rich output: {e}")
-                    await message.answer(f"Произошла ошибка при отправке rich-вывода: {e}")
-
-        # Ищем и отправляем сгенерированные изображения 
-        image_files = [] 
-        if temp_dir: 
-            for ext in ['*.png', '*.jpg', '*.jpeg', '*.gif']:
-                image_files.extend(glob.glob(os.path.join(temp_dir, ext)))
-            
-            for img_path in image_files:
-                try:
-                    await message.answer_photo(photo=FSInputFile(img_path))
-                except Exception as e:
-                    logging.error(f"Failed to send photo {img_path}: {e}")
-                    await message.answer(f"Не удалось отправить изображение {os.path.basename(img_path)}: {e}")
-
-        # Отправляем текстовый вывод, если он есть
-        text_output = output_capture.getvalue()
-        if text_output:
-            if len(text_output) > 4096:
-                await message.answer('Текстовый вывод слишком длинный, отправляю частями.')
-                for x in range(0, len(text_output), 4096):
-                    await message.answer(f"```\n{text_output[x:x+4096]}\n```", parse_mode='markdown')
-            else:
-                await message.answer(f"```\n{text_output}\n```", parse_mode='markdown')
-
-        # Сообщение, если не было ни вывода, ни картинок, ни ошибок
-        if not execution_error and not image_files and not text_output and not rich_outputs:
-            await message.answer("Код выполнен успешно без какого-либо вывода.")
-
-        # Очищаем временную директорию
-        if temp_dir and os.path.exists(temp_dir):
-            try:
-                shutil.rmtree(temp_dir)
-            except Exception as e:
-                logging.error(f"Ошибка при удалении временной директории {temp_dir}: {e}")
-
-        # Возвращаем основную клавиатуру
-        await message.answer("Выполнение завершено.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
+    await service.execute_code_and_send_results(message, message.text)
 
 ##################################################################################################
 # LATEX
 ##################################################################################################
-
-LATEX_PREAMBLE = r"""
-\documentclass[12pt,varwidth=500pt]{standalone}
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath}
-\usepackage{amssymb}
-\usepackage{amsfonts}
-\usepackage{graphicx}
-\usepackage{color}
-\usepackage{mhchem}
-\usepackage{xcolor}
-\begin{document}
-"""
-
-LATEX_POSTAMBLE = r"\end{document}"
-
-
-def _render_latex_sync(latex_string: str, padding: int) -> io.BytesIO:
-    """Синхронная функция для рендеринга LaTeX в PNG с использованием latex и dvipng, с добавлением отступов."""
-    
-    # Если пользователь вводит формулу без $, добавляем их для корректного рендеринга математики
-    if not latex_string.strip().startswith('$') and not latex_string.strip().startswith('\\'):
-        latex_string = f'${latex_string}$'
-
-    full_latex_code = LATEX_PREAMBLE + latex_string + LATEX_POSTAMBLE
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        tex_path = os.path.join(temp_dir, 'formula.tex')
-        log_path = os.path.join(temp_dir, 'formula.log')
-        dvi_path = os.path.join(temp_dir, 'formula.dvi')
-        png_path = os.path.join(temp_dir, 'formula.png')
-
-        with open(tex_path, 'w', encoding='utf-8') as f:
-            f.write(full_latex_code)
-
-        # --- Запуск LaTeX ---
-        process = subprocess.run(
-            ['latex', '-interaction=nonstopmode', '-output-directory', temp_dir, tex_path],
-            capture_output=True, text=True, encoding='utf-8', errors='ignore'
-        )
-
-        # --- Проверка на ошибки LaTeX ---
-        if not os.path.exists(dvi_path) or process.returncode != 0:
-            error_message = "Неизвестная ошибка LaTeX."
-            if os.path.exists(log_path):
-                with open(log_path, 'r', encoding='utf-8', errors='ignore') as log_file:
-                    log_content = log_file.read()
-                    # Поиск конкретной строки с ошибкой
-                    error_lines = [line for line in log_content.split('\n') if line.startswith('! ')]
-                    if error_lines:
-                        error_message = error_lines[0].strip()
-                    else: # Если '!' не найдено, показываем конец лога
-                        error_message = "...\n" + "\n".join(log_content.split('\n')[-20:])
-            raise ValueError(f"Ошибка компиляции LaTeX:\n{error_message}")
-
-        # --- Запуск dvipng для конвертации DVI в PNG ---
-        dvipng_process = subprocess.run(
-            ['dvipng', '-D', '300', '-T', 'tight', '-bg', 'Transparent', '-o', png_path, dvi_path],
-            capture_output=True, text=True, encoding='utf-8', errors='ignore'
-        )
-        
-        if dvipng_process.returncode != 0 or not os.path.exists(png_path):
-            raise RuntimeError(f"Ошибка dvipng: {dvipng_process.stderr}")
-
-        # --- Добавление отступов с помощью Pillow ---
-        with Image.open(png_path) as img:
-            # Создаем новое изображение с прозрачным фоном и отступами
-            new_width = img.width + 2 * padding
-            new_height = img.height + 2 * padding
-            new_img = Image.new("RGBA", (new_width, new_height), (0, 0, 0, 0))
-            
-            # Вставляем исходное изображение в центр нового
-            new_img.paste(img, (padding, padding))
-            
-            # Сохраняем результат в буфер в памяти
-            buf = io.BytesIO()
-            new_img.save(buf, format='PNG')
-            buf.seek(0)
-            return buf
-
-async def render_latex_to_image(latex_string: str, padding: int) -> io.BytesIO:
-    """Асинхронная обертка для рендеринга LaTeX, выполняемая в отдельном потоке."""
-    return await asyncio.to_thread(_render_latex_sync, latex_string, padding)
 
 @router.message(Command('latex'))
 async def latex_command(message: Message, state: FSMContext):
@@ -512,9 +259,9 @@ async def process_latex_formula(message: Message, state: FSMContext):
     status_msg = await message.answer("🖼️ Рендеринг формулы...")
 
     try:
-        settings = await get_user_settings(message.from_user.id)
-        padding = settings.get('latex_padding', DEFAULT_SETTINGS['latex_padding'])
-        image_buffer = await render_latex_to_image(formula, padding)
+        settings = await database.get_user_settings(message.from_user.id)
+        padding = settings['latex_padding']
+        image_buffer = await service.render_latex_to_image(formula, padding)
         
         await status_msg.delete()
         await message.answer_photo(
@@ -534,6 +281,190 @@ async def process_latex_formula(message: Message, state: FSMContext):
         await status_msg.edit_text(
             f"Произошла непредвиденная ошибка: {e}"
         )
+
+##################################################################################################
+# MARKDOWN SEARCH & ABSTRACTS
+##################################################################################################
+
+# Cache for markdown search results
+# {user_id: {'query': str, 'results': list[dict]}}
+md_search_results_cache = {}
+
+
+@router.message(Command('abstracts'))
+async def abstracts_command(message: Message):
+    """Handles the /abstracts command, showing root of the repo."""
+    await service.display_abstracts_path(message, path="")
+
+@router.callback_query(F.data.startswith("abs_nav_hash:"))
+async def cq_abstracts_navigate(callback: CallbackQuery):
+    """Handles navigation through abstracts repo directories."""
+    path_hash = callback.data.split(":", 1)[1]
+    path = kb.code_path_cache.get(path_hash)
+
+    if path is None: # Important to check for None, as "" is a valid path (root)
+        await callback.answer("Информация о навигации устарела. Пожалуйста, начните с /abstracts.", show_alert=True)
+        return
+
+    await callback.answer()
+    await service.display_abstracts_path(callback.message, path, is_edit=True)
+
+@router.callback_query(F.data.startswith("abs_show_hash:"))
+async def cq_abstracts_show_file(callback: CallbackQuery):
+    """Calls the helper to display a file from the abstracts repo."""
+    path_hash = callback.data.split(":", 1)[1]
+    file_path = kb.code_path_cache.get(path_hash)
+
+    if not file_path:
+        await callback.answer("Информация о файле устарела. Пожалуйста, обновите навигацию.", show_alert=True)
+        return
+
+    await service.display_github_file(callback, file_path)
+
+async def get_md_search_results_keyboard(user_id: int, page: int = 0) -> InlineKeyboardMarkup | None:
+    """Создает инлайн-клавиатуру для страницы результатов поиска по конспектам с пагинацией."""
+    search_data = md_search_results_cache.get(user_id)
+    if not search_data or not search_data.get('results'):
+        return None
+
+    results = search_data['results']
+    builder = InlineKeyboardBuilder()
+    
+    start = page * SEARCH_RESULTS_PER_PAGE
+    end = start + SEARCH_RESULTS_PER_PAGE
+    page_items = results[start:end]
+
+    for i, item in enumerate(page_items):
+        # Используем хэш для callback_data, чтобы избежать превышения лимита длины
+        path_hash = hashlib.sha1(item['path'].encode()).hexdigest()[:16]
+        kb.code_path_cache[path_hash] = item['path']
+        builder.row(InlineKeyboardButton(
+            text=f"📄 {item['path']}",
+            callback_data=f"show_md_hash:{path_hash}"
+        ))
+
+    # Элементы управления пагинацией
+    total_pages = (len(results) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
+    if total_pages > 1:
+        pagination_buttons = []
+        if page > 0:
+            pagination_buttons.append(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"md_search_page:{page - 1}"))
+        
+        pagination_buttons.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop"))
+
+        if end < len(results):
+            pagination_buttons.append(InlineKeyboardButton(text="Вперед ➡️", callback_data=f"md_search_page:{page + 1}"))
+        
+        builder.row(*pagination_buttons)
+
+    return builder.as_markup()
+
+
+async def search_github_md(query: str) -> list[dict] | None:
+    """Searches for markdown files in a specific GitHub repository."""
+    github_token = os.getenv("GITHUB_TOKEN")
+    if not github_token:
+        logging.error("GITHUB_TOKEN environment variable not set. Markdown search is disabled.")
+        return None
+    MD_SEARCH_REPO = "kvdep/Abstracts"
+    search_query = f"{query} repo:{MD_SEARCH_REPO} extension:md"
+    url = "https://api.github.com/search/code"
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Authorization": f"Bearer {github_token}"
+    }
+    params = {"q": search_query, "per_page": 100} # Get up to 100 results
+
+    try:
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.get(url, params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("items", [])
+                else:
+                    error_text = await response.text()
+                    logging.error(f"GitHub API search failed with status {response.status}: {error_text}")
+                    return None
+    except Exception as e:
+        logging.error(f"Error during GitHub API request: {e}", exc_info=True)
+        return None
+
+@router.message(Command('search_md'))
+async def search_md_command(message: Message, state: FSMContext):
+    """Handles the /search_md command."""
+    await state.set_state(MarkdownSearch.query)
+    await message.answer("Введите ключевые слова для поиска по конспектам:", reply_markup=ReplyKeyboardRemove())
+
+@router.message(MarkdownSearch.query)
+async def process_md_search_query(message: Message, state: FSMContext):
+    """Processes the user's query for markdown files."""
+    await state.clear()
+    query = message.text
+    status_msg = await message.answer(f"Идет поиск конспектов по запросу '{query}'...")
+
+    results = await search_github_md(query)
+
+    if results is None:
+        await status_msg.edit_text("Произошла ошибка при поиске. Попробуйте позже.")
+        await message.answer("Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
+        return
+
+    if not results:
+        await status_msg.edit_text(f"По вашему запросу '{query}' ничего не найдено.")
+        await message.answer("Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
+        return
+
+    user_id = message.from_user.id
+    md_search_results_cache[user_id] = {'query': query, 'results': results}
+
+    keyboard = await get_md_search_results_keyboard(user_id, page=0)
+    total_pages = (len(results) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
+
+    await status_msg.edit_text(
+        f"Найдено {len(results)} конспектов по запросу '{query}'. Страница 1/{total_pages}:",
+        reply_markup=keyboard
+    )
+
+@router.callback_query(F.data.startswith("md_search_page:"))
+async def cq_md_search_pagination(callback: CallbackQuery):
+    """Обрабатывает нажатия на кнопки пагинации в результатах поиска по конспектам."""
+    user_id = callback.from_user.id
+    search_data = md_search_results_cache.get(user_id)
+    if not search_data:
+        await callback.answer("Результаты поиска устарели. Пожалуйста, выполните поиск заново.", show_alert=True)
+        await callback.message.delete()
+        return
+
+    page = int(callback.data.split(":", 1)[1])
+    keyboard = await get_md_search_results_keyboard(user_id, page=page)
+    
+    results = search_data['results']
+    query = search_data['query']
+    total_pages = (len(results) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
+
+    try:
+        await callback.message.edit_text(
+            f"Найдено {len(results)} конспектов по запросу '{query}'. Страница {page + 1}/{total_pages}:",
+            reply_markup=keyboard
+        )
+    except TelegramBadRequest as e:
+        if "message is not modified" not in e.message:
+            raise
+    finally:
+        await callback.answer()
+
+@router.callback_query(F.data.startswith("show_md_hash:"))
+async def cq_show_md_result(callback: CallbackQuery):
+    """Fetches and displays the content of a markdown file from GitHub search results."""
+    path_hash = callback.data.split(":", 1)[1]
+    file_path = kb.code_path_cache.get(path_hash)
+
+    if not file_path:
+        await callback.answer("Информация о файле устарела. Пожалуйста, выполните поиск заново.", show_alert=True)
+        return
+
+    await service.display_github_file(callback, file_path)
 
 ##################################################################################################
 # SEARCH & FAVORITES
@@ -749,36 +680,6 @@ async def cq_noop(callback: CallbackQuery):
     """Пустой обработчик для кнопок, которые не должны ничего делать (например, счетчик страниц)."""
     await callback.answer()
 
-async def _show_code_by_path(message: Message, code_path: str, header: str):
-    """Helper function to send code to the user based on its path."""
-    try:
-        submodule, topic, code_name = code_path.split('.')
-        
-        module = matplobblib._importlib.import_module(f'matplobblib.{submodule}')
-
-        # Определяем, показывать ли docstring, на основе настроек пользователя
-        settings = await get_user_settings(message.from_user.id)
-        dict_name = 'themes_list_dicts_full' if settings.get('show_docstring', True) else 'themes_list_dicts_full_nd'
-        code_dictionary = getattr(module, dict_name)
-
-        repl = code_dictionary[topic][code_name]
-
-        await message.answer(f'{header}: \n{code_path.replace(".", " -> ")}')
-        
-        if len(repl) > 4096:
-            await message.answer('Сообщение будет отправлено в нескольких частях')
-            for x in range(0, len(repl), 4096):
-                await message.answer(f'''```python\n{repl[x:x+4096]}\n```''', parse_mode='markdown')
-        else:
-            await message.answer(f'''```python\n{repl}\n```''', parse_mode='markdown')
-        
-        await message.answer("Что делаем дальше?", reply_markup=kb.get_code_action_keyboard(code_path))
-        await message.answer("Или выберите другую команду.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
-
-    except (ValueError, KeyError, AttributeError, ImportError) as e:
-        logging.error(f"Ошибка при показе кода (path: {code_path}): {e}")
-        await message.answer("Не удалось найти или отобразить этот пример кода. Возможно, он был удален или перемещен.")
-
 @router.callback_query(F.data.startswith("show_search_idx:"))
 async def cq_show_search_result_by_index(callback: CallbackQuery):
     """Handles clicks on search result buttons."""
@@ -798,7 +699,7 @@ async def cq_show_search_result_by_index(callback: CallbackQuery):
         code_path = results[index]['path']
         
         await callback.answer() # Acknowledge the callback
-        await _show_code_by_path(callback.message, code_path, "Результат поиска")
+        await service.show_code_by_path(callback.message, code_path, "Результат поиска")
 
     except (ValueError, IndexError) as e:
         logging.warning(f"Invalid search index from user {user_id}. Data: {callback.data}. Error: {e}")
@@ -817,7 +718,7 @@ async def cq_show_favorite(callback: CallbackQuery):
         return
 
     await callback.answer()
-    await _show_code_by_path(callback.message, code_path, "Избранное")
+    await service.show_code_by_path(callback.message, code_path, "Избранное")
 
 @router.callback_query(F.data.startswith("run_hash:"))
 async def cq_run_code_from_lib(callback: CallbackQuery):
@@ -833,7 +734,7 @@ async def cq_run_code_from_lib(callback: CallbackQuery):
     code_to_run = module.themes_list_dicts_full_nd[topic][code_name] # Берем код без docstring для корректного выполнения
 
     await callback.answer("▶️ Запускаю пример...")
-    await _execute_code_and_send_results(callback.message, code_to_run)
+    await service.execute_code_and_send_results(callback.message, code_to_run)
 ##################################################################################################
 # SETTINGS
 ##################################################################################################
@@ -841,10 +742,10 @@ async def cq_run_code_from_lib(callback: CallbackQuery):
 # Теперь эта функция асинхронная, так как обращается к БД
 async def get_settings_keyboard(user_id: int) -> InlineKeyboardBuilder:
     """Создает инлайн-клавиатуру для настроек пользователя."""
-    settings = await get_user_settings(user_id) # Теперь асинхронный вызов
+    settings = await database.get_user_settings(user_id) # Теперь асинхронный вызов
     builder = InlineKeyboardBuilder()
 
-    show_docstring_status = "✅ Вкл" if settings.get('show_docstring', True) else "❌ Выкл"
+    show_docstring_status = "✅ Вкл" if settings['show_docstring'] else "❌ Выкл"
 
     builder.row(
         InlineKeyboardButton(
@@ -868,10 +769,10 @@ async def command_settings(message: Message):
 async def cq_toggle_docstring(callback: CallbackQuery):
     """Обработчик для переключения настройки 'show_docstring'."""
     user_id = callback.from_user.id
-    settings = await get_user_settings(user_id) # Теперь асинхронный вызов
-    settings['show_docstring'] = not settings.get('show_docstring', True)
+    settings = await database.get_user_settings(user_id) # Теперь асинхронный вызов
+    settings['show_docstring'] = not settings['show_docstring']
     await database.update_user_settings_db(user_id, settings) # Сохраняем обновленные настройки в БД
-    keyboard = await get_settings_keyboard(user_id) # Теперь асинхронный вызов
+    keyboard = await get_settings_keyboard(user_id)
     await callback.message.edit_reply_markup(reply_markup=keyboard.as_markup())
     await callback.answer("Настройка 'Показывать описание' обновлена.")
 
@@ -881,10 +782,10 @@ async def cq_toggle_docstring(callback: CallbackQuery):
 
 async def get_latex_settings_keyboard(user_id: int) -> InlineKeyboardBuilder:
     """Создает инлайн-клавиатуру для настроек LaTeX."""
-    settings = await get_user_settings(user_id)
+    settings = await database.get_user_settings(user_id)
     builder = InlineKeyboardBuilder()
 
-    padding = settings.get('latex_padding', DEFAULT_SETTINGS['latex_padding'])
+    padding = settings['latex_padding']
 
     builder.row(
         InlineKeyboardButton(text="➖", callback_data="latex_padding_decr"),
@@ -906,8 +807,8 @@ async def command_settings_latex(message: Message):
 async def cq_change_latex_padding(callback: CallbackQuery):
     """Обработчик для изменения отступа LaTeX."""
     user_id = callback.from_user.id
-    settings = await get_user_settings(user_id)
-    current_padding = settings.get('latex_padding', DEFAULT_SETTINGS['latex_padding'])
+    settings = await database.get_user_settings(user_id)
+    current_padding = settings['latex_padding']
 
     action = callback.data.split('_')[-1]  # 'incr' or 'decr'
     new_padding = current_padding
@@ -947,6 +848,20 @@ async def cq_help_cmd_search(callback: CallbackQuery, state: FSMContext):
     # Повторяем логику команды /search
     await state.set_state(Search.query)
     await callback.message.answer("Введите ключевые слова для поиска по примерам кода:", reply_markup=ReplyKeyboardRemove())
+
+@router.callback_query(F.data == "help_cmd_search_md")
+async def cq_help_cmd_search_md(callback: CallbackQuery, state: FSMContext):
+    """Handler for '/search_md' button from help menu."""
+    await callback.answer()
+    # Повторяем логику команды /search_md
+    await state.set_state(MarkdownSearch.query)
+    await callback.message.answer("Введите ключевые слова для поиска по конспектам:", reply_markup=ReplyKeyboardRemove())
+
+@router.callback_query(F.data == "help_cmd_abstracts")
+async def cq_help_cmd_abstracts(callback: CallbackQuery):
+    """Handler for '/abstracts' button from help menu."""
+    await callback.answer()
+    await abstracts_command(callback.message)
 
 @router.callback_query(F.data == "help_cmd_favorites")
 async def cq_help_cmd_favorites(callback: CallbackQuery):

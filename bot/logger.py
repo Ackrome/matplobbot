@@ -4,7 +4,7 @@ from aiogram.types import Update
 import os # Добавлено
 
 # Импортируем функцию для логирования в БД
-from database import log_user_action
+from .database import log_user_action
 
 # Директория и файл для логов
 LOG_DIR = "/app/logs" # Директория для логов внутри контейнера

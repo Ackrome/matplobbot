@@ -9,7 +9,7 @@ import os # Import os to access environment variables like ADMIN_USER_ID
 logger = logging.getLogger(__name__)
 
 # Define base commands that are always available
-BASE_COMMANDS = ['/ask', '/search', '/favorites', '/settings', '/settings_latex', '/help', '/execute', '/latex']
+BASE_COMMANDS = ['/ask', '/search', '/search_md', '/abstracts', '/favorites', '/settings', '/settings_latex', '/help', '/execute', '/latex']
 ADMIN_COMMANDS = ['/update']
 
 # Cache for long code paths to use in callback_data
@@ -68,36 +68,36 @@ def get_main_reply_keyboard(user_id: int) -> ReplyKeyboardMarkup:
 
 # Function to get the submodules ReplyKeyboardMarkup
 def get_submodules_reply_keyboard(user_id: int) -> ReplyKeyboardMarkup:
-    current_commands = _get_user_commands(user_id)
-    keyboard_buttons = [[KeyboardButton(text=i)] for i in matplobblib.submodules + current_commands]
+    keyboard_buttons = [[KeyboardButton(text=i)] for i in matplobblib.submodules]
+    keyboard_buttons.append([KeyboardButton(text="Отмена")])
     return ReplyKeyboardMarkup(
         keyboard=keyboard_buttons,
         resize_keyboard=True,
-        input_field_placeholder='Что выберем, хозяин?',
+        input_field_placeholder='Выберите подмодуль или нажмите "Отмена"',
         one_time_keyboard=True,
     )
 
 # Function to get the topics ReplyKeyboardMarkup for a specific submodule
 def get_topics_reply_keyboard(user_id: int, submodule_name: str) -> ReplyKeyboardMarkup:
-    current_commands = _get_user_commands(user_id)
     topics = topics_data.get(submodule_name, {}).get('topics', [])
-    keyboard_buttons = [[KeyboardButton(text=i)] for i in topics + current_commands]
+    keyboard_buttons = [[KeyboardButton(text=i)] for i in topics]
+    keyboard_buttons.append([KeyboardButton(text="Отмена")])
     return ReplyKeyboardMarkup(
         keyboard=keyboard_buttons,
         resize_keyboard=True,
-        input_field_placeholder='Что выберем, хозяин?',
+        input_field_placeholder='Выберите тему или нажмите "Отмена"',
         one_time_keyboard=True,
     )
 
 # Function to get the codes ReplyKeyboardMarkup for a specific submodule and topic
 def get_codes_reply_keyboard(user_id: int, submodule_name: str, topic_name: str) -> ReplyKeyboardMarkup:
-    current_commands = _get_user_commands(user_id)
     codes = topics_data.get(submodule_name, {}).get('codes', {}).get(topic_name, [])
-    keyboard_buttons = [[KeyboardButton(text=i)] for i in codes + current_commands]
+    keyboard_buttons = [[KeyboardButton(text=i)] for i in codes]
+    keyboard_buttons.append([KeyboardButton(text="Отмена")])
     return ReplyKeyboardMarkup(
         keyboard=keyboard_buttons,
         resize_keyboard=True,
-        input_field_placeholder='Что выберем, хозяин?',
+        input_field_placeholder='Выберите задачу или нажмите "Отмена"',
         one_time_keyboard=True,
     )
 
@@ -107,6 +107,8 @@ def get_help_inline_keyboard(user_id: int) -> InlineKeyboardMarkup:
     inline_keyboard_rows = [
         [InlineKeyboardButton(text="❓ /ask - Начать поиск", callback_data="help_cmd_ask")],
         [InlineKeyboardButton(text="🔍 /search - Поиск по библиотеке", callback_data="help_cmd_search")],
+        [InlineKeyboardButton(text="📚 /search_md - Поиск по конспектам", callback_data="help_cmd_search_md")],
+        [InlineKeyboardButton(text="📂 /abstracts - Просмотр конспектов", callback_data="help_cmd_abstracts")],
         [InlineKeyboardButton(text="⭐ /favorites - Избранное", callback_data="help_cmd_favorites")],
         [InlineKeyboardButton(text="⚙️ /settings - Настройки", callback_data="help_cmd_settings")],
         [InlineKeyboardButton(text="📐 /settings_latex - Настройки LaTeX", callback_data="help_cmd_settings_latex")],
