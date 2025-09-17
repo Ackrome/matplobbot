@@ -9,8 +9,8 @@ import os # Import os to access environment variables like ADMIN_USER_ID
 logger = logging.getLogger(__name__)
 
 # Define base commands that are always available
-BASE_COMMANDS = ['/ask', '/search', '/search_md', '/abstracts', '/favorites', '/settings', '/settings_latex', '/help', '/execute', '/latex']
-ADMIN_COMMANDS = ['/update']
+BASE_COMMANDS = ['/matp_all', '/matp_search', '/lec_search', '/lec_all', '/favorites', '/settings', '/help', '/execute', '/latex']
+ADMIN_COMMANDS = ['/update', '/clear_cache']
 
 # Cache for long code paths to use in callback_data
 code_path_cache = LRUCache(maxsize=1024)
@@ -105,19 +105,19 @@ def get_codes_reply_keyboard(user_id: int, submodule_name: str, topic_name: str)
 # Function to get the help InlineKeyboardMarkup
 def get_help_inline_keyboard(user_id: int) -> InlineKeyboardMarkup:
     inline_keyboard_rows = [
-        [InlineKeyboardButton(text="❓ /ask - Начать поиск", callback_data="help_cmd_ask")],
-        [InlineKeyboardButton(text="🔍 /search - Поиск по библиотеке", callback_data="help_cmd_search")],
-        [InlineKeyboardButton(text="📚 /search_md - Поиск по конспектам", callback_data="help_cmd_search_md")],
-        [InlineKeyboardButton(text="📂 /abstracts - Просмотр конспектов", callback_data="help_cmd_abstracts")],
+        [InlineKeyboardButton(text="📂 /matp_all - Просмотр библиотеки", callback_data="help_cmd_matp_all")],
+        [InlineKeyboardButton(text="🔍 /matp_search - Поиск по библиотеке", callback_data="help_cmd_matp_search")],
+        [InlineKeyboardButton(text="📚 /lec_search - Поиск по конспектам", callback_data="help_cmd_lec_search")],
+        [InlineKeyboardButton(text="📂 /lec_all - Просмотр конспектов", callback_data="help_cmd_lec_all")],
         [InlineKeyboardButton(text="⭐ /favorites - Избранное", callback_data="help_cmd_favorites")],
         [InlineKeyboardButton(text="⚙️ /settings - Настройки", callback_data="help_cmd_settings")],
-        [InlineKeyboardButton(text="📐 /settings_latex - Настройки LaTeX", callback_data="help_cmd_settings_latex")],
         [InlineKeyboardButton(text="▶️ /execute - Выполнить код", callback_data="help_cmd_execute")],
         [InlineKeyboardButton(text="🧮 /latex - Рендер LaTeX", callback_data="help_cmd_latex")]
     ]
     admin_id = os.getenv('ADMIN_USER_ID')
     if admin_id and user_id == int(admin_id):
-        inline_keyboard_rows.append( [InlineKeyboardButton(text="🔄 /update - Обновить (admin)", callback_data="help_cmd_update")])
+        inline_keyboard_rows.append([InlineKeyboardButton(text="🔄 /update - Обновить (admin)", callback_data="help_cmd_update")])
+        inline_keyboard_rows.append([InlineKeyboardButton(text="🗑️ /clear_cache - Очистить кэш (admin)", callback_data="help_cmd_clear_cache")])
     
     inline_keyboard_rows.append([InlineKeyboardButton(text="ℹ️ /help - Эта справка", callback_data="help_cmd_help")])
     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard_rows)

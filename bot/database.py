@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_SETTINGS = {
     'show_docstring': True,
     'latex_padding': 15,
+    'md_display_mode': 'md_file',
 }
 
 async def init_db():
@@ -62,6 +63,13 @@ async def init_db():
                 added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users (user_id),
                 UNIQUE(user_id, code_path)
+            )
+        ''')
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS latex_cache (
+                formula_hash TEXT PRIMARY KEY,
+                image_url TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         await db.commit()
@@ -147,3 +155,31 @@ async def get_favorites(user_id: int) -> list:
         cursor = await db.execute("SELECT code_path FROM user_favorites WHERE user_id = ? ORDER BY added_at DESC", (user_id,))
         rows = await cursor.fetchall()
         return [row[0] for row in rows]
+
+async def get_latex_cache(formula_hash: str) -> str | None:
+    """Retrieves a cached image URL for a given formula hash."""
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute("SELECT image_url FROM latex_cache WHERE formula_hash = ?", (formula_hash,))
+        result = await cursor.fetchone()
+        if result:
+            logger.debug(f"Cache hit for LaTeX formula hash: {formula_hash}")
+            return result[0]
+        logger.debug(f"Cache miss for LaTeX formula hash: {formula_hash}")
+        return None
+
+async def add_latex_cache(formula_hash: str, image_url: str):
+    """Adds a formula's image URL to the cache."""
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute(
+            "INSERT OR REPLACE INTO latex_cache (formula_hash, image_url) VALUES (?, ?)",
+            (formula_hash, image_url)
+        )
+        await db.commit()
+        logger.info(f"Cached new LaTeX image URL for hash: {formula_hash}")
+
+async def clear_latex_cache():
+    """Clears all entries from the latex_cache table."""
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("DELETE FROM latex_cache")
+        await db.commit()
+        logger.info("LaTeX cache table has been cleared.")

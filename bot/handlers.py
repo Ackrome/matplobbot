@@ -20,6 +20,7 @@ import os
 import pkg_resources
 import re
 import hashlib
+from cachetools import TTLCache
 # from main import logging
 
 from . import database
@@ -93,9 +94,6 @@ async def cancel_handler(message: Message, state: FSMContext) -> None:
 # ASK
 ##################################################################################################
 class Search(StatesGroup):
-    submodule = State()
-    topic = State()
-    code = State()
     query = State()
 
 class MarkdownSearch(StatesGroup):
@@ -104,72 +102,139 @@ class MarkdownSearch(StatesGroup):
 class LatexRender(StatesGroup):
     formula = State()
 
-
-@router.message(Command('ask'))
-async def ask(message: Message, state: FSMContext):
-    await state.set_state(Search.submodule)
-    await message.answer('Выберите подмодуль', reply_markup=kb.get_submodules_reply_keyboard(message.from_user.id))
-
-@router.message(Search.submodule)
-async def process_submodule(message: Message, state: FSMContext):
-    # Проверяем, что введённый подмодуль является ожидаемым
-    if message.text not in kb.topics_data:
-        await message.answer("Неверный выбор. Попробуйте еще раз.", reply_markup=kb.get_submodules_reply_keyboard(message.from_user.id))
-        return
-    await state.update_data(submodule=message.text)
-    await state.set_state(Search.topic)
-    await message.answer("Введите тему", reply_markup=kb.get_topics_reply_keyboard(message.from_user.id, message.text))
-
-@router.message(Search.topic)
-async def process_topic(message: Message, state: FSMContext):
-    data = await state.get_data()
-    submodule = data["submodule"]
-
-    # Получаем список тем из предзагруженных данных для валидации
-    topics = kb.topics_data.get(submodule, {}).get('topics', [])
-
-    # Если тема не входит в ожидаемые, просим попробовать снова
-    if message.text not in topics:
-        await message.answer("Неверный выбор. Попробуйте еще раз.", reply_markup=kb.get_topics_reply_keyboard(message.from_user.id, submodule))
-        return
-    await state.update_data(topic=message.text)
-    await state.set_state(Search.code)
-    await message.answer("Выберите задачу", reply_markup=kb.get_codes_reply_keyboard(message.from_user.id, submodule, message.text))
-
-@router.message(Search.code)
-async def process_code(message: Message, state: FSMContext):
-    data = await state.get_data()
-    submodule = data["submodule"]
-    topic = data["topic"]
-
-    # Валидация из предзагруженных данных
-    possible_codes = kb.topics_data.get(submodule, {}).get('codes', {}).get(topic, [])
-    if message.text not in possible_codes:
-        await message.answer("Неверный выбор. Попробуйте еще раз.", reply_markup=kb.get_codes_reply_keyboard(message.from_user.id, submodule, topic))
-        return
-    await state.update_data(code=message.text)
-    data = await state.get_data()
-    code_path = f'{submodule}.{topic}.{data["code"]}'
-
-    # А теперь получаем код с учетом настроек пользователя
-    module = matplobblib._importlib.import_module(f'matplobblib.{submodule}')
-    settings = await database.get_user_settings(message.from_user.id)
-    dict_name = 'themes_list_dicts_full' if settings['show_docstring'] else 'themes_list_dicts_full_nd'
-    code_dictionary = getattr(module, dict_name)
-    repl = code_dictionary[topic][data["code"]]
-
-    await message.answer(f'Ваш запрос: \n{submodule} \n{topic} \n{data["code"]}', reply_markup=ReplyKeyboardRemove())
+async def display_matp_all_navigation(message: Message, path: str = "", page: int = 0, is_edit: bool = False):
+    """Helper to display navigation for /matp_all command."""
+    path_parts = path.split('.') if path else []
+    level = len(path_parts)
     
-    if len(repl) > 4096:
-        await message.answer('Сообщение будет отправлено в нескольких частях')
-        for x in range(0, len(repl), 4096):
-            await message.answer(f'''```python\n{repl[x:x+4096]}\n```''', parse_mode='markdown')
+    builder = InlineKeyboardBuilder()
+    header_text = ""
+
+    # Level 0: Submodules
+    if level == 0:
+        header_text = "Выберите подмодуль"
+        items = sorted(matplobblib.submodules)
+        # No pagination for submodules, assuming list is short
+        for item in items:
+            path_hash = hashlib.sha1(item.encode()).hexdigest()[:16]
+            kb.code_path_cache[path_hash] = item
+            builder.row(InlineKeyboardButton(text=f"📁 {item}", callback_data=f"matp_all_nav_hash:{path_hash}:0"))
+    
+    # Level 1: Topics
+    elif level == 1:
+        submodule = path_parts[0]
+        header_text = f"Подмодуль `{submodule}`. Выберите тему"
+        all_topics = sorted(kb.topics_data.get(submodule, {}).get('topics', []))
+        
+        start = page * SEARCH_RESULTS_PER_PAGE
+        end = start + SEARCH_RESULTS_PER_PAGE
+        page_items = all_topics[start:end]
+
+        for item in page_items:
+            full_path = f"{submodule}.{item}"
+            path_hash = hashlib.sha1(full_path.encode()).hexdigest()[:16]
+            kb.code_path_cache[path_hash] = full_path
+            builder.row(InlineKeyboardButton(text=f"📚 {item}", callback_data=f"matp_all_nav_hash:{path_hash}:0"))
+        
+        # Back button
+        builder.row(InlineKeyboardButton(text="⬅️ .. (Назад к подмодулям)", callback_data="matp_all_nav_hash:root:0"))
+        
+        total_pages = (len(all_topics) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
+        if total_pages > 1:
+            pagination_buttons = []
+            path_hash = hashlib.sha1(path.encode()).hexdigest()[:16]
+            kb.code_path_cache[path_hash] = path
+            if page > 0:
+                pagination_buttons.append(InlineKeyboardButton(text="⬅️", callback_data=f"matp_all_nav_hash:{path_hash}:{page - 1}"))
+            pagination_buttons.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop"))
+            if end < len(all_topics):
+                pagination_buttons.append(InlineKeyboardButton(text="➡️", callback_data=f"matp_all_nav_hash:{path_hash}:{page + 1}"))
+            builder.row(*pagination_buttons)
+
+    # Level 2: Codes
+    elif level == 2:
+        submodule, topic = path_parts
+        header_text = f"Тема `{topic}`. Выберите задачу"
+        all_codes = sorted(kb.topics_data.get(submodule, {}).get('codes', {}).get(topic, []))
+
+        start = page * SEARCH_RESULTS_PER_PAGE
+        end = start + SEARCH_RESULTS_PER_PAGE
+        page_items = all_codes[start:end]
+
+        for item in page_items:
+            full_code_path = f"{path}.{item}"
+            path_hash = hashlib.sha1(full_code_path.encode()).hexdigest()[:16]
+            kb.code_path_cache[path_hash] = full_code_path
+            builder.row(InlineKeyboardButton(text=f"📄 {item}", callback_data=f"matp_all_show:{path_hash}"))
+
+        # Back button
+        back_path = submodule
+        path_hash = hashlib.sha1(back_path.encode()).hexdigest()[:16]
+        kb.code_path_cache[path_hash] = back_path
+        builder.row(InlineKeyboardButton(text=f"⬅️ .. (Назад к темам)", callback_data=f"matp_all_nav_hash:{path_hash}:0"))
+
+        total_pages = (len(all_codes) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
+        if total_pages > 1:
+            pagination_buttons = []
+            path_hash = hashlib.sha1(path.encode()).hexdigest()[:16]
+            kb.code_path_cache[path_hash] = path
+            if page > 0:
+                pagination_buttons.append(InlineKeyboardButton(text="⬅️", callback_data=f"matp_all_nav_hash:{path_hash}:{page - 1}"))
+            pagination_buttons.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop"))
+            if end < len(all_codes):
+                pagination_buttons.append(InlineKeyboardButton(text="➡️", callback_data=f"matp_all_nav_hash:{path_hash}:{page + 1}"))
+            builder.row(*pagination_buttons)
+
     else:
-        await message.answer(f'''```python\n{repl}\n```''', parse_mode='markdown')
+        header_text = "Ошибка навигации."
+
+    reply_markup = builder.as_markup()
     
-    await message.answer("Что делаем дальше?", reply_markup=kb.get_code_action_keyboard(code_path))
-    await message.answer("Или выберите другую команду.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
-    await state.clear()
+    if is_edit:
+        try:
+            await message.edit_text(header_text, reply_markup=reply_markup, parse_mode='markdown')
+        except TelegramBadRequest as e:
+            if "message is not modified" not in e.message:
+                raise
+    else:
+        await message.answer(header_text, reply_markup=reply_markup, parse_mode='markdown')
+
+@router.message(Command('matp_all'))
+async def matp_all_command_inline(message: Message):
+    """Handles the /matp_all command with inline navigation."""
+    await display_matp_all_navigation(message, path="", page=0, is_edit=False)
+
+@router.callback_query(F.data.startswith("matp_all_nav_hash:"))
+async def cq_matp_all_navigate(callback: CallbackQuery):
+    """Handles navigation for the /matp_all command."""
+    parts = callback.data.split(":")
+    path_hash = parts[1]
+    page = int(parts[2])
+    
+    if path_hash == 'root':
+        path = ""
+    else:
+        path = kb.code_path_cache.get(path_hash)
+
+    if path is None:
+        await callback.answer("Ошибка: информация о навигации устарела. Пожалуйста, начните с /matp_all.", show_alert=True)
+        return
+
+    await callback.answer()
+    await display_matp_all_navigation(callback.message, path=path, page=page, is_edit=True)
+
+@router.callback_query(F.data.startswith("matp_all_show:"))
+async def cq_matp_all_show_code(callback: CallbackQuery):
+    """Shows the selected code from the /matp_all navigation."""
+    path_hash = callback.data.split(":", 1)[1]
+    code_path = kb.code_path_cache.get(path_hash)
+    if not code_path:
+        await callback.answer("Ошибка: информация о коде устарела. Пожалуйста, начните с /matp_all.", show_alert=True)
+        return
+    
+    await callback.answer()
+    await service.show_code_by_path(callback.message, callback.from_user.id, code_path, "Выбранный пример")
+
 ##################################################################################################
 # UPDATE
 ##################################################################################################
@@ -194,6 +259,33 @@ async def update(message: Message):
         await status_msg.edit_text(status_message_text) # Убран reply_markup
     
     await message.answer("Обновление завершено. Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
+##################################################################################################
+# CLEAR CACHE
+##################################################################################################
+@router.message(Command('clear_cache'))
+async def clear_cache_command(message: Message):
+    """Handles the /clear_cache command, admin-only. Clears all application caches."""
+    if message.from_user.id != ADMIN_USER_ID:
+        await message.reply("У вас нет прав на использование этой команды.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
+        return
+
+    status_msg = await message.answer("Начинаю очистку кэша...")
+
+    # 1. Clear in-memory caches in handlers.py
+    user_search_results_cache.clear()
+    md_search_results_cache.clear()
+    github_search_cache.clear()
+    
+    # 2. Clear in-memory caches from other modules
+    kb.code_path_cache.clear()
+    service.github_content_cache.clear()
+    service.github_dir_cache.clear()
+
+    # 3. Clear persistent cache in database
+    await database.clear_latex_cache()
+
+    await status_msg.edit_text("✅ Весь кэш приложения был успешно очищен.")
+    await message.answer("Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
 ##################################################################################################
 # EXECUTE
 ##################################################################################################
@@ -289,29 +381,32 @@ async def process_latex_formula(message: Message, state: FSMContext):
 # Cache for markdown search results
 # {user_id: {'query': str, 'results': list[dict]}}
 md_search_results_cache = {}
+# Cache for GitHub markdown search results to reduce API calls
+github_search_cache = TTLCache(maxsize=100, ttl=600) # Cache search results for 10 minutes
 
 
-@router.message(Command('abstracts'))
-async def abstracts_command(message: Message):
-    """Handles the /abstracts command, showing root of the repo."""
-    await service.display_abstracts_path(message, path="")
+
+@router.message(Command('lec_all'))
+async def lec_all_command(message: Message):
+    """Handles the /lec_all command, showing root of the repo."""
+    await service.display_lec_all_path(message, path="")
 
 @router.callback_query(F.data.startswith("abs_nav_hash:"))
-async def cq_abstracts_navigate(callback: CallbackQuery):
-    """Handles navigation through abstracts repo directories."""
+async def cq_lec_all_navigate(callback: CallbackQuery):
+    """Handles navigation through lec_all repo directories."""
     path_hash = callback.data.split(":", 1)[1]
     path = kb.code_path_cache.get(path_hash)
 
     if path is None: # Important to check for None, as "" is a valid path (root)
-        await callback.answer("Информация о навигации устарела. Пожалуйста, начните с /abstracts.", show_alert=True)
+        await callback.answer("Информация о навигации устарела. Пожалуйста, начните с /lec_all.", show_alert=True)
         return
 
     await callback.answer()
-    await service.display_abstracts_path(callback.message, path, is_edit=True)
+    await service.display_lec_all_path(callback.message, path, is_edit=True)
 
 @router.callback_query(F.data.startswith("abs_show_hash:"))
-async def cq_abstracts_show_file(callback: CallbackQuery):
-    """Calls the helper to display a file from the abstracts repo."""
+async def cq_lec_all_show_file(callback: CallbackQuery):
+    """Calls the helper to display a file from the lec_all repo."""
     path_hash = callback.data.split(":", 1)[1]
     file_path = kb.code_path_cache.get(path_hash)
 
@@ -381,7 +476,10 @@ async def search_github_md(query: str) -> list[dict] | None:
             async with session.get(url, params=params) as response:
                 if response.status == 200:
                     data = await response.json()
-                    return data.get("items", [])
+                    results = data.get("items", [])
+                    # Store in cache on success
+                    github_search_cache[query] = results
+                    return results
                 else:
                     error_text = await response.text()
                     logging.error(f"GitHub API search failed with status {response.status}: {error_text}")
@@ -390,9 +488,9 @@ async def search_github_md(query: str) -> list[dict] | None:
         logging.error(f"Error during GitHub API request: {e}", exc_info=True)
         return None
 
-@router.message(Command('search_md'))
-async def search_md_command(message: Message, state: FSMContext):
-    """Handles the /search_md command."""
+@router.message(Command('lec_search'))
+async def lec_search_command(message: Message, state: FSMContext):
+    """Handles the /lec_search command."""
     await state.set_state(MarkdownSearch.query)
     await message.answer("Введите ключевые слова для поиска по конспектам:", reply_markup=ReplyKeyboardRemove())
 
@@ -548,7 +646,7 @@ async def perform_full_text_search(query: str) -> list[dict]:
 
     return found_items
 
-@router.message(Command('search'))
+@router.message(Command('matp_search'))
 async def search_command(message: Message, state: FSMContext):
     await state.set_state(Search.query)
     await message.answer("Введите ключевые слова для поиска по примерам кода:", reply_markup=ReplyKeyboardRemove())
@@ -699,7 +797,7 @@ async def cq_show_search_result_by_index(callback: CallbackQuery):
         code_path = results[index]['path']
         
         await callback.answer() # Acknowledge the callback
-        await service.show_code_by_path(callback.message, code_path, "Результат поиска")
+        await service.show_code_by_path(callback.message, callback.from_user.id, code_path, "Результат поиска")
 
     except (ValueError, IndexError) as e:
         logging.warning(f"Invalid search index from user {user_id}. Data: {callback.data}. Error: {e}")
@@ -718,7 +816,7 @@ async def cq_show_favorite(callback: CallbackQuery):
         return
 
     await callback.answer()
-    await service.show_code_by_path(callback.message, code_path, "Избранное")
+    await service.show_code_by_path(callback.message, callback.from_user.id, code_path, "Избранное")
 
 @router.callback_query(F.data.startswith("run_hash:"))
 async def cq_run_code_from_lib(callback: CallbackQuery):
@@ -753,7 +851,29 @@ async def get_settings_keyboard(user_id: int) -> InlineKeyboardBuilder:
             callback_data="settings_toggle_docstring"
         )
     )
-    # Здесь можно добавлять новые настройки
+
+    # Настройка отображения Markdown
+    md_mode = settings.get('md_display_mode', 'md_file')
+    md_mode_map = {
+        'telegraph': '🌐 Telegra.ph',
+        'text': '📄 Простой текст',
+        'md_file': '📁 .md файл',
+        'html_file': '📁 .html файл'
+    }
+    md_mode_text = md_mode_map.get(md_mode, '❓ Неизвестно')
+
+    builder.row(InlineKeyboardButton(
+        text=f"Показ .md: {md_mode_text}",
+        callback_data="settings_cycle_md_mode"
+    ))
+
+    # Настройка отступов LaTeX
+    padding = settings['latex_padding']
+    builder.row(
+        InlineKeyboardButton(text="➖", callback_data="latex_padding_decr"),
+        InlineKeyboardButton(text=f"Отступ LaTeX: {padding}px", callback_data="noop"),
+        InlineKeyboardButton(text="➕", callback_data="latex_padding_incr")
+    )
     return builder
 
 @router.message(Command('settings'))
@@ -761,7 +881,7 @@ async def command_settings(message: Message):
     """Обработчик команды /settings."""
     keyboard = await get_settings_keyboard(message.from_user.id) # Теперь асинхронный вызов
     await message.answer(
-        "⚙️ Настройки пользователя:",
+        "⚙️ Настройки:",
         reply_markup=keyboard.as_markup()
     )
 
@@ -776,32 +896,40 @@ async def cq_toggle_docstring(callback: CallbackQuery):
     await callback.message.edit_reply_markup(reply_markup=keyboard.as_markup())
     await callback.answer("Настройка 'Показывать описание' обновлена.")
 
+MD_DISPLAY_MODES = ['telegraph', 'text', 'md_file', 'html_file']
+
+@router.callback_query(F.data == "settings_cycle_md_mode")
+async def cq_cycle_md_mode(callback: CallbackQuery):
+    """Обработчик для переключения режима отображения Markdown."""
+    user_id = callback.from_user.id
+    settings = await database.get_user_settings(user_id)
+
+    current_mode = settings.get('md_display_mode', 'md_file')
+    try:
+        current_index = MD_DISPLAY_MODES.index(current_mode)
+        next_index = (current_index + 1) % len(MD_DISPLAY_MODES)
+        new_mode = MD_DISPLAY_MODES[next_index]
+    except ValueError:
+        # Если текущий режим некорректен, сбрасываем на дефолтный
+        new_mode = MD_DISPLAY_MODES[0]
+
+    settings['md_display_mode'] = new_mode
+    await database.update_user_settings_db(user_id, settings)
+
+    keyboard = await get_settings_keyboard(user_id)
+    await callback.message.edit_reply_markup(reply_markup=keyboard.as_markup())
+
+    md_mode_map = {
+        'telegraph': '🌐 Telegra.ph',
+        'text': '📄 Простой текст',
+        'md_file': '📁 .md файл',
+        'html_file': '📁 .html файл'
+    }
+    await callback.answer(f"Режим показа .md изменен на: {md_mode_map[new_mode]}")
+
 ##################################################################################################
 # LATEX SETTINGS
 ##################################################################################################
-
-async def get_latex_settings_keyboard(user_id: int) -> InlineKeyboardBuilder:
-    """Создает инлайн-клавиатуру для настроек LaTeX."""
-    settings = await database.get_user_settings(user_id)
-    builder = InlineKeyboardBuilder()
-
-    padding = settings['latex_padding']
-
-    builder.row(
-        InlineKeyboardButton(text="➖", callback_data="latex_padding_decr"),
-        InlineKeyboardButton(text=f"Отступ: {padding}px", callback_data="noop"),
-        InlineKeyboardButton(text="➕", callback_data="latex_padding_incr")
-    )
-    return builder
-
-@router.message(Command('settings_latex'))
-async def command_settings_latex(message: Message):
-    """Обработчик команды /settings_latex."""
-    keyboard = await get_latex_settings_keyboard(message.from_user.id)
-    await message.answer(
-        "⚙️ Настройки рендеринга LaTeX:",
-        reply_markup=keyboard.as_markup()
-    )
 
 @router.callback_query(F.data.startswith("latex_padding_"))
 async def cq_change_latex_padding(callback: CallbackQuery):
@@ -825,7 +953,7 @@ async def cq_change_latex_padding(callback: CallbackQuery):
     settings['latex_padding'] = new_padding
     await database.update_user_settings_db(user_id, settings)
 
-    keyboard = await get_latex_settings_keyboard(user_id)
+    keyboard = await get_settings_keyboard(user_id)
     await callback.message.edit_reply_markup(reply_markup=keyboard.as_markup())
     await callback.answer(f"Отступ изменен на {new_padding}px")
 
@@ -833,35 +961,34 @@ async def cq_change_latex_padding(callback: CallbackQuery):
 # HELP COMMAND CALLBACKS
 ##################################################################################################
 
-@router.callback_query(F.data == "help_cmd_ask")
-async def cq_help_cmd_ask(callback: CallbackQuery, state: FSMContext):
-    """Handler for '/ask' button from help menu."""
+@router.callback_query(F.data == "help_cmd_matp_all")
+async def cq_help_cmd_matp_all(callback: CallbackQuery):
+    """Handler for '/matp_all' button from help menu."""
     await callback.answer()
-    # Повторяем логику команды /ask
-    await state.set_state(Search.submodule)
-    await callback.message.answer('Введите ваш вопрос', reply_markup=kb.get_submodules_reply_keyboard(callback.from_user.id))
+    # Повторяем логику команды /matp_all
+    await matp_all_command_inline(callback.message)
 
-@router.callback_query(F.data == "help_cmd_search")
-async def cq_help_cmd_search(callback: CallbackQuery, state: FSMContext):
-    """Handler for '/search' button from help menu."""
+@router.callback_query(F.data == "help_cmd_matp_search")
+async def cq_help_cmd_matp_search(callback: CallbackQuery, state: FSMContext):
+    """Handler for '/matp_search' button from help menu."""
     await callback.answer()
-    # Повторяем логику команды /search
+    # Повторяем логику команды /matp_search
     await state.set_state(Search.query)
     await callback.message.answer("Введите ключевые слова для поиска по примерам кода:", reply_markup=ReplyKeyboardRemove())
 
-@router.callback_query(F.data == "help_cmd_search_md")
-async def cq_help_cmd_search_md(callback: CallbackQuery, state: FSMContext):
-    """Handler for '/search_md' button from help menu."""
+@router.callback_query(F.data == "help_cmd_lec_search")
+async def cq_help_cmd_lec_search(callback: CallbackQuery, state: FSMContext):
+    """Handler for '/lec_search' button from help menu."""
     await callback.answer()
-    # Повторяем логику команды /search_md
+    # Повторяем логику команды /lec_search
     await state.set_state(MarkdownSearch.query)
     await callback.message.answer("Введите ключевые слова для поиска по конспектам:", reply_markup=ReplyKeyboardRemove())
 
-@router.callback_query(F.data == "help_cmd_abstracts")
-async def cq_help_cmd_abstracts(callback: CallbackQuery):
-    """Handler for '/abstracts' button from help menu."""
+@router.callback_query(F.data == "help_cmd_lec_all")
+async def cq_help_cmd_lec_all(callback: CallbackQuery):
+    """Handler for '/lec_all' button from help menu."""
     await callback.answer()
-    await abstracts_command(callback.message)
+    await lec_all_command(callback.message)
 
 @router.callback_query(F.data == "help_cmd_favorites")
 async def cq_help_cmd_favorites(callback: CallbackQuery):
@@ -878,13 +1005,6 @@ async def cq_help_cmd_latex(callback: CallbackQuery, state: FSMContext):
     # Повторяем логику команды /latex
     await latex_command(callback.message, state)
 
-@router.callback_query(F.data == "help_cmd_settings_latex")
-async def cq_help_cmd_settings_latex(callback: CallbackQuery):
-    """Handler for '/settings_latex' button from help menu."""
-    await callback.answer()
-    # Повторяем логику команды /settings_latex
-    await command_settings_latex(callback.message)
-
 @router.callback_query(F.data == "help_cmd_settings")
 async def cq_help_cmd_settings(callback: CallbackQuery):
     """Handler for '/settings' button from help menu."""
@@ -892,7 +1012,7 @@ async def cq_help_cmd_settings(callback: CallbackQuery):
     # Повторяем логику команды /settings
     keyboard = await get_settings_keyboard(callback.from_user.id)
     await callback.message.answer(
-        "⚙️ Настройки пользователя:",
+        "⚙️ Настройки:",
         reply_markup=keyboard.as_markup()
     )
 
@@ -915,6 +1035,19 @@ async def cq_help_cmd_update(callback: CallbackQuery):
     else:
         await status_msg.edit_text(status_message_text)
     await callback.message.answer("Обновление завершено. Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(callback.from_user.id))
+
+@router.callback_query(F.data == "help_cmd_clear_cache")
+async def cq_help_cmd_clear_cache(callback: CallbackQuery):
+    """Handler for '/clear_cache' button from help menu."""
+    if callback.from_user.id != ADMIN_USER_ID:
+        await callback.answer("У вас нет прав на использование этой команды.", show_alert=True)
+        return
+
+    await callback.answer("Начинаю очистку кэша...")
+    
+    # Повторяем логику команды /clear_cache
+    # clear_cache_command ожидает объект Message, callback.message подходит
+    await clear_cache_command(callback.message)
 
 @router.callback_query(F.data == "help_cmd_execute")
 async def cq_help_cmd_execute(callback: CallbackQuery, state: FSMContext):

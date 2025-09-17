@@ -1,10 +1,10 @@
 version: '3.8'
 services:
-  telegram-bot:
+  mpb-telegram-bot:
     build:
       context: .
       dockerfile: Dockerfile.bot
-    container_name: telegram-bot
+    container_name: mpb-telegram-bot
     environment:
       - BOT_TOKEN=${BOT_TOKEN} 
       - ADMIN_USER_ID=${ADMIN_USER_ID}
@@ -14,11 +14,11 @@ services:
       - bot_db_data:/app/db_data  # Именованный volume для хранения БД
       - bot_logs:/app/logs        # Именованный volume для логов бота
 
-  fastapi-stats:
+  mpb-fastapi-stats:
     build:
       context: .
       dockerfile: fastapi_stats_app/Dockerfile # Путь к Dockerfile для FastAPI приложения
-    container_name: fastapi-stats-app
+    container_name: mpb-fastapi-stats-app
     ports:
       - "9583:9583"
     volumes:
@@ -29,7 +29,7 @@ services:
       # Здесь можно будет добавить переменные окружения для FastAPI, если понадобятся
       WATCHFILES_FORCE_POLLING: "true" # Может помочь с live reload в Docker
     depends_on:
-      - telegram-bot # FastAPI сервис запустится после бота (полезно, чтобы БД уже могла существовать)
+      - mpb-telegram-bot # FastAPI сервис запустится после бота (полезно, чтобы БД уже могла существовать)
 volumes:
   bot_db_data:
   bot_logs: # Добавляем именованный volume для логов

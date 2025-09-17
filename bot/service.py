@@ -21,12 +21,17 @@ from aiogram.types import Message, CallbackQuery, FSInputFile, BufferedInputFile
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import markdown
+from cachetools import TTLCache
 
 from . import database
 import matplobblib
 from . import keyboards as kb
 
 logger = logging.getLogger(__name__)
+
+# Caches for GitHub API calls to reduce rate-limiting and speed up responses
+github_content_cache = TTLCache(maxsize=200, ttl=300) # Cache for file contents (5 min)
+github_dir_cache = TTLCache(maxsize=50, ttl=180)     # Cache for directory listings (3 min)
 
 # --- Constants ---
 LATEX_PREAMBLE = r"""
@@ -175,7 +180,8 @@ def _render_latex_sync(latex_string: str, padding: int, is_display_override: boo
 
         # --- Запуск dvipng для конвертации DVI в PNG ---
         # Возвращаем постоянный DPI для всех формул для консистентности.
-        dpi = 300
+        # Для строчных формул используем меньший DPI, чтобы они лучше вписывались в текст.
+        dpi = 300  # Display: 300, Inline: 200
         dvipng_process = subprocess.run(
             ['dvipng', '-D', str(dpi), '-T', 'tight', '-bg', 'Transparent', '-o', png_path, dvi_path],
             capture_output=True, text=True, encoding='utf-8', errors='ignore'
@@ -426,8 +432,8 @@ async def get_telegraph_client() -> Telegraph | None:
 
 # service.py
 
-async def upload_image_to_telegraph(image_bytes: io.BytesIO, session: aiohttp.ClientSession) -> str | None:
-    """Uploads an image to a GitHub repository and returns the raw content URL."""
+async def upload_image_to_telegraph(image_bytes: io.BytesIO, session: aiohttp.ClientSession, max_retries: int = 3, retry_delay: int = 2) -> str | None:
+    """Uploads an image to a GitHub repository and returns the raw content URL, with retries."""
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
         logger.error("GITHUB_TOKEN environment variable not set. Image upload to GitHub is disabled.")
@@ -468,22 +474,45 @@ async def upload_image_to_telegraph(image_bytes: io.BytesIO, session: aiohttp.Cl
         "branch": branch
     }
 
-    try:
-        async with session.put(api_url, headers=headers, json=payload) as response:
-            if response.status == 201: # 201 Created
-                response_data = await response.json()
-                logger.info(f"Successfully uploaded image to GitHub: {response_data.get('content', {}).get('html_url')}")
-                return response_data.get('content', {}).get('download_url', raw_url) # Return download_url, fallback to constructed raw_url
-            elif response.status in [409, 422]: # 409 Conflict or 422 Unprocessable (file exists)
-                logger.warning(f"Image {filename} already exists on GitHub. Returning existing URL.")
-                return raw_url
-            else:
-                error_text = await response.text()
-                logger.error(f"GitHub image upload API failed for {filename} with status {response.status}: {error_text}")
-                return None
-    except Exception as e:
-        logger.error(f"Error during GitHub image upload request for {filename}: {e}", exc_info=True)
-        return None
+    for attempt in range(max_retries):
+        try:
+            async with session.put(api_url, headers=headers, json=payload) as response:
+                if response.status == 201:  # 201 Created
+                    response_data = await response.json()
+                    logger.info(f"Successfully uploaded image to GitHub: {response_data.get('content', {}).get('html_url')}")
+                    return response_data.get('content', {}).get('download_url', raw_url)
+                
+                elif response.status == 409:  # 409 Conflict (file already exists)
+                    logger.warning(f"Image {filename} already exists on GitHub. Returning existing URL.")
+                    return raw_url
+                
+                elif response.status == 422:  # 422 Unprocessable Entity (e.g., invalid request, branch not found)
+                    error_text = await response.text()
+                    logger.error(f"GitHub image upload API failed for {filename} with status 422 (Unprocessable Entity): {error_text}. No retry.")
+                    return None  # This is a permanent client error, don't retry.
+
+                else:  # Other non-successful status codes (e.g., 5xx server errors)
+                    error_text = await response.text()
+                    logger.warning(
+                        f"Attempt {attempt + 1}/{max_retries} for {filename} failed with status {response.status}: {error_text}. "
+                        f"Retrying in {retry_delay}s..."
+                    )
+        
+        except aiohttp.ClientError as e:  # Catch network-related errors
+            logger.warning(
+                f"Attempt {attempt + 1}/{max_retries} for {filename} failed with network error: {e}. "
+                f"Retrying in {retry_delay}s..."
+            )
+        except Exception as e:
+            logger.error(f"An unexpected non-network error occurred during upload for {filename}: {e}", exc_info=True)
+            return None  # Don't retry on unexpected code errors, fail fast.
+
+        # If we are not in the last attempt, wait before retrying
+        if attempt < max_retries - 1:
+            await asyncio.sleep(retry_delay)
+
+    logger.error(f"Failed to upload image {filename} after {max_retries} attempts.")
+    return None
 
 async def send_as_plain_text(message: Message, file_path: str, content: str):
     """Helper to send content as plain text, handling long messages."""
@@ -499,159 +528,424 @@ async def send_as_plain_text(message: Message, file_path: str, content: str):
         chunk = content[x:x+4000]
         await message.answer(f"```\n{chunk}\n```", parse_mode='markdown')
 
+async def send_as_text_with_formulas(message: Message, file_path: str, content: str):
+    """
+    Sends markdown content as a series of text messages and rendered LaTeX images.
+    """
+    await message.answer(f"Конспект: `{file_path}` (текст + формулы)", parse_mode='markdown')
+
+    # Regex to find and capture LaTeX formulas
+    latex_regex_for_split = r'(\$\$(?:.|\n)*?\$\$|(?<!\$)\$[^$]+?\$(?!\$))'
+    chunks = re.split(latex_regex_for_split, content, flags=re.DOTALL)
+
+    if not chunks or (len(chunks) == 1 and not chunks[0].strip()):
+        await message.answer("_(файл пуст)_", parse_mode='markdown')
+        return
+
+    settings = await database.get_user_settings(message.from_user.id)
+    padding = settings['latex_padding']
+
+    async with aiohttp.ClientSession() as session: # Create one session for all potential uploads
+        for chunk in chunks:
+            if not chunk or chunk.isspace():
+                continue
+
+            # Check if it's a formula
+            is_display_formula = chunk.startswith('$$') and chunk.endswith('$$')
+            # The negative lookbehind in the regex should prevent this from matching $$
+            is_inline_formula = chunk.startswith('$') and chunk.endswith('$') and not is_display_formula
+
+            if is_display_formula:
+                formula_code = chunk[2:-2].strip()
+                is_display = True
+            elif is_inline_formula:
+                formula_code = chunk[1:-1].strip()
+                is_display = False
+            else: # It's a text chunk
+                text_to_send = chunk.strip()
+                if not text_to_send:
+                    continue
+                
+                # Send text chunk, splitting if necessary
+                for i in range(0, len(text_to_send), 4096):
+                    part = text_to_send[i:i+4096]
+                    try:
+                        # Try sending with Markdown, it's more readable
+                        await message.answer(part, parse_mode='markdown', disable_web_page_preview=True)
+                    except TelegramBadRequest:
+                        # Fallback to plain text if Markdown parsing fails
+                        await message.answer(part, disable_web_page_preview=True)
+                continue # Move to the next chunk
+
+            # It's a formula, render and send
+            if not formula_code:
+                continue
+
+            try:
+                current_padding = padding if is_display else max(0, padding - 10)
+                
+                # --- Caching logic ---
+                formula_key = f"{formula_code}|{current_padding}|{is_display}"
+                formula_hash = hashlib.sha1(formula_key.encode()).hexdigest()
+                cached_url = await database.get_latex_cache(formula_hash)
+                
+                image_to_send = None
+                caption = f"`{chunk}`" if len(chunk) < 1024 else None # Telegram caption limit is 1024
+
+                if cached_url:
+                    image_to_send = cached_url
+                else:
+                    image_buffer = await render_latex_to_image(formula_code, current_padding, is_display_override=is_display)
+                    image_url = await upload_image_to_telegraph(image_buffer, session)
+                    if image_url:
+                        await database.add_latex_cache(formula_hash, image_url)
+                        image_to_send = image_url
+                    else:
+                        image_buffer.seek(0)
+                        image_to_send = BufferedInputFile(image_buffer.read(), filename="formula.png")
+                        await message.answer("⚠️ Не удалось загрузить картинку на сервер, отправлено как временный файл.")
+                await message.answer_photo(photo=image_to_send, caption=caption, parse_mode='markdown')
+            except (ValueError, RuntimeError, FileNotFoundError) as e:
+                logger.error(f"Ошибка при рендеринге LaTeX для '{formula_code}': {e}", exc_info=True)
+                error_text = f"Не удалось отрендерить формулу: `{chunk}`\n\n**Ошибка:**\n```\n{e}\n```"
+                await message.answer(error_text, parse_mode='markdown')
+            except Exception as e:
+                logger.error(f"Непредвиденная ошибка при рендеринге LaTeX для '{formula_code}': {e}", exc_info=True)
+                await message.answer(f"Произошла непредвиденная ошибка при обработке формулы: `{chunk}`")
+
 async def display_github_file(callback: CallbackQuery, file_path: str):
     """
     Fetches a file from GitHub and displays it, using Telegra.ph for Markdown files."""
     await callback.answer("Загружаю и обрабатываю файл...")
     raw_url = f"https://raw.githubusercontent.com/{MD_SEARCH_REPO}/{MD_SEARCH_BRANCH}/{file_path}"
-    
-    content = None
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(raw_url) as response:
-                if response.status == 200:
-                    content = await response.text(encoding='utf-8', errors='ignore')
-                else:
-                    await callback.message.answer(f"Не удалось загрузить файл. Ошибка: {response.status}")
-                    return
-    except Exception as e:
-        await callback.message.answer(f"Произошла ошибка при загрузке файла: {e}")
-        return
 
-    if content is None: # Check for None specifically
+    # Check cache first
+    content = github_content_cache.get(file_path)
+    if content is not None:
+        logger.info(f"Cache hit for file content: {file_path}")
+    else:
+        logger.info(f"Cache miss for file content: {file_path}. Fetching from GitHub.")
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(raw_url) as response:
+                    if response.status == 200:
+                        content = await response.text(encoding='utf-8', errors='ignore')
+                        # Store in cache on success
+                        github_content_cache[file_path] = content
+                    else:
+                        await callback.message.answer(f"Не удалось загрузить файл. Ошибка: {response.status}")
+                        return
+        except Exception as e:
+            await callback.message.answer(f"Произошла ошибка при загрузке файла: {e}")
+            return
+
+    if content is None:
         await callback.message.answer("Не удалось получить содержимое файла.")
         return
 
     # Check if it's a markdown file
     if file_path.lower().endswith('.md'):
-        try: # --- New Robust LaTeX + Markdown Processing ---
+        # Get user settings to decide how to display the file
+        settings = await database.get_user_settings(callback.from_user.id)
+        md_mode = settings.get('md_display_mode', 'md_file')
 
-            # 1. Find all LaTeX formulas, replace with placeholders, and store them.
-            latex_formulas = []
+        # Option 2: Plain text
+        if md_mode == 'text':
+            await send_as_text_with_formulas(callback.message, file_path, content)
 
-            def store_latex_match(match):
-                # group(1) is for display mode $$...$$, group(2) is for inline mode $...$
-                is_display = match.group(1) is not None
-                code = match.group(1) if is_display else match.group(2)
-                
-                if code is not None:
-                    # Используем уникальный кастомный тег в качестве заполнителя.
-                    # Markdown-парсер его проигнорирует и оставит в итоговом HTML,
-                    # в отличие от HTML-комментария, который он удаляет.
-                    placeholder = f'<latex-placeholder id="{len(latex_formulas)}"></latex-placeholder>'
-                    latex_formulas.append({
-                        'code': code.strip(),
-                        'is_display': is_display,
-                        'placeholder': placeholder,
-                        'original': match.group(0) # For fallback
-                    })
-                    return placeholder
-                return match.group(0)
-
-            # Regex to find $$...$$ (group 1) or $...$ (group 2).
-            # The negative lookarounds for inline math prevent matching single dollars or parts of display math.
-            latex_regex = r'\$\$(.*?)\$\$|(?<!\$)\$([^$]+?)\$(?!\$)'
-            content_with_placeholders = re.sub(latex_regex, store_latex_match, content, flags=re.DOTALL)
-
-            # 2. Convert the Markdown (with placeholders) to HTML.
-            
-            html_with_placeholders = markdown.markdown(
-                content_with_placeholders, 
-                extensions=['fenced_code', 'tables']
+        # Option 3: .md file
+        elif md_mode == 'md_file':
+            file_name = file_path.split('/')[-1]
+            file_bytes = content.encode('utf-8')
+            await callback.message.answer_document(
+                document=BufferedInputFile(file_bytes, filename=file_name),
+                caption=f"Файл конспекта: `{file_path}`",
+                parse_mode='markdown'
             )
 
-            # 3. Asynchronously render all stored formulas to images and upload them.
-            settings = await database.get_user_settings(callback.from_user.id)
-            padding = settings['latex_padding']
+        # Option 4: .html file
+        elif md_mode == 'html_file':
+            try:
+                # 1. Find all LaTeX formulas, replace with placeholders, and store them.
+                latex_formulas = []
 
-            # Create one session for all uploads to improve efficiency and potentially avoid rate-limiting.
-            async with aiohttp.ClientSession() as session:
-                debug_photo_sent = True
-                
-                async def render_and_upload(formula_data):
-                    nonlocal debug_photo_sent
-                    try:
-                        if not formula_data['code']: return None # Skip empty formulas
-                        current_padding = padding if formula_data['is_display'] else max(0, padding - 10)
-                        image_buffer = await render_latex_to_image(
-                            formula_data['code'], 
-                            current_padding, 
-                            is_display_override=formula_data['is_display']
-                        )
-                        # --- НАЧАЛО ДИАГНОСТИЧЕСКОГО БЛОКА ---
-                        if not debug_photo_sent:
-                            try:
-                                image_bytes = image_buffer.getvalue()
-                                file_size = len(image_bytes)
-                                
-                                await callback.message.answer(
-                                    f"🩺 **Диагностика:**\n"
-                                    f"Первая сгенерированная картинка.\n"
-                                    f"Размер: **{file_size} байт**.",
-                                    parse_mode='markdown'
-                                )
+                def store_latex_match(match):
+                    # group(1) is for display mode $$...$$, group(2) is for inline mode $...$
+                    is_display = match.group(1) is not None
+                    code = match.group(1) if is_display else match.group(2)
+                    
+                    if code is not None:
+                        placeholder = f'<latex-placeholder id="{len(latex_formulas)}"></latex-placeholder>'
+                        latex_formulas.append({
+                            'code': code.strip(),
+                            'is_display': is_display,
+                            'placeholder': placeholder,
+                            'original': match.group(0) # For fallback
+                        })
+                        return placeholder
+                    return match.group(0)
 
-                                if file_size > 0:
-                                    # Создаем копию для отправки, чтобы не повредить основной буфер
-                                    debug_buffer = io.BytesIO(image_bytes)
-                                    await callback.message.answer_photo(
-                                        photo=BufferedInputFile(debug_buffer.read(), filename="debug_formula.png")
-                                    )
-                                else:
-                                    await callback.message.answer("⚠️ **Диагностика:** Размер картинки 0 байт. Проблема в рендеринге LaTeX.")
-                                
-                            except Exception as e:
-                                await callback.message.answer(f"❌ **Диагностика:** Не удалось отправить картинку в чат. Ошибка: {e}")
-                            finally:
-                                debug_photo_sent = True # Поднимаем флаг, чтобы не спамить в чат
-                        
-                        image_buffer.seek(0) # Возвращаем курсор буфера в начало для основной загрузки
-                        # --- КОНЕЦ ДИАГНОСТИЧЕСКОГО БЛОКА ---
+                latex_regex = r'\$\$(.*?)\$\$|(?<!\$)\$([^$]+?)\$(?!\$)'
+                content_with_placeholders = re.sub(latex_regex, store_latex_match, content, flags=re.DOTALL)
 
-                        return await upload_image_to_telegraph(image_buffer, session)
-                    except Exception as e:
-                        logger.warning(f"Failed to render/upload LaTeX ('{formula_data['code']}'): {e}")
-                        return None
+                # 2. Convert the Markdown (with placeholders) to HTML.
+                html_with_placeholders = markdown.markdown(
+                    content_with_placeholders, 
+                    extensions=['fenced_code', 'tables']
+                )
 
-                # Using a semaphore to limit concurrent requests to avoid overwhelming the system.
-                semaphore = asyncio.Semaphore(1) # Reduced to 1 to make uploads sequential and avoid rate-limiting
-                async def guarded_render(formula_data):
-                    async with semaphore:
-                        return await render_and_upload(formula_data)
+                # 3. Asynchronously render all stored formulas to images and upload them.
+                padding = settings['latex_padding']
 
-                tasks = [guarded_render(f) for f in latex_formulas]
-                image_urls = await asyncio.gather(*tasks)
+                async with aiohttp.ClientSession() as session:
+                    async def render_and_upload(formula_data):
+                        try:
+                            if not formula_data['code']: return None # Skip empty formulas
+                            
+                            current_padding = padding if formula_data['is_display'] else max(0, padding - 10)
+                            # --- Caching logic ---
+                            formula_key = f"{formula_data['code']}|{current_padding}|{formula_data['is_display']}"
+                            formula_hash = hashlib.sha1(formula_key.encode()).hexdigest()
+                            cached_url = await database.get_latex_cache(formula_hash)
+                            if cached_url:
+                                return cached_url
+                            # --- End caching logic ---
 
-            # 4. Replace placeholders in the HTML with the final <img> tags or error messages.
-            final_html = html_with_placeholders
-            for i, formula_data in enumerate(latex_formulas):
-                url = image_urls[i]
-                if url:
-                    replacement = f'<figure><img src="{url}"></figure>' if formula_data['is_display'] else f'<img src="{url}">'
-                else:
-                    replacement = f'<i>[Ошибка рендеринга LaTeX: {formula_data["original"]}]</i>'
-                final_html = final_html.replace(formula_data['placeholder'], replacement)
+                            image_buffer = await render_latex_to_image(
+                                formula_data['code'], 
+                                current_padding, 
+                                is_display_override=formula_data['is_display']
+                            )
+                            image_buffer.seek(0)
+                            image_url = await upload_image_to_telegraph(image_buffer, session)
+                            if image_url:
+                                await database.add_latex_cache(formula_hash, image_url)
+                            return image_url
+                        except Exception as e:
+                            logger.warning(f"Failed to render/upload LaTeX ('{formula_data['code']}'): {e}")
+                            return None
 
-            # 5. Preprocess the final HTML for Telegra.ph compatibility.
-            final_html = preprocess_html_for_telegraph(final_html)
+                    # Ограничиваем количество одновременных задач по рендерингу и загрузке, чтобы не перегружать систему
+                    semaphore = asyncio.Semaphore(1)
+                    async def guarded_render(formula_data):
+                        async with semaphore:
+                            return await render_and_upload(formula_data)
 
-            # 6. Get Telegraph client and create the page.
-            telegraph = await get_telegraph_client()
-            if not telegraph:
-                await callback.message.answer("Ошибка: сервис Telegraph недоступен. Отправляю как простой текст.")
-                await send_as_plain_text(callback.message, file_path, content)
-            else:
+                    tasks = [guarded_render(f) for f in latex_formulas]
+                    image_urls = await asyncio.gather(*tasks)
+
+                # 4. Replace placeholders in the HTML with the final <img> tags.
+                html_content = html_with_placeholders
+                for i, formula_data in enumerate(latex_formulas):
+                    url = image_urls[i]
+                    if url:
+                        if formula_data['is_display']:
+                            replacement = f'<figure><img src="{url}" style="max-width: 80%; height: auto; display: block; margin-left: auto; margin-right: auto;"></figure>'
+
+                        else:
+                            # Для строчных формул добавляем стиль для лучшего выравнивания с текстом
+                            replacement = f'<img src="{url}" style="height: 1.8em; vertical-align: -0.6em;">'
+                    else:
+                        replacement = f'<i>[Ошибка рендеринга LaTeX: {formula_data["original"]}]</i>'
+                    html_content = html_content.replace(formula_data['placeholder'], replacement)
+
+                # 5. Wrap in a full HTML document with proper meta tags for mobile compatibility.
                 page_title = file_path.split('/')[-1].replace('.md', '')
-                try:
-                    response = await telegraph.create_page(title=page_title, html_content=final_html, author_name="Matplobbot", author_url="https://github.com/Ackrome/matplobbot")
-                    page_url = response['url']
-                    await callback.message.answer(f"Конспект **{file_path}** опубликован в Telegra.ph:\n{page_url}", parse_mode='markdown', disable_web_page_preview=False)
-                except TelegraphException as e:
-                    logger.error(f"Failed to create Telegraph page for '{file_path}': {e}", exc_info=True)
-                    await callback.message.answer(f"Не удалось создать Telegra.ph статью: {e}. Отправляю как простой текст.")
+                full_html_doc = f"""
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{page_title}</title>
+    <style>
+        body {{ 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0 auto;
+            padding: 20px;
+            max-width: 800px;
+        }}
+        img {{ max-width: 100%; height: auto; }}
+        figure {{ margin: 1.5em 0; }}
+        pre {{ background-color: #f6f8fa; padding: 16px; overflow: auto; border-radius: 6px; }}
+        code {{ font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace; }}
+        table {{ border-collapse: collapse; width: 100%; margin: 1em 0; border: 1px solid #dfe2e5; }}
+        th, td {{ border: 1px solid #dfe2e5; padding: 6px 13px; }}
+        tr {{ border-top: 1px solid #c6cbd1; }}
+        tr:nth-child(2n) {{ background-color: #f6f8fa; }}
+        h1, h2, h3, h4, h5, h6 {{ border-bottom: 1px solid #eaecef; padding-bottom: .3em; margin-top: 24px; margin-bottom: 16px; }}
+    </style>
+</head>
+<body>
+    {html_content}
+</body>
+</html>"""
+                file_bytes = full_html_doc.encode('utf-8')
+                file_name = f"{page_title}.html"
+                await callback.message.answer_document(
+                    document=BufferedInputFile(file_bytes, filename=file_name),
+                    caption=f"HTML-версия конспекта: `{file_path}`",
+                    parse_mode='markdown'
+                )
+            except Exception as e:
+                logger.error(f"Ошибка при обработке Markdown и LaTeX для HTML-файла '{file_path}': {e}", exc_info=True)
+                await callback.message.answer(f"Произошла ошибка при создании HTML-файла: {e}. Отправляю как простой текст.")
+                await send_as_plain_text(callback.message, file_path, content)
+
+        # Option 1: Telegra.ph (default)
+        elif md_mode == 'telegraph':
+            try: # --- New Robust LaTeX + Markdown Processing ---
+
+                # 1. Find all LaTeX formulas, replace with placeholders, and store them.
+                latex_formulas = []
+
+                def store_latex_match(match):
+                    # group(1) is for display mode $$...$$, group(2) is for inline mode $...$
+                    is_display = match.group(1) is not None
+                    code = match.group(1) if is_display else match.group(2)
+                    
+                    if code is not None:
+                        # Используем уникальный кастомный тег в качестве заполнителя.
+                        # Markdown-парсер его проигнорирует и оставит в итоговом HTML,
+                        # в отличие от HTML-комментария, который он удаляет.
+                        placeholder = f'<latex-placeholder id="{len(latex_formulas)}"></latex-placeholder>'
+                        latex_formulas.append({
+                            'code': code.strip(),
+                            'is_display': is_display,
+                            'placeholder': placeholder,
+                            'original': match.group(0) # For fallback
+                        })
+                        return placeholder
+                    return match.group(0)
+
+                # Regex to find $$...$$ (group 1) or $...$ (group 2).
+                # The negative lookarounds for inline math prevent matching single dollars or parts of display math.
+                latex_regex = r'\$\$(.*?)\$\$|(?<!\$)\$([^$]+?)\$(?!\$)'
+                content_with_placeholders = re.sub(latex_regex, store_latex_match, content, flags=re.DOTALL)
+
+                # 2. Convert the Markdown (with placeholders) to HTML.
+                
+                html_with_placeholders = markdown.markdown(
+                    content_with_placeholders, 
+                    extensions=['fenced_code', 'tables']
+                )
+
+                # 3. Asynchronously render all stored formulas to images and upload them.
+                padding = settings['latex_padding']
+
+                # Create one session for all uploads to improve efficiency and potentially avoid rate-limiting.
+                async with aiohttp.ClientSession() as session:
+                    debug_photo_sent = True
+                    
+                    async def render_and_upload(formula_data):
+                        nonlocal debug_photo_sent
+                        try:
+                            # --- Caching logic ---
+                            current_padding_for_hash = padding if formula_data['is_display'] else max(0, padding - 10)
+                            formula_key = f"{formula_data['code']}|{current_padding_for_hash}|{formula_data['is_display']}"
+                            formula_hash = hashlib.sha1(formula_key.encode()).hexdigest()
+                            cached_url = await database.get_latex_cache(formula_hash)
+                            if cached_url:
+                                return cached_url
+                            # --- End caching logic ---
+
+                            if not formula_data['code']: return None # Skip empty formulas
+                            current_padding = padding if formula_data['is_display'] else max(0, padding - 10)
+                            image_buffer = await render_latex_to_image(
+                                formula_data['code'], 
+                                current_padding, 
+                                is_display_override=formula_data['is_display']
+                            )
+                            # --- НАЧАЛО ДИАГНОСТИЧЕСКОГО БЛОКА ---
+                            if not debug_photo_sent:
+                                try:
+                                    image_bytes = image_buffer.getvalue()
+                                    file_size = len(image_bytes)
+                                    
+                                    await callback.message.answer(
+                                        f"🩺 **Диагностика:**\n"
+                                        f"Первая сгенерированная картинка.\n"
+                                        f"Размер: **{file_size} байт**.",
+                                        parse_mode='markdown'
+                                    )
+
+                                    if file_size > 0:
+                                        # Создаем копию для отправки, чтобы не повредить основной буфер
+                                        debug_buffer = io.BytesIO(image_bytes)
+                                        await callback.message.answer_photo(
+                                            photo=BufferedInputFile(debug_buffer.read(), filename="debug_formula.png")
+                                        )
+                                    else:
+                                        await callback.message.answer("⚠️ **Диагностика:** Размер картинки 0 байт. Проблема в рендеринге LaTeX.")
+                                    
+                                except Exception as e:
+                                    await callback.message.answer(f"❌ **Диагностика:** Не удалось отправить картинку в чат. Ошибка: {e}")
+                                finally:
+                                    debug_photo_sent = True # Поднимаем флаг, чтобы не спамить в чат
+                            
+                            image_buffer.seek(0) # Возвращаем курсор буфера в начало для основной загрузки
+                            # --- КОНЕЦ ДИАГНОСТИЧЕСКОГО БЛОКА ---
+
+                            image_url = await upload_image_to_telegraph(image_buffer, session)
+                            # --- Caching logic ---
+                            if image_url:
+                                await database.add_latex_cache(formula_hash, image_url)
+                            # --- End caching logic ---
+                            return image_url
+                        except Exception as e:
+                            logger.warning(f"Failed to render/upload LaTeX ('{formula_data['code']}'): {e}")
+                            return None
+
+                    # Используем семафор для ограничения одновременных запросов, чтобы не перегружать систему и API.
+                    semaphore = asyncio.Semaphore(5)
+                    async def guarded_render(formula_data):
+                        async with semaphore:
+                            return await render_and_upload(formula_data)
+
+                    tasks = [guarded_render(f) for f in latex_formulas]
+                    image_urls = await asyncio.gather(*tasks)
+
+                # 4. Replace placeholders in the HTML with the final <img> tags or error messages.
+                final_html = html_with_placeholders
+                for i, formula_data in enumerate(latex_formulas):
+                    url = image_urls[i]
+                    if url:
+                        if formula_data['is_display']:
+                            replacement = f'<figure><img src="{url}"></figure>'
+                        else:
+                            # Для строчных формул добавляем стиль для лучшего выравнивания с текстом
+                            replacement = f'<img src="{url}" style="height: 1.1em; vertical-align: -0.2em;">'
+                    else:
+                        replacement = f'<i>[Ошибка рендеринга LaTeX: {formula_data["original"]}]</i>'
+                    final_html = final_html.replace(formula_data['placeholder'], replacement)
+
+                # 5. Preprocess the final HTML for Telegra.ph compatibility.
+                final_html = preprocess_html_for_telegraph(final_html)
+
+                # 6. Get Telegraph client and create the page.
+                telegraph = await get_telegraph_client()
+                if not telegraph:
+                    await callback.message.answer("Ошибка: сервис Telegraph недоступен. Отправляю как простой текст.")
                     await send_as_plain_text(callback.message, file_path, content)
-        except Exception as e:
-            logger.error(f"Ошибка при обработке Markdown и LaTeX для Telegraph '{file_path}': {e}", exc_info=True)
+                else:
+                    page_title = file_path.split('/')[-1].replace('.md', '')
+                    try:
+                        response = await telegraph.create_page(title=page_title, html_content=final_html, author_name="Matplobbot", author_url="https://github.com/Ackrome/matplobbot")
+                        page_url = response['url']
+                        await callback.message.answer(f"Конспект **{file_path}** опубликован в Telegra.ph:\n{page_url}", parse_mode='markdown', disable_web_page_preview=False)
+                    except TelegraphException as e:
+                        logger.error(f"Failed to create Telegraph page for '{file_path}': {e}", exc_info=True)
+                        await callback.message.answer(f"Не удалось создать Telegra.ph статью: {e}. Отправляю как простой текст.")
+                        await send_as_plain_text(callback.message, file_path, content)
+            except Exception as e:
+                logger.error(f"Ошибка при обработке Markdown и LaTeX для Telegraph '{file_path}': {e}", exc_info=True)
+                await callback.message.answer(f"Произошла ошибка при создании Telegra.ph статьи: {e}. Отправляю как простой текст.")
+                await send_as_plain_text(callback.message, file_path, content)
+        
+        # Fallback for unknown mode
+        else:
+            logger.warning(f"Unknown md_display_mode '{md_mode}' for user {callback.from_user.id}. Falling back to plain text.")
             await send_as_plain_text(callback.message, file_path, content)
     else:
         # Not a markdown file, send as plain text
@@ -663,8 +957,14 @@ async def get_github_repo_contents(path: str = "") -> list[dict] | None:
     """Fetches directory contents from the GitHub repository."""
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
-        logger.error("GITHUB_TOKEN environment variable not set. /abstracts command is disabled.")
+        logger.error("GITHUB_TOKEN environment variable not set. /lec_all command is disabled.")
         return None
+
+    # Check cache first
+    cached_contents = github_dir_cache.get(path)
+    if cached_contents is not None:
+        logger.info(f"Cache hit for dir content: /{path}")
+        return cached_contents
 
     # The URL for the contents API
     url = f"https://api.github.com/repos/{MD_SEARCH_REPO}/contents/{path}"
@@ -683,6 +983,8 @@ async def get_github_repo_contents(path: str = "") -> list[dict] | None:
                     # Sort items: folders first, then files, all alphabetically
                     if isinstance(data, list):
                         data.sort(key=lambda x: (x['type'] != 'dir', x['name'].lower()))
+                    # Store in cache on success
+                    github_dir_cache[path] = data
                     return data
                 else:
                     error_text = await response.text()
@@ -692,8 +994,8 @@ async def get_github_repo_contents(path: str = "") -> list[dict] | None:
         logger.error(f"Error during GitHub API contents request for path '{path}': {e}", exc_info=True)
         return None
 
-async def display_abstracts_path(message: Message, path: str, is_edit: bool = False):
-    """Helper to fetch and display contents of a path in the abstracts repo."""
+async def display_lec_all_path(message: Message, path: str, is_edit: bool = False):
+    """Helper to fetch and display contents of a path in the lec_all repo."""
     status_msg = None
     if is_edit:
         # The callback is already answered, so we just edit the text.
@@ -763,7 +1065,7 @@ async def display_abstracts_path(message: Message, path: str, is_edit: bool = Fa
         await message.answer(message_text, reply_markup=reply_markup, parse_mode='markdown')
 
 # --- Code Display ---
-async def show_code_by_path(message: Message, code_path: str, header: str):
+async def show_code_by_path(message: Message, user_id: int, code_path: str, header: str):
     """Helper function to send code to the user based on its path."""
     try:
         submodule, topic, code_name = code_path.split('.')
@@ -771,7 +1073,7 @@ async def show_code_by_path(message: Message, code_path: str, header: str):
         module = matplobblib._importlib.import_module(f'matplobblib.{submodule}')
 
         # Определяем, показывать ли docstring, на основе настроек пользователя
-        settings = await database.get_user_settings(message.from_user.id)
+        settings = await database.get_user_settings(user_id)
         dict_name = 'themes_list_dicts_full' if settings['show_docstring'] else 'themes_list_dicts_full_nd'
         code_dictionary = getattr(module, dict_name)
 
@@ -787,7 +1089,7 @@ async def show_code_by_path(message: Message, code_path: str, header: str):
             await message.answer(f'''```python\n{repl}\n```''', parse_mode='markdown')
         
         await message.answer("Что делаем дальше?", reply_markup=kb.get_code_action_keyboard(code_path))
-        await message.answer("Или выберите другую команду.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
+        await message.answer("Или выберите другую команду.", reply_markup=kb.get_main_reply_keyboard(user_id))
 
     except (ValueError, KeyError, AttributeError, ImportError) as e:
         logging.error(f"Ошибка при показе кода (path: {code_path}): {e}")
