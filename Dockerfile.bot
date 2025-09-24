@@ -1,19 +1,90 @@
-FROM python:3.11-slim
+# Dockerfile.fixed-B-with-tex
+FROM node:20-slim
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    texlive-latex-base \
-    texlive-latex-extra \
-    texlive-fonts-recommended \
-    texlive-lang-cyrillic\
-    texlive-science \
-    dvipng \
-    ghostscript && \
-    apt-get clean && \
+# noninteractive to avoid tzdata/ui prompts
+ENV DEBIAN_FRONTEND=noninteractive \
+    APT_OPTS="-y --no-install-recommends"
+
+# 1) small essentials + python
+RUN set -eux; \
+    find /etc/apt -name "*.list" -exec sed -i 's|http://deb\.debian\.org|http://mirror.truenetwork.ru|g' {} + || true; \
+    find /etc/apt -name "*.sources" -exec sed -i 's|URIs: http://deb\.debian\.org|URIs: http://mirror.truenetwork.ru|g' {} + || true; \
+    apt-get update; \
+    apt-get install $APT_OPTS \
+      python3 python3-pip ca-certificates wget xdg-utils fonts-liberation python3.11-venv git \
+      git curl build-essential procps && \
     rm -rf /var/lib/apt/lists/*
 
+# 2) Puppeteer/Chromium dependencies for mermaid-cli
+#    This layer is crucial for mermaid-cli to be able to launch a headless browser.
+RUN set -eux; \
+    find /etc/apt -name "*.list" -exec sed -i 's|http://deb\.debian\.org|http://mirror.truenetwork.ru|g' {} + || true; \
+    find /etc/apt -name "*.sources" -exec sed -i 's|URIs: http://deb\.debian\.org|URIs: http://mirror.truenetwork.ru|g' {} + || true; \
+    apt-get update; \
+    apt-get install $APT_OPTS \
+      libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdbus-1-3 \
+      libdrm2 libgbm1 libgtk-3-0 libpango-1.0-0 libpangocairo-1.0-0 libx11-6 \
+      libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 libxext6 \
+      libxfixes3 libxi6 libxrandr2 libxrender1 libxss1 libxtst6 libasound2 && \
+    rm -rf /var/lib/apt/lists/*
+
+# 2) TeX packages (split so you can prune/change easily)
+#    Remove any packages you don't need to reduce image size.
+RUN set -eux; \
+    find /etc/apt -name "*.list" -exec sed -i 's|http://deb\.debian\.org|http://mirror.truenetwork.ru|g' {} + || true; \
+    find /etc/apt -name "*.sources" -exec sed -i 's|URIs: http://deb\.debian\.org|URIs: http://mirror.truenetwork.ru|g' {} + || true; \
+    apt-get update; \
+    apt-get install $APT_OPTS \
+      texlive-latex-base \
+      texlive-latex-recommended \
+      texlive-latex-extra \
+      texlive-fonts-recommended \
+      texlive-fonts-extra \
+      texlive-xetex \
+      texlive-pictures \
+      texlive-science \
+      texlive-bibtex-extra \
+      dvipng \
+      ghostscript \
+      texlive-lang-all \
+      latexmk && \
+    rm -rf /var/lib/apt/lists/*
+
+# 3) Install mermaid-cli globally (npm already exists in node:20-slim)
+RUN set -eux; \
+    find /etc/apt -name "*.list" -exec sed -i 's|http://deb\.debian\.org|http://mirror.truenetwork.ru|g' {} + || true; \
+    find /etc/apt -name "*.sources" -exec sed -i 's|URIs: http://deb\.debian\.org|URIs: http://mirror.truenetwork.ru|g' {} + || true; \
+    npm install -g @mermaid-js/mermaid-cli --no-fund --no-update-notifier; \
+    mmdc --version || true
+
+
+
+
+# App setup
 WORKDIR /app
 COPY requirements.txt .
+RUN python3 -m venv /usr/local
+ENV PATH="/usr/local/bin:$PATH"
 RUN pip install --no-cache-dir -r requirements.txt
 COPY bot/ /app/bot/
-CMD ["python", "-m", "bot.main"]
+
+# Install python deps if you have requirements.txt
+# (use pip3 so it uses the system python3)
+
+
+# Optional: sanity checks (uncomment if you want build to fail when a binary is missing)
+RUN command -v python3 >/dev/null && python3 --version \
+    && command -v node >/dev/null && node --version \
+    && command -v npm >/dev/null && npm --version \
+    && command -v pdflatex >/dev/null && pdflatex --version
+
+
+
+COPY bot/puppeteer-config.json /app/bot/
+
+# Set Puppeteer environment variable to skip downloading Chromium, as it's provided by the system dependencies
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+# Explicitly add the common global node binaries path to the PATH
+# ENV PATH="/usr/local/bin:${PATH}"
+
+CMD ["python3", "-m", "bot.main"]

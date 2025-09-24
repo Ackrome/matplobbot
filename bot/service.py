@@ -14,6 +14,7 @@ import json
 import base64
 import hashlib
 import aiohttp
+import aiofiles
 from PIL import Image
 from telegraph.aio import Telegraph
 from telegraph.exceptions import TelegraphException
@@ -26,12 +27,9 @@ from cachetools import TTLCache
 from . import database
 import matplobblib
 from . import keyboards as kb
+from . import github_service
 
 logger = logging.getLogger(__name__)
-
-# Caches for GitHub API calls to reduce rate-limiting and speed up responses
-github_content_cache = TTLCache(maxsize=200, ttl=300) # Cache for file contents (5 min)
-github_dir_cache = TTLCache(maxsize=50, ttl=180)     # Cache for directory listings (3 min)
 
 # --- Constants ---
 LATEX_PREAMBLE = r"""
@@ -43,14 +41,17 @@ LATEX_PREAMBLE = r"""
 \usepackage{amssymb}
 \usepackage{amsfonts}
 \usepackage{graphicx}
+\usepackage{mathrsfs}
 \usepackage{color}
 \usepackage{mhchem}
 \usepackage{xcolor}
+\usepackage{newunicodechar}
+\newunicodechar{∂}{\partial}
+\newunicodechar{Δ}{\Delta}
 \begin{document}
 """
 LATEX_POSTAMBLE = r"\end{document}"
-MD_SEARCH_REPO = "kvdep/Abstracts"
-MD_SEARCH_BRANCH = "main"
+MD_LATEX_PADDING = 15 # Constant padding for formulas inside Markdown
 
 # --- Telegraph Client ---
 telegraph_client = None
@@ -99,7 +100,7 @@ def convert_html_to_telegram_html(html_content: str) -> str:
     return '\n'.join(filter(None, lines))
 
 # --- LaTeX Rendering ---
-def _render_latex_sync(latex_string: str, padding: int, is_display_override: bool | None = None) -> io.BytesIO:
+def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_override: bool | None = None) -> io.BytesIO:
     """Синхронная функция для рендеринга LaTeX в PNG с использованием latex и dvipng, с добавлением отступов."""
     
     # Для команды /latex по умолчанию считаем формулу блочной (display) для лучшего качества.
@@ -180,10 +181,9 @@ def _render_latex_sync(latex_string: str, padding: int, is_display_override: boo
 
         # --- Запуск dvipng для конвертации DVI в PNG ---
         # Возвращаем постоянный DPI для всех формул для консистентности.
-        # Для строчных формул используем меньший DPI, чтобы они лучше вписывались в текст.
-        dpi = 300  # Display: 300, Inline: 200
+
         dvipng_process = subprocess.run(
-            ['dvipng', '-D', str(dpi), '-T', 'tight', '-bg', 'Transparent', '-o', png_path, dvi_path],
+            ['dvipng', '-D', str(dpi), '-T', 'tight', '-bg', 'Transparent', '-o', png_path, dvi_path], # Use the passed DPI
             capture_output=True, text=True, encoding='utf-8', errors='ignore'
         )
         
@@ -222,12 +222,55 @@ def _render_latex_sync(latex_string: str, padding: int, is_display_override: boo
             buf.seek(0)
             return buf
 
-async def render_latex_to_image(latex_string: str, padding: int, is_display_override: bool | None = None) -> io.BytesIO:
+async def render_latex_to_image(latex_string: str, padding: int, dpi:int = 300, is_display_override: bool | None = None) -> io.BytesIO:
     """Асинхронная обертка для рендеринга LaTeX, выполняемая в отдельном потоке."""
-    return await asyncio.to_thread(_render_latex_sync, latex_string, padding, is_display_override)
+    return await asyncio.to_thread(_render_latex_sync, latex_string, padding, dpi, is_display_override)
+
+# --- Mermaid Rendering ---
+def _render_mermaid_sync(mermaid_code: str) -> io.BytesIO:
+    """Синхронная функция для рендеринга Mermaid в PNG с использованием mmdc."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        input_path = os.path.join(temp_dir, 'diagram.mmd')
+        output_path = os.path.join(temp_dir, 'diagram.png')
+
+        with open(input_path, 'w', encoding='utf-8') as f:
+            f.write(mermaid_code)
+
+        # Dynamically find the mmdc executable path
+        mmdc_path = shutil.which('mmdc')
+        if not mmdc_path:
+            raise FileNotFoundError("Mermaid CLI (mmdc) not found in PATH. Please ensure it is installed correctly in the Docker image.")
+
+        # Запуск Mermaid CLI (mmdc)
+        process = subprocess.run(
+            [
+                mmdc_path, '-p', '/app/bot/puppeteer-config.json',
+                '-i', input_path, '-o', output_path, '-b', 'transparent'
+            ],
+            capture_output=True, text=True, encoding='utf-8', errors='ignore'
+        )
+
+        if process.returncode != 0 or not os.path.exists(output_path):
+            error_output = process.stderr or process.stdout or "Unknown error."
+            # Очищаем вывод от лишней информации Puppeteer
+            clean_error = re.sub(r'\(node:\d+\) \[[^\]]+\] ', '', error_output)
+            raise ValueError(f"Ошибка рендеринга Mermaid:\n{clean_error.strip()}")
+
+        # Читаем результат в буфер
+        with open(output_path, 'rb') as f:
+            buf = io.BytesIO(f.read())
+        
+        buf.seek(0)
+        return buf
+
+async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
+    """Асинхронная обертка для рендеринга Mermaid, выполняемая в отдельном потоке."""
+    return await asyncio.to_thread(_render_mermaid_sync, mermaid_code)
+
 
 # --- Code Execution ---
 async def execute_code_and_send_results(message: Message, code_to_execute: str):
+
     """Helper function to execute code and send results back to the user."""
     output_capture = io.StringIO()
     execution_error = None
@@ -432,88 +475,6 @@ async def get_telegraph_client() -> Telegraph | None:
 
 # service.py
 
-async def upload_image_to_telegraph(image_bytes: io.BytesIO, session: aiohttp.ClientSession, max_retries: int = 3, retry_delay: int = 2) -> str | None:
-    """Uploads an image to a GitHub repository and returns the raw content URL, with retries."""
-    github_token = os.getenv("GITHUB_TOKEN")
-    if not github_token:
-        logger.error("GITHUB_TOKEN environment variable not set. Image upload to GitHub is disabled.")
-        return None
-
-    image_bytes.seek(0)
-    image_data = image_bytes.read()
-    
-    if not image_data:
-        logger.warning("Attempted to upload an empty image.")
-        return None
-
-    # Create a unique filename based on the content hash
-    image_hash = hashlib.sha1(image_data).hexdigest()
-    filename = f"{image_hash}.png"
-    
-    # Define repository details
-    repo_owner = "Ackrome"
-    repo_name = "matplobbot"
-    repo_path = f"image/latex_render/{filename}"
-    branch = "test"
-
-    api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{repo_path}"
-    raw_url = f"https://raw.githubusercontent.com/{repo_owner}/{repo_name}/{branch}/{repo_path}"
-
-    # Base64 encode the image data for the GitHub API
-    base64_content = base64.b64encode(image_data).decode('utf-8')
-
-    headers = {
-        "Authorization": f"Bearer {github_token}",
-        "Accept": "application/vnd.github.v3+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-    
-    payload = {
-        "message": f"feat: Add LaTeX render for {filename}",
-        "content": base64_content,
-        "branch": branch
-    }
-
-    for attempt in range(max_retries):
-        try:
-            async with session.put(api_url, headers=headers, json=payload) as response:
-                if response.status == 201:  # 201 Created
-                    response_data = await response.json()
-                    logger.info(f"Successfully uploaded image to GitHub: {response_data.get('content', {}).get('html_url')}")
-                    return response_data.get('content', {}).get('download_url', raw_url)
-                
-                elif response.status == 409:  # 409 Conflict (file already exists)
-                    logger.warning(f"Image {filename} already exists on GitHub. Returning existing URL.")
-                    return raw_url
-                
-                elif response.status == 422:  # 422 Unprocessable Entity (e.g., invalid request, branch not found)
-                    error_text = await response.text()
-                    logger.error(f"GitHub image upload API failed for {filename} with status 422 (Unprocessable Entity): {error_text}. No retry.")
-                    return None  # This is a permanent client error, don't retry.
-
-                else:  # Other non-successful status codes (e.g., 5xx server errors)
-                    error_text = await response.text()
-                    logger.warning(
-                        f"Attempt {attempt + 1}/{max_retries} for {filename} failed with status {response.status}: {error_text}. "
-                        f"Retrying in {retry_delay}s..."
-                    )
-        
-        except aiohttp.ClientError as e:  # Catch network-related errors
-            logger.warning(
-                f"Attempt {attempt + 1}/{max_retries} for {filename} failed with network error: {e}. "
-                f"Retrying in {retry_delay}s..."
-            )
-        except Exception as e:
-            logger.error(f"An unexpected non-network error occurred during upload for {filename}: {e}", exc_info=True)
-            return None  # Don't retry on unexpected code errors, fail fast.
-
-        # If we are not in the last attempt, wait before retrying
-        if attempt < max_retries - 1:
-            await asyncio.sleep(retry_delay)
-
-    logger.error(f"Failed to upload image {filename} after {max_retries} attempts.")
-    return None
-
 async def send_as_plain_text(message: Message, file_path: str, content: str):
     """Helper to send content as plain text, handling long messages."""
     header = f"Файл: `{file_path}` (простой текст)\n\n"
@@ -543,7 +504,8 @@ async def send_as_text_with_formulas(message: Message, file_path: str, content: 
         return
 
     settings = await database.get_user_settings(message.from_user.id)
-    padding = settings['latex_padding']
+    padding = MD_LATEX_PADDING # Use constant padding for MD
+    dpi = settings['latex_dpi']
 
     async with aiohttp.ClientSession() as session: # Create one session for all potential uploads
         for chunk in chunks:
@@ -578,7 +540,7 @@ async def send_as_text_with_formulas(message: Message, file_path: str, content: 
                 continue # Move to the next chunk
 
             # It's a formula, render and send
-            if not formula_code:
+            if not formula_code.strip():
                 continue
 
             try:
@@ -590,20 +552,20 @@ async def send_as_text_with_formulas(message: Message, file_path: str, content: 
                 cached_url = await database.get_latex_cache(formula_hash)
                 
                 image_to_send = None
-                caption = f"`{chunk}`" if len(chunk) < 1024 else None # Telegram caption limit is 1024
+
 
                 if cached_url:
                     image_to_send = cached_url
                 else:
-                    image_buffer = await render_latex_to_image(formula_code, current_padding, is_display_override=is_display)
-                    image_url = await upload_image_to_telegraph(image_buffer, session)
+                    image_buffer = await render_latex_to_image(formula_code, current_padding, dpi, is_display_override=is_display)
+                    image_url = await github_service.upload_image_to_github(image_buffer, session)
                     if image_url:
                         await database.add_latex_cache(formula_hash, image_url)
                         image_to_send = image_url
                     else:
                         image_buffer.seek(0)
                         image_to_send = BufferedInputFile(image_buffer.read(), filename="formula.png")
-                        await message.answer("⚠️ Не удалось загрузить картинку на сервер, отправлено как временный файл.")
+                        await message.answer("⚠️ Не удалось загрузить картинку на сервер, отправлено как временный файл.") # caption is not used here
                 await message.answer_photo(photo=image_to_send, caption=caption, parse_mode='markdown')
             except (ValueError, RuntimeError, FileNotFoundError) as e:
                 logger.error(f"Ошибка при рендеринге LaTeX для '{formula_code}': {e}", exc_info=True)
@@ -613,51 +575,86 @@ async def send_as_text_with_formulas(message: Message, file_path: str, content: 
                 logger.error(f"Непредвиденная ошибка при рендеринге LaTeX для '{formula_code}': {e}", exc_info=True)
                 await message.answer(f"Произошла непредвиденная ошибка при обработке формулы: `{chunk}`")
 
-async def display_github_file(callback: CallbackQuery, file_path: str):
+async def send_as_document_from_url(message: Message, file_url: str, file_path: str):
+    """Downloads a file from a URL by chunks and sends it as a document."""
+    file_name = os.path.basename(file_path)
+    status_msg = await message.answer(f"Загружаю файл `{file_name}`...", parse_mode='markdown')
+    
+    temp_file_path = None
+    try:
+        # Create a temporary file to store the download
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file_name}") as tmp_file:
+            temp_file_path = tmp_file.name
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(file_url) as response:
+                response.raise_for_status() # Raise an exception for bad status codes
+                
+                # Stream the download in chunks
+                async with aiofiles.open(temp_file_path, 'wb') as f:
+                    async for chunk in response.content.iter_chunked(8192):
+                        await f.write(chunk)
+        
+        # Send the downloaded file
+        await message.answer_document(
+            document=FSInputFile(temp_file_path, filename=file_name),
+            caption=f"Файл: `{file_path}`",
+            parse_mode='markdown'
+        )
+        await status_msg.delete()
+
+    except Exception as e:
+        logger.error(f"Failed to download/send file from {file_url}: {e}", exc_info=True)
+        await status_msg.edit_text(f"Не удалось загрузить или отправить файл `{file_name}`. Ошибка: {e}")
+    finally:
+        if temp_file_path and os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+
+async def display_github_file(message: Message, user_id: int, repo_path: str, file_path: str, status_msg_to_delete: Message | None = None):
     """
     Fetches a file from GitHub and displays it, using Telegra.ph for Markdown files."""
-    await callback.answer("Загружаю и обрабатываю файл...")
-    raw_url = f"https://raw.githubusercontent.com/{MD_SEARCH_REPO}/{MD_SEARCH_BRANCH}/{file_path}"
-
-    # Check cache first
-    content = github_content_cache.get(file_path)
-    if content is not None:
-        logger.info(f"Cache hit for file content: {file_path}")
-    else:
-        logger.info(f"Cache miss for file content: {file_path}. Fetching from GitHub.")
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(raw_url) as response:
-                    if response.status == 200:
-                        content = await response.text(encoding='utf-8', errors='ignore')
-                        # Store in cache on success
-                        github_content_cache[file_path] = content
-                    else:
-                        await callback.message.answer(f"Не удалось загрузить файл. Ошибка: {response.status}")
-                        return
-        except Exception as e:
-            await callback.message.answer(f"Произошла ошибка при загрузке файла: {e}")
-            return
-
-    if content is None:
-        await callback.message.answer("Не удалось получить содержимое файла.")
-        return
+    # The initial "Processing..." message is now sent from the handler.
+    raw_url = f"https://raw.githubusercontent.com/{repo_path}/{github_service.MD_SEARCH_BRANCH}/{file_path}"
 
     # Check if it's a markdown file
     if file_path.lower().endswith('.md'):
+        # --- Existing logic for Markdown files ---
+        # This part fetches content as text and processes it.
+        content = github_service.github_content_cache.get(file_path)
+        if content is not None:
+            logger.info(f"Cache hit for file content: {file_path}")
+        else:
+            logger.info(f"Cache miss for file content: {file_path}. Fetching from GitHub.")
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(raw_url) as response:
+                        if response.status == 200:
+                            content = await response.text(encoding='utf-8', errors='ignore')
+                            github_service.github_content_cache[file_path] = content # Store in cache
+                        else:
+                            await message.answer(f"Не удалось загрузить файл. Ошибка: {response.status}")
+                            return
+            except Exception as e:
+                await message.answer(f"Произошла ошибка при загрузке файла: {e}")
+                return
+
+        if content is None:
+            await message.answer("Не удалось получить содержимое файла.")
+            return
+
         # Get user settings to decide how to display the file
-        settings = await database.get_user_settings(callback.from_user.id)
+        settings = await database.get_user_settings(user_id)
         md_mode = settings.get('md_display_mode', 'md_file')
 
         # Option 2: Plain text
         if md_mode == 'text':
-            await send_as_text_with_formulas(callback.message, file_path, content)
+            await send_as_text_with_formulas(message, file_path, content)
 
         # Option 3: .md file
         elif md_mode == 'md_file':
             file_name = file_path.split('/')[-1]
             file_bytes = content.encode('utf-8')
-            await callback.message.answer_document(
+            await message.answer_document(
                 document=BufferedInputFile(file_bytes, filename=file_name),
                 caption=f"Файл конспекта: `{file_path}`",
                 parse_mode='markdown'
@@ -685,7 +682,7 @@ async def display_github_file(callback: CallbackQuery, file_path: str):
                         return placeholder
                     return match.group(0)
 
-                latex_regex = r'\$\$(.*?)\$\$|(?<!\$)\$([^$]+?)\$(?!\$)'
+                latex_regex = r'\$\$(.*?)\$\$|(?<!\$)\$([^$]+)\$(?!\$)'
                 content_with_placeholders = re.sub(latex_regex, store_latex_match, content, flags=re.DOTALL)
 
                 # 2. Convert the Markdown (with placeholders) to HTML.
@@ -694,8 +691,14 @@ async def display_github_file(callback: CallbackQuery, file_path: str):
                     extensions=['fenced_code', 'tables']
                 )
 
+                # After converting to HTML, transform mermaid code blocks to the format Mermaid.js expects.
+                html_with_placeholders = html_with_placeholders.replace(
+                    '<pre><code class="language-mermaid">', '<pre class="mermaid">'
+                ).replace('</code></pre>', '</pre>')
+
                 # 3. Asynchronously render all stored formulas to images and upload them.
-                padding = settings['latex_padding']
+                padding = MD_LATEX_PADDING # Use constant padding for MD
+                dpi = settings['latex_dpi']
 
                 async with aiohttp.ClientSession() as session:
                     async def render_and_upload(formula_data):
@@ -714,10 +717,11 @@ async def display_github_file(callback: CallbackQuery, file_path: str):
                             image_buffer = await render_latex_to_image(
                                 formula_data['code'], 
                                 current_padding, 
+                                dpi,
                                 is_display_override=formula_data['is_display']
                             )
                             image_buffer.seek(0)
-                            image_url = await upload_image_to_telegraph(image_buffer, session)
+                            image_url = await github_service.upload_image_to_github(image_buffer, session)
                             if image_url:
                                 await database.add_latex_cache(formula_hash, image_url)
                             return image_url
@@ -754,12 +758,12 @@ async def display_github_file(callback: CallbackQuery, file_path: str):
                 full_html_doc = f"""
 <!DOCTYPE html>
 <html lang="ru">
-<head>
+<head> 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{page_title}</title>
     <style>
-        body {{ 
+        body {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             line-height: 1.6;
             margin: 0 auto;
@@ -777,21 +781,32 @@ async def display_github_file(callback: CallbackQuery, file_path: str):
         h1, h2, h3, h4, h5, h6 {{ border-bottom: 1px solid #eaecef; padding-bottom: .3em; margin-top: 24px; margin-bottom: 16px; }}
     </style>
 </head>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {{
+        // Check if mermaid is defined
+        if (typeof mermaid !== 'undefined') {{
+            mermaid.initialize({{ startOnLoad: true }});
+        }} else {{
+            console.error("Mermaid library not loaded.");
+        }}
+    }});
+</script>
 <body>
     {html_content}
 </body>
 </html>"""
                 file_bytes = full_html_doc.encode('utf-8')
                 file_name = f"{page_title}.html"
-                await callback.message.answer_document(
+                await message.answer_document(
                     document=BufferedInputFile(file_bytes, filename=file_name),
                     caption=f"HTML-версия конспекта: `{file_path}`",
                     parse_mode='markdown'
                 )
             except Exception as e:
                 logger.error(f"Ошибка при обработке Markdown и LaTeX для HTML-файла '{file_path}': {e}", exc_info=True)
-                await callback.message.answer(f"Произошла ошибка при создании HTML-файла: {e}. Отправляю как простой текст.")
-                await send_as_plain_text(callback.message, file_path, content)
+                await message.answer(f"Произошла ошибка при создании HTML-файла: {e}. Отправляю как простой текст.")
+                await send_as_plain_text(message, file_path, content)
 
         # Option 1: Telegra.ph (default)
         elif md_mode == 'telegraph':
@@ -821,7 +836,7 @@ async def display_github_file(callback: CallbackQuery, file_path: str):
 
                 # Regex to find $$...$$ (group 1) or $...$ (group 2).
                 # The negative lookarounds for inline math prevent matching single dollars or parts of display math.
-                latex_regex = r'\$\$(.*?)\$\$|(?<!\$)\$([^$]+?)\$(?!\$)'
+                latex_regex = r'\$\$(.*?)\$\$|(?<!\$)\$([^$]+)\$(?!\$)'
                 content_with_placeholders = re.sub(latex_regex, store_latex_match, content, flags=re.DOTALL)
 
                 # 2. Convert the Markdown (with placeholders) to HTML.
@@ -831,30 +846,36 @@ async def display_github_file(callback: CallbackQuery, file_path: str):
                     extensions=['fenced_code', 'tables']
                 )
 
+                # After converting to HTML, transform mermaid code blocks to the format Mermaid.js expects.
+                html_with_placeholders = html_with_placeholders.replace(
+                    '<pre><code class="language-mermaid">', '<pre class="mermaid">'
+                ).replace('</code></pre>', '</pre>')
+
                 # 3. Asynchronously render all stored formulas to images and upload them.
-                padding = settings['latex_padding']
+                padding = MD_LATEX_PADDING # Use constant padding for MD
+                dpi = settings['latex_dpi']
 
                 # Create one session for all uploads to improve efficiency and potentially avoid rate-limiting.
                 async with aiohttp.ClientSession() as session:
                     debug_photo_sent = True
                     
-                    async def render_and_upload(formula_data):
+                    async def render_and_upload(formula_data): 
                         nonlocal debug_photo_sent
                         try:
                             # --- Caching logic ---
                             current_padding_for_hash = padding if formula_data['is_display'] else max(0, padding - 10)
-                            formula_key = f"{formula_data['code']}|{current_padding_for_hash}|{formula_data['is_display']}"
+                            formula_key = f"{formula_data['code']}|{current_padding_for_hash}|{dpi}|{formula_data['is_display']}"
                             formula_hash = hashlib.sha1(formula_key.encode()).hexdigest()
                             cached_url = await database.get_latex_cache(formula_hash)
                             if cached_url:
                                 return cached_url
-                            # --- End caching logic ---
-
+                           # --- End caching logic ---
                             if not formula_data['code']: return None # Skip empty formulas
                             current_padding = padding if formula_data['is_display'] else max(0, padding - 10)
                             image_buffer = await render_latex_to_image(
                                 formula_data['code'], 
                                 current_padding, 
+                                dpi,
                                 is_display_override=formula_data['is_display']
                             )
                             # --- НАЧАЛО ДИАГНОСТИЧЕСКОГО БЛОКА ---
@@ -873,21 +894,21 @@ async def display_github_file(callback: CallbackQuery, file_path: str):
                                     if file_size > 0:
                                         # Создаем копию для отправки, чтобы не повредить основной буфер
                                         debug_buffer = io.BytesIO(image_bytes)
-                                        await callback.message.answer_photo(
+                                        await message.answer_photo(
                                             photo=BufferedInputFile(debug_buffer.read(), filename="debug_formula.png")
                                         )
                                     else:
-                                        await callback.message.answer("⚠️ **Диагностика:** Размер картинки 0 байт. Проблема в рендеринге LaTeX.")
+                                        await message.answer("⚠️ **Диагностика:** Размер картинки 0 байт. Проблема в рендеринге LaTeX.")
                                     
                                 except Exception as e:
-                                    await callback.message.answer(f"❌ **Диагностика:** Не удалось отправить картинку в чат. Ошибка: {e}")
+                                    await message.answer(f"❌ **Диагностика:** Не удалось отправить картинку в чат. Ошибка: {e}")
                                 finally:
                                     debug_photo_sent = True # Поднимаем флаг, чтобы не спамить в чат
                             
                             image_buffer.seek(0) # Возвращаем курсор буфера в начало для основной загрузки
                             # --- КОНЕЦ ДИАГНОСТИЧЕСКОГО БЛОКА ---
-
-                            image_url = await upload_image_to_telegraph(image_buffer, session)
+                            
+                            image_url = await github_service.upload_image_to_github(image_buffer, session)
                             # --- Caching logic ---
                             if image_url:
                                 await database.add_latex_cache(formula_hash, image_url)
@@ -926,84 +947,49 @@ async def display_github_file(callback: CallbackQuery, file_path: str):
                 # 6. Get Telegraph client and create the page.
                 telegraph = await get_telegraph_client()
                 if not telegraph:
-                    await callback.message.answer("Ошибка: сервис Telegraph недоступен. Отправляю как простой текст.")
-                    await send_as_plain_text(callback.message, file_path, content)
+                    await message.answer("Ошибка: сервис Telegraph недоступен. Отправляю как простой текст.")
+                    await send_as_plain_text(message, file_path, content)
                 else:
                     page_title = file_path.split('/')[-1].replace('.md', '')
                     try:
                         response = await telegraph.create_page(title=page_title, html_content=final_html, author_name="Matplobbot", author_url="https://github.com/Ackrome/matplobbot")
                         page_url = response['url']
-                        await callback.message.answer(f"Конспект **{file_path}** опубликован в Telegra.ph:\n{page_url}", parse_mode='markdown', disable_web_page_preview=False)
+                        await message.answer(f"Конспект **{file_path}** опубликован в Telegra.ph:\n{page_url}", parse_mode='markdown', disable_web_page_preview=False)
                     except TelegraphException as e:
                         logger.error(f"Failed to create Telegraph page for '{file_path}': {e}", exc_info=True)
-                        await callback.message.answer(f"Не удалось создать Telegra.ph статью: {e}. Отправляю как простой текст.")
-                        await send_as_plain_text(callback.message, file_path, content)
+                        await message.answer(f"Не удалось создать Telegra.ph статью: {e}. Отправляю как простой текст.")
+                        await send_as_plain_text(message, file_path, content)
             except Exception as e:
                 logger.error(f"Ошибка при обработке Markdown и LaTeX для Telegraph '{file_path}': {e}", exc_info=True)
-                await callback.message.answer(f"Произошла ошибка при создании Telegra.ph статьи: {e}. Отправляю как простой текст.")
-                await send_as_plain_text(callback.message, file_path, content)
+                await message.answer(f"Произошла ошибка при создании Telegra.ph статьи: {e}. Отправляю как простой текст.")
+                await send_as_plain_text(message, file_path, content)
         
         # Fallback for unknown mode
         else:
-            logger.warning(f"Unknown md_display_mode '{md_mode}' for user {callback.from_user.id}. Falling back to plain text.")
-            await send_as_plain_text(callback.message, file_path, content)
+            logger.warning(f"Unknown md_display_mode '{md_mode}' for user {user_id}. Falling back to plain text.")
+            await send_as_plain_text(message, file_path, content)
     else:
-        # Not a markdown file, send as plain text
-        await send_as_plain_text(callback.message, file_path, content)
+        # Not a markdown file, download and send as a document
+        await send_as_document_from_url(message, raw_url, file_path)
     
-    await callback.message.answer("Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(callback.from_user.id))
+    # Finally, delete the status message and show the main keyboard
+    if status_msg_to_delete:
+        try:
+            await status_msg_to_delete.delete()
+        except TelegramBadRequest:
+            pass # Message might have been deleted already
+    await message.answer("Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(user_id))
 
-async def get_github_repo_contents(path: str = "") -> list[dict] | None:
-    """Fetches directory contents from the GitHub repository."""
-    github_token = os.getenv("GITHUB_TOKEN")
-    if not github_token:
-        logger.error("GITHUB_TOKEN environment variable not set. /lec_all command is disabled.")
-        return None
-
-    # Check cache first
-    cached_contents = github_dir_cache.get(path)
-    if cached_contents is not None:
-        logger.info(f"Cache hit for dir content: /{path}")
-        return cached_contents
-
-    # The URL for the contents API
-    url = f"https://api.github.com/repos/{MD_SEARCH_REPO}/contents/{path}"
-    headers = {
-        "Accept": "application/vnd.github.v3+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "Authorization": f"Bearer {github_token}"
-    }
-    params = {"ref": MD_SEARCH_BRANCH}
-
-    try:
-        async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.get(url, params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    # Sort items: folders first, then files, all alphabetically
-                    if isinstance(data, list):
-                        data.sort(key=lambda x: (x['type'] != 'dir', x['name'].lower()))
-                    # Store in cache on success
-                    github_dir_cache[path] = data
-                    return data
-                else:
-                    error_text = await response.text()
-                    logger.error(f"GitHub API contents fetch failed for path '{path}' with status {response.status}: {error_text}")
-                    return None
-    except Exception as e:
-        logger.error(f"Error during GitHub API contents request for path '{path}': {e}", exc_info=True)
-        return None
-
-async def display_lec_all_path(message: Message, path: str, is_edit: bool = False):
+async def display_lec_all_path(message: Message, repo_path: str, path: str, is_edit: bool = False):
     """Helper to fetch and display contents of a path in the lec_all repo."""
     status_msg = None
     if is_edit:
         # The callback is already answered, so we just edit the text.
         pass
     else:
-        status_msg = await message.answer(f"Загружаю содержимое `/{path or 'корня'}`...", parse_mode='markdown')
+        status_msg = await message.answer(f"Загружаю содержимое `/{path or 'корня'}` из `{repo_path}`...", parse_mode='markdown')
 
-    contents = await get_github_repo_contents(path)
+    contents = await github_service.get_github_repo_contents(repo_path, path)
 
     if contents is None:
         error_text = "Не удалось получить содержимое репозитория. Возможно, проблема с токеном GitHub или API."
@@ -1019,7 +1005,9 @@ async def display_lec_all_path(message: Message, path: str, is_edit: bool = Fals
 
     # Add a "back" button if not in the root directory
     if path:
-        parent_path = path.rsplit('/', 1)[0] if '/' in path else ""
+        # The full path for navigation now includes the repo
+        parent_dir = path.rsplit('/', 1)[0] if '/' in path else ""
+        parent_path = f"{repo_path}/{parent_dir}" if parent_dir else repo_path
         path_hash = hashlib.sha1(parent_path.encode()).hexdigest()[:16]
         kb.code_path_cache[path_hash] = parent_path
         builder.row(InlineKeyboardButton(text="⬅️ .. (Назад)", callback_data=f"abs_nav_hash:{path_hash}"))
@@ -1030,21 +1018,23 @@ async def display_lec_all_path(message: Message, path: str, is_edit: bool = Fals
     elif isinstance(contents, list):
         for item in contents:
             if item['type'] == 'dir':
-                path_hash = hashlib.sha1(item['path'].encode()).hexdigest()[:16]
-                kb.code_path_cache[path_hash] = item['path']
+                full_item_path = f"{repo_path}/{item['path']}"
+                path_hash = hashlib.sha1(full_item_path.encode()).hexdigest()[:16]
+                kb.code_path_cache[path_hash] = full_item_path
                 builder.row(InlineKeyboardButton(
                     text=f"📁 {item['name']}",
                     callback_data=f"abs_nav_hash:{path_hash}"
                 ))
             elif item['type'] == 'file':
-                path_hash = hashlib.sha1(item['path'].encode()).hexdigest()[:16]
-                kb.code_path_cache[path_hash] = item['path']
+                full_item_path = f"{repo_path}/{item['path']}"
+                path_hash = hashlib.sha1(full_item_path.encode()).hexdigest()[:16]
+                kb.code_path_cache[path_hash] = full_item_path
                 builder.row(InlineKeyboardButton(
                     text=f"📄 {item['name']}",
                     callback_data=f"abs_show_hash:{path_hash}"
                 ))
     
-    message_text = f"Содержимое: `/{path}`" if path else "Содержимое корневой папки"
+    message_text = f"Содержимое: `/{path}` в `{repo_path}`" if path else f"Содержимое `{repo_path}`"
     
     if not contents and not path: # Root is empty
         message_text = "Репозиторий пуст."

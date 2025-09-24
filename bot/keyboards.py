@@ -5,11 +5,12 @@ from cachetools import LRUCache
 import hashlib
 import matplobblib
 import os # Import os to access environment variables like ADMIN_USER_ID
+from . import database # Import database to check for user repos
 
 logger = logging.getLogger(__name__)
 
 # Define base commands that are always available
-BASE_COMMANDS = ['/matp_all', '/matp_search', '/lec_search', '/lec_all', '/favorites', '/settings', '/help', '/execute', '/latex']
+BASE_COMMANDS = ['/matp_all', '/matp_search', '/lec_search', '/lec_all', '/favorites', '/settings', '/help', '/execute', '/latex', '/mermaid']
 ADMIN_COMMANDS = ['/update', '/clear_cache']
 
 # Cache for long code paths to use in callback_data
@@ -112,7 +113,8 @@ def get_help_inline_keyboard(user_id: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="⭐ /favorites - Избранное", callback_data="help_cmd_favorites")],
         [InlineKeyboardButton(text="⚙️ /settings - Настройки", callback_data="help_cmd_settings")],
         [InlineKeyboardButton(text="▶️ /execute - Выполнить код", callback_data="help_cmd_execute")],
-        [InlineKeyboardButton(text="🧮 /latex - Рендер LaTeX", callback_data="help_cmd_latex")]
+        [InlineKeyboardButton(text="🧮 /latex - Рендер LaTeX", callback_data="help_cmd_latex")],
+        [InlineKeyboardButton(text="🎨 /mermaid - Рендер Mermaid", callback_data="help_cmd_mermaid")]
     ]
     admin_id = os.getenv('ADMIN_USER_ID')
     if admin_id and user_id == int(admin_id):
@@ -136,4 +138,21 @@ def get_code_action_keyboard(code_path: str) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="▶️ Выполнить", callback_data=f"run_hash:{path_hash}"),
         InlineKeyboardButton(text="⭐ В избранное", callback_data=f"fav_hash:{path_hash}")
     )
+    return builder.as_markup()
+
+async def get_repo_management_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    """Creates an inline keyboard for managing user repositories."""
+    repos = await database.get_user_repos(user_id)
+    builder = InlineKeyboardBuilder()
+
+    for repo_path in repos:
+        repo_hash = hashlib.sha1(repo_path.encode()).hexdigest()[:16]
+        code_path_cache[repo_hash] = repo_path
+        builder.row(
+            InlineKeyboardButton(text=f"Repo: {repo_path}", callback_data="noop"),
+            InlineKeyboardButton(text="✏️", callback_data=f"repo_edit_hash:{repo_hash}"),
+            InlineKeyboardButton(text="❌", callback_data=f"repo_del_hash:{repo_hash}")
+        )
+    builder.row(InlineKeyboardButton(text="➕ Добавить новый репозиторий", callback_data="repo_add_new"))
+    builder.row(InlineKeyboardButton(text="⬅️ Назад в настройки", callback_data="back_to_settings"))
     return builder.as_markup()

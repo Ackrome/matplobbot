@@ -1,15 +1,24 @@
-FROM python:3.11-slim
+FROM node:20-slim 
+ENV APT_OPTS="-y --no-install-recommends "
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    texlive-latex-base \
-    texlive-latex-extra \
-    texlive-fonts-recommended \
-    texlive-science \
-    dvipng \
-    ghostscript && \
-    apt-get clean && \
+RUN set -eux; \
+    find /etc/apt -name "*.list" -exec sed -i 's|http://deb\.debian\.org|http://mirror.truenetwork.ru|g' {} + || true; \
+    find /etc/apt -name "*.sources" -exec sed -i 's|URIs: http://deb\.debian\.org|URIs: http://mirror.truenetwork.ru|g' {} + || true; \
+    apt-get update; \
+    apt-get install $APT_OPTS \
+      texlive-latex-base \
+      texlive-latex-recommended \
+      texlive-latex-extra \
+      texlive-fonts-recommended \
+      texlive-fonts-extra \
+      texlive-xetex \
+      texlive-pictures \
+      texlive-science \
+      texlive-bibtex-extra \
+      dvipng \
+      ghostscript \
+      latexmk && \
     rm -rf /var/lib/apt/lists/*
 
-# Оставим только для теста — не копируем requirements
-CMD ["echo", "LaTeX packages installed successfully"]
+
+CMD ["echo", "LaTeX and Mermaid CLI installed successfully"]

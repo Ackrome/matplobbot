@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 ENV APP_PACKAGE_DIR_NAME=fastapi_stats_module
 ENV APP_HOME=/app_root

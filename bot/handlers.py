@@ -26,19 +26,26 @@ from cachetools import TTLCache
 from . import database
 from . import keyboards as kb
 from . import service
-
+from . import github_service
+import importlib
 SEARCH_RESULTS_PER_PAGE = 10
 
 async def update_library_async(library_name):
     try:
+        # 1. Get the version before updating
+        old_version = pkg_resources.get_distribution(library_name).version
+
         process = await asyncio.create_subprocess_exec(
         sys.executable, "-m", "pip", "install", "--upgrade", library_name,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE)
         stdout, stderr = await process.communicate()
+
         if process.returncode == 0:
-            print(f"Библиотека '{library_name}' успешно обновлена! {stdout.decode()}")
-            return True, f"Библиотека '{library_name}' успешно обновлена! Текущая версия: {pkg_resources.get_distribution('matplobblib').version}"
+            # 2. Reload the package metadata to get the new version
+            importlib.reload(pkg_resources)
+            new_version = pkg_resources.get_distribution(library_name).version
+            return True, f"Библиотека '{library_name}' успешно обновлена с {old_version} до {new_version}!"
         else:
             print(f"Ошибка при обновлении библиотеки '{library_name}': {stderr.decode()}")
             return False, f"Ошибка при обновлении библиотеки '{library_name}': {stderr.decode()}"
@@ -101,6 +108,16 @@ class MarkdownSearch(StatesGroup):
 
 class LatexRender(StatesGroup):
     formula = State()
+
+class MermaidRender(StatesGroup):
+    code = State()
+
+class RepoManagement(StatesGroup):
+    add_repo = State()
+    edit_repo = State()
+    choose_repo_for_search = State()
+    choose_repo_for_browse = State()
+
 
 async def display_matp_all_navigation(message: Message, path: str = "", page: int = 0, is_edit: bool = False):
     """Helper to display navigation for /matp_all command."""
@@ -252,7 +269,6 @@ async def update(message: Message):
     success, status_message_text = await update_library_async('matplobblib')
     if success:
         # Перезагрузка модуля matplobblib, если это необходимо для немедленного применения изменений
-        import importlib
         importlib.reload(matplobblib) # Может быть сложным и иметь побочные эффекты
         await status_msg.edit_text(status_message_text) # Убран reply_markup
     else:
@@ -274,12 +290,12 @@ async def clear_cache_command(message: Message):
     # 1. Clear in-memory caches in handlers.py
     user_search_results_cache.clear()
     md_search_results_cache.clear()
-    github_search_cache.clear()
+    github_search_cache.clear() # This is a local cache in handlers.py
     
     # 2. Clear in-memory caches from other modules
     kb.code_path_cache.clear()
-    service.github_content_cache.clear()
-    service.github_dir_cache.clear()
+    github_service.github_content_cache.clear()
+    github_service.github_dir_cache.clear()
 
     # 3. Clear persistent cache in database
     await database.clear_latex_cache()
@@ -353,7 +369,8 @@ async def process_latex_formula(message: Message, state: FSMContext):
     try:
         settings = await database.get_user_settings(message.from_user.id)
         padding = settings['latex_padding']
-        image_buffer = await service.render_latex_to_image(formula, padding)
+        dpi = settings['latex_dpi']
+        image_buffer = await service.render_latex_to_image(formula, padding, dpi)
         
         await status_msg.delete()
         await message.answer_photo(
@@ -375,6 +392,40 @@ async def process_latex_formula(message: Message, state: FSMContext):
         )
 
 ##################################################################################################
+# MERMAID
+##################################################################################################
+
+@router.message(Command('mermaid'))
+async def mermaid_command(message: Message, state: FSMContext):
+    """Handles the /mermaid command for rendering diagrams."""
+    await state.set_state(MermaidRender.code)
+    await message.answer(
+        "Пожалуйста, отправьте код диаграммы в синтаксисе Mermaid:",
+        reply_markup=ReplyKeyboardRemove()
+    )
+
+@router.message(MermaidRender.code)
+async def process_mermaid_code(message: Message, state: FSMContext):
+    """Renders the received Mermaid code into a PNG image."""
+    await state.clear()
+    mermaid_code = message.text
+    
+    status_msg = await message.answer("🎨 Рендеринг диаграммы...")
+
+    try:
+        image_buffer = await service.render_mermaid_to_image(mermaid_code)
+        
+        await status_msg.delete()
+        await message.answer_photo(
+            photo=BufferedInputFile(image_buffer.read(), filename="diagram.png"),
+            caption=f"Ваша диаграмма Mermaid."
+        )
+        await message.answer("Готово! Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
+
+    except (ValueError, RuntimeError) as e:
+        error_text = f"Не удалось отрендерить диаграмму.\n\n**Ошибка:**\n```\n{e}\n```"
+        await status_msg.edit_text(error_text, parse_mode='markdown')
+##################################################################################################
 # MARKDOWN SEARCH & ABSTRACTS
 ##################################################################################################
 
@@ -387,10 +438,40 @@ github_search_cache = TTLCache(maxsize=100, ttl=600) # Cache search results for 
 
 
 @router.message(Command('lec_all'))
-async def lec_all_command(message: Message):
-    """Handles the /lec_all command, showing root of the repo."""
-    await service.display_lec_all_path(message, path="")
+async def lec_all_command(message: Message, state: FSMContext):
+    """Handles /lec_all, asking for a repo if multiple are configured."""
+    user_id = message.from_user.id
+    repos = await database.get_user_repos(user_id)
 
+    if not repos:
+        await message.answer("У вас не добавлено ни одного репозитория для просмотра. Пожалуйста, добавьте их в /settings.")
+        return
+
+    if len(repos) == 1:
+        await service.display_lec_all_path(message, repo_path=repos[0], path="")
+        return
+
+    # Ask user to choose a repo
+    builder = InlineKeyboardBuilder()
+    for repo in repos:
+        repo_hash = hashlib.sha1(repo.encode()).hexdigest()[:16]
+        kb.code_path_cache[repo_hash] = repo
+        builder.row(InlineKeyboardButton(text=repo, callback_data=f"lec_browse_repo:{repo_hash}"))
+
+    await message.answer("Выберите репозиторий для просмотра:", reply_markup=builder.as_markup())
+
+@router.callback_query(F.data.startswith("lec_browse_repo:"))
+async def cq_lec_browse_repo_selected(callback: CallbackQuery):
+    """Handles the selection of a repository for browsing."""
+    repo_hash = callback.data.split(":", 1)[1]
+    repo_path = kb.code_path_cache.get(repo_hash)
+    if not repo_path:
+        await callback.answer("Информация о репозитории устарела.", show_alert=True)
+        return
+    
+    await callback.answer(f"Загружаю {repo_path}...")
+    await service.display_lec_all_path(callback.message, repo_path=repo_path, path="", is_edit=True)
+    
 @router.callback_query(F.data.startswith("abs_nav_hash:"))
 async def cq_lec_all_navigate(callback: CallbackQuery):
     """Handles navigation through lec_all repo directories."""
@@ -402,7 +483,12 @@ async def cq_lec_all_navigate(callback: CallbackQuery):
         return
 
     await callback.answer()
-    await service.display_lec_all_path(callback.message, path, is_edit=True)
+    # The path from cache now includes the repo, e.g., "owner/repo/folder" or just "owner/repo"
+    path_parts = path.split('/')
+    repo_path = f"{path_parts[0]}/{path_parts[1]}"
+    relative_path = "/".join(path_parts[2:])
+    
+    await service.display_lec_all_path(callback.message, repo_path=repo_path, path=relative_path, is_edit=True)
 
 @router.callback_query(F.data.startswith("abs_show_hash:"))
 async def cq_lec_all_show_file(callback: CallbackQuery):
@@ -414,7 +500,15 @@ async def cq_lec_all_show_file(callback: CallbackQuery):
         await callback.answer("Информация о файле устарела. Пожалуйста, обновите навигацию.", show_alert=True)
         return
 
-    await service.display_github_file(callback, file_path)
+    # Send a new temporary message to inform the user about processing.
+    file_name = file_path.split('/')[-1]
+    status_msg = await callback.message.answer(f"⏳ Обработка файла `{file_name}`...", parse_mode='markdown')
+    await callback.answer() # Acknowledge the button press
+
+    path_parts = file_path.split('/')
+    repo_path = f"{path_parts[0]}/{path_parts[1]}"
+    relative_path = "/".join(path_parts[2:])
+    await service.display_github_file(callback.message, callback.from_user.id, repo_path, relative_path, status_msg_to_delete=status_msg)
 
 async def get_md_search_results_keyboard(user_id: int, page: int = 0) -> InlineKeyboardMarkup | None:
     """Создает инлайн-клавиатуру для страницы результатов поиска по конспектам с пагинацией."""
@@ -455,14 +549,14 @@ async def get_md_search_results_keyboard(user_id: int, page: int = 0) -> InlineK
     return builder.as_markup()
 
 
-async def search_github_md(query: str) -> list[dict] | None:
+async def search_github_md(query: str, repo_path: str) -> list[dict] | None:
     """Searches for markdown files in a specific GitHub repository."""
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
         logging.error("GITHUB_TOKEN environment variable not set. Markdown search is disabled.")
         return None
-    MD_SEARCH_REPO = "kvdep/Abstracts"
-    search_query = f"{query} repo:{MD_SEARCH_REPO} extension:md"
+    
+    search_query = f"{query} repo:{repo_path} extension:md"
     url = "https://api.github.com/search/code"
     headers = {
         "Accept": "application/vnd.github.v3+json",
@@ -491,17 +585,51 @@ async def search_github_md(query: str) -> list[dict] | None:
 @router.message(Command('lec_search'))
 async def lec_search_command(message: Message, state: FSMContext):
     """Handles the /lec_search command."""
+    user_id = message.from_user.id
+    repos = await database.get_user_repos(user_id)
+
+    if not repos:
+        await message.answer("У вас не добавлено ни одного репозитория для поиска. Пожалуйста, добавьте их в /settings.")
+        return
+
+    if len(repos) == 1:
+        await state.update_data(repo_to_search=repos[0])
+        await state.set_state(MarkdownSearch.query)
+        await message.answer(f"Введите запрос для поиска по репозиторию `{repos[0]}`:", parse_mode='markdown', reply_markup=ReplyKeyboardRemove())
+        return
+
+    # Ask user to choose a repo
+    builder = InlineKeyboardBuilder()
+    for repo in repos:
+        repo_hash = hashlib.sha1(repo.encode()).hexdigest()[:16]
+        kb.code_path_cache[repo_hash] = repo
+        builder.row(InlineKeyboardButton(text=repo, callback_data=f"lec_search_repo:{repo_hash}"))
+
+    await state.set_state(RepoManagement.choose_repo_for_search)
+    await message.answer("Выберите репозиторий для поиска:", reply_markup=builder.as_markup())
+
+@router.callback_query(RepoManagement.choose_repo_for_search, F.data.startswith("lec_search_repo:"))
+async def cq_lec_search_repo_selected(callback: CallbackQuery, state: FSMContext):
+    repo_hash = callback.data.split(":", 1)[1]
+    repo_path = kb.code_path_cache.get(repo_hash)
+    if not repo_path:
+        await callback.answer("Информация о репозитории устарела.", show_alert=True)
+        return
+
+    await state.update_data(repo_to_search=repo_path)
     await state.set_state(MarkdownSearch.query)
-    await message.answer("Введите ключевые слова для поиска по конспектам:", reply_markup=ReplyKeyboardRemove())
+    await callback.message.edit_text(f"Введите запрос для поиска по репозиторию `{repo_path}`:", parse_mode='markdown')
+    await callback.answer()
 
 @router.message(MarkdownSearch.query)
 async def process_md_search_query(message: Message, state: FSMContext):
     """Processes the user's query for markdown files."""
+    user_data = await state.get_data()
+    repo_to_search = user_data.get('repo_to_search')
     await state.clear()
     query = message.text
-    status_msg = await message.answer(f"Идет поиск конспектов по запросу '{query}'...")
-
-    results = await search_github_md(query)
+    status_msg = await message.answer(f"Идет поиск по запросу '{query}' в репозитории `{repo_to_search}`...", parse_mode='markdown')
+    results = await search_github_md(query, repo_to_search)
 
     if results is None:
         await status_msg.edit_text("Произошла ошибка при поиске. Попробуйте позже.")
@@ -514,13 +642,13 @@ async def process_md_search_query(message: Message, state: FSMContext):
         return
 
     user_id = message.from_user.id
-    md_search_results_cache[user_id] = {'query': query, 'results': results}
+    md_search_results_cache[user_id] = {'query': query, 'results': results, 'repo_path': repo_to_search}
 
     keyboard = await get_md_search_results_keyboard(user_id, page=0)
     total_pages = (len(results) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
 
     await status_msg.edit_text(
-        f"Найдено {len(results)} конспектов по запросу '{query}'. Страница 1/{total_pages}:",
+        f"Найдено {len(results)} файлов в `{repo_to_search}` по запросу '{query}'.\nСтраница 1/{total_pages}:",
         reply_markup=keyboard
     )
 
@@ -539,11 +667,12 @@ async def cq_md_search_pagination(callback: CallbackQuery):
     
     results = search_data['results']
     query = search_data['query']
+    repo_path = search_data['repo_path']
     total_pages = (len(results) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
 
     try:
         await callback.message.edit_text(
-            f"Найдено {len(results)} конспектов по запросу '{query}'. Страница {page + 1}/{total_pages}:",
+            f"Найдено {len(results)} файлов в `{repo_path}` по запросу '{query}'.\nСтраница {page + 1}/{total_pages}:",
             reply_markup=keyboard
         )
     except TelegramBadRequest as e:
@@ -556,13 +685,20 @@ async def cq_md_search_pagination(callback: CallbackQuery):
 async def cq_show_md_result(callback: CallbackQuery):
     """Fetches and displays the content of a markdown file from GitHub search results."""
     path_hash = callback.data.split(":", 1)[1]
-    file_path = kb.code_path_cache.get(path_hash)
+    relative_path = kb.code_path_cache.get(path_hash)
+    search_data = md_search_results_cache.get(callback.from_user.id)
 
-    if not file_path:
+    if not relative_path or not search_data:
         await callback.answer("Информация о файле устарела. Пожалуйста, выполните поиск заново.", show_alert=True)
         return
+    
+    # Send a new temporary message to inform the user about processing.
+    file_name = relative_path.split('/')[-1]
+    status_msg = await callback.message.answer(f"⏳ Обработка файла `{file_name}`...", parse_mode='markdown')
+    await callback.answer() # Acknowledge the button press
 
-    await service.display_github_file(callback, file_path)
+    repo_path = search_data['repo_path']
+    await service.display_github_file(callback.message, callback.from_user.id, repo_path, relative_path, status_msg_to_delete=status_msg)
 
 ##################################################################################################
 # SEARCH & FAVORITES
@@ -874,6 +1010,21 @@ async def get_settings_keyboard(user_id: int) -> InlineKeyboardBuilder:
         InlineKeyboardButton(text=f"Отступ LaTeX: {padding}px", callback_data="noop"),
         InlineKeyboardButton(text="➕", callback_data="latex_padding_incr")
     )
+
+    builder.row(
+        InlineKeyboardButton(text="➖", callback_data="latex_dpi_decr"),
+        InlineKeyboardButton(text=f"DPI LaTeX: {settings['latex_dpi']}dpi", callback_data="noop"),
+        InlineKeyboardButton(text="➕", callback_data="latex_dpi_incr")
+    )
+
+    # --- Управление репозиториями ---
+    user_repos = await database.get_user_repos(user_id)
+    repo_button_text = "Просматриваемые репозитории" if user_repos else "Добавьте репозитории для просмотра"
+    builder.row(InlineKeyboardButton(
+        text=repo_button_text,
+        callback_data="manage_repos"
+    ))
+
     return builder
 
 @router.message(Command('settings'))
@@ -928,6 +1079,99 @@ async def cq_cycle_md_mode(callback: CallbackQuery):
     await callback.answer(f"Режим показа .md изменен на: {md_mode_map[new_mode]}")
 
 ##################################################################################################
+# REPO MANAGEMENT
+##################################################################################################
+
+@router.callback_query(F.data == "manage_repos")
+async def cq_manage_repos(callback: CallbackQuery):
+    """Displays the repository management interface."""
+    user_id = callback.from_user.id
+    keyboard = await kb.get_repo_management_keyboard(user_id)
+    await callback.message.edit_text("Управление вашими репозиториями GitHub:", reply_markup=keyboard)
+    await callback.answer()
+
+@router.callback_query(F.data == "back_to_settings")
+async def cq_back_to_settings(callback: CallbackQuery):
+    """Returns to the main settings menu."""
+    keyboard = await get_settings_keyboard(callback.from_user.id)
+    await callback.message.edit_text("⚙️ Настройки:", reply_markup=keyboard.as_markup())
+    await callback.answer()
+
+@router.callback_query(F.data == "repo_add_new")
+async def cq_add_new_repo_prompt(callback: CallbackQuery, state: FSMContext):
+    """Prompts the user to enter a new repository path."""
+    await state.set_state(RepoManagement.add_repo)
+    await callback.message.edit_text("Отправьте репозиторий в формате `owner/repository`:", reply_markup=None)
+    await callback.answer()
+
+@router.message(RepoManagement.add_repo)
+async def process_add_repo(message: Message, state: FSMContext):
+    """Processes the new repository path from the user."""
+    repo_path = message.text.strip()
+    # Basic validation
+    if re.match(r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$", repo_path):
+        success = await database.add_user_repo(message.from_user.id, repo_path)
+        if success:
+            await message.answer(f"✅ Репозиторий `{repo_path}` успешно добавлен.", parse_mode='markdown')
+        else:
+            await message.answer(f"⚠️ Репозиторий `{repo_path}` уже есть в вашем списке.", parse_mode='markdown')
+    else:
+        await message.answer("❌ Неверный формат. Пожалуйста, используйте формат `owner/repository`.")
+
+    await state.clear()
+    # Show updated repo list
+    keyboard = await kb.get_repo_management_keyboard(message.from_user.id)
+    await message.answer("Управление вашими репозиториями GitHub:", reply_markup=keyboard)
+
+@router.callback_query(F.data.startswith("repo_del_hash:"))
+async def cq_delete_repo(callback: CallbackQuery):
+    """Deletes a repository from the user's list."""
+    repo_hash = callback.data.split(":", 1)[1]
+    repo_path = kb.code_path_cache.get(repo_hash)
+    if not repo_path:
+        await callback.answer("Информация о репозитории устарела.", show_alert=True)
+        return
+
+    await database.remove_user_repo(callback.from_user.id, repo_path)
+    await callback.answer(f"Репозиторий {repo_path} удален.", show_alert=False)
+
+    # Refresh the keyboard
+    keyboard = await kb.get_repo_management_keyboard(callback.from_user.id)
+    await callback.message.edit_reply_markup(reply_markup=keyboard)
+
+@router.callback_query(F.data.startswith("repo_edit_hash:"))
+async def cq_edit_repo_prompt(callback: CallbackQuery, state: FSMContext):
+    """Prompts the user to edit a repository path."""
+    repo_hash = callback.data.split(":", 1)[1]
+    repo_path = kb.code_path_cache.get(repo_hash)
+    if not repo_path:
+        await callback.answer("Информация о репозитории устарела.", show_alert=True)
+        return
+
+    await state.set_state(RepoManagement.edit_repo)
+    await state.update_data(old_repo_path=repo_path)
+    await callback.message.edit_text(f"Отправьте новое имя для репозитория `{repo_path}` (в формате `owner/repo`):", parse_mode='markdown')
+    await callback.answer()
+
+@router.message(RepoManagement.edit_repo)
+async def process_edit_repo(message: Message, state: FSMContext):
+    """Processes the edited repository path."""
+    new_repo_path = message.text.strip()
+    user_data = await state.get_data()
+    old_repo_path = user_data.get('old_repo_path')
+
+    if re.match(r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$", new_repo_path):
+        await database.update_user_repo(message.from_user.id, old_repo_path, new_repo_path)
+        await message.answer(f"✅ Репозиторий обновлен на `{new_repo_path}`.", parse_mode='markdown')
+    else:
+        await message.answer("❌ Неверный формат. Пожалуйста, используйте формат `owner/repository`.")
+
+    await state.clear()
+    # Show updated repo list
+    keyboard = await kb.get_repo_management_keyboard(message.from_user.id)
+    await message.answer("Управление вашими репозиториями GitHub:", reply_markup=keyboard)
+
+##################################################################################################
 # LATEX SETTINGS
 ##################################################################################################
 
@@ -956,6 +1200,32 @@ async def cq_change_latex_padding(callback: CallbackQuery):
     keyboard = await get_settings_keyboard(user_id)
     await callback.message.edit_reply_markup(reply_markup=keyboard.as_markup())
     await callback.answer(f"Отступ изменен на {new_padding}px")
+
+@router.callback_query(F.data.startswith("latex_dpi_"))
+async def cq_change_latex_dpi(callback: CallbackQuery):
+    """Обработчик для изменения DPI LaTeX."""
+    user_id = callback.from_user.id
+    settings = await database.get_user_settings(user_id)
+    current_dpi = settings.get('latex_dpi', 300) # Используем .get для безопасности
+
+    action = callback.data.split('_')[-1]  # 'incr' or 'decr'
+    new_dpi = current_dpi
+
+    if action == "incr":
+        new_dpi = min(600, current_dpi + 50)
+    elif action == "decr":
+        new_dpi = max(100, current_dpi - 50)
+
+    if new_dpi == current_dpi:
+        await callback.answer("Значение DPI не изменилось (достигнут лимит).")
+        return
+
+    settings['latex_dpi'] = new_dpi
+    await database.update_user_settings_db(user_id, settings)
+
+    keyboard = await get_settings_keyboard(user_id)
+    await callback.message.edit_reply_markup(reply_markup=keyboard.as_markup())
+    await callback.answer(f"DPI изменено на {new_dpi}dpi")
 
 ##################################################################################################
 # HELP COMMAND CALLBACKS
@@ -1004,6 +1274,13 @@ async def cq_help_cmd_latex(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     # Повторяем логику команды /latex
     await latex_command(callback.message, state)
+
+@router.callback_query(F.data == "help_cmd_mermaid")
+async def cq_help_cmd_mermaid(callback: CallbackQuery, state: FSMContext):
+    """Handler for '/mermaid' button from help menu."""
+    await callback.answer()
+    # Повторяем логику команды /mermaid
+    await mermaid_command(callback.message, state)
 
 @router.callback_query(F.data == "help_cmd_settings")
 async def cq_help_cmd_settings(callback: CallbackQuery):

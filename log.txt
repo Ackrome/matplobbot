@@ -1,0 +1,50 @@
+ => ERROR [mpb-telegram-bot 7/9] RUN pip install --no-cache-dir -r requirements.txt                                                                                      0.6s 
+ => [mpb-fastapi-stats] resolving provenance for metadata file                                                                                                           0.0s 
+------
+ > [mpb-telegram-bot 7/9] RUN pip install --no-cache-dir -r requirements.txt:
+0.513 error: externally-managed-environment
+0.513
+0.513 × This environment is externally managed
+0.513 ╰─> To install Python packages system-wide, try apt install
+0.513     python3-xyz, where xyz is the package you are trying to
+0.513     install.
+0.513
+0.513     If you wish to install a non-Debian-packaged Python package,
+0.513     create a virtual environment using python3 -m venv path/to/venv.
+0.513     Then use path/to/venv/bin/python and path/to/venv/bin/pip. Make
+0.513     sure you have python3-full installed.
+0.513
+0.513     If you wish to install a non-Debian packaged Python application,
+0.513     it may be easiest to use pipx install xyz, which will manage a
+0.513     virtual environment for you. Make sure you have pipx installed.
+0.513
+0.513     See /usr/share/doc/python3.11/README.venv for more information.
+0.513
+0.513 note: If you believe this is a mistake, please contact your Python installation or OS distribution provider. You can override this, at the risk of breaking your Python installation or OS, by passing --break-system-packages.
+0.513 hint: See PEP 668 for the detailed specification.
+------
+Dockerfile.bot:49
+
+--------------------
+
+  47 |     WORKDIR /app
+
+  48 |     COPY requirements.txt .
+
+  49 | >>> RUN pip install --no-cache-dir -r requirements.txt
+
+  50 |     COPY bot/ /app/bot/
+
+  51 |
+
+--------------------
+
+target mpb-telegram-bot: failed to solve: process "/bin/sh -c pip install --no-cache-dir -r requirements.txt" did not complete successfully: exit code: 1
+
+
+
+View build details: docker-desktop://dashboard/build/default/default/mfm6gb1wnu6abygyaj8w8diyh
+
+
+ *  The terminal process "C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -Command & 'C:\Program Files\Docker\Docker\resources\bin\docker.EXE' compose -f 'docker-compose.yml' up -d --build" terminated with exit code: 1. 
+ *  Terminal will be reused by tasks, press any key to close it. 

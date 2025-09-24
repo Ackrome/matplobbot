@@ -1,116 +1,182 @@
 <div align="center">
-  <h1>Matplobbot 🤖 & Stats Dashboard 📊</h1>
-  <p>
-    <strong>Комплексное решение: Telegram-бот на Aiogram 3 для доступа к коду и FastAPI-приложение для real-time аналитики его использования.</strong>
-  </p>
+  <img src="https://github.com/Ackrome/matplobbot/blob/main/image/notes/logo.svg" alt="Matplobbot Logo" width="150">
+  <h1>Matplobbot & Stats Dashboard</h1>
+  <strong>A comprehensive solution: An Aiogram 3 Telegram bot for advanced code interaction and a FastAPI dashboard for real-time analytics.</strong>
 </div>
 
-## Обзор проекта
+---
 
-Этот проект представляет собой систему из двух тесно интегрированных компонентов, развернутых с помощью Docker:
+## 🚀 Project Overview
 
-1.  **Telegram-бот (`matplobbot`)**: Асинхронный бот на `aiogram 3`, предоставляющий пользователям доступ к примерам кода, возможность его выполнения, рендеринг LaTeX-формул и многое другое. Все действия пользователей логируются в базу данных SQLite.
-2.  **Веб-панель статистики (`fastapi_stats_app`)**: Приложение на `FastAPI` с веб-интерфейсом на `Vanilla JS` и `Chart.js`, которое в реальном времени визуализирует статистику использования бота и транслирует его логи через WebSockets.
+This project is a system of two tightly integrated, Docker-deployed components:
 
-Оба сервиса используют общие Docker-volumes для доступа к базе данных и файлам логов, что обеспечивает их слаженную работу.
+1.  **Telegram Bot (`matplobbot`)**: An asynchronous bot built with `aiogram 3`. It provides users with access to code examples, remote code execution, rendering of LaTeX formulas and Mermaid diagrams, and much more. All user activities are logged into a shared SQLite database.
+2.  **Stats Web Dashboard (`fastapi_stats_app`)**: A `FastAPI` application with a `Vanilla JS` and `Chart.js` frontend. It visualizes bot usage statistics in real-time and streams its logs via WebSockets.
+
+Both services utilize shared Docker volumes for the database and log files, ensuring seamless data flow and consistent operation.
+
+## ✨ Features
+
+### 🤖 Telegram Bot
+
+The bot offers a rich set of features for developers, students, and researchers.
+
+#### Content Interaction
+-   **Library Browsing**: Interactive navigation through `matplobblib` modules (`/matp_all`) and user-configured GitHub repositories (`/lec_all`).
+-   **Full-Text Search**: Powerful search capabilities across `matplobblib` code (`/matp_search`) and Markdown notes in GitHub repositories (`/lec_search`).
+
+#### Dynamic Rendering
+-   **LaTeX Rendering**: Converts LaTeX formulas into high-quality PNG images via the `/latex` command.
+-   **Mermaid.js Rendering**: Transforms Mermaid diagram syntax into PNG images using the `/mermaid` command.
+
+#### Advanced Markdown Handling
+The bot can display `.md` files from GitHub in multiple user-selectable formats, with full support for embedded LaTeX and Mermaid diagrams.
+
+| Format | Description |
+| :--- | :--- |
+| 🌐 **Telegra.ph** | Publishes a clean, readable web article. LaTeX and Mermaid diagrams are automatically rendered and embedded. |
+| 📄 **Text + Images** | Sends the content directly into the chat as a series of text messages and rendered formula images. |
+| 📁 **HTML File** | Generates a self-contained `.html` file with all styles, rendered LaTeX, and interactive Mermaid diagrams. |
+| 📁 **MD File** | Sends the original, raw `.md` file. |
+
+#### Code Execution
+-   **Remote Execution (`/execute`)**: Executes Python code in an isolated environment. The bot captures and returns:
+    -   Standard output and errors.
+    -   Generated image files (e.g., Matplotlib plots).
+    -   Rich display outputs (Markdown, HTML) via `IPython.display` compatibility.
+
+#### Personalization
+-   ⭐ **Favorites (`/favorites`)**: Save and quickly access frequently used code examples.
+-   ⚙️ **Settings (`/settings`)**: A comprehensive menu for user-specific preferences:
+    -   Toggle docstring visibility for code examples.
+    -   Select the preferred Markdown display mode.
+    -   Adjust LaTeX rendering quality (DPI) and padding.
+    -   Manage a personal list of GitHub repositories for browsing and searching.
+
+#### Administration
+-   **Live Updates (`/update`)**: Fetches the latest version of the `matplobblib` library.
+-   **Cache Management (`/clear_cache`)**: Clears all application caches (in-memory and database) to ensure fresh data.
 
 ---
 
-## 🚀 Возможности
+### 📊 Web Dashboard
 
-### 🤖 Telegram-бот
-- **Просмотр библиотек**: Интерактивная навигация по модулям и примерам кода (`/matp_all`, `/lec_all`).
-- **Полнотекстовый поиск**: Поиск по коду и названиям примеров в `matplobblib` (`/matp_search`) и по конспектам в репозитории GitHub (`/lec_search`).
-- **Выполнение кода**: Исполнение Python-кода в изолированном окружении (`/execute`). Бот возвращает текстовый вывод, ошибки, а также сгенерированные изображения (например, графики Matplotlib).
-- **Рендеринг LaTeX**: Преобразование LaTeX-формул в изображения (`/latex`).
-- **Работа с Markdown**: Отображение `.md` файлов из GitHub в нескольких форматах:
-    - 🌐 Публикация статьи в **Telegra.ph** с автоматическим рендерингом и загрузкой LaTeX-формул.
-    - 📄 Отправка в виде **текста с картинками** формул прямо в чат.
-    - 📁 Отправка в виде **файлов** (`.md`, `.html`).
-- **Персонализация**:
-    - ⭐ **Избранное** (`/favorites`): Сохранение и быстрый доступ к нужным примерам кода.
-    - ⚙️ **Настройки** (`/settings`): Пользовательские настройки отображения кода, формата Markdown и качества LaTeX.
-- **Администрирование**: Команды для обновления зависимостей и очистки кэша (`/update`, `/clear_cache`).
-- **Логирование**: Все действия пользователей (команды, сообщения, колбэки) записываются в базу данных `SQLite` для последующего анализа.
+The dashboard provides a live, insightful look into the bot's usage and health.
 
-### 📊 Веб-панель статистики
-- **Real-time обновления**: Вся статистика на странице обновляется в реальном времени через **WebSockets** без необходимости перезагрузки.
-- **Визуализация данных**:
-    - Общее количество действий.
-    - Таблица лидеров самых активных пользователей с аватарами.
-    - Графики популярных команд и сообщений.
-    - Круговая диаграмма распределения типов действий.
-    - Линейный график активности пользователей по дням.
-- **Live-трансляция логов**: Прямая трансляция файла `bot.log` в веб-интерфейс, что позволяет отслеживать работу бота в реальном времени.
-- **Современный интерфейс**: Адаптивный дизайн с поддержкой **светлой и темной тем**.
+<div align="center">
+  <img src="https://github.com/Ackrome/matplobbot/blob/main/image/notes/Dashboard.png" alt="Dashboard Screenshot" width="800">
+</div>
+
+-   **Real-time Updates**: All statistics on the page update instantly via **WebSockets** without requiring a page refresh.
+-   **Data Visualization**:
+    -   Total actions counter.
+    -   Leaderboard of the most active users, complete with their Telegram avatars.
+    -   Bar charts for popular commands and text messages.
+    -   Pie chart showing the distribution of action types.
+    -   Line chart illustrating user activity over time.
+-   **Live Log Streaming**: A live feed of the `bot.log` file is streamed directly to the web interface, allowing for real-time monitoring of the bot's operations.
+-   **Modern UI**: A clean, responsive interface with support for both **light and dark themes**.
 
 ---
 
-## 🛠️ Технологический стек
+## ⌨️ Bot Commands
 
-- **Бекэнд**: Python 3.11
-- **Бот**: Aiogram 3, Matplotlib, aiosqlite, cachetools
-- **Веб-приложение**: FastAPI, Uvicorn, Jinja2, aiosqlite, aiofiles
-- **Фронтенд**: HTML5, CSS3, Vanilla JavaScript, Chart.js
-- **База данных**: SQLite
-- **API**: Telegram Bot API, GitHub API, Telegra.ph API
-- **Оркестрация и контейнеризация**: Docker, Docker Compose
-- **Рендеринг LaTeX**: TeX Live, dvipng (внутри Docker-контейнера бота)
+Here is a detailed list of all commands available in the bot.
+
+| Command | Description | Usage |
+| :--- | :--- | :--- |
+| **General** | | |
+| `/start` | Initializes the bot and displays the main command keyboard. | Send the command to begin or reset your session. |
+| `/help` | Shows an interactive menu with descriptions of all available commands. | Send the command to get a quick overview of the bot's features. |
+| `/cancel` | Aborts any ongoing operation or conversation state. | Use this if you get stuck waiting for input or want to return to the main menu. |
+| **Content Browsing & Search** | | |
+| `/matp_all` | Interactively browse the `matplobblib` library by modules and topics. | Send the command and navigate the library structure using inline buttons. |
+| `/matp_search` | Performs a full-text search for code examples within `matplobblib`. | Send the command, then type your search query (e.g., "line plot"). |
+| `/lec_all` | Interactively browse files in your configured GitHub repositories. | Send the command. If you have multiple repos, you'll be asked to choose one. |
+| `/lec_search` | Performs a full-text search within `.md` files in a chosen GitHub repository. | Send the command, choose a repository, then enter your search query. |
+| **Dynamic Rendering** | | |
+| `/latex` | Renders a LaTeX formula into a high-quality PNG image. | Send the command, then provide the LaTeX code (e.g., `\frac{a}{b}`). |
+| `/mermaid` | Renders a Mermaid.js diagram into a PNG image. | Send the command, then provide the Mermaid diagram code (e.g., `graph TD; A-->B;`). |
+| **Tools & Personalization** | | |
+| `/execute` | Executes a Python code snippet in an isolated environment. | Send the command, then provide the Python code. The bot will return text output and any generated images. |
+| `/favorites` | View, manage, and run your saved favorite code examples. | Send the command to see your list. You can add items from search results or library browsing. |
+| `/settings` | Access and modify your personal settings. | Configure docstring visibility, Markdown display format, LaTeX quality, and manage your GitHub repositories. |
+| **Admin Commands** | | |
+| `/update` | Updates the `matplobblib` library to the latest version from PyPI. | *(Admin only)* Send the command to perform a live update. |
+| `/clear_cache` | Clears all application caches (in-memory and database). | *(Admin only)* Useful for forcing the bot to fetch fresh data. |
 
 ---
 
-## ⚙️ Установка и запуск
+## 🛠️ Tech Stack
 
-Проект полностью контейнеризирован, поэтому для запуска требуется только Docker.
+| Category | Technology |
+| :--- | :--- |
+| **Backend** | Python 3.11+ |
+| **Bot Framework** | Aiogram 3 |
+| **Web Framework** | FastAPI, Uvicorn |
+| **Database** | SQLite (via `aiosqlite`) |
+| **Frontend** | HTML5, CSS3, Vanilla JavaScript, Chart.js |
+| **Containerization** | Docker, Docker Compose |
+| **Rendering** | **LaTeX**: TeX Live, dvipng <br> **Mermaid**: Mermaid-CLI, Puppeteer |
+| **APIs** | Telegram Bot API, GitHub API, Telegra.ph API |
+| **Libraries** | Matplotlib, `matplobblib`, `cachetools`, `aiohttp` |
 
-### 1. Предварительные требования
-- **Docker** и **Docker Compose** должны быть установлены на вашей системе.
+---
 
-### 2. Переменные окружения
+## ⚙️ Installation and Setup
 
-Создайте файл `.env` в корневой директории проекта и заполните его по следующему шаблону:
+The project is fully containerized, making setup straightforward with Docker.
+
+### 1. Prerequisites
+-   **Docker** and **Docker Compose** must be installed on your system.
+
+### 2. Environment Variables
+
+Create a `.env` file in the project's root directory. Fill it out using the template below.
 
 ```env
-# Токен вашего Telegram-бота, полученный от @BotFather
+# Get this from @BotFather on Telegram
 BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
 
-# Ваш личный Telegram User ID для доступа к админ-командам
+# Your personal Telegram User ID for admin command access
 ADMIN_USER_ID=123456789
 
-# Токен GitHub (Personal Access Token) с правами на чтение репозиториев (read:repo)
-# Необходим для поиска по конспектам (/lec_search) и загрузки изображений LaTeX
+# GitHub Personal Access Token with 'repo' scope for reading repositories
+# Required for /lec_search, /lec_all, and uploading rendered LaTeX images
 GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-# (Опционально) Токен доступа для Telegra.ph. Если не указан, будет создан новый аккаунт при первом запуске.
+# (Optional) Telegra.ph access token. If not provided, a new account
+# will be created on the first run and the token will be logged.
 TELEGRAPH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-### 3. Запуск с помощью Docker Compose
+### 3. Running with Docker Compose
 
-Это рекомендуемый и самый простой способ запуска.
+This is the recommended method for running the project.
 
-1.  Клонируйте репозиторий:
+1.  **Clone the repository:**
     ```bash
     git clone https://github.com/Ackrome/matplobbot.git
     cd matplobbot
     ```
-2.  Убедитесь, что вы создали и заполнили файл `.env` (см. шаг 2).
 
-3.  Соберите и запустите контейнеры в фоновом режиме:
+2.  **Ensure your `.env` file is created and configured** as described above.
+
+3.  **Build and run the services:**
     ```bash
     docker-compose up --build -d
     ```
 
-### 4. Доступ к сервисам
+### 4. Accessing the Services
 
-- **Telegram-бот**: Будет активен и доступен в Telegram.
-- **Веб-панель статистики**: Откройте в браузере `http://localhost:9583`.
+-   **Telegram Bot**: Will be active and available on Telegram.
+-   **Web Dashboard**: Open `http://localhost:9583` in your browser.
 
-### 5. Остановка
+### 5. Stopping the Services
 
-Для остановки всех сервисов выполните команду:
+To stop all running containers, execute:
 ```bash
 docker-compose down
 ```
 
-При этом данные в базе и логах сохранятся благодаря использованию именованных volumes (`bot_db_data`, `bot_logs`). Для полного удаления данных выполните `docker-compose down -v`.
+Your database and log files will persist thanks to the named volumes (`bot_db_data`, `bot_logs`). To remove all data, run `docker-compose down -v`.
