@@ -1,7 +1,11 @@
 <div align="center">
-  <img src="image/notes/thelogo.png" alt="Matplobbot Logo" width="400">
-  <h1>Matplobbot & Stats Dashboard</h1>
-  <strong>A comprehensive solution: An Aiogram 3 Telegram bot for advanced code interaction and a FastAPI dashboard for real-time analytics.</strong>
+
+![Matplobbot Logo](image/notes/thelogo.png)
+
+# Matplobbot & Stats Dashboard
+
+**A comprehensive solution: An Aiogram 3 Telegram bot for advanced code interaction and a FastAPI dashboard for real-time analytics.**
+
 </div>
 
 ---
