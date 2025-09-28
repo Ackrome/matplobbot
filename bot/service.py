@@ -107,36 +107,41 @@ def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_ove
     # Для обработки markdown флаг передается явно.
     is_display = is_display_override if is_display_override is not None else True
 
-    # Удаляем переносы строк, заменяя их пробелами, чтобы избежать ошибок компиляции.
-    processed_latex = latex_string.replace('\n', ' ').strip()
+    # Сначала просто убираем пробелы по краям
+    processed_latex = latex_string.strip()
+
+    # --- FIX START ---
+    # Heuristic fix for a common user error: placing \tag after the environment.
+    # This moves the tag inside, right before the \end{...} command.
+    processed_latex = re.sub(
+        r'(\\end\{([a-zA-Z\*]+)\})(\s*\\tag\{.*?\})',
+        r'\3 \1',
+        processed_latex,
+        flags=re.DOTALL
+    )
+    # --- FIX END ---
 
     # Более интеллектуальная обработка переносов строк.
     # Если строка содержит \begin{...}...\end{...}, не заменяем переносы строк внутри.
     # Это важно для окружений вроде align, cases и т.д.
-    # if not re.search(r'\\begin\{[a-zA-Z\*]+\}.*?\\end\{[a-zA-Z\*]+\}', processed_latex, re.DOTALL):
-    #     # Если нет многострочных окружений, можно безопасно заменить переносы строк на пробелы.
-    #     processed_latex = processed_latex.replace('\n', ' ')
-    # else:
-    #     # В противном случае, оставляем переносы строк как есть, latex их обработает.
-    #     pass
+    if not re.search(r'\\begin\{[a-zA-Z\*]+\}.*?\\end\{[a-zA-Z\*]+\}', processed_latex, re.DOTALL):
+        # Если нет многострочных окружений, можно безопасно заменить переносы строк на пробелы.
+        processed_latex = processed_latex.replace('\n', ' ')
+    else:
+        # В противном случае, оставляем переносы строк как есть, latex их обработает.
+        pass
 
     s = processed_latex
 
     # Список окружений, которые сами создают математический режим.
-    # Окружения типа 'cases', 'pmatrix' и т.д. в этот список не входят,
-    # так как они должны находиться внутри математического режима.
     standalone_math_envs = [
-        'equation', 'equation*',
-        'align', 'align*',
-        'gather', 'gather*',
-        'multline', 'multline*',
-        'displaymath', 'math',
-        'alignat', 'alignat*',
+        'equation', 'equation*', 'align', 'align*', 'gather', 'gather*',
+        'multline', 'multline*', 'displaymath', 'math', 'alignat', 'alignat*',
         'flalign', 'flalign*'
     ]
     # Проверяем, начинается ли строка с \begin{...}, где ... - одно из автономных окружений.
     starts_with_standalone_env = False
-    match = re.match(r'\\begin\{([a-zA-Z\*]+)\}', s)
+    match = re.match(r'\\begin\{([a-zA-Z\*]+)\}', s.strip())
     if match and match.group(1) in standalone_math_envs:
         starts_with_standalone_env = True
 
@@ -146,19 +151,29 @@ def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_ove
         (s.startswith(r'\[') and s.endswith(r'\]')) or
         starts_with_standalone_env
     )
+    
+    # --- FIX START ---
+    contains_tag = r'\tag' in s
+    
+    # The \tag command is only for display math, so we force display mode for padding/centering.
+    if contains_tag:
+        is_display = True
 
-    if is_display_override is None:
-        # Logic for /latex command: auto-detect and wrap if needed
-        if not is_already_math_env:
-            processed_latex = f'${processed_latex}$'
-    else:
-        # Logic for markdown processing: we know it's math, just wrap it correctly.
-        if not is_already_math_env:
-            # Using \[...\] for display is better than $$...$$
-            if is_display_override:
+    # Only wrap the expression if it isn't already in a math environment
+    if not is_already_math_env:
+        # The \tag command requires a specific display math environment.
+        # Using equation* allows tagging without adding a second, automatic number.
+        if contains_tag:
+            processed_latex = f'\\begin{{equation*}}\n{processed_latex}\n\\end{{equation*}}'
+        else:
+            # Use the determined display style to wrap the formula
+            if is_display:
                 processed_latex = f'\\[{processed_latex}\\]'
             else:
+                # This branch is for explicit inline formulas from markdown ($...$)
                 processed_latex = f'${processed_latex}$'
+    # --- FIX END ---
+                
     full_latex_code = LATEX_PREAMBLE + processed_latex + LATEX_POSTAMBLE
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -232,7 +247,7 @@ def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_ove
             new_img.save(buf, format='PNG')
             buf.seek(0)
             return buf
-
+        
 async def render_latex_to_image(latex_string: str, padding: int, dpi:int = 300, is_display_override: bool | None = None) -> io.BytesIO:
     """Асинхронная обертка для рендеринга LaTeX, выполняемая в отдельном потоке."""
     return await asyncio.to_thread(_render_latex_sync, latex_string, padding, dpi, is_display_override)
