@@ -110,7 +110,6 @@ def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_ove
     # Сначала просто убираем пробелы по краям
     processed_latex = latex_string.strip()
 
-    # --- FIX START ---
     # Heuristic fix for a common user error: placing \tag after the environment.
     # This moves the tag inside, right before the \end{...} command.
     processed_latex = re.sub(
@@ -119,16 +118,22 @@ def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_ove
         processed_latex,
         flags=re.DOTALL
     )
-    # --- FIX END ---
+
+    # --- NEW FIX START ---
+    # Heuristic fix for primitive TeX commands like \atop used after an environment.
+    # This transforms the invalid structure into a modern, valid LaTeX structure.
+    if re.search(r'\\end\{[a-zA-Z\*]+\}\s*\\atop', processed_latex, re.DOTALL):
+        # Replace \atop with a proper LaTeX newline
+        processed_latex = processed_latex.replace(r'\atop', r'\\')
+        # Wrap the entire expression in a `gathered` environment to handle multiple lines
+        # (the original environment + the text from after \atop) as a single block.
+        processed_latex = f'\\begin{{gathered}}\n{processed_latex}\n\\end{{gathered}}'
+    # --- NEW FIX END ---
 
     # Более интеллектуальная обработка переносов строк.
-    # Если строка содержит \begin{...}...\end{...}, не заменяем переносы строк внутри.
-    # Это важно для окружений вроде align, cases и т.д.
     if not re.search(r'\\begin\{[a-zA-Z\*]+\}.*?\\end\{[a-zA-Z\*]+\}', processed_latex, re.DOTALL):
-        # Если нет многострочных окружений, можно безопасно заменить переносы строк на пробелы.
         processed_latex = processed_latex.replace('\n', ' ')
     else:
-        # В противном случае, оставляем переносы строк как есть, latex их обработает.
         pass
 
     s = processed_latex
@@ -137,9 +142,9 @@ def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_ove
     standalone_math_envs = [
         'equation', 'equation*', 'align', 'align*', 'gather', 'gather*',
         'multline', 'multline*', 'displaymath', 'math', 'alignat', 'alignat*',
-        'flalign', 'flalign*'
+        'flalign', 'flalign*', 'gathered' # Added gathered to the list
     ]
-    # Проверяем, начинается ли строка с \begin{...}, где ... - одно из автономных окружений.
+    # Проверяем, начинается ли строка с \begin{...}
     starts_with_standalone_env = False
     match = re.match(r'\\begin\{([a-zA-Z\*]+)\}', s.strip())
     if match and match.group(1) in standalone_math_envs:
@@ -152,27 +157,21 @@ def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_ove
         starts_with_standalone_env
     )
     
-    # --- FIX START ---
     contains_tag = r'\tag' in s
     
-    # The \tag command is only for display math, so we force display mode for padding/centering.
+    # The \tag command is only for display math, so we force display mode.
     if contains_tag:
         is_display = True
 
     # Only wrap the expression if it isn't already in a math environment
     if not is_already_math_env:
-        # The \tag command requires a specific display math environment.
-        # Using equation* allows tagging without adding a second, automatic number.
         if contains_tag:
             processed_latex = f'\\begin{{equation*}}\n{processed_latex}\n\\end{{equation*}}'
         else:
-            # Use the determined display style to wrap the formula
             if is_display:
                 processed_latex = f'\\[{processed_latex}\\]'
             else:
-                # This branch is for explicit inline formulas from markdown ($...$)
                 processed_latex = f'${processed_latex}$'
-    # --- FIX END ---
                 
     full_latex_code = LATEX_PREAMBLE + processed_latex + LATEX_POSTAMBLE
 
@@ -197,19 +196,16 @@ def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_ove
             if os.path.exists(log_path):
                 with open(log_path, 'r', encoding='utf-8', errors='ignore') as log_file:
                     log_content = log_file.read()
-                    # Поиск конкретной строки с ошибкой
                     error_lines = [line for line in log_content.split('\n') if line.startswith('! ')]
                     if error_lines:
                         error_message = error_lines[0].strip()
-                    else: # Если '!' не найдено, показываем конец лога
+                    else:
                         error_message = "...\n" + "\n".join(log_content.split('\n')[-20:])
             raise ValueError(f"Ошибка компиляции LaTeX:\n{error_message}")
 
         # --- Запуск dvipng для конвертации DVI в PNG ---
-        # Возвращаем постоянный DPI для всех формул для консистентности.
-
         dvipng_process = subprocess.run(
-            ['dvipng', '-D', str(dpi), '-T', 'tight', '-bg', 'Transparent', '-o', png_path, dvi_path], # Use the passed DPI
+            ['dvipng', '-D', str(dpi), '-T', 'tight', '-bg', 'Transparent', '-o', png_path, dvi_path],
             capture_output=True, text=True, encoding='utf-8', errors='ignore'
         )
         
@@ -219,34 +215,23 @@ def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_ove
         # --- Добавление отступов и выравнивание с помощью Pillow ---
         with Image.open(png_path) as img:
             if is_display:
-                # Для блочных формул создаем изображение фиксированной ширины и центрируем формулу.
-                # Это обеспечивает визуальное выравнивание всех блочных формул в статье.
-                target_width = 600  # Ширина в пикселях, подходящая для Telegra.ph
-                
-                # Если исходное изображение с отступами шире, мы его не обрезаем, а используем его ширину.
-                # Это предотвращает потерю данных для очень широких формул.
+                target_width = 600
                 final_width = max(img.width + 2 * padding, target_width)
                 final_height = img.height + 2 * padding
-                
                 new_img = Image.new("RGBA", (final_width, final_height), (0, 0, 0, 0))
-                
-                # Рассчитываем позицию для вставки, чтобы отцентрировать изображение
                 paste_x = (final_width - img.width) // 2
                 paste_y = padding
-                
                 new_img.paste(img, (paste_x, paste_y))
             else:
-                # Для строчных формул просто добавляем отступы, чтобы они оставались компактными.
                 final_width = img.width + 2 * padding
                 final_height = img.height + 2 * padding
                 new_img = Image.new("RGBA", (final_width, final_height), (0, 0, 0, 0))
                 new_img.paste(img, (padding, padding))
 
-            # Сохраняем результат в буфер в памяти
             buf = io.BytesIO()
             new_img.save(buf, format='PNG')
             buf.seek(0)
-            return buf
+            return buf   
         
 async def render_latex_to_image(latex_string: str, padding: int, dpi:int = 300, is_display_override: bool | None = None) -> io.BytesIO:
     """Асинхронная обертка для рендеринга LaTeX, выполняемая в отдельном потоке."""
