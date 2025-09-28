@@ -107,18 +107,18 @@ def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_ove
     # Для обработки markdown флаг передается явно.
     is_display = is_display_override if is_display_override is not None else True
 
-    # Заменяем \atop на \substack для совместимости с amsmath
-    processed_latex = latex_string.replace(r'\atop', r'\substack').strip()
+    # Удаляем переносы строк, заменяя их пробелами, чтобы избежать ошибок компиляции.
+    processed_latex = latex_string.replace('\n', ' ').strip()
 
     # Более интеллектуальная обработка переносов строк.
     # Если строка содержит \begin{...}...\end{...}, не заменяем переносы строк внутри.
     # Это важно для окружений вроде align, cases и т.д.
-    if not re.search(r'\\begin\{[a-zA-Z\*]+\}.*?\\end\{[a-zA-Z\*]+\}', processed_latex, re.DOTALL):
-        # Если нет многострочных окружений, можно безопасно заменить переносы строк на пробелы.
-        processed_latex = processed_latex.replace('\n', ' ')
-    else:
-        # В противном случае, оставляем переносы строк как есть, latex их обработает.
-        pass
+    # if not re.search(r'\\begin\{[a-zA-Z\*]+\}.*?\\end\{[a-zA-Z\*]+\}', processed_latex, re.DOTALL):
+    #     # Если нет многострочных окружений, можно безопасно заменить переносы строк на пробелы.
+    #     processed_latex = processed_latex.replace('\n', ' ')
+    # else:
+    #     # В противном случае, оставляем переносы строк как есть, latex их обработает.
+    #     pass
 
     s = processed_latex
 
