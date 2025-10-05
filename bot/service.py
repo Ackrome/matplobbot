@@ -102,7 +102,7 @@ def convert_html_to_telegram_html(html_content: str) -> str:
 # --- LaTeX Rendering ---
 def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_override: bool | None = None) -> io.BytesIO:
     """Синхронная функция для рендеринга LaTeX в PNG с использованием latex и dvipng, с добавлением отступов."""
-    
+
     # Для команды /latex по умолчанию считаем формулу блочной (display) для лучшего качества.
     # Для обработки markdown флаг передается явно.
     is_display = is_display_override if is_display_override is not None else True
@@ -121,13 +121,15 @@ def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_ove
 
     # --- NEW FIX START ---
     # Heuristic fix for primitive TeX commands like \atop used after an environment.
-    # This transforms the invalid structure into a modern, valid LaTeX structure.
-    if re.search(r'\\end\{[a-zA-Z\*]+\}\s*\\atop', processed_latex, re.DOTALL):
-        # Replace \atop with a proper LaTeX newline
-        processed_latex = processed_latex.replace(r'\atop', r'\\')
-        # Wrap the entire expression in a `gathered` environment to handle multiple lines
-        # (the original environment + the text from after \atop) as a single block.
-        processed_latex = f'\\begin{{gathered}}\n{processed_latex}\n\\end{{gathered}}'
+    # This specifically finds `\atop` followed by a `\text{...}` command, and moves
+    # the entire `\text{...}` command to a new line inside the preceding environment.
+    # This avoids the double-wrapping issue that caused 'ext' to be printed.
+    processed_latex = re.sub(
+        r'(\\end\{([a-zA-Z\*]+)\})(\s*\\atop\s*(\\text\{.*?\}))',
+        r'\\ \4 \1',
+        processed_latex,
+        flags=re.DOTALL
+    )
     # --- NEW FIX END ---
 
     # Более интеллектуальная обработка переносов строк.
@@ -231,8 +233,8 @@ def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_ove
             buf = io.BytesIO()
             new_img.save(buf, format='PNG')
             buf.seek(0)
-            return buf   
-        
+            return buf
+                    
 async def render_latex_to_image(latex_string: str, padding: int, dpi:int = 300, is_display_override: bool | None = None) -> io.BytesIO:
     """Асинхронная обертка для рендеринга LaTeX, выполняемая в отдельном потоке."""
     return await asyncio.to_thread(_render_latex_sync, latex_string, padding, dpi, is_display_override)
