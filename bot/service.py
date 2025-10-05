@@ -98,7 +98,39 @@ def convert_html_to_telegram_html(html_content: str) -> str:
     # Clean up extra newlines and spaces
     lines = [line.strip() for line in html_content.split('\n')]
     return '\n'.join(filter(None, lines))
-
+def _pmatrix_hline_fixer(match: re.Match) -> str:
+    """
+    Callback for re.sub to replace a pmatrix environment with an array environment
+    if the pmatrix contains a \\hline command, which is not supported by pmatrix.
+    """
+    matrix_content = match.group(1)
+    # Check if \hline is present inside the matched pmatrix content
+    if r'\hline' in matrix_content:
+        # \hline is not supported by pmatrix, so we convert it to a compatible array.
+        # To determine the number of columns, we find the line with the maximum number of alignment tabs (&).
+        lines = matrix_content.strip().split(r'\\')
+        num_cols = 0
+        for line in lines:
+            # This is a simple heuristic to avoid counting '&' inside other commands like \text{...}.
+            # It's not foolproof but covers many common cases.
+            clean_line = re.sub(r'\\text\{.*?\}', '', line)
+            # Count alignment tabs in the current line and add 1 for the number of columns.
+            current_cols = clean_line.count('&') + 1
+            if current_cols > num_cols:
+                num_cols = current_cols
+        
+        # Fallback to 1 column if no '&' are found (unlikely for a matrix with \hline, but safe).
+        if num_cols == 0 and len(lines) > 0:
+            num_cols = 1
+        
+        if num_cols > 0:
+            # Create the column specification string (e.g., 'ccc' for 3 columns).
+            col_spec = 'c' * num_cols
+            # Reconstruct the matrix using the array environment, wrapped in parentheses.
+            return f'\\left(\\begin{{array}}{{{col_spec}}}{matrix_content}\\end{{array}}\\right)'
+    
+    # If no \hline is found, return the original pmatrix environment unchanged.
+    return match.group(0)
 # --- LaTeX Rendering ---
 def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_override: bool | None = None) -> io.BytesIO:
     """Синхронная функция для рендеринга LaTeX в PNG с использованием latex и dvipng, с добавлением отступов."""
@@ -119,15 +151,23 @@ def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_ove
         flags=re.DOTALL
     )
 
-    # --- NEW FIX START ---
     # Heuristic fix for primitive TeX commands like \atop used after an environment.
-    # This specifically finds `\atop` followed by a `\text{...}` command, and moves
-    # the entire `\text{...}` command to a new line inside the preceding environment.
-    # This avoids the double-wrapping issue that caused 'ext' to be printed.
     processed_latex = re.sub(
         r'(\\end\{([a-zA-Z\*]+)\})(\s*\\atop\s*(\\text\{.*?\}))',
         r'\\ \4 \1',
         processed_latex,
+        flags=re.DOTALL
+    )
+    
+    # --- NEW FIX START ---
+    # Heuristic fix for pmatrix environments containing \hline.
+    # The pmatrix environment does not support \hline, causing a compilation error.
+    # This fix replaces the pmatrix with a functionally equivalent array environment
+    # which does support \hline.
+    processed_latex = re.sub(
+        r'\\begin{pmatrix}(.*?)\\end{pmatrix}', 
+        _pmatrix_hline_fixer, 
+        processed_latex, 
         flags=re.DOTALL
     )
     # --- NEW FIX END ---
@@ -202,8 +242,8 @@ def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_ove
                     if error_lines:
                         error_message = error_lines[0].strip()
                     else:
-                        error_message = "...\n" + "\n".join(log_content.split('\n')[-20:])
-            raise ValueError(f"Ошибка компиляции LaTeX:\n{error_message}")
+                       error_message = "...\n" + "\n".join(log_content.split('\n')[-20:])
+                       raise ValueError(f"Ошибка компиляции LaTeX:\n{error_message}")
 
         # --- Запуск dvipng для конвертации DVI в PNG ---
         dvipng_process = subprocess.run(
