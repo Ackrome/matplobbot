@@ -52,8 +52,6 @@ PANDOC_HEADER_INCLUDES = r"""
 \usepackage{xcolor}
 \usepackage{newunicodechar}
 \usepackage{mathtools}
-\usepackage{fontspec}      % Essential for xelatex to use system fonts
-\usepackage{dejavu}        % Explicitly load the dejavu package for robustness
 \newunicodechar{∂}{\partial}
 \newunicodechar{Δ}{\Delta}
 """
