@@ -988,59 +988,62 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
 async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     """
     Prepares a self-contained HTML document with client-side rendering for LaTeX (using KaTeX)
-    and Mermaid diagrams, using a robust placeholder method to prevent Markdown interference.
+    and Mermaid diagrams. This version uses a robust placeholder method and includes heuristic
+    fixes for common non-standard TeX patterns like `\atop`.
     """
     
     # Step 1: Isolate all valid math blocks and replace them with placeholders.
     latex_formulas = []
     def store_and_replace_latex(match):
-        # Use a placeholder that is safe for HTML and Markdown
         placeholder = f"<!--KATEX_PLACEHOLDER_{len(latex_formulas)}-->"
-        latex_formulas.append(match.group(0)) # Store the original, full math block (e.g., "$n=2$")
+        latex_formulas.append(match.group(0))
         return placeholder
 
-    # This regex finds valid, paired delimiters for both display and inline math.
     latex_regex = r'\$\$(?:.|\n)*?\$\$|(?<!\$)\$[^$\n]+?\$(?!\$)'
     content_with_placeholders = re.sub(latex_regex, store_and_replace_latex, content)
 
-    # Step 2: Render the Markdown. It now contains no math, so it's safe.
+    # Step 2: Render the Markdown. It is now safe from LaTeX interference.
     md = MarkdownIt("commonmark", {"html": True, "linkify": True, "typographer": True}).enable('table')
     html_content = md.render(content_with_placeholders)
 
-    # Step 3: Process the stored formulas to make them KaTeX-compatible (Cyrillic wrapping).
+    # Step 3: Process the stored formulas with Cyrillic wrapping and heuristic fixes.
     processed_formulas = []
     for formula_string in latex_formulas:
         is_display = formula_string.startswith('$$')
         content_start, content_end = (2, -2) if is_display else (1, -1)
         
         # Get the raw content inside the delimiters
-        original_content = formula_string[content_start:content_end]
+        original_content = formula_string[content_start:content_end].strip()
 
-        # --- Cyrillic wrapping logic (applied correctly here) ---
+        # --- HEURISTIC FIX for \atop and multi-line display math ---
+        if is_display and ('\n' in original_content or r'\atop' in original_content):
+            # 1. Replace the primitive \atop command with the standard LaTeX newline \\
+            processed_content = original_content.replace(r'\atop', r'\\')
+            # 2. Wrap the entire content in a 'gathered' environment for robust alignment.
+            original_content = f"\\begin{{gathered}}\n{processed_content}\n\\end{{gathered}}"
+
+        # --- Cyrillic wrapping logic ---
         protected_blocks = []
         def protect_text_blocks(m):
             placeholder = f"__TEXT_BLOCK_{len(protected_blocks)}__"
             protected_blocks.append(m.group(0))
             return placeholder
         
-        # Protect existing \text{...} blocks
         temp_content = re.sub(r'\\text\{.*?\}', protect_text_blocks, original_content, flags=re.DOTALL)
-        # Wrap any remaining Cyrillic text
         temp_content = re.sub(r'([\u0400-\u04FF]+(?:[\s.,][\u0400-\u04FF]+)*)', r'\\text{\1}', temp_content)
-        # Restore the protected blocks
         for i, block in enumerate(protected_blocks):
             temp_content = temp_content.replace(f"__TEXT_BLOCK_{i}__", block)
         
-        processed_content = temp_content
+        final_content = temp_content
         # --- End of Cyrillic logic ---
 
-        # Reconstruct the full formula with the original delimiters
+        # Reconstruct the full formula with original delimiters
         if is_display:
-            processed_formulas.append(f'$${processed_content}$$')
+            processed_formulas.append(f'$${final_content}$$')
         else:
-            processed_formulas.append(f'${processed_content}$')
+            processed_formulas.append(f'${final_content}$')
 
-    # Step 4: Re-insert the now fully-processed math formulas back into the HTML.
+    # Step 4: Re-insert the processed and fixed math formulas back into the HTML.
     for i, formula in enumerate(processed_formulas):
         placeholder = f"<!--KATEX_PLACEHOLDER_{i}-->"
         html_content = html_content.replace(placeholder, formula)
