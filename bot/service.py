@@ -988,38 +988,62 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
 async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     """
     Prepares a self-contained HTML document with client-side rendering for LaTeX (using KaTeX)
-    and Mermaid diagrams, with enhanced styling and interactivity.
+    and Mermaid diagrams, using a robust placeholder method to prevent Markdown interference.
     """
-    # --- KaTeX Cyrillic Pre-processing ---
-    # This function robustly wraps Cyrillic text in `\text{...}` for KaTeX.
+    
+    # --- Step 1 & 2: Isolate Math and Replace with Placeholders ---
+    latex_formulas = []
+    
+    def store_and_replace_latex(match):
+        placeholder = f"<!--KATEX_PLACEHOLDER_{len(latex_formulas)}-->"
+        latex_formulas.append(match.group(0)) # Store the original, full math block
+        return placeholder
+
+    # A robust regex to find either $$...$$ or $...$ blocks.
+    latex_regex = r'\$\$(?:.|\n)*?\$\$|(?<!\$)\$[^$\n]+?\$(?!\$)'
+    content_with_placeholders = re.sub(latex_regex, store_and_replace_latex, content, flags=re.DOTALL)
+
+    # --- Step 3: Render the Markdown (now safe from LaTeX characters) ---
+    md = MarkdownIt("commonmark", {"html": True, "linkify": True, "typographer": True}).enable('table')
+    html_content = md.render(content_with_placeholders)
+
+    # --- Step 4: Process the Stored Math (Cyrillic wrapping) ---
+    processed_formulas = []
+    
     def wrap_cyrillic_in_text_command(match):
-        is_display = match.group(1) is not None
-        original_content = match.group(1) if is_display else match.group(2)
-        if original_content is None: return match.group(0)
-        
+        # This function now operates on a single, isolated formula string
+        is_display = match.group(0).startswith('$$')
+        # Get content between delimiters: $$content$$ or $content$
+        content_start, content_end = (2, -2) if is_display else (1, -1)
+        original_content = match.group(0)[content_start:content_end]
+
         protected_blocks = []
         def protect_text_blocks(m):
-            placeholder = f"__LATEX_TEXT_PLACEHOLDER_{len(protected_blocks)}__"
+            placeholder = f"__TEXT_BLOCK_{len(protected_blocks)}__"
             protected_blocks.append(m.group(0))
             return placeholder
         
+        # Protect existing \text blocks, then wrap Cyrillic, then restore
         processed_content = re.sub(r'\\text\{.*?\}', protect_text_blocks, original_content, flags=re.DOTALL)
         processed_content = re.sub(r'([\u0400-\u04FF]+(?:[\s.,][\u0400-\u04FF]+)*)', r'\\text{\1}', processed_content)
-
         for i, block in enumerate(protected_blocks):
-            processed_content = processed_content.replace(f"__LATEX_TEXT_PLACEHOLDER_{i}__", block)
+            processed_content = processed_content.replace(f"__TEXT_BLOCK_{i}__", block)
             
-        return f'$${processed_content}$$' if is_display else f'${processed_content}$'
+        # Reconstruct the full formula string
+        if is_display:
+            return f'$${processed_content}$$'
+        else:
+            return f'${processed_content}$'
 
-    latex_regex = r'\$\$(.*?)\$\$|(?<!\$)\$([^$]+?)\$(?!\$)'
-    # The output of this is still a MARKDOWN string
-    processed_content = re.sub(latex_regex, wrap_cyrillic_in_text_command, content, flags=re.DOTALL)
+    for formula in latex_formulas:
+        processed_formulas.append(wrap_cyrillic_in_text_command(re.match(latex_regex, formula)))
 
-    # --- THIS IS THE CRITICAL FIX ---
-    # Convert the processed Markdown string into an HTML string.
-    md = MarkdownIt("commonmark", {"html": True, "linkify": True, "typographer": True}).enable('table')
-    html_content = md.render(processed_content)
+    # --- Step 5: Re-insert the Processed Math into the HTML ---
+    for i, formula in enumerate(processed_formulas):
+        placeholder = f"<!--KATEX_PLACEHOLDER_{i}-->"
+        html_content = html_content.replace(placeholder, formula)
 
+    # --- Final Touches and HTML Template ---
     # Prepare Mermaid blocks for the Mermaid.js script.
     html_content = html_content.replace(
         '<pre><code class="language-mermaid">', '<pre class="mermaid">'
@@ -1038,43 +1062,21 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous" onload="renderMathInElement(document.body, {{ delimiters: [ {{left: '$$', right: '$$', display: true}}, {{left: '$', right: '$', display: false}}, {{left: '\\[', right: '\\]', display: true}}, {{left: '\\(', right: '\\)', display: false}} ], throwOnError: false }});"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <style>
-        /* General Styling & Light Mode */
         :root {{
-            --bg-color: #ffffff;
-            --text-color: #24292e;
-            --link-color: #0366d6;
-            --border-color: #eaecef;
-            --code-bg-color: #f6f8fa;
+            --bg-color: #ffffff; --text-color: #24292e; --link-color: #0366d6;
+            --border-color: #eaecef; --code-bg-color: #f6f8fa;
         }}
         body {{ 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            line-height: 1.6; 
-            margin: 0 auto; 
-            padding: 20px; 
-            max-width: 800px; 
-            background-color: var(--bg-color);
-            color: var(--text-color);
+            line-height: 1.6; margin: 0 auto; padding: 20px; max-width: 800px; 
+            background-color: var(--bg-color); color: var(--text-color);
         }}
-        
-        /* Dark Mode */
         @media (prefers-color-scheme: dark) {{
             :root:not(.light-theme) {{
-                --bg-color: #0d1117;
-                --text-color: #c9d1d9;
-                --link-color: #58a6ff;
-                --border-color: #30363d;
-                --code-bg-color: #161b22;
+                --bg-color: #0d1117; --text-color: #c9d1d9; --link-color: #58a6ff;
+                --border-color: #30363d; --code-bg-color: #161b22;
             }}
         }}
-        html.dark-theme {{
-            --bg-color: #0d1117;
-            --text-color: #c9d1d9;
-            --link-color: #58a6ff;
-            --border-color: #30363d;
-            --code-bg-color: #161b22;
-        }}
-        
-        /* Elements Styling */
         a {{ color: var(--link-color); }}
         img {{ max-width: 100%; height: auto; }}
         pre {{ background-color: var(--code-bg-color); padding: 16px; overflow: auto; border-radius: 6px; position: relative; border: 1px solid var(--border-color); }}
@@ -1083,69 +1085,32 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
         th, td {{ border: 1px solid var(--border-color); padding: 6px 13px; text-align: left; }}
         tr:nth-child(2n) {{ background-color: var(--code-bg-color); }}
         h1, h2, h3, h4, h5, h6 {{ border-bottom: 1px solid var(--border-color); padding-bottom: .3em; margin-top: 24px; margin-bottom: 16px; }}
-        
-        /* Copy Button for Code Blocks */
         .copy-btn {{
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            padding: 4px 8px;
-            font-size: 12px;
-            background-color: #e1e4e8;
-            color: #24292e;
-            border: 1px solid #d1d5da;
-            border-radius: 6px;
-            cursor: pointer;
-            opacity: 0;
-            transition: opacity 0.2s;
+            position: absolute; top: 8px; right: 8px; padding: 4px 8px; font-size: 12px;
+            background-color: #e1e4e8; color: #24292e; border: 1px solid #d1d5da;
+            border-radius: 6px; cursor: pointer; opacity: 0; transition: opacity 0.2s;
         }}
         pre:hover .copy-btn {{ opacity: 1; }}
-        html.dark-theme .copy-btn {{ background-color: #21262d; color: #c9d1d9; border-color: #30363d; }}
-        
-        /* Print-Friendly Styles */
-        @media print {{
-            body {{ color: #000; background: #fff; font-family: "Times New Roman", serif; font-size: 12pt; }}
-            pre, code {{ background: #f4f4f4; border: 1px solid #ddd; font-family: "Courier New", monospace; }}
-            .copy-btn, .theme-toggle {{ display: none; }}
-            a {{ text-decoration: none; color: #000; }}
-            a[href]:after {{ content: " (" attr(href) ")"; }}
-        }}
+        @media (prefers-color-scheme: dark) {{ .copy-btn {{ background-color: #21262d; color: #c9d1d9; border-color: #30363d; }} }}
     </style>
 </head>
 <body>
-    <main>
-        {html_content}
-    </main>
+    <main>{html_content}</main>
     <script>
         document.addEventListener("DOMContentLoaded", function() {{
-            // Mermaid Initialization
-            if (typeof mermaid !== 'undefined') {{
-                mermaid.initialize({{ startOnLoad: true, theme: document.documentElement.classList.contains('dark-theme') ? 'dark' : 'default' }});
-            }} else {{
-                console.error("Mermaid library not loaded.");
-            }}
-
-            // Add Copy Buttons to Code Blocks
-            document.querySelectorAll('pre').forEach(function(pre) {{
-                if (pre.querySelector('code')) {{
-                    var button = document.createElement('button');
-                    button.className = 'copy-btn';
-                    button.textContent = 'Copy';
-                    button.setAttribute('aria-label', 'Copy code to clipboard');
-                    
-                    button.addEventListener('click', function() {{
-                        var code = pre.querySelector('code').innerText;
-                        navigator.clipboard.writeText(code).then(function() {{
-                            button.textContent = 'Copied!';
-                            setTimeout(function() {{ button.textContent = 'Copy'; }}, 2000);
-                        }}, function(err) {{
-                            button.textContent = 'Error';
-                            console.error('Could not copy text: ', err);
-                        }});
+            if (typeof mermaid !== 'undefined') mermaid.initialize({{ startOnLoad: true }});
+            document.querySelectorAll('pre > code').forEach(function(codeBlock) {{
+                var pre = codeBlock.parentElement;
+                var button = document.createElement('button');
+                button.className = 'copy-btn'; button.textContent = 'Copy';
+                button.setAttribute('aria-label', 'Copy code to clipboard');
+                button.addEventListener('click', function() {{
+                    navigator.clipboard.writeText(codeBlock.innerText).then(function() {{
+                        button.textContent = 'Copied!';
+                        setTimeout(function() {{ button.textContent = 'Copy'; }}, 2000);
                     }});
-                    
-                    pre.appendChild(button);
-                }}
+                }});
+                pre.appendChild(button);
             }});
         }});
     </script>
