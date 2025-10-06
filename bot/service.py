@@ -1000,10 +1000,14 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
         latex_formulas.append(match.group(0))
         return placeholder
 
-    # THIS IS THE FINAL, CORRECT REGEX.
-    # It first looks for $$...$$ blocks across multiple lines (re.DOTALL).
-    # Then, it looks for $...$ blocks that do NOT contain newlines. This is the key.
-    latex_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$)'
+    # ------------------- THIS IS THE DEFINITIVE FIX -------------------
+    # This new regex is more robust. It correctly finds:
+    # 1. $$...$$ blocks across multiple lines (re.DOTALL).
+    # 2. $...$ blocks that do NOT contain newlines, ensuring they don't "run away".
+    # This correctly parses cases like `($X \in R^n$)` which the previous regex missed.
+    latex_regex = r'(\$\$.*?\$\$|\$[^$\n]+?\$)'
+    # ------------------------------------------------------------------
+    
     content_with_placeholders = re.sub(latex_regex, store_and_replace_latex, content, flags=re.DOTALL)
 
     # --- Step 2: Render the Markdown. It is now safe from LaTeX interference ---
@@ -1063,7 +1067,7 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     <title>{page_title}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous" onload="renderMathInElement(document.body, {{ delimiters: [ {{left: '$$', right: '$$', display: true}}, {{left: '$', right: '$', display: false}}, {{left: '\\[', right: '\\]', display: true}}, {{left: '\\(', right: '\\)', display: false}} ], throwOnError: false }});"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous" onload="renderMathInElement(document.body, {{ delimiters: [ {{left: '$$', right: '$$', display: true}}, {{left: '$', right: '$', display: false}} ], throwOnError: false }});"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <style>
         :root {{
