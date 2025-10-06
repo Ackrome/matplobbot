@@ -340,7 +340,8 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
         command = [
             'pandoc',
             '--filter', '/app/bot/pandoc_mermaid_filter.py',
-            '--from=markdown',
+            # Enable raw_tex to prevent pandoc from wrapping $$...$$ blocks in \[...\]
+            '--from=markdown+raw_tex',
             '--to=pdf',
             '--pdf-engine=xelatex', # Use xelatex for better Unicode (Cyrillic) support
             '--variable', f'title={title}',
@@ -795,12 +796,9 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
         # Option 4: .html file
         elif md_mode == 'html_file':
             try:
-                # 1. Find all LaTeX formulas, replace with placeholders, and store them.
-                latex_formulas = []
-
                 page_title = file_path.split('/')[-1].replace('.md', '')
-                full_html_doc, _ = await _prepare_html_from_markdown(content, settings, file_path)
-
+                # Use the new KaTeX-based HTML generation for a pure client-side rendering experience.
+                full_html_doc = await _prepare_html_with_katex(content, page_title)
                 file_bytes = full_html_doc.encode('utf-8')
                 file_name = f"{page_title}.html"
                 await message.answer_document(
@@ -809,7 +807,7 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
                     parse_mode='markdown'
                 )
             except Exception as e:
-                logger.error(f"Ошибка при обработке Markdown и LaTeX для HTML-файла '{file_path}': {e}", exc_info=True)
+                logger.error(f"Ошибка при создании HTML-файла с KaTeX для '{file_path}': {e}", exc_info=True)
                 await message.answer(f"Произошла ошибка при создании HTML-файла: {e}. Отправляю как простой текст.")
                 await send_as_plain_text(message, file_path, content)
 
@@ -984,6 +982,68 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
         except TelegramBadRequest:
             pass # Message might have been deleted already
     await message.answer("Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(user_id))
+
+async def _prepare_html_with_katex(content: str, page_title: str) -> str:
+    """
+    Prepares a self-contained HTML document with client-side rendering for LaTeX (using KaTeX)
+    and Mermaid diagrams.
+    """
+    # Convert Markdown to HTML. The 'markdown' library will leave the LaTeX delimiters ($ and $$) intact.
+    # Using 'codehilite' helps to correctly isolate code blocks, preventing KaTeX from
+    # misinterpreting '$' characters inside code as math delimiters.
+    html_content = markdown.markdown(content, extensions=['fenced_code', 'tables', 'codehilite'])
+
+    # Prepare Mermaid blocks for the Mermaid.js script.
+    html_content = html_content.replace(
+        '<pre><code class="language-mermaid">', '<pre class="mermaid">'
+    ).replace('</code></pre>', '</pre>')
+
+    # Wrap in a full HTML document with KaTeX and Mermaid.js from CDN.
+    full_html_doc = f"""
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{page_title}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUbGuHTCG" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; margin: 0 auto; padding: 20px; max-width: 800px; }}
+        img {{ max-width: 100%; height: auto; }}
+        pre {{ background-color: #f6f8fa; padding: 16px; overflow: auto; border-radius: 6px; }}
+        code {{ font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace; }}
+        table {{ border-collapse: collapse; width: 100%; margin: 1em 0; border: 1px solid #dfe2e5; }}
+        th, td {{ border: 1px solid #dfe2e5; padding: 6px 13px; }}
+        tr {{ border-top: 1px solid #c6cbd1; }} tr:nth-child(2n) {{ background-color: #f6f8fa; }}
+        h1, h2, h3, h4, h5, h6 {{ border-bottom: 1px solid #eaecef; padding-bottom: .3em; margin-top: 24px; margin-bottom: 16px; }}
+    </style>
+</head>
+<body>
+    {html_content}
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {{
+            renderMathInElement(document.body, {{
+                delimiters: [
+                    {{left: '$$', right: '$$', display: true}},
+                    {{left: '$', right: '$', display: false}},
+                    {{left: '\\[', right: '\\]', display: true}},
+                    {{left: '\\(', right: '\\)', display: false}}
+                ],
+                throwOnError : false
+            }});
+            if (typeof mermaid !== 'undefined') {{
+                mermaid.initialize({{ startOnLoad: true }});
+            }} else {{
+                console.error("Mermaid library not loaded.");
+            }}
+        }});
+    </script>
+</body>
+</html>"""
+    return full_html_doc
 
 async def _prepare_html_from_markdown(content: str, settings: dict, file_path: str) -> tuple[str, list]:
     """
