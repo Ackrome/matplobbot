@@ -43,17 +43,15 @@ PANDOC_HEADER_INCLUDES = r"""
 \usepackage[utf8]{inputenc}
 \usepackage[T2A]{fontenc}
 \usepackage[english,russian]{babel}
-\usepackage{amscd,amssymb}
-\usepackage{amsfonts,amsmath,array}
-\usepackage[dvips]{graphicx}
+\usepackage{amscd,amssymb,amsfonts,amsmath,array}
+\usepackage{graphicx} % Loaded once
 \usepackage{longtable,wrapfig}
-\usepackage{graphicx}
 \usepackage{mathrsfs}
-\usepackage{color}
+\usepackage{xcolor} % xcolor is sufficient
 \usepackage{mhchem}
-\usepackage{xcolor}
-\usepackage{newunicodechar}
 \usepackage{mathtools}
+\usepackage{newunicodechar}
+\usepackage{cm-super}
 \newunicodechar{∂}{\partial}
 \newunicodechar{Δ}{\Delta}
 """
