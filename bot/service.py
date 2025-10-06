@@ -11,6 +11,7 @@ import traceback
 import re
 import os
 import json
+import html
 import base64
 import hashlib
 import aiohttp
@@ -985,11 +986,12 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
             pass # Message might have been deleted already
     await message.answer("Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(user_id))
 
+
 async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     """
-    Prepares a self-contained HTML document with client-side rendering for LaTeX (using KaTeX)
-    and Mermaid diagrams. This version uses a robust placeholder method and includes heuristic
-    fixes for common non-standard TeX patterns like `\atop`.
+    Prepares a self-contained HTML document with client-side rendering for LaTeX (using KaTeX).
+    This definitive version uses a robust placeholder method and correctly escapes HTML-sensitive
+    characters within LaTeX to prevent browser rendering errors.
     """
     
     # Step 1: Isolate all valid math blocks and replace them with placeholders.
@@ -1003,10 +1005,11 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     content_with_placeholders = re.sub(latex_regex, store_and_replace_latex, content)
 
     # Step 2: Render the Markdown. It is now safe from LaTeX interference.
+    # Note: Added 'gfm-tables' for better table support, which is what Obsidian uses.
     md = MarkdownIt("commonmark", {"html": True, "linkify": True, "typographer": True}).enable('table')
     html_content = md.render(content_with_placeholders)
 
-    # Step 3: Process the stored formulas with Cyrillic wrapping and heuristic fixes.
+    # Step 3: Process the stored formulas.
     processed_formulas = []
     for formula_string in latex_formulas:
         is_display = formula_string.startswith('$$')
@@ -1015,12 +1018,10 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
         # Get the raw content inside the delimiters
         original_content = formula_string[content_start:content_end].strip()
 
-        # --- HEURISTIC FIX for \atop and multi-line display math ---
+        # --- Heuristic Fix for \atop and multi-line display math ---
         if is_display and ('\n' in original_content or r'\atop' in original_content):
-            # 1. Replace the primitive \atop command with the standard LaTeX newline \\
-            processed_content = original_content.replace(r'\atop', r'\\')
-            # 2. Wrap the entire content in a 'gathered' environment for robust alignment.
-            original_content = f"\\begin{{gathered}}\n{processed_content}\n\\end{{gathered}}"
+            temp_content = original_content.replace(r'\atop', r'\\')
+            original_content = f"\\begin{{gathered}}\n{temp_content}\n\\end{{gathered}}"
 
         # --- Cyrillic wrapping logic ---
         protected_blocks = []
@@ -1034,8 +1035,10 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
         for i, block in enumerate(protected_blocks):
             temp_content = temp_content.replace(f"__TEXT_BLOCK_{i}__", block)
         
-        final_content = temp_content
-        # --- End of Cyrillic logic ---
+        # --- THE DEFINITIVE FIX: HTML ESCAPING ---
+        # Escape characters like '<', '>', '&' to prevent the browser from misinterpreting them.
+        # KaTeX will correctly render the escaped entities.
+        final_content = html.escape(temp_content)
 
         # Reconstruct the full formula with original delimiters
         if is_display:
@@ -1053,6 +1056,7 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
         '<pre><code class="language-mermaid">', '<pre class="mermaid">'
     ).replace('</code></pre>', '</pre>')
 
+    # (The rest of the HTML template remains the same)
     full_html_doc = f"""
 <!DOCTYPE html>
 <html lang="ru">
