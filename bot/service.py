@@ -991,65 +991,65 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     and Mermaid diagrams, using a robust placeholder method to prevent Markdown interference.
     """
     
-    # --- Step 1 & 2: Isolate Math and Replace with Placeholders ---
+    # Step 1: Isolate all valid math blocks and replace them with placeholders.
     latex_formulas = []
-    
     def store_and_replace_latex(match):
+        # Use a placeholder that is safe for HTML and Markdown
         placeholder = f"<!--KATEX_PLACEHOLDER_{len(latex_formulas)}-->"
-        latex_formulas.append(match.group(0)) # Store the original, full math block
+        latex_formulas.append(match.group(0)) # Store the original, full math block (e.g., "$n=2$")
         return placeholder
 
-    # A robust regex to find either $$...$$ or $...$ blocks.
+    # This regex finds valid, paired delimiters for both display and inline math.
     latex_regex = r'\$\$(?:.|\n)*?\$\$|(?<!\$)\$[^$\n]+?\$(?!\$)'
-    content_with_placeholders = re.sub(latex_regex, store_and_replace_latex, content, flags=re.DOTALL)
+    content_with_placeholders = re.sub(latex_regex, store_and_replace_latex, content)
 
-    # --- Step 3: Render the Markdown (now safe from LaTeX characters) ---
+    # Step 2: Render the Markdown. It now contains no math, so it's safe.
     md = MarkdownIt("commonmark", {"html": True, "linkify": True, "typographer": True}).enable('table')
     html_content = md.render(content_with_placeholders)
 
-    # --- Step 4: Process the Stored Math (Cyrillic wrapping) ---
+    # Step 3: Process the stored formulas to make them KaTeX-compatible (Cyrillic wrapping).
     processed_formulas = []
-    
-    def wrap_cyrillic_in_text_command(match):
-        # This function now operates on a single, isolated formula string
-        is_display = match.group(0).startswith('$$')
-        # Get content between delimiters: $$content$$ or $content$
+    for formula_string in latex_formulas:
+        is_display = formula_string.startswith('$$')
         content_start, content_end = (2, -2) if is_display else (1, -1)
-        original_content = match.group(0)[content_start:content_end]
+        
+        # Get the raw content inside the delimiters
+        original_content = formula_string[content_start:content_end]
 
+        # --- Cyrillic wrapping logic (applied correctly here) ---
         protected_blocks = []
         def protect_text_blocks(m):
             placeholder = f"__TEXT_BLOCK_{len(protected_blocks)}__"
             protected_blocks.append(m.group(0))
             return placeholder
         
-        # Protect existing \text blocks, then wrap Cyrillic, then restore
-        processed_content = re.sub(r'\\text\{.*?\}', protect_text_blocks, original_content, flags=re.DOTALL)
-        processed_content = re.sub(r'([\u0400-\u04FF]+(?:[\s.,][\u0400-\u04FF]+)*)', r'\\text{\1}', processed_content)
+        # Protect existing \text{...} blocks
+        temp_content = re.sub(r'\\text\{.*?\}', protect_text_blocks, original_content, flags=re.DOTALL)
+        # Wrap any remaining Cyrillic text
+        temp_content = re.sub(r'([\u0400-\u04FF]+(?:[\s.,][\u0400-\u04FF]+)*)', r'\\text{\1}', temp_content)
+        # Restore the protected blocks
         for i, block in enumerate(protected_blocks):
-            processed_content = processed_content.replace(f"__TEXT_BLOCK_{i}__", block)
-            
-        # Reconstruct the full formula string
+            temp_content = temp_content.replace(f"__TEXT_BLOCK_{i}__", block)
+        
+        processed_content = temp_content
+        # --- End of Cyrillic logic ---
+
+        # Reconstruct the full formula with the original delimiters
         if is_display:
-            return f'$${processed_content}$$'
+            processed_formulas.append(f'$${processed_content}$$')
         else:
-            return f'${processed_content}$'
+            processed_formulas.append(f'${processed_content}$')
 
-    for formula in latex_formulas:
-        processed_formulas.append(wrap_cyrillic_in_text_command(re.match(latex_regex, formula)))
-
-    # --- Step 5: Re-insert the Processed Math into the HTML ---
+    # Step 4: Re-insert the now fully-processed math formulas back into the HTML.
     for i, formula in enumerate(processed_formulas):
         placeholder = f"<!--KATEX_PLACEHOLDER_{i}-->"
         html_content = html_content.replace(placeholder, formula)
 
-    # --- Final Touches and HTML Template ---
-    # Prepare Mermaid blocks for the Mermaid.js script.
+    # Step 5: Final preparation of the full HTML document.
     html_content = html_content.replace(
         '<pre><code class="language-mermaid">', '<pre class="mermaid">'
     ).replace('</code></pre>', '</pre>')
 
-    # Wrap in a full HTML document with KaTeX and Mermaid.js from CDN.
     full_html_doc = f"""
 <!DOCTYPE html>
 <html lang="ru">
