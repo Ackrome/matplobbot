@@ -994,7 +994,8 @@ async def get_settings_keyboard(user_id: int) -> InlineKeyboardBuilder:
         'telegraph': '🌐 Telegra.ph',
         'text': '📄 Простой текст',
         'md_file': '📁 .md файл',
-        'html_file': '📁 .html файл'
+        'html_file': '📁 .html файл',
+        'pdf_file': '📁 .pdf файл'
     }
     md_mode_text = md_mode_map.get(md_mode, '❓ Неизвестно')
 
@@ -1047,7 +1048,7 @@ async def cq_toggle_docstring(callback: CallbackQuery):
     await callback.message.edit_reply_markup(reply_markup=keyboard.as_markup())
     await callback.answer("Настройка 'Показывать описание' обновлена.")
 
-MD_DISPLAY_MODES = ['telegraph', 'text', 'md_file', 'html_file']
+MD_DISPLAY_MODES = ['telegraph', 'text', 'md_file', 'html_file', 'pdf_file']
 
 @router.callback_query(F.data == "settings_cycle_md_mode")
 async def cq_cycle_md_mode(callback: CallbackQuery):
@@ -1074,7 +1075,8 @@ async def cq_cycle_md_mode(callback: CallbackQuery):
         'telegraph': '🌐 Telegra.ph',
         'text': '📄 Простой текст',
         'md_file': '📁 .md файл',
-        'html_file': '📁 .html файл'
+        'html_file': '📁 .html файл',
+        'pdf_file': '📁 .pdf файл'
     }
     await callback.answer(f"Режим показа .md изменен на: {md_mode_map[new_mode]}")
 

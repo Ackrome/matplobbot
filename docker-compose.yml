@@ -13,6 +13,7 @@ services:
     volumes:
       - bot_db_data:/app/db_data  # Именованный volume для хранения БД
       - bot_logs:/app/logs        # Именованный volume для логов бота
+      - matplobblib_lib:/usr/local/lib/python3.11/site-packages/matplobblib # Persist library updates
 
 
 
@@ -34,4 +35,5 @@ services:
       - mpb-telegram-bot # FastAPI сервис запустится после бота (полезно, чтобы БД уже могла существовать)
 volumes:
   bot_db_data:
-  bot_logs: # Добавляем именованный volume для логов
+  bot_logs:
+  matplobblib_lib:
