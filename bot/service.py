@@ -326,7 +326,7 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
 def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.BytesIO:
     """
     Синхронная функция для конвертации Markdown в PDF с использованием pandoc.
-    Применяет окончательный двухпроходный препроцессор для LaTeX для максимальной надежности.
+    Применяет окончательный, контекстно-зависимый препроцессор для LaTeX для максимальной надежности.
     """
     author = "Matplobbot"
     date = datetime.datetime.now().strftime("%d %B %Y")
@@ -334,38 +334,38 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
     if os.path.exists(cleanup_log_path):
         os.remove(cleanup_log_path)
 
-    # --- START: Definitive Multi-Pass LaTeX Preprocessor ---
+    # --- START: Definitive LaTeX Preprocessor ---
 
-    processed_markdown = markdown_string
-
-    # --- PASS 1: Sanitize Standalone Environments ---
-    # Goal: Find any standalone environment that the user has incorrectly wrapped in $$...$$ and unwrap it.
-    # This directly prevents the "Bad math environment delimiter" error.
-    standalone_envs = ['equation', 'align', 'gather', 'multline']
-    for env in standalone_envs:
-        # Regex to find \begin{env}...\end{env} wrapped in optional whitespace and $$
-        unwrap_regex = re.compile(r'\$\$s*?(\\begin\{' + env + r'\*?\}.*?\\end\{' + env + r'\*?\})s*?\$\$', re.DOTALL)
-        processed_markdown = unwrap_regex.sub(r'\1', processed_markdown)
-
-    # --- PASS 2: Fix and Wrap Component Environments ---
-    # Goal: Find all matrix-like or component environments, fix their internal structure,
-    # and ensure they are wrapped in $$...$$ to be processed in math mode.
+    # Regex to split the document into math blocks and text blocks.
+    math_split_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$)'
+    parts = re.split(math_split_regex, markdown_string, flags=re.DOTALL)
     
-    def _fix_and_wrap_components_callback(match: re.Match) -> str:
+    processed_parts = []
+
+    # Regex to find any \begin{...}...\end{...} block.
+    env_finder_regex = re.compile(r'\\begin\{([a-zA-Z\*]+)\}(.*?)\\end\{\1\*?\}', re.DOTALL)
+
+    def _process_latex_block(match: re.Match) -> str:
         """
-        Processes a found component environment. It fixes matrix alignment and
-        then wraps the entire corrected block in $$...$$ for Pandoc.
+        Callback to process a single LaTeX environment found in a text block.
+        It categorizes, fixes (if needed), and correctly wraps the environment.
         """
-        env_name = match.group(1)
+        env_name = match.group(1).strip('*') # Normalize name by removing star
         content = match.group(2)
         original_block = match.group(0)
 
-        matrix_like_envs = ['pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix', 'matrix', 'cases']
-        
-        fixed_content = content
-        
-        # --- Sub-step: Fix matrix alignment if necessary ---
-        if env_name in matrix_like_envs:
+        # 1. Define Environment Categories
+        standalone_envs = ['equation', 'align', 'gather', 'multline']
+        matrix_envs = ['pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix', 'matrix', 'cases']
+        component_envs = ['aligned', 'gathered']
+
+        # RULE 1: If it's a standalone environment, do nothing. It's already correct.
+        if env_name in standalone_envs:
+            return original_block
+
+        # RULE 2: If it's a matrix-like environment, fix its content and wrap in $$.
+        if env_name in matrix_envs:
+            # --- Matrix alignment fix logic ---
             lines = content.strip().split(r'\\')
             max_cols = 0
             for line in lines:
@@ -373,35 +373,47 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
                 current_cols = clean_line.count('&') + 1
                 if current_cols > max_cols:
                     max_cols = current_cols
-            
             if max_cols == 0: max_cols = 1
-            
             col_spec = 'c' * max_cols
-            
-            # Reconstruct using the forgiving 'array' environment
-            if env_name == 'pmatrix': fixed_content = f'\\left(\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right)'
-            elif env_name in ['bmatrix', 'Bmatrix']: fixed_content = f'\\left[\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right]'
-            elif env_name == 'vmatrix': fixed_content = f'\\left|\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right|'
-            elif env_name == 'Vmatrix': fixed_content = f'\\left\\|\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right\\|'
+
+            # This is the corrected logic: rebuild the *original* environment with fixed content.
+            # We replace the content inside the \begin{}...\end{} block.
+            # Note: For simplicity and max compatibility, we convert all to a generic 'array'.
+            fixed_content = content
+            if env_name == 'pmatrix': fixed_block = f'\\left(\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right)'
+            elif env_name in ['bmatrix', 'Bmatrix']: fixed_block = f'\\left[\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right]'
+            elif env_name == 'vmatrix': fixed_block = f'\\left|\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right|'
+            elif env_name == 'Vmatrix': fixed_block = f'\\left\\|\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right\\|'
             elif env_name == 'cases':
                 col_spec = 'l' + ('l' * (max_cols - 1))
-                fixed_content = f'\\left\\{{\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right.'
+                fixed_block = f'\\left\\{{\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right.'
             else: # matrix
-                fixed_content = f'\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}'
-            
-            # The fixed block is just the content, not the full \begin{}...\end{}
-            return f'$$\n{fixed_content}\n$$'
+                fixed_block = f'\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}'
+
+            return f'$$\n{fixed_block}\n$$'
         
-        # For other component envs like 'aligned', just wrap them.
-        return f'$$\n{original_block}\n$$'
+        # RULE 3: If it's another component, just wrap it in $$.
+        if env_name in component_envs:
+            return f'$$\n{original_block}\n$$'
+        
+        # RULE 4: If unknown, leave it alone.
+        return original_block
 
-    # Regex to find any component environment that is NOT a standalone one.
-    component_envs = ['pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix', 'matrix', 'cases', 'aligned', 'gathered']
-    # We apply this regex to the already sanitized markdown.
-    component_finder_regex = re.compile(r'\\begin\{(' + '|'.join(component_envs) + r')\*?\}(.*?)\\end\{\1\*?\}', re.DOTALL)
-    processed_markdown = component_finder_regex.sub(_fix_and_wrap_components_callback, processed_markdown)
+    # Process each part of the document
+    for i, part in enumerate(parts):
+        if part is None: continue
+        # An even index means it's a text block. Odd is a math block.
+        if i % 2 == 0:
+            # This is a text block, so we can safely process its LaTeX environments.
+            processed_part = env_finder_regex.sub(_process_latex_block, part)
+            processed_parts.append(processed_part)
+        else:
+            # This is already a math block ($$...$$ or $...$), so we protect it by adding it back unchanged.
+            processed_parts.append(part)
 
-    # --- END: Definitive Multi-Pass LaTeX Preprocessor ---
+    processed_markdown = "".join(processed_parts)
+    
+    # --- END: Definitive LaTeX Preprocessor ---
 
     try:
         command = [
