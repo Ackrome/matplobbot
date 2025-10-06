@@ -39,9 +39,6 @@ logger = logging.getLogger(__name__)
 # single formula rendering AND the full PDF document generation.
 # This is the implementation of your excellent suggestion.
 PANDOC_HEADER_INCLUDES = r"""
-\usepackage[utf8]{inputenc}
-\usepackage[T2A]{fontenc}
-\usepackage[russian]{babel}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{amsfonts}
@@ -52,13 +49,13 @@ PANDOC_HEADER_INCLUDES = r"""
 \usepackage{xcolor}
 \usepackage{newunicodechar}
 \usepackage{mathtools}
-\usepackage{fontspec}      % Essential for xelatex to use system fonts
-\usepackage{dejavu}        % Explicitly load the dejavu package for robustness
+\usepackage{fontspec}      % The core of XeLaTeX font handling
+\usepackage{babel}         % Language-specific settings
 \newunicodechar{∂}{\partial}
 \newunicodechar{Δ}{\Delta}
 """
 
-# The preamble for single formulas now uses the shared header includes.
+# The preamble for single formulas (this should now also be updated for consistency)
 LATEX_PREAMBLE = r"""
 \documentclass[12pt,varwidth=500pt]{standalone}
 """ + PANDOC_HEADER_INCLUDES + r"""
@@ -338,9 +335,8 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
 def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.BytesIO:
     """
     Окончательная, надежная функция для конвертации Markdown в PDF.
-    Использует централизованную конфигурацию LaTeX и предоставляет полную спецификацию
-    шрифтов (serif, sans-serif, mono) для Pandoc, что решает проблему с
-    отсутствующими символами в разных стилях текста.
+    Использует централизованную, корректную для XeLaTeX конфигурацию и полную спецификацию
+    шрифтов для Pandoc.
     """
     author = "Matplobbot"
     date = datetime.datetime.now().strftime("%d %B %Y")
@@ -350,14 +346,11 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
         os.remove(cleanup_log_path)
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        # Create a header file on-the-fly using a centralized constant preamble
         header_path = os.path.join(temp_dir, 'header.tex')
         with open(header_path, 'w', encoding='utf-8') as f:
-            # PANDOC_HEADER_INCLUDES should be defined globally in the file
             f.write(PANDOC_HEADER_INCLUDES)
 
         try:
-            # --- STAGE 1: Convert Markdown to a standalone .tex file using Pandoc ---
             tex_path = os.path.join(temp_dir, 'document.tex')
             pandoc_to_tex_command = [
                 'pandoc',
@@ -365,16 +358,13 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
                 '--from=markdown+tex_math_dollars+raw_tex',
                 '--to=latex',
                 '--pdf-engine=xelatex',
-                # --- START: DEFINITIVE FONT & LANGUAGE CONFIGURATION ---
-                # 1. Inject our complete, centralized preamble.
+                # --- DEFINITIVE CONFIGURATION ---
                 '--include-in-header', header_path,
-                # 2. Instruct Pandoc's template to activate the Russian language.
                 '--variable', 'lang=russian',
-                # 3. Provide a COMPLETE font specification for all text types.
-                '--variable', 'mainfont=DejaVu Serif',      # Main body text font
-                '--variable', 'sansfont=DejaVu Sans',      # Sans-serif font (for headers, etc.)
-                '--variable', 'monofont=DejaVu Sans Mono', # Monospaced font (for code)
-                # --- END: DEFINITIVE FONT & LANGUAGE CONFIGURATION ---
+                '--variable', 'mainfont=DejaVu Serif',
+                '--variable', 'sansfont=DejaVu Sans',
+                '--variable', 'monofont=DejaVu Sans Mono',
+                # ---
                 '--variable', f'title={title}',
                 '--variable', f'author={author}',
                 '--variable', f'date={date}',
@@ -395,7 +385,6 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
                 error_message = pandoc_process.stderr.decode('utf-8', errors='ignore').strip()
                 raise RuntimeError(f"Ошибка Pandoc при конвертации Markdown в LaTeX:\n{error_message}")
 
-            # --- STAGE 2: Sanitize the generated LaTeX code for matrix errors ---
             with open(tex_path, 'r', encoding='utf-8') as f:
                 latex_content = f.read()
 
@@ -424,7 +413,6 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
             with open(tex_path, 'w', encoding='utf-8') as f:
                 f.write(sanitized_latex)
             
-            # --- STAGE 3: Compile the sanitized .tex file to PDF using latexmk ---
             compile_command = [
                 'latexmk', '-xelatex', '-interaction=nonstopmode',
                 f'-output-directory={temp_dir}', tex_path
@@ -445,7 +433,6 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
             return pdf_buffer
 
         finally:
-            # Cleanup logic
             if os.path.exists(cleanup_log_path):
                 try:
                     with open(cleanup_log_path, 'r', encoding='utf-8') as f:
