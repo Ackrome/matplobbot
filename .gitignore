@@ -5,3 +5,5 @@ venv/
 *.log
 .idea/
 idea.ipynb
+log.txt
+service.txt

@@ -622,7 +622,7 @@ async def send_as_text_with_formulas(message: Message, file_path: str, content: 
     latex_regex_for_split = r'(\$\$(?:.|\n)*?\$\$|(?<!\$)\$[^$]+?\$(?!\$))'
     chunks = re.split(latex_regex_for_split, content, flags=re.DOTALL)
 
-    if not chunks or (len(chunks) == 1 and not chunks[0].strip()):
+    if not chunks or (len(chunks) == 1 and not chunks.strip()):
         await message.answer("_(файл пуст)_", parse_mode='markdown')
         return
 
@@ -988,43 +988,38 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
 async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     """
     Prepares a self-contained HTML document with client-side rendering for LaTeX (using KaTeX)
-    and Mermaid diagrams.
+    and Mermaid diagrams, with enhanced styling and interactivity.
     """
     # --- KaTeX Cyrillic Pre-processing ---
     # This function robustly wraps Cyrillic text in `\text{...}` for KaTeX.
     def wrap_cyrillic_in_text_command(match):
-        content = match.group(2) # Content within $...$ or $$...$$
+        is_display = match.group(1) is not None
+        original_content = match.group(1) if is_display else match.group(2)
+        if original_content is None:
+            return match.group(0)
         
-        # 1. Protect existing \text{...} blocks by replacing them with placeholders.
         protected_blocks = []
         def protect_text_blocks(m):
             placeholder = f"__LATEX_TEXT_PLACEHOLDER_{len(protected_blocks)}__"
             protected_blocks.append(m.group(0))
             return placeholder
         
-        content = re.sub(r'\\text\{[^}]*\}', protect_text_blocks, content)
+        processed_content = re.sub(r'\\text\{.*?\}', protect_text_blocks, original_content, flags=re.DOTALL)
+        processed_content = re.sub(r'([\u0400-\u04FF]+(?:[\s.,][\u0400-\u04FF]+)*)', r'\\text{\1}', processed_content)
 
-        # 2. Wrap remaining Cyrillic text.
-        content = re.sub(r'([\u0400-\u04FF]+(?:[\s.,][\u0400-\u04FF]+)*)', r'\\text{\1}', content)
-
-        # 3. Restore the protected blocks.
         for i, block in enumerate(protected_blocks):
-            content = content.replace(f"__LATEX_TEXT_PLACEHOLDER_{i}__", block)
+            processed_content = processed_content.replace(f"__LATEX_TEXT_PLACEHOLDER_{i}__", block)
             
-        return f'{match.group(1)}{content}{match.group(3)}'
+        return f'$${processed_content}$$' if is_display else f'${processed_content}$'
 
-    # Regex to find content within $...$ or $$...$$
-    # Using re.DOTALL to handle multi-line formulas
-    # We now capture the closing delimiter in group 3 to correctly reconstruct the string.
-    processed_content = re.sub(r'(\${1,2})(.+?)(\1)', wrap_cyrillic_in_text_command, content, flags=re.DOTALL)
+    # A robust regex to find either $$...$$ (group 1) or $...$ (group 2, non-greedy).
+    # It correctly handles cases with single dollars inside display math.
+    latex_regex = r'\$\$(.*?)\$\$|(?<!\$)\$([^$]+?)\$(?!\$)'
+    processed_content = re.sub(latex_regex, wrap_cyrillic_in_text_command, content, flags=re.DOTALL)
 
-    # Use markdown-it-py, which is better at preserving backslashes in LaTeX commands
-    # like \epsilon, which the standard 'markdown' library can strip.
-    # We enable 'html' to allow raw HTML tags if they exist in the markdown.
     md = MarkdownIt("commonmark", {"html": True})
     html_content = md.render(processed_content)
 
-    # Prepare Mermaid blocks for the Mermaid.js script.
     html_content = html_content.replace(
         '<pre><code class="language-mermaid">', '<pre class="mermaid">'
     ).replace('</code></pre>', '</pre>')
@@ -1038,31 +1033,119 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{page_title}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
-    <!-- Load KaTeX main library synchronously to ensure it's available for the auto-render script -->
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
-    <!-- The auto-render script can be deferred as it depends on the main library -->
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous" onload="renderMathInElement(document.body, {{ delimiters: [ {{left: '$$', right: '$$', display: true}}, {{left: '$', right: '$', display: false}}, {{left: '\\[', right: '\\]', display: true}}, {{left: '\\(', right: '\\)', display: false}} ], throwOnError: false }});"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; margin: 0 auto; padding: 20px; max-width: 800px; }}
+        /* General Styling & Light Mode */
+        :root {{
+            --bg-color: #ffffff;
+            --text-color: #24292e;
+            --link-color: #0366d6;
+            --border-color: #eaecef;
+            --code-bg-color: #f6f8fa;
+        }}
+        body {{ 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            line-height: 1.6; 
+            margin: 0 auto; 
+            padding: 20px; 
+            max-width: 800px; 
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }}
+        
+        /* Dark Mode */
+        @media (prefers-color-scheme: dark) {{
+            :root:not(.light-theme) {{
+                --bg-color: #0d1117;
+                --text-color: #c9d1d9;
+                --link-color: #58a6ff;
+                --border-color: #30363d;
+                --code-bg-color: #161b22;
+            }}
+        }}
+        html.dark-theme {{
+            --bg-color: #0d1117;
+            --text-color: #c9d1d9;
+            --link-color: #58a6ff;
+            --border-color: #30363d;
+            --code-bg-color: #161b22;
+        }}
+        
+        /* Elements Styling */
+        a {{ color: var(--link-color); }}
         img {{ max-width: 100%; height: auto; }}
-        pre {{ background-color: #f6f8fa; padding: 16px; overflow: auto; border-radius: 6px; }}
+        pre {{ background-color: var(--code-bg-color); padding: 16px; overflow: auto; border-radius: 6px; position: relative; border: 1px solid var(--border-color); }}
         code {{ font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace; }}
-        table {{ border-collapse: collapse; width: 100%; margin: 1em 0; border: 1px solid #dfe2e5; }}
-        th, td {{ border: 1px solid #dfe2e5; padding: 6px 13px; }}
-        tr {{ border-top: 1px solid #c6cbd1; }} tr:nth-child(2n) {{ background-color: #f6f8fa; }}
-        h1, h2, h3, h4, h5, h6 {{ border-bottom: 1px solid #eaecef; padding-bottom: .3em; margin-top: 24px; margin-bottom: 16px; }}
+        table {{ border-collapse: collapse; width: 100%; margin: 1em 0; border: 1px solid var(--border-color); }}
+        th, td {{ border: 1px solid var(--border-color); padding: 6px 13px; }}
+        tr:nth-child(2n) {{ background-color: var(--code-bg-color); }}
+        h1, h2, h3, h4, h5, h6 {{ border-bottom: 1px solid var(--border-color); padding-bottom: .3em; margin-top: 24px; margin-bottom: 16px; }}
+        
+        /* Copy Button for Code Blocks */
+        .copy-btn {{
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            padding: 4px 8px;
+            font-size: 12px;
+            background-color: #e1e4e8;
+            color: #24292e;
+            border: 1px solid #d1d5da;
+            border-radius: 6px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }}
+        pre:hover .copy-btn {{ opacity: 1; }}
+        .dark-theme .copy-btn {{ background-color: #21262d; color: #c9d1d9; border-color: #30363d; }}
+        
+        /* Print-Friendly Styles */
+        @media print {{
+            body {{ color: #000; background: #fff; font-family: "Times New Roman", serif; font-size: 12pt; }}
+            pre, code {{ background: #f4f4f4; border: 1px solid #ddd; font-family: "Courier New", monospace; }}
+            .copy-btn, .theme-toggle {{ display: none; }}
+            a {{ text-decoration: none; color: #000; }}
+            a[href]:after {{ content: " (" attr(href) ")"; }}
+        }}
     </style>
 </head>
 <body>
-    {html_content}
+    <main>
+        {html_content}
+    </main>
     <script>
-        document.addEventListener("DOMContentLoaded", function() {{ // Keep this for Mermaid
+        document.addEventListener("DOMContentLoaded", function() {{
+            // Mermaid Initialization
             if (typeof mermaid !== 'undefined') {{
-                mermaid.initialize({{ startOnLoad: true }});
+                mermaid.initialize({{ startOnLoad: true, theme: 'default' }});
             }} else {{
                 console.error("Mermaid library not loaded.");
             }}
+
+            // Add Copy Buttons to Code Blocks
+            document.querySelectorAll('pre').forEach(function(pre) {{
+                if (pre.querySelector('code')) {{
+                    var button = document.createElement('button');
+                    button.className = 'copy-btn';
+                    button.textContent = 'Copy';
+                    button.setAttribute('aria-label', 'Copy code to clipboard');
+                    
+                    button.addEventListener('click', function() {{
+                        var code = pre.querySelector('code').innerText;
+                        navigator.clipboard.writeText(code).then(function() {{
+                            button.textContent = 'Copied!';
+                            setTimeout(function() {{ button.textContent = 'Copy'; }}, 2000);
+                        }}, function(err) {{
+                            button.textContent = 'Error';
+                            console.error('Could not copy text: ', err);
+                        }});
+                    }});
+                    
+                    pre.appendChild(button);
+                }}
+            }});
         }});
     </script>
 </body>
@@ -1199,7 +1282,7 @@ async def display_lec_all_path(message: Message, repo_path: str, path: str, is_e
     # Add a "back" button if not in the root directory
     if path:
         # The full path for navigation now includes the repo
-        parent_dir = path.rsplit('/', 1)[0] if '/' in path else ""
+        parent_dir = path.rsplit('/', 1) if '/' in path else ""
         parent_path = f"{repo_path}/{parent_dir}" if parent_dir else repo_path
         path_hash = hashlib.sha1(parent_path.encode()).hexdigest()[:16]
         kb.code_path_cache[path_hash] = parent_path
