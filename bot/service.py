@@ -991,21 +991,31 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     and Mermaid diagrams.
     """
     # --- KaTeX Cyrillic Pre-processing ---
-    # This function finds sequences of Cyrillic characters inside math delimiters ($...$ or $$...$$)
-    # and wraps them in `\text{...}` so KaTeX can render them correctly.
-    # It avoids wrapping content that is already inside a \text{...} command.
+    # This function robustly wraps Cyrillic text in `\text{...}` for KaTeX.
     def wrap_cyrillic_in_text_command(match):
-        # The content inside the delimiters ($...$ or $$...$$)
-        content = match.group(2)
-        # Replace Cyrillic words/phrases not already in \text{}
-        # The negative lookbehind `(?<!\\text{)` is key here.
-        processed_content = re.sub(r'(?<!\\text{)([\u0400-\u04FF\s]+)(?!})', r'\\text{\1}', content)
-        # Reconstruct the full math block
-        return f'{match.group(1)}{processed_content}{match.group(3)}'
+        content = match.group(2) # Content within $...$ or $$...$$
+        
+        # 1. Protect existing \text{...} blocks by replacing them with placeholders.
+        protected_blocks = []
+        def protect_text_blocks(m):
+            placeholder = f"__LATEX_TEXT_PLACEHOLDER_{len(protected_blocks)}__"
+            protected_blocks.append(m.group(0))
+            return placeholder
+        
+        content = re.sub(r'\\text\{[^}]*\}', protect_text_blocks, content)
+
+        # 2. Wrap remaining Cyrillic text.
+        content = re.sub(r'([\u0400-\u04FF]+(?:[\s.,][\u0400-\u04FF]+)*)', r'\\text{\1}', content)
+
+        # 3. Restore the protected blocks.
+        for i, block in enumerate(protected_blocks):
+            content = content.replace(f"__LATEX_TEXT_PLACEHOLDER_{i}__", block)
+            
+        return f'{match.group(1)}{content}{match.group(3)}'
 
     # Regex to find content within $...$ or $$...$$
-    # It captures the opening delimiter, the content, and the closing delimiter.
-    processed_content = re.sub(r'(\${1,2})([^$]+?)(\${1,2})', wrap_cyrillic_in_text_command, content)
+    # Using re.DOTALL to handle multi-line formulas
+    processed_content = re.sub(r'(\${1,2})(.+?)\1', wrap_cyrillic_in_text_command, content, flags=re.DOTALL)
 
     # Use markdown-it-py, which is better at preserving backslashes in LaTeX commands
     # like \epsilon, which the standard 'markdown' library can strip.
