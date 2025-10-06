@@ -450,13 +450,123 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
                                 except OSError: pass
                     os.remove(cleanup_log_path)
                 except Exception: pass
-                
-                
-async def convert_md_to_pdf_pandoc(markdown_string: str, title: str) -> io.BytesIO:
-    """Асинхронная обертка для конвертации Markdown в PDF с помощью pandoc."""
-    return await asyncio.to_thread(_convert_md_to_pdf_pandoc_sync, markdown_string, title)
+                             
+def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.BytesIO:
+    """
+    Окончательная, надежная функция для конвертации Markdown в PDF с использованием
+    двухэтапного процесса: Markdown -> LaTeX -> PDF. Этот подход позволяет
+    исправлять критические синтаксические ошибки LaTeX перед финальной компиляцией.
+    """
+    author = "Matplobbot"
+    date = datetime.datetime.now().strftime("%d %B %Y")
+    
+    cleanup_log_path = '/tmp/pandoc_cleanup.log'
+    if os.path.exists(cleanup_log_path):
+        os.remove(cleanup_log_path)
 
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Create a dedicated file for header includes to ensure font settings are applied
+        header_path = os.path.join(temp_dir, 'header.tex')
+        with open(header_path, 'w', encoding='utf-8') as f:
+            f.write(r'\usepackage{fontspec}' + '\n') # Ensures mainfont is respected
+            f.write(r'\usepackage{dejavu}' + '\n')   # Explicitly load the dejavu package
 
+        try:
+            # --- STAGE 1: Convert Markdown to a standalone .tex file using Pandoc ---
+            tex_path = os.path.join(temp_dir, 'document.tex')
+            pandoc_to_tex_command = [
+                'pandoc',
+                '--filter', '/app/bot/pandoc_mermaid_filter.py',
+                '--from=markdown+tex_math_dollars+raw_tex',
+                '--to=latex',
+                '--pdf-engine=xelatex',
+                # --- START: DEFINITIVE FONT FIX ---
+                # Force Pandoc to include our header file in the document's preamble.
+                '--include-in-header', header_path,
+                # Set the main font for the document.
+                '--variable', 'mainfont=DejaVu Sans',
+                # --- END: DEFINITIVE FONT FIX ---
+                '--variable', f'title={title}',
+                '--variable', f'author={author}',
+                '--variable', f'date={date}',
+                '--variable', 'documentclass=article',
+                '--variable', 'geometry:margin=1in',
+                '-o', tex_path
+            ]
+            
+            if re.search(r'^# ', markdown_string, re.MULTILINE):
+                pandoc_to_tex_command.append('--toc')
+
+            pandoc_process = subprocess.run(
+                pandoc_to_tex_command,
+                input=markdown_string.encode('utf-8'),
+                capture_output=True
+            )
+            if pandoc_process.returncode != 0:
+                error_message = pandoc_process.stderr.decode('utf-8', errors='ignore').strip()
+                raise RuntimeError(f"Ошибка Pandoc при конвертации Markdown в LaTeX:\n{error_message}")
+
+            # --- STAGE 2: Sanitize the generated LaTeX code ---
+            with open(tex_path, 'r', encoding='utf-8') as f:
+                latex_content = f.read()
+
+            def _sanitize_latex_matrices(match: re.Match) -> str:
+                env_name = match.group(1)
+                content = match.group(2)
+                if r'\hline' in content:
+                    lines = re.split(r'\s*\\\\\s*', content.strip())
+                    max_cols = 0
+                    for line in lines:
+                        if not line.strip() or r'\hline' in line: continue
+                        clean_line = re.sub(r'\\text\{.*?\}', '', line)
+                        current_cols = clean_line.count('&') + 1
+                        if current_cols > max_cols: max_cols = current_cols
+                    if max_cols == 0: max_cols = 1
+                    col_spec = 'c' * max_cols
+                    if env_name == 'pmatrix': return f'\\left(\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right)'
+                    if env_name in ['bmatrix', 'Bmatrix']: return f'\\left[\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right]'
+                    if env_name == 'vmatrix': return f'\\left|\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right|'
+                    if env_name == 'Vmatrix': return f'\\left\\|\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right\\|'
+                return match.group(0)
+
+            matrix_finder_regex = re.compile(r'\\begin\{(pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix)\}(.*?)\\end\{\1\*?\}', re.DOTALL)
+            sanitized_latex = matrix_finder_regex.sub(_sanitize_latex_matrices, latex_content)
+            
+            with open(tex_path, 'w', encoding='utf-8') as f:
+                f.write(sanitized_latex)
+            
+            # --- STAGE 3: Compile the sanitized .tex file to PDF using latexmk ---
+            compile_command = [
+                'latexmk', '-xelatex', '-interaction=nonstopmode',
+                f'-output-directory={temp_dir}', tex_path
+            ]
+            compile_process = subprocess.run(compile_command, capture_output=True, text=True, encoding='utf-8', errors='ignore')
+
+            pdf_path = os.path.join(temp_dir, 'document.pdf')
+            if compile_process.returncode != 0 or not os.path.exists(pdf_path):
+                log_path = os.path.join(temp_dir, 'document.log')
+                log_content = "Log file not found."
+                if os.path.exists(log_path):
+                    with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        log_content = f.read()
+                raise RuntimeError(f"Финальная ошибка компиляции LaTeX после исправлений. Log:\n{log_content[-2000:]}")
+
+            with open(pdf_path, 'rb') as f:
+                pdf_buffer = io.BytesIO(f.read())
+            return pdf_buffer
+
+        finally:
+            # --- Cleanup ---
+            if os.path.exists(cleanup_log_path):
+                try:
+                    with open(cleanup_log_path, 'r', encoding='utf-8') as f:
+                        for line in f:
+                            file_path = line.strip()
+                            if file_path and os.path.exists(file_path):
+                                try: os.remove(file_path)
+                                except OSError: pass
+                    os.remove(cleanup_log_path)
+                except Exception: pass
 # --- Code Execution ---
 async def execute_code_and_send_results(message: Message, code_to_execute: str):
 
