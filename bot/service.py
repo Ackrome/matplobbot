@@ -58,7 +58,20 @@ PANDOC_HEADER_INCLUDES = r"""
 # The preamble for single formulas (this should now also be updated for consistency)
 LATEX_PREAMBLE = r"""
 \documentclass[12pt,varwidth=500pt]{standalone}
-""" + PANDOC_HEADER_INCLUDES + r"""
+\usepackage[utf8]{inputenc}
+\usepackage[T2A]{fontenc}
+\usepackage[russian]{babel}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{graphicx}
+\usepackage{mathrsfs}
+\usepackage{color}
+\usepackage{mhchem}
+\usepackage{xcolor}
+\usepackage{newunicodechar}
+\newunicodechar{∂}{\partial}
+\newunicodechar{Δ}{\Delta}
 \begin{document}
 """
 
@@ -335,9 +348,9 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
 def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.BytesIO:
     """
     Окончательная, надежная функция для конвертации Markdown в PDF.
-    Использует прямой, многошаговый процесс компиляции (xelatex -> xelatex -> xdvipdfmx),
-    чтобы обойти ненадежность latexmk и гарантировать создание финального PDF-файла,
-    проверяя успех по фактическому наличию артефактов, а не по кодам возврата.
+    Использует стандартный компилятор latexmk с флагом принуждения (-f), чтобы
+    игнорировать некритичные предупреждения, и проверяет успех по фактическому
+    наличию PDF-файла.
     """
     author = "Matplobbot"
     date = datetime.datetime.now().strftime("%d %B %Y")
@@ -350,19 +363,14 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
         # A minimal, correct header for XeLaTeX
         header_path = os.path.join(temp_dir, 'header.tex')
         with open(header_path, 'w', encoding='utf-8') as f:
-            f.write(r"""
-\usepackage{amsmath}
-\usepackage{amssymb}
-\usepackage{mathtools}
-\usepackage{graphicx}
-\usepackage{longtable}
-\usepackage{booktabs}
-""")
+            # PANDOC_HEADER_INCLUDES must be defined globally and correctly for XeLaTeX
+            f.write(PANDOC_HEADER_INCLUDES)
 
         try:
             base_name = 'document'
             tex_path = os.path.join(temp_dir, f'{base_name}.tex')
-            
+            pdf_path = os.path.join(temp_dir, f'{base_name}.pdf')
+
             # --- STAGE 1: Convert Markdown to a standalone .tex file ---
             pandoc_to_tex_command = [
                 'pandoc', '--filter', '/app/bot/pandoc_mermaid_filter.py',
@@ -406,27 +414,28 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
             with open(tex_path, 'w', encoding='utf-8') as f:
                 f.write(sanitized_latex)
             
-            # --- STAGE 3: Direct, Manual Compilation Pipeline ---
-            xelatex_command = ['xelatex', '-interaction=nonstopmode', f'-output-directory={temp_dir}', tex_path]
-            xdv_path = os.path.join(temp_dir, f'{base_name}.xdv')
-            
-            # Run 1: Generate .xdv and .aux files
-            run1 = subprocess.run(xelatex_command, capture_output=True, text=True, encoding='utf-8', errors='ignore')
-            if not os.path.exists(xdv_path):
-                raise RuntimeError(f"Ошибка на первом проходе xelatex (XDV не создан). Log:\n{run1.stdout[-2000:]}")
-            
-            # Run 2: Re-read .aux for TOC and references
-            run2 = subprocess.run(xelatex_command, capture_output=True, text=True, encoding='utf-8', errors='ignore')
-            if not os.path.exists(xdv_path):
-                 raise RuntimeError(f"Ошибка на втором проходе xelatex (XDV не создан). Log:\n{run2.stdout[-2000:]}")
+            # --- STAGE 3: Compile with latexmk, the robust industry standard ---
+            compile_command = [
+                'latexmk',
+                '-pdf',          # Explicitly demand a PDF as the final output
+                '-xelatex',      # Use the correct, Unicode-aware engine
+                '-f',            # Force compilation to continue despite non-fatal warnings
+                '-interaction=nonstopmode',
+                f'-output-directory={temp_dir}',
+                tex_path
+            ]
+            compile_process = subprocess.run(compile_command, capture_output=True, text=True, encoding='utf-8', errors='ignore')
 
-            # Run 3: Convert the final .xdv to .pdf
-            pdf_path = os.path.join(temp_dir, f'{base_name}.pdf')
-            xdvipdfmx_command = ['xdvipdfmx', '-o', pdf_path, xdv_path]
-            run3 = subprocess.run(xdvipdfmx_command, capture_output=True, text=True, encoding='utf-8', errors='ignore')
-            
+            # --- DEFINITIVE ERROR CHECK: Trust the file, not the return code ---
             if not os.path.exists(pdf_path):
-                 raise RuntimeError(f"Финальная ошибка при конвертации XDV в PDF. Log:\n{run3.stdout[-2000:]}")
+                log_path = os.path.join(temp_dir, f'{base_name}.log')
+                log_content = "Log file not found."
+                if os.path.exists(log_path):
+                    with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        log_content = f.read()
+                
+                process_output = compile_process.stdout or "No stdout."
+                raise RuntimeError(f"Финальная ошибка: PDF-файл не был создан. \n--- STDOUT ---\n{process_output[-2000:]}\n--- LOG ---\n{log_content[-2000:]}")
 
             with open(pdf_path, 'rb') as f:
                 return io.BytesIO(f.read())
@@ -443,7 +452,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
                                 except OSError: pass
                     os.remove(cleanup_log_path)
                 except Exception: pass
-
+                
 async def convert_md_to_pdf_pandoc(markdown_string: str, title: str) -> io.BytesIO:
     """Асинхронная обертка для конвертации Markdown в PDF с помощью pandoc."""
     return await asyncio.to_thread(_convert_md_to_pdf_pandoc_sync, markdown_string, title)
