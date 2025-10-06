@@ -335,8 +335,8 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
 def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.BytesIO:
     """
     Окончательная, надежная функция для конвертации Markdown в PDF.
-    Использует централизованную, корректную для XeLaTeX конфигурацию и явно указывает
-    команде latexmk создать финальный PDF-файл.
+    Использует прямой, многошаговый процесс компиляции (xelatex -> xelatex -> xdvipdfmx),
+    чтобы обойти ненадежность latexmk и гарантировать создание финального PDF-файла.
     """
     author = "Matplobbot"
     date = datetime.datetime.now().strftime("%d %B %Y")
@@ -346,14 +346,22 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
         os.remove(cleanup_log_path)
 
     with tempfile.TemporaryDirectory() as temp_dir:
+        # We define a minimal, xelatex-compatible header. Pandoc will handle the rest.
         header_path = os.path.join(temp_dir, 'header.tex')
         with open(header_path, 'w', encoding='utf-8') as f:
-            # PANDOC_HEADER_INCLUDES should be defined globally in the file
-            f.write(PANDOC_HEADER_INCLUDES)
+            f.write(r"""
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{booktabs}
+""")
 
         try:
-            # --- STAGE 1: Convert Markdown to a standalone .tex file using Pandoc ---
-            tex_path = os.path.join(temp_dir, 'document.tex')
+            # --- STAGE 1: Convert Markdown to a standalone .tex file ---
+            base_name = 'document'
+            tex_path = os.path.join(temp_dir, f'{base_name}.tex')
             pandoc_to_tex_command = [
                 'pandoc', '--filter', '/app/bot/pandoc_mermaid_filter.py',
                 '--from=markdown+tex_math_dollars+raw_tex', '--to=latex',
@@ -369,69 +377,57 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
                 pandoc_to_tex_command.append('--toc')
 
             pandoc_process = subprocess.run(
-                pandoc_to_tex_command,
-                input=markdown_string.encode('utf-8'),
-                capture_output=True
+                pandoc_to_tex_command, input=markdown_string.encode('utf-8'), capture_output=True
             )
             if pandoc_process.returncode != 0:
-                error_message = pandoc_process.stderr.decode('utf-8', errors='ignore').strip()
-                raise RuntimeError(f"Ошибка Pandoc при конвертации Markdown в LaTeX:\n{error_message}")
+                raise RuntimeError(f"Ошибка Pandoc: {pandoc_process.stderr.decode('utf-8', 'ignore')}")
 
-            # --- STAGE 2: Sanitize the generated LaTeX code for matrix errors ---
+            # --- STAGE 2: Sanitize the generated LaTeX code ---
             with open(tex_path, 'r', encoding='utf-8') as f:
                 latex_content = f.read()
 
             def _sanitize_latex_matrices(match: re.Match) -> str:
-                env_name = match.group(1)
-                content = match.group(2)
+                env_name, content = match.groups()
                 if r'\hline' in content:
                     lines = re.split(r'\s*\\\\\s*', content.strip())
-                    max_cols = 0
-                    for line in lines:
-                        if not line.strip() or r'\hline' in line: continue
-                        clean_line = re.sub(r'\\text\{.*?\}', '', line)
-                        current_cols = clean_line.count('&') + 1
-                        if current_cols > max_cols: max_cols = current_cols
-                    if max_cols == 0: max_cols = 1
+                    max_cols = max((line.count('&') + 1 for line in lines if line.strip() and r'\hline' not in line), default=1)
                     col_spec = 'c' * max_cols
                     if env_name == 'pmatrix': return f'\\left(\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right)'
-                    if env_name in ['bmatrix', 'Bmatrix']: return f'\\left[\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right]'
+                    if env_name in ('bmatrix', 'Bmatrix'): return f'\\left[\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right]'
                     if env_name == 'vmatrix': return f'\\left|\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right|'
                     if env_name == 'Vmatrix': return f'\\left\\|\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right\\|'
                 return match.group(0)
-
+            
             matrix_finder_regex = re.compile(r'\\begin\{(pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix)\}(.*?)\\end\{\1\*?\}', re.DOTALL)
             sanitized_latex = matrix_finder_regex.sub(_sanitize_latex_matrices, latex_content)
             
             with open(tex_path, 'w', encoding='utf-8') as f:
                 f.write(sanitized_latex)
             
-            # --- STAGE 3: Compile the sanitized .tex file to PDF using latexmk ---
-            # --- START: DEFINITIVE COMPILATION FIX ---
-            # The -pdf flag explicitly tells latexmk to produce a PDF file as the final output.
-            compile_command = [
-                'latexmk',
-                '-pdf',  # This is the crucial, missing flag.
-                '-xelatex',
-                '-interaction=nonstopmode',
-                f'-output-directory={temp_dir}',
-                tex_path
-            ]
-            # --- END: DEFINITIVE COMPILATION FIX ---
-            compile_process = subprocess.run(compile_command, capture_output=True, text=True, encoding='utf-8', errors='ignore')
+            # --- STAGE 3: Direct, Manual Compilation ---
+            xelatex_command = ['xelatex', '-interaction=nonstopmode', f'-output-directory={temp_dir}', tex_path]
+            
+            # Run 1: Generate .xdv and .aux files
+            run1 = subprocess.run(xelatex_command, capture_output=True, text=True, encoding='utf-8', errors='ignore')
+            if run1.returncode != 0:
+                raise RuntimeError(f"Ошибка на первом проходе xelatex. Log:\n{run1.stdout[-2000:]}")
+            
+            # Run 2: Re-read .aux for TOC and references
+            run2 = subprocess.run(xelatex_command, capture_output=True, text=True, encoding='utf-8', errors='ignore')
+            if run2.returncode != 0:
+                raise RuntimeError(f"Ошибка на втором проходе xelatex. Log:\n{run2.stdout[-2000:]}")
 
-            pdf_path = os.path.join(temp_dir, 'document.pdf')
-            if compile_process.returncode != 0 or not os.path.exists(pdf_path):
-                log_path = os.path.join(temp_dir, 'document.log')
-                log_content = "Log file not found."
-                if os.path.exists(log_path):
-                    with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        log_content = f.read()
-                raise RuntimeError(f"Финальная ошибка компиляции LaTeX после исправлений. Log:\n{log_content[-2000:]}")
+            # Run 3: Convert the final .xdv to .pdf
+            xdv_path = os.path.join(temp_dir, f'{base_name}.xdv')
+            xdvipdfmx_command = ['xdvipdfmx', '-o', os.path.join(temp_dir, f'{base_name}.pdf'), xdv_path]
+            run3 = subprocess.run(xdvipdfmx_command, capture_output=True, text=True, encoding='utf-8', errors='ignore')
+            
+            pdf_path = os.path.join(temp_dir, f'{base_name}.pdf')
+            if run3.returncode != 0 or not os.path.exists(pdf_path):
+                 raise RuntimeError(f"Финальная ошибка при конвертации XDV в PDF. Log:\n{run3.stdout[-2000:]}")
 
             with open(pdf_path, 'rb') as f:
-                pdf_buffer = io.BytesIO(f.read())
-            return pdf_buffer
+                return io.BytesIO(f.read())
 
         finally:
             # Cleanup logic
