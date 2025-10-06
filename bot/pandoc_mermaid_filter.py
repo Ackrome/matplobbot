@@ -82,13 +82,18 @@ def main():
         json.dump(modified_doc, sys.stdout)
     except Exception as e:
         sys.stderr.write(f"Error in pandoc filter: {e}\n")
-        # In case of a JSON loading error, stdin might be consumed.
-        # We can't reliably re-read it, so we exit. Pandoc will fail, which is correct.
         sys.exit(1)
     finally:
         # After processing, log the generated file paths for cleanup by the parent process.
         if generated_files:
             try:
+                # --- START: Improvement ---
+                # Ensure the directory for the log file exists to prevent errors.
+                log_dir = os.path.dirname(CLEANUP_LOG_FILE)
+                if not os.path.exists(log_dir):
+                    os.makedirs(log_dir)
+                # --- END: Improvement ---
+
                 with open(CLEANUP_LOG_FILE, 'a', encoding='utf-8') as f:
                     for path in generated_files:
                         f.write(path + '\n')

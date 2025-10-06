@@ -326,53 +326,57 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
 def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.BytesIO:
     """
     Синхронная функция для конвертации Markdown в PDF с использованием pandoc.
-    LaTeX-формулы и Mermaid-блоки обрабатываются pandoc и его движком LaTeX.
+    LaTeX-формулы и Mermaid-блоки обрабатываются.
     """
-    # Add author and date for a more complete article look.
     author = "Matplobbot"
     date = datetime.datetime.now().strftime("%d %B %Y")
-
-    # Path for the filter to log temporary files
     cleanup_log_path = '/tmp/pandoc_cleanup.log'
-    # Ensure the log file is empty before starting
     if os.path.exists(cleanup_log_path):
         os.remove(cleanup_log_path)
+
+    # --- START: Preprocessing Step ---
+    # Regex to find common LaTeX display environments that are not already inside $$...$$
+    # This prevents the "! Missing $ inserted" error from pandoc.
+    # It looks for environments that start on a new line.
+    latex_env_regex = re.compile(r'^(?!.*\$\$)(\\begin\{(?:equation|align|gather|cases|matrix|pmatrix|Bmatrix|vmatrix|Vmatrix|aligned|gathered|multline)\*?.*?\\end\{.*?\})', re.MULTILINE | re.DOTALL)
+
+    def wrap_in_dollars(match):
+        # Wraps the matched LaTeX block in $$...$$
+        return f'$$\n{match.group(1)}\n$$'
+
+    # Apply the wrapping to the entire markdown string
+    processed_markdown = latex_env_regex.sub(wrap_in_dollars, markdown_string)
+    # --- END: Preprocessing Step ---
 
     try:
         command = [
             'pandoc',
             '--filter', '/app/bot/pandoc_mermaid_filter.py',
-            # Explicitly define markdown extensions.
-            # We disable tex_math_dollars to prevent pandoc from wrapping content in $...$ or $$...$$
-            # and use raw_tex to pass the raw LaTeX content directly to the engine.
-            '--from=markdown-tex_math_dollars+raw_tex',
+            # We now let pandoc recognize tex_math_dollars, as our preprocessing
+            # ensures environments are correctly wrapped. This is more robust.
+            '--from=markdown+tex_math_dollars+raw_tex',
             '--to=pdf',
-            '--pdf-engine=xelatex', # Use xelatex for better Unicode (Cyrillic) support
+            '--pdf-engine=xelatex',
             '--variable', f'title={title}',
             '--variable', f'author={author}',
             '--variable', f'date={date}',
             '--variable', 'documentclass=article',
-            # Specify a main font that supports Cyrillic characters.
-            # This is required for xelatex to work correctly with Russian text.
             '--variable', 'mainfont=DejaVu Sans',
             '--variable', 'geometry:margin=1in',
-            '-o', '-' # Output to stdout
+            '-o', '-'
         ]
 
-        # Add a table of contents if the document likely has sections (contains '# ' at the start of a line)
-        if re.search(r'^# ', markdown_string, re.MULTILINE):
+        if re.search(r'^# ', processed_markdown, re.MULTILINE):
             command.append('--toc')
 
-        process = subprocess.run(command, input=markdown_string.encode('utf-8'), capture_output=True)
+        process = subprocess.run(command, input=processed_markdown.encode('utf-8'), capture_output=True)
         if process.returncode != 0:
             error_message = process.stderr.decode('utf-8', errors='ignore').strip()
             raise RuntimeError(f"Ошибка Pandoc при конвертации в PDF:\n{error_message}")
-        
+
         pdf_buffer = io.BytesIO(process.stdout)
         return pdf_buffer
     finally:
-        # --- Cleanup ---
-        # After pandoc has finished, clean up the temporary files logged by the filter.
         if os.path.exists(cleanup_log_path):
             try:
                 with open(cleanup_log_path, 'r', encoding='utf-8') as f:
@@ -381,10 +385,9 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
                         if file_path and os.path.exists(file_path):
                             try:
                                 os.remove(file_path)
-                                logger.debug(f"Cleaned up temporary file: {file_path}")
                             except OSError as e:
                                 logger.warning(f"Failed to clean up temporary file {file_path}: {e}")
-                os.remove(cleanup_log_path) # Clean up the log file itself
+                os.remove(cleanup_log_path)
             except Exception as e:
                 logger.error(f"Error during pandoc cleanup process: {e}")
 

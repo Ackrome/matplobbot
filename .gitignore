@@ -7,3 +7,5 @@ venv/
 idea.ipynb
 log.txt
 service.txt
+pandoc_mermaid_filter.txt
+dockerfile.txt
