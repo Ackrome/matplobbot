@@ -326,7 +326,7 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
 def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.BytesIO:
     """
     Синхронная функция для конвертации Markdown в PDF с использованием pandoc.
-    Применяет единый, контекстно-зависимый препроцессор для LaTeX.
+    Применяет окончательный двухпроходный препроцессор для LaTeX для максимальной надежности.
     """
     author = "Matplobbot"
     date = datetime.datetime.now().strftime("%d %B %Y")
@@ -334,83 +334,74 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
     if os.path.exists(cleanup_log_path):
         os.remove(cleanup_log_path)
 
-    # --- START: Unified LaTeX Preprocessor ---
+    # --- START: Definitive Multi-Pass LaTeX Preprocessor ---
 
-    def _latex_preprocessor_callback(match: re.Match) -> str:
+    processed_markdown = markdown_string
+
+    # --- PASS 1: Sanitize Standalone Environments ---
+    # Goal: Find any standalone environment that the user has incorrectly wrapped in $$...$$ and unwrap it.
+    # This directly prevents the "Bad math environment delimiter" error.
+    standalone_envs = ['equation', 'align', 'gather', 'multline']
+    for env in standalone_envs:
+        # Regex to find \begin{env}...\end{env} wrapped in optional whitespace and $$
+        unwrap_regex = re.compile(r'\$\$s*?(\\begin\{' + env + r'\*?\}.*?\\end\{' + env + r'\*?\})s*?\$\$', re.DOTALL)
+        processed_markdown = unwrap_regex.sub(r'\1', processed_markdown)
+
+    # --- PASS 2: Fix and Wrap Component Environments ---
+    # Goal: Find all matrix-like or component environments, fix their internal structure,
+    # and ensure they are wrapped in $$...$$ to be processed in math mode.
+    
+    def _fix_and_wrap_components_callback(match: re.Match) -> str:
         """
-        Callback that processes a found LaTeX environment.
-        - Ignores standalone environments.
-        - Fixes and wraps matrix-like environments.
-        - Wraps other component environments.
+        Processes a found component environment. It fixes matrix alignment and
+        then wraps the entire corrected block in $$...$$ for Pandoc.
         """
         env_name = match.group(1)
         content = match.group(2)
+        original_block = match.group(0)
 
-        # 1. Define Environment Categories
-        standalone_envs = ['equation', 'align', 'gather', 'multline']
-        matrix_envs = ['pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix', 'matrix', 'cases']
-        component_envs = ['aligned', 'gathered']
-
-        # 2. Handle Standalone Environments (Rule: DO NOTHING)
-        if env_name in standalone_envs:
-            return match.group(0) # Return the original, untouched block
-
-        # 3. Handle Matrix-like Environments (Rule: FIX and WRAP)
-        if env_name in matrix_envs:
-            # --- Matrix alignment fix logic (from previous version) ---
+        matrix_like_envs = ['pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix', 'matrix', 'cases']
+        
+        fixed_content = content
+        
+        # --- Sub-step: Fix matrix alignment if necessary ---
+        if env_name in matrix_like_envs:
             lines = content.strip().split(r'\\')
             max_cols = 0
             for line in lines:
                 clean_line = re.sub(r'\\text\{.*?\}', '', line)
                 current_cols = clean_line.count('&') + 1
-                if current_cols > max_cols: max_cols = current_cols
+                if current_cols > max_cols:
+                    max_cols = current_cols
+            
             if max_cols == 0: max_cols = 1
+            
             col_spec = 'c' * max_cols
             
-            # Reconstruct using 'array' and add delimiters
-            if env_name == 'pmatrix': fixed_block = f'\\left(\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right)'
-            elif env_name in ['bmatrix', 'Bmatrix']: fixed_block = f'\\left[\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right]'
-            elif env_name == 'vmatrix': fixed_block = f'\\left|\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right|'
-            elif env_name == 'Vmatrix': fixed_block = f'\\left\\|\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right\\|'
+            # Reconstruct using the forgiving 'array' environment
+            if env_name == 'pmatrix': fixed_content = f'\\left(\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right)'
+            elif env_name in ['bmatrix', 'Bmatrix']: fixed_content = f'\\left[\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right]'
+            elif env_name == 'vmatrix': fixed_content = f'\\left|\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right|'
+            elif env_name == 'Vmatrix': fixed_content = f'\\left\\|\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right\\|'
             elif env_name == 'cases':
                 col_spec = 'l' + ('l' * (max_cols - 1))
-                fixed_block = f'\\left\\{{\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right.'
+                fixed_content = f'\\left\\{{\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right.'
             else: # matrix
-                fixed_block = f'\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}'
+                fixed_content = f'\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}'
             
-            # Finally, wrap the corrected block in display math delimiters
-            return f'$$\n{fixed_block}\n$$'
+            # The fixed block is just the content, not the full \begin{}...\end{}
+            return f'$$\n{fixed_content}\n$$'
+        
+        # For other component envs like 'aligned', just wrap them.
+        return f'$$\n{original_block}\n$$'
 
-        # 4. Handle Other Component Environments (Rule: Just WRAP)
-        if env_name in component_envs:
-            return f'$$\n{match.group(0)}\n$$'
+    # Regex to find any component environment that is NOT a standalone one.
+    component_envs = ['pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix', 'matrix', 'cases', 'aligned', 'gathered']
+    # We apply this regex to the already sanitized markdown.
+    component_finder_regex = re.compile(r'\\begin\{(' + '|'.join(component_envs) + r')\*?\}(.*?)\\end\{\1\*?\}', re.DOTALL)
+    processed_markdown = component_finder_regex.sub(_fix_and_wrap_components_callback, processed_markdown)
 
-        # 5. If the environment is unknown, don't touch it
-        return match.group(0)
-
-    # Regex to find any top-level LaTeX environment.
-    # We will apply this only to text *outside* of existing math blocks.
-    env_finder_regex = re.compile(r'\\begin\{([a-zA-Z\*]+)\}(.*?)\\end\{\1\}', re.DOTALL)
-
-    # Isolate existing math blocks to prevent double-processing.
-    # This makes the preprocessor context-aware.
-    math_split_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$)'
-    parts = re.split(math_split_regex, markdown_string, flags=re.DOTALL)
-    
-    processed_parts = []
-    for part in parts:
-        if part is None: continue
-        # If a part starts with '$', it's a math block; leave it alone.
-        if part.startswith('$'):
-            processed_parts.append(part)
-        else:
-            # This is not a math block, so we can safely process it.
-            processed_part = env_finder_regex.sub(_latex_preprocessor_callback, part)
-            processed_parts.append(processed_part)
-    
-    processed_markdown = "".join(processed_parts)
-    
-    # --- END: Unified LaTeX Preprocessor ---
+    # --- END: Definitive Multi-Pass LaTeX Preprocessor ---
 
     try:
         command = [
@@ -433,7 +424,12 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
         process = subprocess.run(command, input=processed_markdown.encode('utf-8'), capture_output=True)
         if process.returncode != 0:
             error_message = process.stderr.decode('utf-8', errors='ignore').strip()
-            raise RuntimeError(f"Ошибка Pandoc при конвертации в PDF:\n{error_message}")
+            # Provide more debug info upon failure
+            error_detail = (f"Ошибка Pandoc при конвертации в PDF:\n{error_message}\n\n"
+                            f"--- Начало обработанного Markdown (первые 500 символов) ---\n"
+                            f"{processed_markdown[:500]}\n"
+                            f"--- Конец обработанного Markdown ---")
+            raise RuntimeError(error_detail)
 
         pdf_buffer = io.BytesIO(process.stdout)
         return pdf_buffer
