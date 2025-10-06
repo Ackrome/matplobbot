@@ -342,13 +342,14 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
             '--filter', '/app/bot/pandoc_mermaid_filter.py',
             '--from=markdown',
             '--to=pdf',
-            '--pdf-engine=pdflatex',
+            '--pdf-engine=xelatex', # Use xelatex for better Unicode (Cyrillic) support
             '--variable', f'title={title}',
             '--variable', f'author={author}',
             '--variable', f'date={date}',
             '--variable', 'documentclass=article',
-            # By removing 'mainfont', we let pdflatex use the default Computer Modern font,
-            # which gives the classic LaTeX look. Cyrillic support is handled by texlive-lang-all.
+            # Specify a main font that supports Cyrillic characters.
+            # This is required for xelatex to work correctly with Russian text.
+            '--variable', 'mainfont=DejaVu Sans',
             '--variable', 'geometry:margin=1in',
             '-o', '-' # Output to stdout
         ]
