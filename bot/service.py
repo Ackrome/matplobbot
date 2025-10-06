@@ -995,8 +995,7 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     def wrap_cyrillic_in_text_command(match):
         is_display = match.group(1) is not None
         original_content = match.group(1) if is_display else match.group(2)
-        if original_content is None:
-            return match.group(0)
+        if original_content is None: return match.group(0)
         
         protected_blocks = []
         def protect_text_blocks(m):
@@ -1012,14 +1011,16 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
             
         return f'$${processed_content}$$' if is_display else f'${processed_content}$'
 
-    # A robust regex to find either $$...$$ (group 1) or $...$ (group 2, non-greedy).
-    # It correctly handles cases with single dollars inside display math.
     latex_regex = r'\$\$(.*?)\$\$|(?<!\$)\$([^$]+?)\$(?!\$)'
+    # The output of this is still a MARKDOWN string
     processed_content = re.sub(latex_regex, wrap_cyrillic_in_text_command, content, flags=re.DOTALL)
 
-    md = MarkdownIt("commonmark", {"html": True})
+    # --- THIS IS THE CRITICAL FIX ---
+    # Convert the processed Markdown string into an HTML string.
+    md = MarkdownIt("commonmark", {"html": True, "linkify": True, "typographer": True}).enable('table')
     html_content = md.render(processed_content)
 
+    # Prepare Mermaid blocks for the Mermaid.js script.
     html_content = html_content.replace(
         '<pre><code class="language-mermaid">', '<pre class="mermaid">'
     ).replace('</code></pre>', '</pre>')
@@ -1079,7 +1080,7 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
         pre {{ background-color: var(--code-bg-color); padding: 16px; overflow: auto; border-radius: 6px; position: relative; border: 1px solid var(--border-color); }}
         code {{ font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace; }}
         table {{ border-collapse: collapse; width: 100%; margin: 1em 0; border: 1px solid var(--border-color); }}
-        th, td {{ border: 1px solid var(--border-color); padding: 6px 13px; }}
+        th, td {{ border: 1px solid var(--border-color); padding: 6px 13px; text-align: left; }}
         tr:nth-child(2n) {{ background-color: var(--code-bg-color); }}
         h1, h2, h3, h4, h5, h6 {{ border-bottom: 1px solid var(--border-color); padding-bottom: .3em; margin-top: 24px; margin-bottom: 16px; }}
         
@@ -1099,7 +1100,7 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
             transition: opacity 0.2s;
         }}
         pre:hover .copy-btn {{ opacity: 1; }}
-        .dark-theme .copy-btn {{ background-color: #21262d; color: #c9d1d9; border-color: #30363d; }}
+        html.dark-theme .copy-btn {{ background-color: #21262d; color: #c9d1d9; border-color: #30363d; }}
         
         /* Print-Friendly Styles */
         @media print {{
@@ -1119,7 +1120,7 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
         document.addEventListener("DOMContentLoaded", function() {{
             // Mermaid Initialization
             if (typeof mermaid !== 'undefined') {{
-                mermaid.initialize({{ startOnLoad: true, theme: 'default' }});
+                mermaid.initialize({{ startOnLoad: true, theme: document.documentElement.classList.contains('dark-theme') ? 'dark' : 'default' }});
             }} else {{
                 console.error("Mermaid library not loaded.");
             }}
