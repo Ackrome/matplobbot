@@ -49,6 +49,7 @@ RUN set -eux; \
       dvipng \
       ghostscript \
       texlive-lang-all \
+      cm-super \
       latexmk && \
     rm -rf /var/lib/apt/lists/*
 
