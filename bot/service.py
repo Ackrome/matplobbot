@@ -338,8 +338,9 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
 def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.BytesIO:
     """
     Окончательная, надежная функция для конвертации Markdown в PDF.
-    Использует централизованную конфигурацию LaTeX из константы PANDOC_HEADER_INCLUDES,
-    реализуя предложение пользователя для максимальной чистоты и надежности кода.
+    Использует централизованную конфигурацию LaTeX и предоставляет полную спецификацию
+    шрифтов (serif, sans-serif, mono) для Pandoc, что решает проблему с
+    отсутствующими символами в разных стилях текста.
     """
     author = "Matplobbot"
     date = datetime.datetime.now().strftime("%d %B %Y")
@@ -349,9 +350,10 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
         os.remove(cleanup_log_path)
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        # Create a header file on-the-fly using our new shared constant.
+        # Create a header file on-the-fly using a centralized constant preamble
         header_path = os.path.join(temp_dir, 'header.tex')
         with open(header_path, 'w', encoding='utf-8') as f:
+            # PANDOC_HEADER_INCLUDES should be defined globally in the file
             f.write(PANDOC_HEADER_INCLUDES)
 
         try:
@@ -363,14 +365,16 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
                 '--from=markdown+tex_math_dollars+raw_tex',
                 '--to=latex',
                 '--pdf-engine=xelatex',
-                # --- DEFINITIVE CONFIGURATION ---
+                # --- START: DEFINITIVE FONT & LANGUAGE CONFIGURATION ---
                 # 1. Inject our complete, centralized preamble.
                 '--include-in-header', header_path,
                 # 2. Instruct Pandoc's template to activate the Russian language.
                 '--variable', 'lang=russian',
-                # 3. Instruct Pandoc's template to use the specified font.
-                '--variable', 'mainfont=DejaVu Sans',
-                # ---
+                # 3. Provide a COMPLETE font specification for all text types.
+                '--variable', 'mainfont=DejaVu Serif',      # Main body text font
+                '--variable', 'sansfont=DejaVu Sans',      # Sans-serif font (for headers, etc.)
+                '--variable', 'monofont=DejaVu Sans Mono', # Monospaced font (for code)
+                # --- END: DEFINITIVE FONT & LANGUAGE CONFIGURATION ---
                 '--variable', f'title={title}',
                 '--variable', f'author={author}',
                 '--variable', f'date={date}',
@@ -451,7 +455,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
                                 try: os.remove(file_path)
                                 except OSError: pass
                     os.remove(cleanup_log_path)
-                except Exception: pass     
+                except Exception: pass
 
 async def convert_md_to_pdf_pandoc(markdown_string: str, title: str) -> io.BytesIO:
     """Асинхронная обертка для конвертации Markdown в PDF с помощью pandoc."""
