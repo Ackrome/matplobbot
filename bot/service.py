@@ -1015,7 +1015,8 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
 
     # Regex to find content within $...$ or $$...$$
     # Using re.DOTALL to handle multi-line formulas
-    processed_content = re.sub(r'(\${1,2})(.+?)\1', wrap_cyrillic_in_text_command, content, flags=re.DOTALL)
+    # We now capture the closing delimiter in group 3 to correctly reconstruct the string.
+    processed_content = re.sub(r'(\${1,2})(.+?)(\1)', wrap_cyrillic_in_text_command, content, flags=re.DOTALL)
 
     # Use markdown-it-py, which is better at preserving backslashes in LaTeX commands
     # like \epsilon, which the standard 'markdown' library can strip.
