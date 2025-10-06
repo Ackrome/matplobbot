@@ -39,12 +39,14 @@ logger = logging.getLogger(__name__)
 # single formula rendering AND the full PDF document generation.
 # This is the implementation of your excellent suggestion.
 PANDOC_HEADER_INCLUDES = r"""
+%\usepackage[cp1251]{inputenc}
 \usepackage[utf8]{inputenc}
 \usepackage[T2A]{fontenc}
-\usepackage[russian]{babel}
-\usepackage{amsmath}
-\usepackage{amssymb}
-\usepackage{amsfonts}
+\usepackage[english,russian]{babel}
+\usepackage{amscd,amssymb}
+\usepackage{amsfonts,amsmath,array}
+\usepackage[dvips]{graphicx}
+\usepackage{longtable,wrapfig}
 \usepackage{graphicx}
 \usepackage{mathrsfs}
 \usepackage{color}
