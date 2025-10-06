@@ -986,38 +986,31 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
             pass # Message might have been deleted already
     await message.answer("Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(user_id))
 
-
 async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     """
     Prepares a self-contained HTML document with client-side rendering for LaTeX (using KaTeX).
-    This definitive version handles proprietary Obsidian wikilinks, uses a robust regex for
-    math isolation, and correctly escapes HTML-sensitive characters within LaTeX.
+    This definitive version uses a robust regex for math isolation and correctly escapes all
+    HTML-sensitive characters within LaTeX to prevent browser rendering errors.
     """
     
-    # --- Step 1: Pre-process Markdown for proprietary Obsidian wikilinks ---
-    # Convert [[path|text]] to [text](path.html)
-    content = re.sub(r'\[\[([^|\]]+)\|([^\]]+)\]\]', r'[\2](\1.html)', content)
-    # Convert [[path]] to [path](path.html)
-    content = re.sub(r'\[\[([^|\]]+)\]\]', r'[\1](\1.html)', content)
-
-    # --- Step 2: Isolate all valid math blocks with a robust regex ---
+    # --- Step 1: Isolate all valid math blocks with a new, robust regex ---
     latex_formulas = []
     def store_and_replace_latex(match):
         placeholder = f"<!--KATEX_PLACEHOLDER_{len(latex_formulas)}-->"
         latex_formulas.append(match.group(0))
         return placeholder
 
-    # This new regex is more robust. It tries to match display math first,
-    # then falls back to a non-greedy inline math match. This correctly handles
-    # cases like ($...$) without complex lookarounds.
-    latex_regex = r'(\$\$.*?\$\$|\$.*?\$)'
+    # THIS IS THE FINAL, CORRECT REGEX.
+    # It first looks for $$...$$ blocks across multiple lines (re.DOTALL).
+    # Then, it looks for $...$ blocks that do NOT contain newlines. This is the key.
+    latex_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$)'
     content_with_placeholders = re.sub(latex_regex, store_and_replace_latex, content, flags=re.DOTALL)
 
-    # --- Step 3: Render the Markdown. It is now safe from LaTeX interference ---
+    # --- Step 2: Render the Markdown. It is now safe from LaTeX interference ---
     md = MarkdownIt("commonmark", {"html": True, "linkify": True, "typographer": True}).enable('table')
     html_content = md.render(content_with_placeholders)
 
-    # --- Step 4: Process the stored formulas with all necessary fixes ---
+    # --- Step 3: Process the stored formulas with all necessary fixes ---
     processed_formulas = []
     for formula_string in latex_formulas:
         is_display = formula_string.startswith('$$')
@@ -1051,12 +1044,12 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
         else:
             processed_formulas.append(f'${final_content}$')
 
-    # --- Step 5: Re-insert the fully processed formulas back into the HTML ---
+    # --- Step 4: Re-insert the fully processed formulas back into the HTML ---
     for i, formula in enumerate(processed_formulas):
         placeholder = f"<!--KATEX_PLACEHOLDER_{i}-->"
         html_content = html_content.replace(placeholder, formula)
 
-    # --- Step 6: Final preparation and templating ---
+    # --- Step 5: Final preparation and templating ---
     html_content = html_content.replace(
         '<pre><code class="language-mermaid">', '<pre class="mermaid">'
     ).replace('</code></pre>', '</pre>')
