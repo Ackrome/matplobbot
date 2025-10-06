@@ -23,7 +23,7 @@ from aiogram.types import Message, CallbackQuery, FSInputFile, BufferedInputFile
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import markdown
-from cachetools import TTLCache
+from markdown_it import MarkdownIt
 
 from . import database
 import matplobblib
@@ -988,10 +988,11 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     Prepares a self-contained HTML document with client-side rendering for LaTeX (using KaTeX)
     and Mermaid diagrams.
     """
-    # Convert Markdown to HTML. The 'markdown' library will leave the LaTeX delimiters ($ and $$) intact.
-    # Using 'codehilite' helps to correctly isolate code blocks, preventing KaTeX from
-    # misinterpreting '$' characters inside code as math delimiters.
-    html_content = markdown.markdown(content, extensions=['fenced_code', 'tables', 'codehilite'])
+    # Use markdown-it-py, which is better at preserving backslashes in LaTeX commands
+    # like \epsilon, which the standard 'markdown' library can strip.
+    # We enable 'html' to allow raw HTML tags if they exist in the markdown.
+    md = MarkdownIt("commonmark", {"html": True})
+    html_content = md.render(content)
 
     # Prepare Mermaid blocks for the Mermaid.js script.
     html_content = html_content.replace(
