@@ -335,8 +335,8 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
 def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.BytesIO:
     """
     Окончательная, надежная функция для конвертации Markdown в PDF.
-    Использует централизованную, корректную для XeLaTeX конфигурацию и полную спецификацию
-    шрифтов для Pandoc.
+    Использует централизованную, корректную для XeLaTeX конфигурацию и явно указывает
+    команде latexmk создать финальный PDF-файл.
     """
     author = "Matplobbot"
     date = datetime.datetime.now().strftime("%d %B %Y")
@@ -348,29 +348,21 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
     with tempfile.TemporaryDirectory() as temp_dir:
         header_path = os.path.join(temp_dir, 'header.tex')
         with open(header_path, 'w', encoding='utf-8') as f:
+            # PANDOC_HEADER_INCLUDES should be defined globally in the file
             f.write(PANDOC_HEADER_INCLUDES)
 
         try:
+            # --- STAGE 1: Convert Markdown to a standalone .tex file using Pandoc ---
             tex_path = os.path.join(temp_dir, 'document.tex')
             pandoc_to_tex_command = [
-                'pandoc',
-                '--filter', '/app/bot/pandoc_mermaid_filter.py',
-                '--from=markdown+tex_math_dollars+raw_tex',
-                '--to=latex',
-                '--pdf-engine=xelatex',
-                # --- DEFINITIVE CONFIGURATION ---
-                '--include-in-header', header_path,
-                '--variable', 'lang=russian',
-                '--variable', 'mainfont=DejaVu Serif',
-                '--variable', 'sansfont=DejaVu Sans',
-                '--variable', 'monofont=DejaVu Sans Mono',
-                # ---
-                '--variable', f'title={title}',
-                '--variable', f'author={author}',
-                '--variable', f'date={date}',
-                '--variable', 'documentclass=article',
-                '--variable', 'geometry:margin=in',
-                '-o', tex_path
+                'pandoc', '--filter', '/app/bot/pandoc_mermaid_filter.py',
+                '--from=markdown+tex_math_dollars+raw_tex', '--to=latex',
+                '--pdf-engine=xelatex', '--include-in-header', header_path,
+                '--variable', 'lang=russian', '--variable', 'mainfont=DejaVu Serif',
+                '--variable', 'sansfont=DejaVu Sans', '--variable', 'monofont=DejaVu Sans Mono',
+                '--variable', f'title={title}', '--variable', f'author={author}',
+                '--variable', f'date={date}', '--variable', 'documentclass=article',
+                '--variable', 'geometry:margin=in', '-o', tex_path
             ]
             
             if re.search(r'^# ', markdown_string, re.MULTILINE):
@@ -385,6 +377,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
                 error_message = pandoc_process.stderr.decode('utf-8', errors='ignore').strip()
                 raise RuntimeError(f"Ошибка Pandoc при конвертации Markdown в LaTeX:\n{error_message}")
 
+            # --- STAGE 2: Sanitize the generated LaTeX code for matrix errors ---
             with open(tex_path, 'r', encoding='utf-8') as f:
                 latex_content = f.read()
 
@@ -413,10 +406,18 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
             with open(tex_path, 'w', encoding='utf-8') as f:
                 f.write(sanitized_latex)
             
+            # --- STAGE 3: Compile the sanitized .tex file to PDF using latexmk ---
+            # --- START: DEFINITIVE COMPILATION FIX ---
+            # The -pdf flag explicitly tells latexmk to produce a PDF file as the final output.
             compile_command = [
-                'latexmk', '-xelatex', '-interaction=nonstopmode',
-                f'-output-directory={temp_dir}', tex_path
+                'latexmk',
+                '-pdf',  # This is the crucial, missing flag.
+                '-xelatex',
+                '-interaction=nonstopmode',
+                f'-output-directory={temp_dir}',
+                tex_path
             ]
+            # --- END: DEFINITIVE COMPILATION FIX ---
             compile_process = subprocess.run(compile_command, capture_output=True, text=True, encoding='utf-8', errors='ignore')
 
             pdf_path = os.path.join(temp_dir, 'document.pdf')
@@ -433,6 +434,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
             return pdf_buffer
 
         finally:
+            # Cleanup logic
             if os.path.exists(cleanup_log_path):
                 try:
                     with open(cleanup_log_path, 'r', encoding='utf-8') as f:
