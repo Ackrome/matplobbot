@@ -345,15 +345,21 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
     """Асинхронная обертка для рендеринга Mermaid, выполняемая в отдельном потоке."""
     return await asyncio.to_thread(_render_mermaid_sync, mermaid_code)
 
-def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.BytesIO:
+def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributors: list | None = None, last_modified_date: str | None = None) -> io.BytesIO:
     """
     Окончательная, надежная функция для конвертации Markdown в PDF.
-    Использует стандартный компилятор latexmk с флагом принуждения (-f), чтобы
-    игнорировать некритичные предупреждения, и проверяет успех по фактическому
-    наличию PDF-файла. Отступы документа установлены в 2см.
+    Использует метаданные (авторы, дата) для создания более информативного документа.
     """
-    author = "Matplobbot"
-    date = datetime.datetime.now().strftime("%d %B %Y")
+    # Форматируем авторов в виде кликабельных ссылок для Pandoc
+    if contributors:
+        # Pandoc понимает синтаксис Markdown в метаданных и превратит его в \href{}{} в LaTeX
+        author_links = [f"[{c['login']}]({c['html_url']})" for c in contributors]
+        author_string = ", ".join(author_links)
+    else:
+        author_string = "Matplobbot" # Запасной вариант
+
+    # Используем дату последнего изменения или текущую дату как запасной вариант
+    date_string = last_modified_date or datetime.datetime.now().strftime("%d %B %Y")
     
     cleanup_log_path = '/tmp/pandoc_cleanup.log'
     if os.path.exists(cleanup_log_path):
@@ -378,8 +384,8 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
                 '--pdf-engine=xelatex', '--include-in-header', header_path,
                 '--variable', 'lang=russian', '--variable', 'mainfont=DejaVu Serif',
                 '--variable', 'sansfont=DejaVu Sans', '--variable', 'monofont=DejaVu Sans Mono',
-                '--variable', f'title={title}', '--variable', f'author={author}',
-                '--variable', f'date={date}', '--variable', 'documentclass=article',
+                '--variable', f'title={title}', '--variable', f'author={author_string}',
+                '--variable', f'date={date_string}', '--variable', 'documentclass=article',
                 # --- ИЗМЕНЕНИЕ ЗДЕСЬ: Устанавливаем поля в 2см ---
                 '--variable', 'geometry:margin=2cm',
                 '-o', tex_path
@@ -455,9 +461,9 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
                     os.remove(cleanup_log_path)
                 except Exception: pass
                 
-async def convert_md_to_pdf_pandoc(markdown_string: str, title: str) -> io.BytesIO:
+async def convert_md_to_pdf_pandoc(markdown_string: str, title: str, contributors: list | None = None, last_modified_date: str | None = None) -> io.BytesIO:
     """Асинхронная обертка для конвертации Markdown в PDF с помощью pandoc."""
-    return await asyncio.to_thread(_convert_md_to_pdf_pandoc_sync, markdown_string, title)
+    return await asyncio.to_thread(_convert_md_to_pdf_pandoc_sync, markdown_string, title, contributors, last_modified_date)
 
 
 # --- Code Execution ---
@@ -857,7 +863,12 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
             try:
                 page_title = file_path.split('/')[-1].replace('.md', '')
                 # Directly convert markdown content to PDF using pandoc
-                pdf_buffer = await convert_md_to_pdf_pandoc(content, page_title)
+                async with aiohttp.ClientSession() as session:
+                    contributors = await github_service.get_repo_contributors(repo_path, session)
+                    last_modified_date = await github_service.get_file_last_modified_date(repo_path, file_path, session)
+
+                # Передаем метаданные в функцию конвертации
+                pdf_buffer = await convert_md_to_pdf_pandoc(content, page_title, contributors, last_modified_date)
                 file_name = f"{page_title}.pdf"
                 await message.answer_document(document=BufferedInputFile(pdf_buffer.getvalue(), filename=file_name), caption=f"PDF-версия конспекта: `{file_path}`", parse_mode='markdown')
             except Exception as e:

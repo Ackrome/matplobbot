@@ -4,6 +4,7 @@ import aiohttp
 import base64
 import hashlib
 import asyncio
+import datetime
 
 from cachetools import TTLCache
 
@@ -149,3 +150,55 @@ async def upload_image_to_github(image_bytes: asyncio.StreamReader, session: aio
 
     logger.error(f"Failed to upload image {filename} after {max_retries} attempts.")
     return None
+
+async def get_repo_contributors(repo_path: str, session: aiohttp.ClientSession) -> list | None:
+    """
+    Получает список контрибьюторов для указанного репозитория.
+    Возвращает список словарей {'login': username, 'html_url': profile_url} или None в случае ошибки.
+    """
+    github_token = os.getenv("GITHUB_TOKEN")
+    url = f"https://api.github.com/repos/{repo_path}/contributors"
+    headers = {'Accept': 'application/vnd.github.v3+json'}
+    if github_token:
+        headers['Authorization'] = f'token {github_token}'
+        
+    try:
+        async with session.get(url, headers=headers) as response:
+            if response.status == 200:
+                data = await response.json()
+                # Извлекаем только нужные поля
+                return [{'login': user['login'], 'html_url': user['html_url']} for user in data]
+            else:
+                logger.error(f"Failed to fetch contributors for {repo_path}. Status: {response.status}")
+                return None
+    except Exception as e:
+        logger.error(f"Exception while fetching contributors for {repo_path}: {e}")
+        return None
+
+async def get_file_last_modified_date(repo_path: str, file_path: str, session: aiohttp.ClientSession) -> str | None:
+    """
+    Получает дату последнего коммита для указанного файла.
+    Возвращает отформатированную строку с датой или None в случае ошибки.
+    """
+    github_token = os.getenv("GITHUB_TOKEN")
+    url = f"https://api.github.com/repos/{repo_path}/commits?path={file_path}&page=1&per_page=1"
+    headers = {'Accept': 'application/vnd.github.v3+json'}
+    if github_token:
+        headers['Authorization'] = f'token {github_token}'
+
+    try:
+        async with session.get(url, headers=headers) as response:
+            if response.status == 200:
+                data = await response.json()
+                if data:
+                    commit_date_str = data[0]['commit']['committer']['date']
+                    # Преобразуем из ISO формата в читаемый вид
+                    commit_date = datetime.datetime.fromisoformat(commit_date_str.replace('Z', '+00:00'))
+                    return commit_date.strftime("%d %B %Y")
+                return None # Если для файла нет коммитов (маловероятно)
+            else:
+                logger.error(f"Failed to fetch last commit date for {file_path}. Status: {response.status}")
+                return None
+    except Exception as e:
+        logger.error(f"Exception while fetching last commit date for {file_path}: {e}")
+        return None
