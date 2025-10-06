@@ -350,7 +350,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
     Окончательная, надежная функция для конвертации Markdown в PDF.
     Использует стандартный компилятор latexmk с флагом принуждения (-f), чтобы
     игнорировать некритичные предупреждения, и проверяет успех по фактическому
-    наличию PDF-файла.
+    наличию PDF-файла. Отступы документа установлены в 2см.
     """
     author = "Matplobbot"
     date = datetime.datetime.now().strftime("%d %B %Y")
@@ -380,7 +380,9 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
                 '--variable', 'sansfont=DejaVu Sans', '--variable', 'monofont=DejaVu Sans Mono',
                 '--variable', f'title={title}', '--variable', f'author={author}',
                 '--variable', f'date={date}', '--variable', 'documentclass=article',
-                '--variable', 'geometry:margin=in', '-o', tex_path
+                # --- ИЗМЕНЕНИЕ ЗДЕСЬ: Устанавливаем поля в 2см ---
+                '--variable', 'geometry:margin=2cm',
+                '-o', tex_path
             ]
             
             if re.search(r'^# ', markdown_string, re.MULTILINE):
