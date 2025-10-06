@@ -39,18 +39,21 @@ logger = logging.getLogger(__name__)
 # single formula rendering AND the full PDF document generation.
 # This is the implementation of your excellent suggestion.
 PANDOC_HEADER_INCLUDES = r"""
-%\usepackage[cp1251]{inputenc}
 \usepackage[utf8]{inputenc}
-\usepackage[T1, T2A]{fontenc}
-\usepackage[english,russian]{babel}
-\usepackage{amscd,amssymb,amsfonts,amsmath,array}
-\usepackage{graphicx} % Loaded once
-\usepackage{longtable,wrapfig}
+\usepackage[T2A]{fontenc}
+\usepackage[russian]{babel}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{graphicx}
 \usepackage{mathrsfs}
-\usepackage{xcolor} % xcolor is sufficient
+\usepackage{color}
 \usepackage{mhchem}
-\usepackage{mathtools}
+\usepackage{xcolor}
 \usepackage{newunicodechar}
+\usepackage{mathtools}
+\usepackage{fontspec}      % Essential for xelatex to use system fonts
+\usepackage{dejavu}        % Explicitly load the dejavu package for robustness
 \newunicodechar{∂}{\partial}
 \newunicodechar{Δ}{\Delta}
 """
@@ -448,8 +451,8 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
                                 try: os.remove(file_path)
                                 except OSError: pass
                     os.remove(cleanup_log_path)
-                except Exception: pass
-              
+                except Exception: pass     
+
 async def convert_md_to_pdf_pandoc(markdown_string: str, title: str) -> io.BytesIO:
     """Асинхронная обертка для конвертации Markdown в PDF с помощью pandoc."""
     return await asyncio.to_thread(_convert_md_to_pdf_pandoc_sync, markdown_string, title)
