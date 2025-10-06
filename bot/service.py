@@ -51,7 +51,6 @@ PANDOC_HEADER_INCLUDES = r"""
 \usepackage{mhchem}
 \usepackage{mathtools}
 \usepackage{newunicodechar}
-\usepackage{cm-super}
 \newunicodechar{∂}{\partial}
 \newunicodechar{Δ}{\Delta}
 """
