@@ -49,6 +49,7 @@ LATEX_PREAMBLE = r"""
 \usepackage{mhchem}
 \usepackage{xcolor}
 \usepackage{newunicodechar}
+\usepackage{mathtools} 
 \newunicodechar{∂}{\partial}
 \newunicodechar{Δ}{\Delta}
 \begin{document}
@@ -334,52 +335,38 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
     if os.path.exists(cleanup_log_path):
         os.remove(cleanup_log_path)
 
-    # --- START: Definitive LaTeX Preprocessor ---
-
-    # Regex to split the document into math blocks and text blocks.
+    # --- START: Definitive LaTeX Preprocessor (Final Version) ---
     math_split_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$)'
     parts = re.split(math_split_regex, markdown_string, flags=re.DOTALL)
-    
     processed_parts = []
-
-    # Regex to find any \begin{...}...\end{...} block.
     env_finder_regex = re.compile(r'\\begin\{([a-zA-Z\*]+)\}(.*?)\\end\{\1\*?\}', re.DOTALL)
 
     def _process_latex_block(match: re.Match) -> str:
-        """
-        Callback to process a single LaTeX environment found in a text block.
-        It categorizes, fixes (if needed), and correctly wraps the environment.
-        """
-        env_name = match.group(1).strip('*') # Normalize name by removing star
+        env_name = match.group(1).strip('*')
         content = match.group(2)
         original_block = match.group(0)
-
-        # 1. Define Environment Categories
         standalone_envs = ['equation', 'align', 'gather', 'multline']
         matrix_envs = ['pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix', 'matrix', 'cases']
         component_envs = ['aligned', 'gathered']
 
-        # RULE 1: If it's a standalone environment, do nothing. It's already correct.
         if env_name in standalone_envs:
             return original_block
 
-        # RULE 2: If it's a matrix-like environment, fix its content and wrap in $$.
         if env_name in matrix_envs:
-            # --- Matrix alignment fix logic ---
-            lines = content.strip().split(r'\\')
+            # --- MORE ROBUST ALIGNMENT FIX ---
+            # Replace escaped backslashes to simplify splitting, then split.
+            lines = content.replace(r'\\\\', r'\\').strip().split(r'\\')
             max_cols = 0
             for line in lines:
-                clean_line = re.sub(r'\\text\{.*?\}', '', line)
+                if not line.strip(): continue
+                clean_line = re.sub(r'\\text\{.*?\}|\\mathrm\{.*?\}', '', line)
                 current_cols = clean_line.count('&') + 1
                 if current_cols > max_cols:
                     max_cols = current_cols
             if max_cols == 0: max_cols = 1
             col_spec = 'c' * max_cols
-
-            # This is the corrected logic: rebuild the *original* environment with fixed content.
-            # We replace the content inside the \begin{}...\end{} block.
-            # Note: For simplicity and max compatibility, we convert all to a generic 'array'.
             fixed_content = content
+
             if env_name == 'pmatrix': fixed_block = f'\\left(\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right)'
             elif env_name in ['bmatrix', 'Bmatrix']: fixed_block = f'\\left[\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right]'
             elif env_name == 'vmatrix': fixed_block = f'\\left|\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right|'
@@ -387,66 +374,47 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
             elif env_name == 'cases':
                 col_spec = 'l' + ('l' * (max_cols - 1))
                 fixed_block = f'\\left\\{{\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right.'
-            else: # matrix
+            else:
                 fixed_block = f'\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}'
-
             return f'$$\n{fixed_block}\n$$'
-        
-        # RULE 3: If it's another component, just wrap it in $$.
+
         if env_name in component_envs:
             return f'$$\n{original_block}\n$$'
-        
-        # RULE 4: If unknown, leave it alone.
         return original_block
 
-    # Process each part of the document
     for i, part in enumerate(parts):
         if part is None: continue
-        # An even index means it's a text block. Odd is a math block.
         if i % 2 == 0:
-            # This is a text block, so we can safely process its LaTeX environments.
             processed_part = env_finder_regex.sub(_process_latex_block, part)
             processed_parts.append(processed_part)
         else:
-            # This is already a math block ($$...$$ or $...$), so we protect it by adding it back unchanged.
             processed_parts.append(part)
-
     processed_markdown = "".join(processed_parts)
-    
     # --- END: Definitive LaTeX Preprocessor ---
 
     try:
         command = [
-            'pandoc',
-            '--filter', '/app/bot/pandoc_mermaid_filter.py',
-            '--from=markdown+tex_math_dollars+raw_tex',
-            '--to=pdf',
+            'pandoc', '--filter', '/app/bot/pandoc_mermaid_filter.py',
+            '--from=markdown+tex_math_dollars+raw_tex', '--to=pdf',
             '--pdf-engine=xelatex',
-            '--variable', f'title={title}',
-            '--variable', f'author={author}',
-            '--variable', f'date={date}',
-            '--variable', 'documentclass=article',
-            '--variable', 'mainfont=DejaVu Sans',
-            '--variable', 'geometry:margin=1in',
+            '--variable', f'title={title}', '--variable', f'author={author}',
+            '--variable', f'date={date}', '--variable', 'documentclass=article',
+            '--variable', 'mainfont=DejaVu Sans', '--variable', 'geometry:margin=1in',
             '-o', '-'
         ]
         if re.search(r'^# ', processed_markdown, re.MULTILINE):
             command.append('--toc')
-
         process = subprocess.run(command, input=processed_markdown.encode('utf-8'), capture_output=True)
         if process.returncode != 0:
             error_message = process.stderr.decode('utf-8', errors='ignore').strip()
-            # Provide more debug info upon failure
             error_detail = (f"Ошибка Pandoc при конвертации в PDF:\n{error_message}\n\n"
                             f"--- Начало обработанного Markdown (первые 500 символов) ---\n"
                             f"{processed_markdown[:500]}\n"
                             f"--- Конец обработанного Markdown ---")
             raise RuntimeError(error_detail)
-
         pdf_buffer = io.BytesIO(process.stdout)
         return pdf_buffer
     finally:
-        # --- Cleanup logic (unchanged) ---
         if os.path.exists(cleanup_log_path):
             try:
                 with open(cleanup_log_path, 'r', encoding='utf-8') as f:
