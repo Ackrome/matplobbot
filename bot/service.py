@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 PANDOC_HEADER_INCLUDES = r"""
 %\usepackage[cp1251]{inputenc}
 \usepackage[utf8]{inputenc}
-\usepackage[T2A]{fontenc}
+\usepackage[T1, T2A]{fontenc}
 \usepackage[english,russian]{babel}
 \usepackage{amscd,amssymb,amsfonts,amsmath,array}
 \usepackage{graphicx} % Loaded once
