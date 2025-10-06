@@ -321,7 +321,7 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
     """Асинхронная обертка для рендеринга Mermaid, выполняемая в отдельном потоке."""
     return await asyncio.to_thread(_render_mermaid_sync, mermaid_code)
 
-async def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.BytesIO:
+def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.BytesIO:
     """
     Синхронная функция для конвертации Markdown в PDF с использованием pandoc.
     LaTeX-формулы и Mermaid-блоки обрабатываются pandoc и его движком LaTeX.
