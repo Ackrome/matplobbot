@@ -11,7 +11,7 @@ RUN set -eux; \
     find /etc/apt -name "*.sources" -exec sed -i 's|URIs: http://deb\.debian\.org|URIs: http://mirror.truenetwork.ru|g' {} + || true; \
     apt-get update; \
     apt-get install $APT_OPTS \
-      python3 python3-pip ca-certificates wget xdg-utils fonts-liberation python3.11-venv git \
+      python3 python3-pip ca-certificates wget xdg-utils fonts-liberation fonts-dejavu python3.11-venv git \
       git curl build-essential procps && \
     rm -rf /var/lib/apt/lists/*
 
