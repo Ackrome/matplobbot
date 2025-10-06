@@ -326,126 +326,132 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
 
 def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.BytesIO:
     """
-    Синхронная функция для конвертации Markdown в PDF с использованием pandoc.
-    Применяет окончательный, многоступенчатый "санитайзер" LaTeX для максимальной надежности.
+    Окончательная, надежная функция для конвертации Markdown в PDF с использованием
+    двухэтапного процесса: Markdown -> LaTeX -> PDF. Этот подход позволяет
+    исправлять критические синтаксические ошибки LaTeX перед финальной компиляцией.
     """
     author = "Matplobbot"
     date = datetime.datetime.now().strftime("%d %B %Y")
+    
+    # Path for the filter to log temporary files
     cleanup_log_path = '/tmp/pandoc_cleanup.log'
+    # Ensure the log file is empty before starting
     if os.path.exists(cleanup_log_path):
         os.remove(cleanup_log_path)
 
-    # --- START: Definitive LaTeX Sanitizer ---
-    math_split_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$)'
-    parts = re.split(math_split_regex, markdown_string, flags=re.DOTALL)
-    processed_parts = []
-    env_finder_regex = re.compile(r'\\begin\{([a-zA-Z\*]+)\}(.*?)\\end\{\1\*?\}', re.DOTALL)
-
-    def _latex_sanitizer_callback(match: re.Match) -> str:
-        """
-        Processes a single LaTeX environment based on its type and content to prevent common errors.
-        """
-        env_name = match.group(1).strip('*')
-        content = match.group(2)
-        original_block = match.group(0)
-
-        # Define environment categories
-        standalone_envs = ['equation', 'align', 'gather', 'multline']
-        # Environments that are just wrappers around the 'array' environment
-        matrix_like_envs = ['pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix', 'matrix', 'cases']
-        # Environments to leave untouched
-        untouchable_envs = ['array', 'tabular', 'longtable']
-        
-        # --- RULE C: Leave standalone and already-correct environments alone ---
-        if env_name in standalone_envs or env_name in untouchable_envs:
-            return original_block
-
-        # --- RULE A & B: Fix matrix-like environments for hline and alignment issues ---
-        if env_name in matrix_like_envs:
-            # Determine if conversion to array is mandatory (due to \hline)
-            is_hline_present = r'\hline' in content
-
-            # --- Robust Column Counting ---
-            lines = re.split(r'\s*\\\\\s*', content.strip())
-            max_cols = 0
-            for line in lines:
-                if not line.strip(): continue
-                # Exclude '&' found inside text commands
-                clean_line = re.sub(r'\\text\{.*?\}|\\mathrm\{.*?\}', '', line)
-                current_cols = clean_line.count('&') + 1
-                if current_cols > max_cols:
-                    max_cols = current_cols
-            if max_cols == 0: max_cols = 1
+    with tempfile.TemporaryDirectory() as temp_dir:
+        try:
+            # --- STAGE 1: Convert Markdown to a standalone .tex file using Pandoc ---
+            tex_path = os.path.join(temp_dir, 'document.tex')
+            pandoc_to_tex_command = [
+                'pandoc',
+                '--filter', '/app/bot/pandoc_mermaid_filter.py',
+                '--from=markdown+tex_math_dollars+raw_tex',
+                '--to=latex',  # Output to LaTeX format
+                '--pdf-engine=xelatex',
+                '--variable', f'title={title}',
+                '--variable', f'author={author}',
+                '--variable', f'date={date}',
+                '--variable', 'documentclass=article',
+                '--variable', 'mainfont=DejaVu Sans',
+                '--variable', 'geometry:margin=1in',
+                '-o', tex_path
+            ]
             
-            # This logic now applies to all matrix-like envs for consistency and safety.
-            # It rebuilds the environment as a robust 'array' that supports \hline and guarantees alignment.
-            col_spec = 'c' * max_cols
-            fixed_content = content
-            
-            if env_name == 'pmatrix': fixed_block = f'\\left(\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right)'
-            elif env_name in ['bmatrix', 'Bmatrix']: fixed_block = f'\\left[\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right]'
-            elif env_name == 'vmatrix': fixed_block = f'\\left|\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right|'
-            elif env_name == 'Vmatrix': fixed_block = f'\\left\\|\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right\\|'
-            elif env_name == 'cases':
-                col_spec = 'l' + ('l' * (max_cols - 1))
-                fixed_block = f'\\left\\{{\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right.'
-            else: # matrix
-                fixed_block = f'\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}'
+            # Add a table of contents if the document likely has sections
+            if re.search(r'^# ', markdown_string, re.MULTILINE):
+                pandoc_to_tex_command.append('--toc')
+
+            pandoc_process = subprocess.run(
+                pandoc_to_tex_command,
+                input=markdown_string.encode('utf-8'),
+                capture_output=True
+            )
+            if pandoc_process.returncode != 0:
+                error_message = pandoc_process.stderr.decode('utf-8', errors='ignore').strip()
+                raise RuntimeError(f"Ошибка Pandoc при конвертации Markdown в LaTeX:\n{error_message}")
+
+            # --- STAGE 2: Read and Sanitize the generated LaTeX code ---
+            with open(tex_path, 'r', encoding='utf-8') as f:
+                latex_content = f.read()
+
+            def _sanitize_latex_matrices(match: re.Match) -> str:
+                """
+                Находит несовместимые с \hline окружения (pmatrix, etc.) и конвертирует их
+                в окружение 'array', которое поддерживает \hline и гарантирует правильное
+                выравнивание столбцов.
+                """
+                env_name = match.group(1)
+                content = match.group(2)
+
+                # The presence of \hline is the trigger for this fix.
+                if r'\hline' in content:
+                    lines = re.split(r'\s*\\\\\s*', content.strip())
+                    max_cols = 0
+                    for line in lines:
+                        if not line.strip() or r'\hline' in line: continue
+                        clean_line = re.sub(r'\\text\{.*?\}', '', line)
+                        current_cols = clean_line.count('&') + 1
+                        if current_cols > max_cols:
+                            max_cols = current_cols
+                    
+                    if max_cols == 0: max_cols = 1
+                    col_spec = 'c' * max_cols
+                    
+                    # Rebuild as a robust 'array' with appropriate delimiters
+                    if env_name == 'pmatrix': return f'\\left(\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right)'
+                    if env_name in ['bmatrix', 'Bmatrix']: return f'\\left[\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right]'
+                    if env_name == 'vmatrix': return f'\\left|\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right|'
+                    if env_name == 'Vmatrix': return f'\\left\\|\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right\\|'
                 
-            return f'$$\n{fixed_block}\n$$'
-        
-        # --- Fallback Rule: For other math environments, just ensure they are in math mode ---
-        return f'$$\n{original_block}\n$$'
+                # If no \hline is found, return the original block untouched.
+                return match.group(0)
 
-    # --- Main Processing Loop ---
-    for i, part in enumerate(parts):
-        if part is None: continue
-        # Process only "text blocks" (even indices)
-        if i % 2 == 0:
-            processed_part = env_finder_regex.sub(_latex_sanitizer_callback, part)
-            processed_parts.append(processed_part)
-        # Protect "math blocks" (odd indices) by adding them back unchanged
-        else:
-            processed_parts.append(part)
+            # Target only matrix environments that don't support \hline
+            matrix_finder_regex = re.compile(r'\\begin\{(pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix)\}(.*?)\\end\{\1\*?\}', re.DOTALL)
+            sanitized_latex = matrix_finder_regex.sub(_sanitize_latex_matrices, latex_content)
             
-    processed_markdown = "".join(processed_parts)
-    # --- END: Definitive LaTeX Sanitizer ---
-    
-    try:
-        command = [
-            'pandoc', '--filter', '/app/bot/pandoc_mermaid_filter.py',
-            '--from=markdown+tex_math_dollars+raw_tex', '--to=pdf',
-            '--pdf-engine=xelatex',
-            '--variable', f'title={title}', '--variable', f'author={author}',
-            '--variable', f'date={date}', '--variable', 'documentclass=article',
-            '--variable', 'mainfont=DejaVu Sans', '--variable', 'geometry:margin=1in',
-            '-o', '-'
-        ]
-        if re.search(r'^# ', processed_markdown, re.MULTILINE):
-            command.append('--toc')
-        process = subprocess.run(command, input=processed_markdown.encode('utf-8'), capture_output=True)
-        if process.returncode != 0:
-            error_message = process.stderr.decode('utf-8', errors='ignore').strip()
-            error_detail = (f"Ошибка Pandoc при конвертации в PDF:\n{error_message}\n\n"
-                            f"--- Начало обработанного Markdown (первые 500 символов) ---\n"
-                            f"{processed_markdown[:500]}\n"
-                            f"--- Конец обработанного Markdown ---")
-            raise RuntimeError(error_detail)
-        pdf_buffer = io.BytesIO(process.stdout)
-        return pdf_buffer
-    finally:
-        # Cleanup logic remains the same
-        if os.path.exists(cleanup_log_path):
-            try:
-                with open(cleanup_log_path, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        file_path = line.strip()
-                        if file_path and os.path.exists(file_path):
-                            try: os.remove(file_path)
-                            except OSError: pass
-                os.remove(cleanup_log_path)
-            except Exception: pass
+            with open(tex_path, 'w', encoding='utf-8') as f:
+                f.write(sanitized_latex)
+            
+            # --- STAGE 3: Compile the sanitized .tex file to PDF using latexmk ---
+            # latexmk automatically runs the compiler multiple times for TOC, etc.
+            compile_command = [
+                'latexmk',
+                '-xelatex',
+                '-interaction=nonstopmode',
+                f'-output-directory={temp_dir}',
+                tex_path
+            ]
+            compile_process = subprocess.run(compile_command, capture_output=True, text=True, encoding='utf-8', errors='ignore')
 
+            pdf_path = os.path.join(temp_dir, 'document.pdf')
+            if compile_process.returncode != 0 or not os.path.exists(pdf_path):
+                log_path = os.path.join(temp_dir, 'document.log')
+                log_content = "Log file not found."
+                if os.path.exists(log_path):
+                    with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        log_content = f.read()
+                raise RuntimeError(f"Финальная ошибка компиляции LaTeX после исправлений. Log:\n{log_content[-2000:]}")
+
+            with open(pdf_path, 'rb') as f:
+                pdf_buffer = io.BytesIO(f.read())
+            return pdf_buffer
+
+        finally:
+            # --- Cleanup ---
+            if os.path.exists(cleanup_log_path):
+                try:
+                    with open(cleanup_log_path, 'r', encoding='utf-8') as f:
+                        for line in f:
+                            file_path = line.strip()
+                            if file_path and os.path.exists(file_path):
+                                try: os.remove(file_path)
+                                except OSError: pass
+                    os.remove(cleanup_log_path)
+                except Exception: pass
+                
+                
 async def convert_md_to_pdf_pandoc(markdown_string: str, title: str) -> io.BytesIO:
     """Асинхронная обертка для конвертации Markdown в PDF с помощью pandoc."""
     return await asyncio.to_thread(_convert_md_to_pdf_pandoc_sync, markdown_string, title)
