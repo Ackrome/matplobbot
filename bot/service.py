@@ -988,12 +988,11 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
 
 async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     """
-    Prepares a self-contained HTML document with client-side rendering for LaTeX (using KaTeX).
-    This definitive version includes an automatic Table of Contents, uses a robust regex for 
-    math isolation, and correctly escapes HTML-sensitive characters.
+    Prepares a self-contained HTML document with a navigation panel, client-side rendering
+    for LaTeX (using KaTeX), and Mermaid diagrams. This is the definitive, feature-complete version.
     """
     
-    # --- Step 1: Isolate all valid math blocks with a robust regex ---
+    # --- Step 1: Isolate all valid math blocks with the robust regex ---
     latex_formulas = []
     def store_and_replace_latex(match):
         placeholder = f"<!--KATEX_PLACEHOLDER_{len(latex_formulas)}-->"
@@ -1003,58 +1002,43 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     latex_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$)'
     content_with_placeholders = re.sub(latex_regex, content, flags=re.DOTALL)
 
-    # --- Step 2: Render the Markdown. It is now safe from LaTeX interference ---
+    # --- Step 2: Render the Markdown into an initial HTML string ---
     md = MarkdownIt("commonmark", {"html": True, "linkify": True, "typographer": True}).enable('table')
     html_content = md.render(content_with_placeholders)
 
-    # --- Step 3: Generate Table of Contents and add IDs to headings ---
-    toc_entries = []
-    heading_counter = 0
+    # --- Step 3: Generate Navigation Panel and Add IDs to Headers ---
+    soup = BeautifulSoup(html_content, 'html.parser')
+    headings = soup.find_all(['h1', 'h2', 'h3'])
+    toc_items = []
+    used_ids = set()
 
-    def add_anchor_to_heading(match):
-        nonlocal heading_counter
-        level = match.group(1)
-        attributes = match.group(2)
-        text = match.group(3)
+    for heading in headings:
+        text = heading.get_text()
+        # Create a URL-friendly "slug" for the ID
+        slug_base = re.sub(r'[^\w\s-]', '', text.lower()).strip().replace(' ', '-')
+        slug = slug_base
+        counter = 1
+        # Ensure the ID is unique
+        while slug in used_ids:
+            slug = f"{slug_base}-{counter}"
+            counter += 1
         
-        # Create a URL-friendly "slug" from the heading text
-        clean_text = re.sub(r'<.*?>', '', text) # Remove any inner tags like <code>
-        slug = re.sub(r'[^\w\s-]', '', clean_text).strip().lower()
-        slug = re.sub(r'[\s-]+', '-', slug)
+        used_ids.add(slug)
+        heading['id'] = slug
         
-        anchor = f"{slug}-{heading_counter}"
-        heading_counter += 1
-        
-        toc_entries.append({'level': int(level), 'text': clean_text, 'anchor': anchor})
-        
-        return f'<h{level} id="{anchor}"{attributes}>{text}</h{level}>'
+        level = int(heading.name[1]) # Gets the number from 'h1', 'h2', etc.
+        toc_items.append({'level': level, 'text': text, 'id': slug})
 
-    # Find all h1-h6 tags and run the function to add anchors
-    html_content = re.sub(r'<h([1-6])(.*?)>(.*?)</h\1>', add_anchor_to_heading, html_content)
+    # Build the TOC HTML
+    toc_html = '<nav class="toc"><h4>Содержание</h4><ul>'
+    for item in toc_items:
+        toc_html += f'<li class="toc-level-{item["level"]}"><a href="#{item["id"]}">{item["text"]}</a></li>'
+    toc_html += '</ul></nav>'
 
-    # Build the TOC HTML from the collected entries
-    toc_html = ""
-    if toc_entries:
-        toc_html = '<nav id="toc"><h3>Содержание</h3><ul>'
-        min_level = min(entry['level'] for entry in toc_entries)
-        current_level = min_level -1
-        for entry in toc_entries:
-            level_diff = entry['level'] - current_level
-            if level_diff > 0:
-                toc_html += '<ul>' * level_diff
-            elif level_diff < 0:
-                toc_html += '</ul>' * abs(level_diff)
-            
-            toc_html += f'<li><a href="#{entry["anchor"]}">{entry["text"]}</a></li>'
-            current_level = entry['level']
-        
-        toc_html += '</ul>' * (current_level - (min_level -1))
-        toc_html += '</ul></nav>'
-    
-    # Prepend the TOC to the main content
-    html_content = toc_html + html_content
+    # Get the HTML with the newly added IDs in the header tags
+    html_content_with_ids = str(soup)
 
-    # --- Step 4: Process the stored formulas with all necessary fixes ---
+    # --- Step 4: Process and re-insert the stored math formulas ---
     processed_formulas = []
     for formula_string in latex_formulas:
         is_display = formula_string.startswith('$$')
@@ -1083,13 +1067,14 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
         else:
             processed_formulas.append(f'${final_content}$')
 
-    # --- Step 5: Re-insert the fully processed formulas back into the HTML ---
+    # Re-insert into the HTML that already has header IDs
+    final_html_content = html_content_with_ids
     for i, formula in enumerate(processed_formulas):
         placeholder = f"<!--KATEX_PLACEHOLDER_{i}-->"
-        html_content = html_content.replace(placeholder, formula)
+        final_html_content = final_html_content.replace(placeholder, formula)
 
-    # --- Step 6: Final preparation and templating ---
-    html_content = html_content.replace(
+    # --- Step 5: Final preparation and templating ---
+    final_html_content = final_html_content.replace(
         '<pre><code class="language-mermaid">', '<pre class="mermaid">'
     ).replace('</code></pre>', '</pre>')
 
@@ -1109,9 +1094,11 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
             --bg-color: #ffffff; --text-color: #24292e; --link-color: #0366d6;
             --border-color: #eaecef; --code-bg-color: #f6f8fa;
         }}
+        html {{ scroll-behavior: smooth; }} /* This enables smooth scrolling */
         body {{ 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            line-height: 1.6; margin: 0 auto; padding: 20px; max-width: 800px; 
+            line-height: 1.6; margin: 0 auto; padding: 20px 20px 20px 300px; /* Add left padding for TOC */
+            max-width: 800px; 
             background-color: var(--bg-color); color: var(--text-color);
         }}
         @media (prefers-color-scheme: dark) {{
@@ -1120,39 +1107,60 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
                 --border-color: #30363d; --code-bg-color: #161b22;
             }}
         }}
-        a {{ color: var(--link-color); text-decoration: none; }}
-        a:hover {{ text-decoration: underline; }}
-        img {{ max-width: 100%; height: auto; }}
+
+        /* ----- Navigation Panel (TOC) Styles ----- */
+        .toc {{
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 240px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 16px;
+            background-color: var(--code-bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 14px;
+        }}
+        .toc h4 {{
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 16px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }}
+        .toc ul {{
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }}
+        .toc li a {{
+            text-decoration: none;
+            color: var(--text-color);
+            display: block;
+            padding: 4px 0;
+            border-radius: 4px;
+        }}
+        .toc li a:hover {{
+            background-color: var(--border-color);
+        }}
+        .toc .toc-level-2 {{ margin-left: 15px; }}
+        .toc .toc-level-3 {{ margin-left: 30px; }}
+
+        /* Responsive: Hide TOC on smaller screens */
+        @media (max-width: 1200px) {{
+            .toc {{ display: none; }}
+            body {{ padding: 20px; }} /* Reset body padding */
+        }}
+
+        /* ----- General Element Styling ----- */
+        a {{ color: var(--link-color); }}
         pre {{ background-color: var(--code-bg-color); padding: 16px; overflow: auto; border-radius: 6px; position: relative; border: 1px solid var(--border-color); }}
         code {{ font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace; }}
         table {{ border-collapse: collapse; width: 100%; margin: 1em 0; border: 1px solid var(--border-color); }}
         th, td {{ border: 1px solid var(--border-color); padding: 6px 13px; text-align: left; }}
         tr:nth-child(2n) {{ background-color: var(--code-bg-color); }}
         h1, h2, h3, h4, h5, h6 {{ border-bottom: 1px solid var(--border-color); padding-bottom: .3em; margin-top: 24px; margin-bottom: 16px; }}
-        
-        /* Table of Contents Styling */
-        #toc {{
-            background-color: var(--code-bg-color);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 16px;
-            margin-bottom: 24px;
-        }}
-        #toc h3 {{
-            margin-top: 0;
-            border-bottom: 0;
-        }}
-        #toc ul {{
-            padding-left: 20px;
-            margin-bottom: 0;
-        }}
-        #toc ul ul {{
-            padding-left: 20px;
-        }}
-        #toc li {{
-            list-style-type: square;
-        }}
-
         .copy-btn {{
             position: absolute; top: 8px; right: 8px; padding: 4px 8px; font-size: 12px;
             background-color: #e1e4e8; color: #24292e; border: 1px solid #d1d5da;
@@ -1163,13 +1171,14 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     </style>
 </head>
 <body>
-    <main>{html_content}</main>
+    {toc_html}
+    <main>{final_html_content}</main>
     <script>
         document.addEventListener("DOMContentLoaded", function() {{
             if (typeof mermaid !== 'undefined') mermaid.initialize({{ startOnLoad: true }});
             document.querySelectorAll('pre > code').forEach(function(codeBlock) {{
                 var pre = codeBlock.parentElement;
-                if(pre.classList.contains('mermaid')) return; // Don't add copy button to mermaid diagrams
+                if (!pre) return;
                 var button = document.createElement('button');
                 button.className = 'copy-btn'; button.textContent = 'Copy';
                 button.setAttribute('aria-label', 'Copy code to clipboard');
@@ -1186,7 +1195,6 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
 </body>
 </html>"""
     return full_html_doc
-
 async def _prepare_html_from_markdown(content: str, settings: dict, file_path: str) -> tuple[str, list]:
     """
     A helper function that processes markdown content into a full HTML document.
