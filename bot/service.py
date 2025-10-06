@@ -1000,7 +1000,7 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
         return placeholder
 
     latex_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$)'
-    content_with_placeholders = re.sub(latex_regex, content, flags=re.DOTALL)
+    content_with_placeholders = re.sub(latex_regex, store_and_replace_latex, content, flags=re.DOTALL)
 
     # --- Step 2: Render the Markdown into an initial HTML string ---
     md = MarkdownIt("commonmark", {"html": True, "linkify": True, "typographer": True}).enable('table')
@@ -1195,6 +1195,7 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
 </body>
 </html>"""
     return full_html_doc
+
 async def _prepare_html_from_markdown(content: str, settings: dict, file_path: str) -> tuple[str, list]:
     """
     A helper function that processes markdown content into a full HTML document.
