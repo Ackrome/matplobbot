@@ -18,6 +18,7 @@ import aiofiles
 from PIL import Image
 import datetime
 import html # Added for HTML escaping
+from bs4 import BeautifulSoup
 from telegraph.aio import Telegraph
 from telegraph.exceptions import TelegraphException
 from aiogram.types import Message, CallbackQuery, FSInputFile, BufferedInputFile, InlineKeyboardButton
