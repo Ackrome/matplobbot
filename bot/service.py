@@ -334,26 +334,69 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
     if os.path.exists(cleanup_log_path):
         os.remove(cleanup_log_path)
 
-    # --- START: Preprocessing Step ---
-    # Regex to find common LaTeX display environments that are not already inside $$...$$
-    # This prevents the "! Missing $ inserted" error from pandoc.
-    # It looks for environments that start on a new line.
-    latex_env_regex = re.compile(r'^(?!.*\$\$)(\\begin\{(?:equation|align|gather|cases|matrix|pmatrix|Bmatrix|vmatrix|Vmatrix|aligned|gathered|multline)\*?.*?\\end\{.*?\})', re.MULTILINE | re.DOTALL)
+    # --- START: NEW Preprocessing Step for Matrix Alignment ---
+    def _fix_matrix_alignment_callback(match: re.Match) -> str:
+        """
+        Callback to find the max column count in a matrix and rewrite it as a
+        well-formed 'array' to prevent 'Extra alignment tab' errors.
+        """
+        # Group 1 captures the environment name (e.g., "pmatrix", "cases")
+        # Group 2 captures the inner content of the environment
+        env_name = match.group(1)
+        matrix_content = match.group(2)
 
+        lines = matrix_content.strip().split(r'\\')
+        max_cols = 0
+        for line in lines:
+            # Avoid counting '&' inside commands like \text{...}
+            clean_line = re.sub(r'\\text\{.*?\}', '', line)
+            current_cols = clean_line.count('&') + 1
+            if current_cols > max_cols:
+                max_cols = current_cols
+        
+        # Fallback for empty or single-column matrices
+        if max_cols == 0: return match.group(0) # Return original if empty
+        if max_cols == 1 and matrix_content.count('&') == 0:
+             max_cols = 1
+        
+        # Define the column spec string (e.g., 'ccc' for 3 columns)
+        col_spec = 'c' * max_cols
+        
+        # Reconstruct using the forgiving 'array' environment, adding appropriate delimiters
+        if env_name == 'pmatrix':
+            return f'\\left(\\begin{{array}}{{{col_spec}}} {matrix_content} \\end{{array}}\\right)'
+        elif env_name in ['bmatrix', 'Bmatrix']:
+            return f'\\left[\\begin{{array}}{{{col_spec}}} {matrix_content} \\end{{array}}\\right]'
+        elif env_name == 'vmatrix':
+            return f'\\left|\\begin{{array}}{{{col_spec}}} {matrix_content} \\end{{array}}\\right|'
+        elif env_name == 'Vmatrix':
+            return f'\\left\\|\\begin{{array}}{{{col_spec}}} {matrix_content} \\end{{array}}\\right\\|'
+        elif env_name == 'cases':
+            # Cases are special, usually two left-aligned columns
+            col_spec = 'l' + ('l' * (max_cols - 1))
+            return f'\\left\\{{\\begin{{array}}{{{col_spec}}} {matrix_content} \\end{{array}}\\right.'
+        elif env_name == 'matrix':
+            return f'\\begin{{array}}{{{col_spec}}} {matrix_content} \\end{{array}}'
+        
+        # For other environments (like align, gather, etc.), don't modify them.
+        return match.group(0)
+
+    # This regex captures common matrix environments and the 'cases' environment.
+    # It avoids capturing environments like 'align' or 'gather' which handle columns differently.
+    matrix_env_regex = re.compile(r'\\begin\{(pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix|matrix|cases)\}(.*?)\\end\{\1\}', re.DOTALL)
+    processed_markdown = matrix_env_regex.sub(_fix_matrix_alignment_callback, markdown_string)
+    # --- END: NEW Preprocessing Step ---
+
+    # --- Existing Preprocessing for Math Mode ---
+    latex_env_regex = re.compile(r'^(?!.*\$\$)(\\begin\{(?:equation|align|gather|aligned|gathered|multline)\*?.*?\\end\{.*?\})', re.MULTILINE | re.DOTALL)
     def wrap_in_dollars(match):
-        # Wraps the matched LaTeX block in $$...$$
         return f'$$\n{match.group(1)}\n$$'
-
-    # Apply the wrapping to the entire markdown string
-    processed_markdown = latex_env_regex.sub(wrap_in_dollars, markdown_string)
-    # --- END: Preprocessing Step ---
-
+    processed_markdown = latex_env_regex.sub(wrap_in_dollars, processed_markdown)
+    
     try:
         command = [
             'pandoc',
             '--filter', '/app/bot/pandoc_mermaid_filter.py',
-            # We now let pandoc recognize tex_math_dollars, as our preprocessing
-            # ensures environments are correctly wrapped. This is more robust.
             '--from=markdown+tex_math_dollars+raw_tex',
             '--to=pdf',
             '--pdf-engine=xelatex',
@@ -365,7 +408,6 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
             '--variable', 'geometry:margin=1in',
             '-o', '-'
         ]
-
         if re.search(r'^# ', processed_markdown, re.MULTILINE):
             command.append('--toc')
 
