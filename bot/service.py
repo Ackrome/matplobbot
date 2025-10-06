@@ -327,7 +327,7 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
 def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.BytesIO:
     """
     Синхронная функция для конвертации Markdown в PDF с использованием pandoc.
-    Применяет окончательный, контекстно-зависимый препроцессор для LaTeX для максимальной надежности.
+    Применяет окончательный, многоступенчатый "санитайзер" LaTeX для максимальной надежности.
     """
     author = "Matplobbot"
     date = datetime.datetime.now().strftime("%d %B %Y")
@@ -335,38 +335,53 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
     if os.path.exists(cleanup_log_path):
         os.remove(cleanup_log_path)
 
-    # --- START: Definitive LaTeX Preprocessor (Final Version) ---
+    # --- START: Definitive LaTeX Sanitizer ---
     math_split_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$)'
     parts = re.split(math_split_regex, markdown_string, flags=re.DOTALL)
     processed_parts = []
     env_finder_regex = re.compile(r'\\begin\{([a-zA-Z\*]+)\}(.*?)\\end\{\1\*?\}', re.DOTALL)
 
-    def _process_latex_block(match: re.Match) -> str:
+    def _latex_sanitizer_callback(match: re.Match) -> str:
+        """
+        Processes a single LaTeX environment based on its type and content to prevent common errors.
+        """
         env_name = match.group(1).strip('*')
         content = match.group(2)
         original_block = match.group(0)
-        standalone_envs = ['equation', 'align', 'gather', 'multline']
-        matrix_envs = ['pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix', 'matrix', 'cases']
-        component_envs = ['aligned', 'gathered']
 
-        if env_name in standalone_envs:
+        # Define environment categories
+        standalone_envs = ['equation', 'align', 'gather', 'multline']
+        # Environments that are just wrappers around the 'array' environment
+        matrix_like_envs = ['pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix', 'matrix', 'cases']
+        # Environments to leave untouched
+        untouchable_envs = ['array', 'tabular', 'longtable']
+        
+        # --- RULE C: Leave standalone and already-correct environments alone ---
+        if env_name in standalone_envs or env_name in untouchable_envs:
             return original_block
 
-        if env_name in matrix_envs:
-            # --- MORE ROBUST ALIGNMENT FIX ---
-            # Replace escaped backslashes to simplify splitting, then split.
-            lines = content.replace(r'\\\\', r'\\').strip().split(r'\\')
+        # --- RULE A & B: Fix matrix-like environments for hline and alignment issues ---
+        if env_name in matrix_like_envs:
+            # Determine if conversion to array is mandatory (due to \hline)
+            is_hline_present = r'\hline' in content
+
+            # --- Robust Column Counting ---
+            lines = re.split(r'\s*\\\\\s*', content.strip())
             max_cols = 0
             for line in lines:
                 if not line.strip(): continue
+                # Exclude '&' found inside text commands
                 clean_line = re.sub(r'\\text\{.*?\}|\\mathrm\{.*?\}', '', line)
                 current_cols = clean_line.count('&') + 1
                 if current_cols > max_cols:
                     max_cols = current_cols
             if max_cols == 0: max_cols = 1
+            
+            # This logic now applies to all matrix-like envs for consistency and safety.
+            # It rebuilds the environment as a robust 'array' that supports \hline and guarantees alignment.
             col_spec = 'c' * max_cols
             fixed_content = content
-
+            
             if env_name == 'pmatrix': fixed_block = f'\\left(\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right)'
             elif env_name in ['bmatrix', 'Bmatrix']: fixed_block = f'\\left[\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right]'
             elif env_name == 'vmatrix': fixed_block = f'\\left|\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right|'
@@ -374,24 +389,28 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
             elif env_name == 'cases':
                 col_spec = 'l' + ('l' * (max_cols - 1))
                 fixed_block = f'\\left\\{{\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}\\right.'
-            else:
+            else: # matrix
                 fixed_block = f'\\begin{{array}}{{{col_spec}}} {fixed_content} \\end{{array}}'
+                
             return f'$$\n{fixed_block}\n$$'
+        
+        # --- Fallback Rule: For other math environments, just ensure they are in math mode ---
+        return f'$$\n{original_block}\n$$'
 
-        if env_name in component_envs:
-            return f'$$\n{original_block}\n$$'
-        return original_block
-
+    # --- Main Processing Loop ---
     for i, part in enumerate(parts):
         if part is None: continue
+        # Process only "text blocks" (even indices)
         if i % 2 == 0:
-            processed_part = env_finder_regex.sub(_process_latex_block, part)
+            processed_part = env_finder_regex.sub(_latex_sanitizer_callback, part)
             processed_parts.append(processed_part)
+        # Protect "math blocks" (odd indices) by adding them back unchanged
         else:
             processed_parts.append(part)
+            
     processed_markdown = "".join(processed_parts)
-    # --- END: Definitive LaTeX Preprocessor ---
-
+    # --- END: Definitive LaTeX Sanitizer ---
+    
     try:
         command = [
             'pandoc', '--filter', '/app/bot/pandoc_mermaid_filter.py',
@@ -415,6 +434,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
         pdf_buffer = io.BytesIO(process.stdout)
         return pdf_buffer
     finally:
+        # Cleanup logic remains the same
         if os.path.exists(cleanup_log_path):
             try:
                 with open(cleanup_log_path, 'r', encoding='utf-8') as f:
