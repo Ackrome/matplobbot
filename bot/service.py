@@ -11,13 +11,13 @@ import traceback
 import re
 import os
 import json
-import html
 import base64
 import hashlib
 import aiohttp
 import aiofiles
 from PIL import Image
 import datetime
+import html # Added for HTML escaping
 from telegraph.aio import Telegraph
 from telegraph.exceptions import TelegraphException
 from aiogram.types import Message, CallbackQuery, FSInputFile, BufferedInputFile, InlineKeyboardButton
@@ -989,45 +989,82 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
 async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     """
     Prepares a self-contained HTML document with client-side rendering for LaTeX (using KaTeX).
-    This definitive version uses a robust regex for math isolation and correctly escapes all
-    HTML-sensitive characters within LaTeX to prevent browser rendering errors.
+    This definitive version includes an automatic Table of Contents, uses a robust regex for 
+    math isolation, and correctly escapes HTML-sensitive characters.
     """
     
-    # --- Step 1: Isolate all valid math blocks with a new, robust regex ---
+    # --- Step 1: Isolate all valid math blocks with a robust regex ---
     latex_formulas = []
     def store_and_replace_latex(match):
         placeholder = f"<!--KATEX_PLACEHOLDER_{len(latex_formulas)}-->"
         latex_formulas.append(match.group(0))
         return placeholder
 
-    # ------------------- THIS IS THE DEFINITIVE FIX -------------------
-    # This new regex is more robust. It correctly finds:
-    # 1. $$...$$ blocks across multiple lines (re.DOTALL).
-    # 2. $...$ blocks that do NOT contain newlines, ensuring they don't "run away".
-    # This correctly parses cases like `($X \in R^n$)` which the previous regex missed.
-    latex_regex = r'(\$\$.*?\$\$|\$[^$\n]+?\$)'
-    # ------------------------------------------------------------------
-    
-    content_with_placeholders = re.sub(latex_regex, store_and_replace_latex, content, flags=re.DOTALL)
+    latex_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$)'
+    content_with_placeholders = re.sub(latex_regex, content, flags=re.DOTALL)
 
     # --- Step 2: Render the Markdown. It is now safe from LaTeX interference ---
     md = MarkdownIt("commonmark", {"html": True, "linkify": True, "typographer": True}).enable('table')
     html_content = md.render(content_with_placeholders)
 
-    # --- Step 3: Process the stored formulas with all necessary fixes ---
+    # --- Step 3: Generate Table of Contents and add IDs to headings ---
+    toc_entries = []
+    heading_counter = 0
+
+    def add_anchor_to_heading(match):
+        nonlocal heading_counter
+        level = match.group(1)
+        attributes = match.group(2)
+        text = match.group(3)
+        
+        # Create a URL-friendly "slug" from the heading text
+        clean_text = re.sub(r'<.*?>', '', text) # Remove any inner tags like <code>
+        slug = re.sub(r'[^\w\s-]', '', clean_text).strip().lower()
+        slug = re.sub(r'[\s-]+', '-', slug)
+        
+        anchor = f"{slug}-{heading_counter}"
+        heading_counter += 1
+        
+        toc_entries.append({'level': int(level), 'text': clean_text, 'anchor': anchor})
+        
+        return f'<h{level} id="{anchor}"{attributes}>{text}</h{level}>'
+
+    # Find all h1-h6 tags and run the function to add anchors
+    html_content = re.sub(r'<h([1-6])(.*?)>(.*?)</h\1>', add_anchor_to_heading, html_content)
+
+    # Build the TOC HTML from the collected entries
+    toc_html = ""
+    if toc_entries:
+        toc_html = '<nav id="toc"><h3>Содержание</h3><ul>'
+        min_level = min(entry['level'] for entry in toc_entries)
+        current_level = min_level -1
+        for entry in toc_entries:
+            level_diff = entry['level'] - current_level
+            if level_diff > 0:
+                toc_html += '<ul>' * level_diff
+            elif level_diff < 0:
+                toc_html += '</ul>' * abs(level_diff)
+            
+            toc_html += f'<li><a href="#{entry["anchor"]}">{entry["text"]}</a></li>'
+            current_level = entry['level']
+        
+        toc_html += '</ul>' * (current_level - (min_level -1))
+        toc_html += '</ul></nav>'
+    
+    # Prepend the TOC to the main content
+    html_content = toc_html + html_content
+
+    # --- Step 4: Process the stored formulas with all necessary fixes ---
     processed_formulas = []
     for formula_string in latex_formulas:
         is_display = formula_string.startswith('$$')
         content_start, content_end = (2, -2) if is_display else (1, -1)
-        
         original_content = formula_string[content_start:content_end].strip()
 
-        # Heuristic Fix for \atop and multi-line display math
         if is_display and ('\n' in original_content or r'\atop' in original_content):
             temp_content = original_content.replace(r'\atop', r'\\')
             original_content = f"\\begin{{gathered}}\n{temp_content}\n\\end{{gathered}}"
 
-        # Cyrillic wrapping logic
         protected_blocks = []
         def protect_text_blocks(m):
             placeholder = f"__TEXT_BLOCK_{len(protected_blocks)}__"
@@ -1039,21 +1076,19 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
         for i, block in enumerate(protected_blocks):
             temp_content = temp_content.replace(f"__TEXT_BLOCK_{i}__", block)
         
-        # HTML Escaping: Prevents browser from misinterpreting '<' and '>' as HTML tags.
         final_content = html.escape(temp_content)
 
-        # Reconstruct the full formula string
         if is_display:
             processed_formulas.append(f'$${final_content}$$')
         else:
             processed_formulas.append(f'${final_content}$')
 
-    # --- Step 4: Re-insert the fully processed formulas back into the HTML ---
+    # --- Step 5: Re-insert the fully processed formulas back into the HTML ---
     for i, formula in enumerate(processed_formulas):
         placeholder = f"<!--KATEX_PLACEHOLDER_{i}-->"
         html_content = html_content.replace(placeholder, formula)
 
-    # --- Step 5: Final preparation and templating ---
+    # --- Step 6: Final preparation and templating ---
     html_content = html_content.replace(
         '<pre><code class="language-mermaid">', '<pre class="mermaid">'
     ).replace('</code></pre>', '</pre>')
@@ -1085,7 +1120,8 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
                 --border-color: #30363d; --code-bg-color: #161b22;
             }}
         }}
-        a {{ color: var(--link-color); }}
+        a {{ color: var(--link-color); text-decoration: none; }}
+        a:hover {{ text-decoration: underline; }}
         img {{ max-width: 100%; height: auto; }}
         pre {{ background-color: var(--code-bg-color); padding: 16px; overflow: auto; border-radius: 6px; position: relative; border: 1px solid var(--border-color); }}
         code {{ font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace; }}
@@ -1093,6 +1129,30 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
         th, td {{ border: 1px solid var(--border-color); padding: 6px 13px; text-align: left; }}
         tr:nth-child(2n) {{ background-color: var(--code-bg-color); }}
         h1, h2, h3, h4, h5, h6 {{ border-bottom: 1px solid var(--border-color); padding-bottom: .3em; margin-top: 24px; margin-bottom: 16px; }}
+        
+        /* Table of Contents Styling */
+        #toc {{
+            background-color: var(--code-bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }}
+        #toc h3 {{
+            margin-top: 0;
+            border-bottom: 0;
+        }}
+        #toc ul {{
+            padding-left: 20px;
+            margin-bottom: 0;
+        }}
+        #toc ul ul {{
+            padding-left: 20px;
+        }}
+        #toc li {{
+            list-style-type: square;
+        }}
+
         .copy-btn {{
             position: absolute; top: 8px; right: 8px; padding: 4px 8px; font-size: 12px;
             background-color: #e1e4e8; color: #24292e; border: 1px solid #d1d5da;
@@ -1109,6 +1169,7 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
             if (typeof mermaid !== 'undefined') mermaid.initialize({{ startOnLoad: true }});
             document.querySelectorAll('pre > code').forEach(function(codeBlock) {{
                 var pre = codeBlock.parentElement;
+                if(pre.classList.contains('mermaid')) return; // Don't add copy button to mermaid diagrams
                 var button = document.createElement('button');
                 button.className = 'copy-btn'; button.textContent = 'Copy';
                 button.setAttribute('aria-label', 'Copy code to clipboard');
