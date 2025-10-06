@@ -340,8 +340,10 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
         command = [
             'pandoc',
             '--filter', '/app/bot/pandoc_mermaid_filter.py',
-            # Enable raw_tex to prevent pandoc from wrapping $$...$$ blocks in \[...\]
-            '--from=markdown+raw_tex',
+            # Explicitly define markdown extensions.
+            # We disable tex_math_dollars to prevent pandoc from wrapping content in $...$ or $$...$$
+            # and use raw_tex to pass the raw LaTeX content directly to the engine.
+            '--from=markdown-tex_math_dollars+raw_tex',
             '--to=pdf',
             '--pdf-engine=xelatex', # Use xelatex for better Unicode (Cyrillic) support
             '--variable', f'title={title}',
@@ -1008,8 +1010,10 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{page_title}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUbGuHTCG" crossorigin="anonymous"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"></script>
+    <!-- Load KaTeX main library synchronously to ensure it's available for the auto-render script -->
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUbGuHTCG" crossorigin="anonymous"></script>
+    <!-- The auto-render script can be deferred as it depends on the main library -->
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous" onload="renderMathInElement(document.body, { delimiters: [ {left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}, {left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false} ], throwOnError: false });"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <style>
         body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; margin: 0 auto; padding: 20px; max-width: 800px; }}
@@ -1025,16 +1029,7 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
 <body>
     {html_content}
     <script>
-        document.addEventListener("DOMContentLoaded", function() {{
-            renderMathInElement(document.body, {{
-                delimiters: [
-                    {{left: '$$', right: '$$', display: true}},
-                    {{left: '$', right: '$', display: false}},
-                    {{left: '\\[', right: '\\]', display: true}},
-                    {{left: '\\(', right: '\\)', display: false}}
-                ],
-                throwOnError : false
-            }});
+        document.addEventListener("DOMContentLoaded", function() {{ // Keep this for Mermaid
             if (typeof mermaid !== 'undefined') {{
                 mermaid.initialize({{ startOnLoad: true }});
             }} else {{
