@@ -326,7 +326,7 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
 def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.BytesIO:
     """
     Синхронная функция для конвертации Markdown в PDF с использованием pandoc.
-    LaTeX-формулы и Mermaid-блоки обрабатываются.
+    Применяет единый, контекстно-зависимый препроцессор для LaTeX.
     """
     author = "Matplobbot"
     date = datetime.datetime.now().strftime("%d %B %Y")
@@ -334,65 +334,84 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
     if os.path.exists(cleanup_log_path):
         os.remove(cleanup_log_path)
 
-    # --- START: NEW Preprocessing Step for Matrix Alignment ---
-    def _fix_matrix_alignment_callback(match: re.Match) -> str:
-        """
-        Callback to find the max column count in a matrix and rewrite it as a
-        well-formed 'array' to prevent 'Extra alignment tab' errors.
-        """
-        # Group 1 captures the environment name (e.g., "pmatrix", "cases")
-        # Group 2 captures the inner content of the environment
-        env_name = match.group(1)
-        matrix_content = match.group(2)
+    # --- START: Unified LaTeX Preprocessor ---
 
-        lines = matrix_content.strip().split(r'\\')
-        max_cols = 0
-        for line in lines:
-            # Avoid counting '&' inside commands like \text{...}
-            clean_line = re.sub(r'\\text\{.*?\}', '', line)
-            current_cols = clean_line.count('&') + 1
-            if current_cols > max_cols:
-                max_cols = current_cols
-        
-        # Fallback for empty or single-column matrices
-        if max_cols == 0: return match.group(0) # Return original if empty
-        if max_cols == 1 and matrix_content.count('&') == 0:
-             max_cols = 1
-        
-        # Define the column spec string (e.g., 'ccc' for 3 columns)
-        col_spec = 'c' * max_cols
-        
-        # Reconstruct using the forgiving 'array' environment, adding appropriate delimiters
-        if env_name == 'pmatrix':
-            return f'\\left(\\begin{{array}}{{{col_spec}}} {matrix_content} \\end{{array}}\\right)'
-        elif env_name in ['bmatrix', 'Bmatrix']:
-            return f'\\left[\\begin{{array}}{{{col_spec}}} {matrix_content} \\end{{array}}\\right]'
-        elif env_name == 'vmatrix':
-            return f'\\left|\\begin{{array}}{{{col_spec}}} {matrix_content} \\end{{array}}\\right|'
-        elif env_name == 'Vmatrix':
-            return f'\\left\\|\\begin{{array}}{{{col_spec}}} {matrix_content} \\end{{array}}\\right\\|'
-        elif env_name == 'cases':
-            # Cases are special, usually two left-aligned columns
-            col_spec = 'l' + ('l' * (max_cols - 1))
-            return f'\\left\\{{\\begin{{array}}{{{col_spec}}} {matrix_content} \\end{{array}}\\right.'
-        elif env_name == 'matrix':
-            return f'\\begin{{array}}{{{col_spec}}} {matrix_content} \\end{{array}}'
-        
-        # For other environments (like align, gather, etc.), don't modify them.
+    def _latex_preprocessor_callback(match: re.Match) -> str:
+        """
+        Callback that processes a found LaTeX environment.
+        - Ignores standalone environments.
+        - Fixes and wraps matrix-like environments.
+        - Wraps other component environments.
+        """
+        env_name = match.group(1)
+        content = match.group(2)
+
+        # 1. Define Environment Categories
+        standalone_envs = ['equation', 'align', 'gather', 'multline']
+        matrix_envs = ['pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix', 'matrix', 'cases']
+        component_envs = ['aligned', 'gathered']
+
+        # 2. Handle Standalone Environments (Rule: DO NOTHING)
+        if env_name in standalone_envs:
+            return match.group(0) # Return the original, untouched block
+
+        # 3. Handle Matrix-like Environments (Rule: FIX and WRAP)
+        if env_name in matrix_envs:
+            # --- Matrix alignment fix logic (from previous version) ---
+            lines = content.strip().split(r'\\')
+            max_cols = 0
+            for line in lines:
+                clean_line = re.sub(r'\\text\{.*?\}', '', line)
+                current_cols = clean_line.count('&') + 1
+                if current_cols > max_cols: max_cols = current_cols
+            if max_cols == 0: max_cols = 1
+            col_spec = 'c' * max_cols
+            
+            # Reconstruct using 'array' and add delimiters
+            if env_name == 'pmatrix': fixed_block = f'\\left(\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right)'
+            elif env_name in ['bmatrix', 'Bmatrix']: fixed_block = f'\\left[\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right]'
+            elif env_name == 'vmatrix': fixed_block = f'\\left|\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right|'
+            elif env_name == 'Vmatrix': fixed_block = f'\\left\\|\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right\\|'
+            elif env_name == 'cases':
+                col_spec = 'l' + ('l' * (max_cols - 1))
+                fixed_block = f'\\left\\{{\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right.'
+            else: # matrix
+                fixed_block = f'\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}'
+            
+            # Finally, wrap the corrected block in display math delimiters
+            return f'$$\n{fixed_block}\n$$'
+
+        # 4. Handle Other Component Environments (Rule: Just WRAP)
+        if env_name in component_envs:
+            return f'$$\n{match.group(0)}\n$$'
+
+        # 5. If the environment is unknown, don't touch it
         return match.group(0)
 
-    # This regex captures common matrix environments and the 'cases' environment.
-    # It avoids capturing environments like 'align' or 'gather' which handle columns differently.
-    matrix_env_regex = re.compile(r'\\begin\{(pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix|matrix|cases)\}(.*?)\\end\{\1\}', re.DOTALL)
-    processed_markdown = matrix_env_regex.sub(_fix_matrix_alignment_callback, markdown_string)
-    # --- END: NEW Preprocessing Step ---
+    # Regex to find any top-level LaTeX environment.
+    # We will apply this only to text *outside* of existing math blocks.
+    env_finder_regex = re.compile(r'\\begin\{([a-zA-Z\*]+)\}(.*?)\\end\{\1\}', re.DOTALL)
 
-    # --- Existing Preprocessing for Math Mode ---
-    latex_env_regex = re.compile(r'^(?!.*\$\$)(\\begin\{(?:equation|align|gather|aligned|gathered|multline)\*?.*?\\end\{.*?\})', re.MULTILINE | re.DOTALL)
-    def wrap_in_dollars(match):
-        return f'$$\n{match.group(1)}\n$$'
-    processed_markdown = latex_env_regex.sub(wrap_in_dollars, processed_markdown)
+    # Isolate existing math blocks to prevent double-processing.
+    # This makes the preprocessor context-aware.
+    math_split_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$)'
+    parts = re.split(math_split_regex, markdown_string, flags=re.DOTALL)
     
+    processed_parts = []
+    for part in parts:
+        if part is None: continue
+        # If a part starts with '$', it's a math block; leave it alone.
+        if part.startswith('$'):
+            processed_parts.append(part)
+        else:
+            # This is not a math block, so we can safely process it.
+            processed_part = env_finder_regex.sub(_latex_preprocessor_callback, part)
+            processed_parts.append(processed_part)
+    
+    processed_markdown = "".join(processed_parts)
+    
+    # --- END: Unified LaTeX Preprocessor ---
+
     try:
         command = [
             'pandoc',
@@ -419,19 +438,17 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str) -> io.Bytes
         pdf_buffer = io.BytesIO(process.stdout)
         return pdf_buffer
     finally:
+        # --- Cleanup logic (unchanged) ---
         if os.path.exists(cleanup_log_path):
             try:
                 with open(cleanup_log_path, 'r', encoding='utf-8') as f:
                     for line in f:
                         file_path = line.strip()
                         if file_path and os.path.exists(file_path):
-                            try:
-                                os.remove(file_path)
-                            except OSError as e:
-                                logger.warning(f"Failed to clean up temporary file {file_path}: {e}")
+                            try: os.remove(file_path)
+                            except OSError: pass
                 os.remove(cleanup_log_path)
-            except Exception as e:
-                logger.error(f"Error during pandoc cleanup process: {e}")
+            except Exception: pass
 
 async def convert_md_to_pdf_pandoc(markdown_string: str, title: str) -> io.BytesIO:
     """Асинхронная обертка для конвертации Markdown в PDF с помощью pandoc."""
