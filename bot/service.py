@@ -353,7 +353,8 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
     # Форматируем авторов в виде кликабельных ссылок для Pandoc
     if contributors:
         # Pandoc понимает синтаксис Markdown в метаданных и превратит его в \href{}{} в LaTeX
-        author_links = [f"[{c['login']}]({c['html_url']})" for c in contributors]
+        # author_links = [f"[{c['login']}]({c['html_url']})" for c in contributors]
+        author_links = [r"\href{"+ f"{c['html_url']}" + r"}{" + f"{c['login']}" + r"}" for c in contributors]
         author_string = ", ".join(author_links)
     else:
         author_string = "Matplobbot" # Запасной вариант
