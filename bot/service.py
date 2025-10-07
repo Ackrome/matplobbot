@@ -20,7 +20,6 @@ import datetime
 import html # Added for HTML escaping
 from bs4 import BeautifulSoup
 from telegraph.aio import Telegraph
-from telegraph.exceptions import TelegraphException
 from aiogram.types import Message, CallbackQuery, FSInputFile, BufferedInputFile, InlineKeyboardButton
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -77,9 +76,6 @@ LATEX_PREAMBLE = r"""
 
 LATEX_POSTAMBLE = r"\end{document}"
 MD_LATEX_PADDING = 15
-
-# --- Telegraph Client ---
-telegraph_client = None
 
 # --- HTML Conversion ---
 def convert_html_to_telegram_html(html_content: str) -> str:
@@ -620,60 +616,6 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
         # Возвращаем основную клавиатуру
         await message.answer("Выполнение завершено.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
 
-# --- Markdown and Abstracts ---
-def preprocess_html_for_telegraph(html_content: str) -> str:
-    """Replaces unsupported HTML tags with tags supported by Telegra.ph."""
-    # h1, h2 -> h3, h4
-    html_content = html_content.replace('<h1>', '<h3>').replace('</h1>', '</h3>')
-    html_content = html_content.replace('<h2>', '<h4>').replace('</h2>', '</h4>')
-    # h5, h6 -> bold paragraph
-    html_content = html_content.replace('<h5>', '<p><b>').replace('</h5>', '</b></p>')
-    html_content = html_content.replace('<h6>', '<p><b>').replace('</h5>', '</b></p>')
-
-    # Crude table removal to prevent errors, replacing with a placeholder.
-    import re
-    html_content = re.sub(
-        r'<table.*?>.*?</table>', 
-        '<p><i>[Таблица была удалена, так как не поддерживается Telegra.ph]</i></p>', 
-        html_content, 
-        flags=re.DOTALL
-    )
-    
-    return html_content
-
-async def get_telegraph_client() -> Telegraph | None:
-    """Initializes and returns an async Telegraph client instance. Creates a new account if no token is provided."""
-    global telegraph_client
-    if telegraph_client:
-        return telegraph_client
-
-    token = os.getenv("TELEGRAPH_TOKEN")
-    client = Telegraph(access_token=token)
-
-    if not token:
-        try:
-            await client.create_account(short_name='Matplobbot', author_name='Matplobbot', author_url='https://github.com/Ackrome/matplobbot')
-            new_token = client.access_token
-            logger.info(f"Created new Telegraph account. Your TELEGRAPH_TOKEN is: {new_token}. Please set it as an environment variable to reuse the account.")
-            telegraph_client = client
-        except Exception as e:
-            logger.error(f"Could not create Telegraph account: {e}", exc_info=True)
-            return None
-    else:
-        try:
-            await client.get_account_info()
-            logger.info("Telegraph client initialized with existing token.")
-            telegraph_client = client
-        except TelegraphException as e:
-            logger.error(f"Telegraph token is invalid: {e}. Please check your TELEGRAPH_TOKEN environment variable.", exc_info=True)
-            return None
-
-    return telegraph_client
-
-
-
-# service.py
-
 async def send_as_plain_text(message: Message, file_path: str, content: str):
     """Helper to send content as plain text, handling long messages."""
     header = f"Файл: `{file_path}` (простой текст)\n\n"
@@ -687,92 +629,6 @@ async def send_as_plain_text(message: Message, file_path: str, content: str):
     for x in range(0, len(content), 4000): # Use a slightly smaller chunk size for safety with markdown ```
         chunk = content[x:x+4000]
         await message.answer(f"```\n{chunk}\n```", parse_mode='markdown')
-
-async def send_as_text_with_formulas(message: Message, file_path: str, content: str):
-    """
-    Sends markdown content as a series of text messages and rendered LaTeX images.
-    """
-    await message.answer(f"Конспект: `{file_path}` (текст + формулы)", parse_mode='markdown')
-
-    # Regex to find and capture LaTeX formulas
-    latex_regex_for_split = r'(\$\$(?:.|\n)*?\$\$|(?<!\$)\$[^$]+?\$(?!\$))'
-    chunks = re.split(latex_regex_for_split, content, flags=re.DOTALL)
-
-    if not chunks or (len(chunks) == 1 and not chunks.strip()):
-        await message.answer("_(файл пуст)_", parse_mode='markdown')
-        return
-
-    settings = await database.get_user_settings(message.from_user.id)
-    padding = MD_LATEX_PADDING # Use constant padding for MD
-    dpi = settings['latex_dpi']
-
-    async with aiohttp.ClientSession() as session: # Create one session for all potential uploads
-        for chunk in chunks:
-            if not chunk or chunk.isspace():
-                continue
-
-            # Check if it's a formula
-            is_display_formula = chunk.startswith('$$') and chunk.endswith('$$')
-            # The negative lookbehind in the regex should prevent this from matching $$
-            is_inline_formula = chunk.startswith('$') and chunk.endswith('$') and not is_display_formula
-
-            if is_display_formula:
-                formula_code = chunk[2:-2].strip()
-                is_display = True
-            elif is_inline_formula:
-                formula_code = chunk[1:-1].strip()
-                is_display = False
-            else: # It's a text chunk
-                text_to_send = chunk.strip()
-                if not text_to_send:
-                    continue
-                
-                # Send text chunk, splitting if necessary
-                for i in range(0, len(text_to_send), 4096):
-                    part = text_to_send[i:i+4096]
-                    try:
-                        # Try sending with Markdown, it's more readable
-                        await message.answer(part, parse_mode='markdown', disable_web_page_preview=True)
-                    except TelegramBadRequest:
-                        # Fallback to plain text if Markdown parsing fails
-                        await message.answer(part, disable_web_page_preview=True)
-                continue # Move to the next chunk
-
-            # It's a formula, render and send
-            if not formula_code.strip():
-                continue
-
-            try:
-                current_padding = padding if is_display else max(0, padding - 10)
-                
-                # --- Caching logic ---
-                formula_key = f"{formula_code}|{current_padding}|{is_display}"
-                formula_hash = hashlib.sha1(formula_key.encode()).hexdigest()
-                cached_url = await database.get_latex_cache(formula_hash)
-                
-                image_to_send = None
-
-
-                if cached_url:
-                    image_to_send = cached_url
-                else:
-                    image_buffer = await render_latex_to_image(formula_code, current_padding, dpi, is_display_override=is_display)
-                    image_url = await github_service.upload_image_to_github(image_buffer, session)
-                    if image_url:
-                        await database.add_latex_cache(formula_hash, image_url)
-                        image_to_send = image_url
-                    else:
-                        image_buffer.seek(0)
-                        image_to_send = BufferedInputFile(image_buffer.read(), filename="formula.png")
-                        await message.answer("⚠️ Не удалось загрузить картинку на сервер, отправлено как временный файл.") # caption is not used here
-                await message.answer_photo(photo=image_to_send, caption=caption, parse_mode='markdown')
-            except (ValueError, RuntimeError, FileNotFoundError) as e:
-                logger.error(f"Ошибка при рендеринге LaTeX для '{formula_code}': {e}", exc_info=True)
-                error_text = f"Не удалось отрендерить формулу: `{chunk}`\n\n**Ошибка:**\n```\n{e}\n```"
-                await message.answer(error_text, parse_mode='markdown')
-            except Exception as e:
-                logger.error(f"Непредвиденная ошибка при рендеринге LaTeX для '{formula_code}': {e}", exc_info=True)
-                await message.answer(f"Произошла непредвиденная ошибка при обработке формулы: `{chunk}`")
 
 async def send_as_document_from_url(message: Message, file_url: str, file_path: str):
     """Downloads a file from a URL by chunks and sends it as a document."""
@@ -845,12 +701,8 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
         settings = await database.get_user_settings(user_id)
         md_mode = settings.get('md_display_mode', 'md_file')
 
-        # Option 2: Plain text
-        if md_mode == 'text':
-            await send_as_text_with_formulas(message, file_path, content)
-
-        # Option 3: .md file
-        elif md_mode == 'md_file':
+        # Option 1: .md file
+        if md_mode == 'md_file':
             file_name = file_path.split('/')[-1]
             file_bytes = content.encode('utf-8')
             await message.answer_document(
@@ -859,7 +711,7 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
                 parse_mode='markdown'
             )
 
-        # Option 5: .pdf file
+        # Option 2: .pdf file
         elif md_mode == 'pdf_file':
             try:
                 page_title = file_path.split('/')[-1].replace('.md', '')
@@ -875,8 +727,8 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
             except Exception as e:
                 logger.error(f"Ошибка при создании PDF для '{file_path}': {e}", exc_info=True)
                 await message.answer(f"Произошла ошибка при создании PDF-файла: {e}. Отправляю как простой текст.")
-                await send_as_plain_text(message, file_path, content)
-        # Option 4: .html file
+                await send_as_plain_text(message, file_path, content) # Fallback
+        # Option 3: .html file
         elif md_mode == 'html_file':
             try:
                 page_title = file_path.split('/')[-1].replace('.md', '')
@@ -892,163 +744,7 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
             except Exception as e:
                 logger.error(f"Ошибка при создании HTML-файла с KaTeX для '{file_path}': {e}", exc_info=True)
                 await message.answer(f"Произошла ошибка при создании HTML-файла: {e}. Отправляю как простой текст.")
-                await send_as_plain_text(message, file_path, content)
-
-        # Option 1: Telegra.ph (default)
-        elif md_mode == 'telegraph':
-            try: # --- New Robust LaTeX + Markdown Processing ---
-
-                # 1. Find all LaTeX formulas, replace with placeholders, and store them.
-                latex_formulas = []
-
-                def store_latex_match(match):
-                    # group(1) is for display mode $$...$$, group(2) is for inline mode $...$
-                    is_display = match.group(1) is not None
-                    code = match.group(1) if is_display else match.group(2)
-                    
-                    if code is not None:
-                        # Используем уникальный кастомный тег в качестве заполнителя.
-                        # Markdown-парсер его проигнорирует и оставит в итоговом HTML,
-                        # в отличие от HTML-комментария, который он удаляет.
-                        placeholder = f'<latex-placeholder id="{len(latex_formulas)}"></latex-placeholder>'
-                        latex_formulas.append({
-                            'code': code.strip(),
-                            'is_display': is_display,
-                            'placeholder': placeholder,
-                            'original': match.group(0) # For fallback
-                        })
-                        return placeholder
-                    return match.group(0)
-
-                # Regex to find $$...$$ (group 1) or $...$ (group 2).
-                # The negative lookarounds for inline math prevent matching single dollars or parts of display math.
-                latex_regex = r'\$\$(.*?)\$\$|(?<!\$)\$([^$]+)\$(?!\$)'
-                content_with_placeholders = re.sub(latex_regex, store_latex_match, content, flags=re.DOTALL)
-
-                # 2. Convert the Markdown (with placeholders) to HTML.
-                
-                html_with_placeholders = markdown.markdown(
-                    content_with_placeholders, 
-                    extensions=['fenced_code', 'tables']
-                )
-
-                # After converting to HTML, transform mermaid code blocks to the format Mermaid.js expects.
-                html_with_placeholders = html_with_placeholders.replace(
-                    '<pre><code class="language-mermaid">', '<pre class="mermaid">'
-                ).replace('</code></pre>', '</pre>')
-
-                # 3. Asynchronously render all stored formulas to images and upload them.
-                padding = MD_LATEX_PADDING # Use constant padding for MD
-                dpi = settings['latex_dpi']
-
-                # Create one session for all uploads to improve efficiency and potentially avoid rate-limiting.
-                async with aiohttp.ClientSession() as session:
-                    debug_photo_sent = True
-                    
-                    async def render_and_upload(formula_data): 
-                        nonlocal debug_photo_sent
-                        try:
-                            # --- Caching logic ---
-                            current_padding_for_hash = padding if formula_data['is_display'] else max(0, padding - 10)
-                            formula_key = f"{formula_data['code']}|{current_padding_for_hash}|{dpi}|{formula_data['is_display']}"
-                            formula_hash = hashlib.sha1(formula_key.encode()).hexdigest()
-                            cached_url = await database.get_latex_cache(formula_hash)
-                            if cached_url:
-                                return cached_url
-                           # --- End caching logic ---
-                            if not formula_data['code']: return None # Skip empty formulas
-                            current_padding = padding if formula_data['is_display'] else max(0, padding - 10)
-                            image_buffer = await render_latex_to_image(
-                                formula_data['code'], 
-                                current_padding, 
-                                dpi,
-                                is_display_override=formula_data['is_display']
-                            )
-                            # --- НАЧАЛО ДИАГНОСТИЧЕСКОГО БЛОКА ---
-                            if not debug_photo_sent:
-                                try:
-                                    image_bytes = image_buffer.getvalue()
-                                    file_size = len(image_bytes)
-                                    
-                                    await callback.message.answer(
-                                        f"🩺 **Диагностика:**\n"
-                                        f"Первая сгенерированная картинка.\n"
-                                        f"Размер: **{file_size} байт**.",
-                                        parse_mode='markdown'
-                                    )
-
-                                    if file_size > 0:
-                                        # Создаем копию для отправки, чтобы не повредить основной буфер
-                                        debug_buffer = io.BytesIO(image_bytes)
-                                        await message.answer_photo(
-                                            photo=BufferedInputFile(debug_buffer.read(), filename="debug_formula.png")
-                                        )
-                                    else:
-                                        await message.answer("⚠️ **Диагностика:** Размер картинки 0 байт. Проблема в рендеринге LaTeX.")
-                                    
-                                except Exception as e:
-                                    await message.answer(f"❌ **Диагностика:** Не удалось отправить картинку в чат. Ошибка: {e}")
-                                finally:
-                                    debug_photo_sent = True # Поднимаем флаг, чтобы не спамить в чат
-                            
-                            image_buffer.seek(0) # Возвращаем курсор буфера в начало для основной загрузки
-                            # --- КОНЕЦ ДИАГНОСТИЧЕСКОГО БЛОКА ---
-                            
-                            image_url = await github_service.upload_image_to_github(image_buffer, session)
-                            # --- Caching logic ---
-                            if image_url:
-                                await database.add_latex_cache(formula_hash, image_url)
-                            # --- End caching logic ---
-                            return image_url
-                        except Exception as e:
-                            logger.warning(f"Failed to render/upload LaTeX ('{formula_data['code']}'): {e}")
-                            return None
-
-                    # Используем семафор для ограничения одновременных запросов, чтобы не перегружать систему и API.
-                    semaphore = asyncio.Semaphore(5)
-                    async def guarded_render(formula_data):
-                        async with semaphore:
-                            return await render_and_upload(formula_data)
-
-                    tasks = [guarded_render(f) for f in latex_formulas]
-                    image_urls = await asyncio.gather(*tasks)
-
-                # 4. Replace placeholders in the HTML with the final <img> tags or error messages.
-                final_html = html_with_placeholders
-                for i, formula_data in enumerate(latex_formulas):
-                    url = image_urls[i]
-                    if url:
-                        if formula_data['is_display']:
-                            replacement = f'<figure><img src="{url}"></figure>'
-                        else:
-                            # Для строчных формул добавляем стиль для лучшего выравнивания с текстом
-                            replacement = f'<img src="{url}" style="height: 1.1em; vertical-align: -0.2em;">'
-                    else:
-                        replacement = f'<i>[Ошибка рендеринга LaTeX: {formula_data["original"]}]</i>'
-                    final_html = final_html.replace(formula_data['placeholder'], replacement)
-
-                # 5. Preprocess the final HTML for Telegra.ph compatibility.
-                final_html = preprocess_html_for_telegraph(final_html)
-
-                # 6. Get Telegraph client and create the page.
-                telegraph = await get_telegraph_client()
-                if not telegraph:
-                    await message.answer("Ошибка: сервис Telegraph недоступен. Отправляю как простой текст.")
-                    await send_as_plain_text(message, file_path, content)
-                else:
-                    page_title = file_path.split('/')[-1].replace('.md', '')
-                    try:
-                        response = await telegraph.create_page(title=page_title, html_content=final_html, author_name="Matplobbot", author_url="https://github.com/Ackrome/matplobbot")
-                        page_url = response['url']
-                        await message.answer(f"Конспект **{file_path}** опубликован в Telegra.ph:\n{page_url}", parse_mode='markdown', disable_web_page_preview=False)
-                    except TelegraphException as e:
-                        logger.error(f"Failed to create Telegraph page for '{file_path}': {e}", exc_info=True)
-                        await message.answer(f"Не удалось создать Telegra.ph статью: {e}. Отправляю как простой текст.")
-                        await send_as_plain_text(message, file_path, content)
-            except Exception as e:
-                logger.error(f"Ошибка при обработке Markdown и LaTeX для Telegraph '{file_path}': {e}", exc_info=True)
-                await message.answer(f"Произошла ошибка при создании Telegra.ph статьи: {e}. Отправляю как простой текст.")
-                await send_as_plain_text(message, file_path, content)
+                await send_as_plain_text(message, file_path, content) # Fallback
         
         # Fallback for unknown mode
         else:
