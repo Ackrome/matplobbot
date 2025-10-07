@@ -991,8 +991,8 @@ async def get_settings_keyboard(user_id: int) -> InlineKeyboardBuilder:
     # Настройка отображения Markdown
     md_mode = settings.get('md_display_mode', 'md_file')
     md_mode_map = {
-        'telegraph': '🌐 Telegra.ph',
-        'text': '📄 Простой текст',
+        # 'telegraph': '🌐 Telegra.ph',
+        # 'text': '📄 Простой текст',
         'md_file': '📁 .md файл',
         'html_file': '📁 .html файл',
         'pdf_file': '📁 .pdf файл'
@@ -1072,8 +1072,8 @@ async def cq_cycle_md_mode(callback: CallbackQuery):
     await callback.message.edit_reply_markup(reply_markup=keyboard.as_markup())
 
     md_mode_map = {
-        'telegraph': '🌐 Telegra.ph',
-        'text': '📄 Простой текст',
+        # 'telegraph': '🌐 Telegra.ph',
+        # 'text': '📄 Простой текст',
         'md_file': '📁 .md файл',
         'html_file': '📁 .html файл',
         'pdf_file': '📁 .pdf файл'
