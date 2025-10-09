@@ -50,6 +50,8 @@ PANDOC_HEADER_INCLUDES = r"""
 \usepackage{mathtools}
 \usepackage{fontspec}      % The core of XeLaTeX font handling
 \usepackage{babel}         % Language-specific settings
+\usepackage{tikz,pgfplots}
+\usepackage{blindtext}
 \newunicodechar{∂}{\partial}
 \newunicodechar{Δ}{\Delta}
 """
@@ -67,6 +69,8 @@ LATEX_PREAMBLE = r"""
 \usepackage{mathrsfs}
 \usepackage{color}
 \usepackage{mhchem}
+\usepackage{tikz,pgfplots}
+\usepackage{blindtext}
 \usepackage{xcolor}
 \usepackage{newunicodechar}
 \newunicodechar{∂}{\partial}
