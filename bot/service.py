@@ -48,6 +48,10 @@ PANDOC_HEADER_INCLUDES = r"""
 \usepackage{fontspec}
 \usepackage[main=russian]{babel}
 \usepackage{microtype}
+
+% --- ЯВНАЯ НАСТРОЙКА ШРИФТОВ ДЛЯ КИРИЛЛИЦЫ ---
+% Это гарантирует, что для русского текста будет использоваться DejaVu,
+% а не стандартный Latin Modern, в котором нет кириллицы.
 \babelfont{rm}[
   Ligatures=TeX,
   BoldFont = DejaVu Serif Bold,
@@ -64,19 +68,25 @@ PANDOC_HEADER_INCLUDES = r"""
 
 \newunicodechar{∂}{\partial}
 \newunicodechar{Δ}{\Delta}
+
+% --- НАСТРОЙКА HYPERREF ДЛЯ ПОДДЕРЖКИ UNICODE В ССЫЛКАХ И ЗАГОЛОВКАХ ---
 \usepackage{hyperref}
 \hypersetup{
-    unicode=true,          % разрешить символы не-Latin в закладках PDF
+    unicode=true,
     pdftitle={\@title},
     pdfauthor={\@author},
-    pdfsubject={},
-    pdfkeywords={},
-    colorlinks=true,       % цветные ссылки вместо рамок
-    linkcolor=blue,        % цвет внутренних ссылок
-    citecolor=green,       % цвет ссылок на библиографию
-    urlcolor=magenta,      % цвет внешних ссылок
-    breaklinks=true        % разрешить переносы в длинных ссылках
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=green,
+    urlcolor=magenta,
+    breaklinks=true
 }
+\makeatletter
+% Пандок использует \hypertarget для создания якорей. Без этого исправления
+% кириллические заголовки ломают \hypertarget. Этот код "защищает" текст заголовка.
+\let\oldhypertarget\hypertarget
+\renewcommand{\hypertarget}[2]{\oldhypertarget{#1}{\texorpdfstring{#2}{#2}}}
+\makeatother
 """
 
 # The preamble for single formulas (this should now also be updated for consistency)
@@ -375,17 +385,14 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
 
 def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributors: list | None = None, last_modified_date: str | None = None) -> io.BytesIO:
     """
-    Окончательная, надежная функция для конвертации Markdown в PDF.
+    Финальная, надежная функция для конвертации Markdown в PDF.
     Использует метаданные (авторы, дата) для создания более информативного документа.
     """
-    # Форматируем авторов в виде кликабельных ссылок для Pandoc
     if contributors:
-        # Pandoc понимает синтаксис Markdown в метаданных и превратит его в \href{}{} в LaTeX
-        # author_links = [f"[{c['login']}]({c['html_url']})" for c in contributors]
         author_links = [r"\href{"+ f"{c['html_url']}" + r"}{" + f"{c['login']}" + r"}" for c in contributors]
         author_string = ", ".join(author_links)
     else:
-        author_string = "Matplobbot" # Запасной вариант
+        author_string = "Matplobbot"
 
     date_string = last_modified_date or datetime.datetime.now().strftime("%d %B %Y")
     
@@ -403,7 +410,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             tex_path = os.path.join(temp_dir, f'{base_name}.tex')
             pdf_path = os.path.join(temp_dir, f'{base_name}.pdf')
 
-            # --- STAGE 1: Convert Markdown to a standalone .tex file ---
+            # --- ЭТАП 1: Конвертация Markdown в .tex ---
             pandoc_to_tex_command = [
                 'pandoc', 
                 '--filter', '/app/bot/pandoc_mermaid_filter.py',
@@ -411,10 +418,12 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
                 '--from=markdown-yaml_metadata_block+tex_math_dollars+raw_tex+escaped_line_breaks+backtick_code_blocks',
                 '--to=latex',
                 '--pdf-engine=xelatex', '--include-in-header', header_path,
-                '--variable', 'lang=russian', '--variable', 'mainfont=DejaVu Serif',
-                '--variable', 'sansfont=DejaVu Sans', '--variable', 'monofont=DejaVu Sans Mono',
-                '--variable', f'title={title}', '--variable', f'author={author_string}',
-                '--variable', f'date={date_string}', '--variable', 'documentclass=article',
+                # --- ИСПРАВЛЕНИЕ: Убраны переменные, конфликтующие с header.tex ---
+                # 'lang', 'mainfont', 'sansfont', 'monofont' теперь задаются в PANDOC_HEADER_INCLUDES
+                '--variable', f'title={title}',
+                '--variable', f'author={author_string}',
+                '--variable', f'date={date_string}',
+                '--variable', 'documentclass=article',
                 '--variable', 'geometry:margin=2cm',
                 '-o', tex_path
             ]
@@ -426,43 +435,53 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
                 pandoc_to_tex_command, input=markdown_string.encode('utf-8'), capture_output=True
             )
             if pandoc_process.returncode != 0:
-                raise RuntimeError(f"Ошибка Pandoc: {pandoc_process.stderr.decode('utf-8', 'ignore')}")
+                raise RuntimeError(f"Ошибка Pandoc при конвертации в .tex: {pandoc_process.stderr.decode('utf-8', 'ignore')}")
 
-            # --- STAGE 2: Sanitize the generated LaTeX code ---
-            # --- STAGE 3: Compile with latexmk, the robust industry standard ---
+            # --- ЭТАП 2: Компиляция с latexmk ---
             compile_command = [
                 'latexmk',
                 '-file-line-error',
-                '-pdf',          # Explicitly demand a PDF as the final output
-                '-xelatex',      # Use the correct, Unicode-aware engine. Removed '-f' to fail on errors.
+                '-pdf',
+                '-xelatex',
                 '-interaction=nonstopmode',
                 f'-output-directory={temp_dir}',
                 tex_path
             ]
             compile_process = subprocess.run(compile_command, capture_output=True, text=True, encoding='utf-8', errors='ignore')
 
-            # --- DEFINITIVE ERROR CHECK: Trust the file, not the return code ---
+            # --- ЭТАП 3: Улучшенная проверка ошибок ---
             log_path = os.path.join(temp_dir, f'{base_name}.log')
             log_content = "Log file not found."
             compilation_successful = False
             if os.path.exists(log_path):
                 with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
                     log_content = f.read()
-                    logger.info(f"latexmk compilation output for {base_name}.tex:\n{compile_process.stdout}\n--------------------------------------------------------------- LOG ---------------------------------------------------------------\n{log_content}\n--------------------------------------------------------------- END LOG -----------------------------------------------------------\n")
-                    # A successful latexmk run will have this line near the end.
-                    if re.search(r"Output written on .*?\.pdf", log_content):
+                    logger.info(f"latexmk compilation log for {base_name}.tex:\n{log_content}\n")
+                    if "Output written on" in log_content and ".pdf" in log_content:
                         compilation_successful = True
 
-            if not os.path.exists(pdf_path) or not compilation_successful:
-                process_output = compile_process.stdout or "No stdout."
-                error_header = "PDF-файл не был создан." if not os.path.exists(pdf_path) else "Компиляция PDF завершилась некорректно (неполный файл)."
-                raise RuntimeError(f"Финальная ошибка: {error_header}\n--- STDOUT ---\n{process_output[-2000:]}\n--- LOG ---\n{log_content[-2000:]}")
+            if not os.path.exists(pdf_path) or not compilation_successful or compile_process.returncode != 0:
+                # --- УЛУЧШЕННЫЙ ПОИСК ФАТАЛЬНОЙ ОШИБКИ ---
+                error_message = "Неизвестная ошибка компиляции LaTeX."
+                # Ищем первую строку, начинающуюся с "!", которая является маркером фатальной ошибки
+                fatal_error_match = re.search(r"^!.*$", log_content, re.MULTILINE)
+                if fatal_error_match:
+                    # Захватываем саму ошибку и несколько строк контекста после нее
+                    error_start_index = fatal_error_match.start()
+                    context_end_index = log_content.find('\n\n', error_start_index)
+                    if context_end_index == -1:
+                        context_end_index = error_start_index + 400
+                    error_message = log_content[error_start_index:context_end_index].strip()
+                else:
+                    error_message = "Фатальная ошибка не найдена, но компиляция не удалась. Конец лога:\n" + log_content[-2000:]
+
+                error_header = "PDF-файл не был создан." if not os.path.exists(pdf_path) else "Компиляция PDF завершилась некорректно."
+                raise RuntimeError(f"Финальная ошибка: {error_header}\n--- КЛЮЧЕВАЯ ОШИБКА ИЗ ЛОГА ---\n{error_message}")
 
             with open(pdf_path, 'rb') as f:
                 return io.BytesIO(f.read())
-
         finally:
-            # Cleanup logic
+            # Логика очистки
             if os.path.exists(cleanup_log_path):
                 try:
                     with open(cleanup_log_path, 'r', encoding='utf-8') as f:
@@ -473,7 +492,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
                                 except OSError: pass
                     os.remove(cleanup_log_path)
                 except Exception: pass
-                
+
 async def convert_md_to_pdf_pandoc(markdown_string: str, title: str, contributors: list | None = None, last_modified_date: str | None = None) -> io.BytesIO:
     """Асинхронная обертка для конвертации Markdown в PDF с помощью pandoc."""
     return await asyncio.to_thread(_convert_md_to_pdf_pandoc_sync, markdown_string, title, contributors, last_modified_date)
