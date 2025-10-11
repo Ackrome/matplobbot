@@ -428,8 +428,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             compile_command = [
                 'latexmk',
                 '-pdf',          # Explicitly demand a PDF as the final output
-                '-xelatex',      # Use the correct, Unicode-aware engine
-                '-f',            # Force compilation to continue despite non-fatal warnings
+                '-xelatex',      # Use the correct, Unicode-aware engine. Removed '-f' to fail on errors.
                 '-interaction=nonstopmode',
                 f'-output-directory={temp_dir}',
                 tex_path
@@ -437,15 +436,20 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             compile_process = subprocess.run(compile_command, capture_output=True, text=True, encoding='utf-8', errors='ignore')
 
             # --- DEFINITIVE ERROR CHECK: Trust the file, not the return code ---
-            if not os.path.exists(pdf_path):
-                log_path = os.path.join(temp_dir, f'{base_name}.log')
-                log_content = "Log file not found."
-                if os.path.exists(log_path):
-                    with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        log_content = f.read()
-                
+            log_path = os.path.join(temp_dir, f'{base_name}.log')
+            log_content = "Log file not found."
+            compilation_successful = False
+            if os.path.exists(log_path):
+                with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    log_content = f.read()
+                    # A successful latexmk run will have this line near the end.
+                    if re.search(r"Output written on .*?\.pdf", log_content):
+                        compilation_successful = True
+
+            if not os.path.exists(pdf_path) or not compilation_successful:
                 process_output = compile_process.stdout or "No stdout."
-                raise RuntimeError(f"Финальная ошибка: PDF-файл не был создан. \n--- STDOUT ---\n{process_output[-2000:]}\n--- LOG ---\n{log_content[-2000:]}")
+                error_header = "PDF-файл не был создан." if not os.path.exists(pdf_path) else "Компиляция PDF завершилась некорректно (неполный файл)."
+                raise RuntimeError(f"Финальная ошибка: {error_header}\n--- STDOUT ---\n{process_output[-2000:]}\n--- LOG ---\n{log_content[-2000:]}")
 
             with open(pdf_path, 'rb') as f:
                 return io.BytesIO(f.read())
