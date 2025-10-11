@@ -381,7 +381,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             # --- STAGE 1: Convert Markdown to a standalone .tex file ---
             pandoc_to_tex_command = [
                 'pandoc', '--filter', '/app/bot/pandoc_mermaid_filter.py',
-                '--from=markdown+tex_math_dollars+raw_tex', '--to=latex',
+                '--from=markdown+tex_math_dollars+raw_tex+tab_stop', '--to=latex',
                 '--pdf-engine=xelatex', '--include-in-header', header_path,
                 '--variable', 'lang=russian', '--variable', 'mainfont=DejaVu Serif',
                 '--variable', 'sansfont=DejaVu Sans', '--variable', 'monofont=DejaVu Sans Mono',
