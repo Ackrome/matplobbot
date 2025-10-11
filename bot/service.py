@@ -37,6 +37,12 @@ logger = logging.getLogger(__name__)
 # This new constant contains all the packages and settings needed by BOTH
 # single formula rendering AND the full PDF document generation.
 # This is the implementation of your excellent suggestion.
+# service.py
+
+# --- Constants ---
+# This new constant contains all the packages and settings needed by BOTH
+# single formula rendering AND the full PDF document generation.
+# This is the implementation of your excellent suggestion.
 PANDOC_HEADER_INCLUDES = r"""
 \usepackage{amsmath}
 \usepackage{amssymb}
@@ -48,18 +54,34 @@ PANDOC_HEADER_INCLUDES = r"""
 \usepackage{xcolor}
 \usepackage{newunicodechar}
 \usepackage{mathtools}
-\usepackage{fontspec}      % The core of XeLaTeX font handling
-\usepackage{babel}         % Language-specific settings
+\usepackage{fontspec}      % Must be before font settings
+\usepackage{babel}         % Must be after fontspec for language-specific settings
 \usepackage{tikz,pgfplots}
 \usepackage{blindtext}
+
+% Explicitly define main fonts with bold/italic variants
+% This helps LaTeX find the correct Cyrillic font for bold/italic text
+\setmainfont{DejaVu Serif}[
+  BoldFont = DejaVu Serif Bold,
+  ItalicFont = DejaVu Serif Italic,
+  BoldItalicFont = DejaVu Serif Bold Italic
+]
+\setsansfont{DejaVu Sans}[
+  BoldFont = DejaVu Sans Bold,
+  ItalicFont = DejaVu Sans Oblique,
+  BoldItalicFont = DejaVu Sans Bold Oblique
+]
+\setmonofont{DejaVu Sans Mono}[
+  BoldFont = DejaVu Sans Mono Bold,
+  ItalicFont = DejaVu Sans Mono Oblique,
+  BoldItalicFont = DejaVu Sans Mono Bold Oblique
+]
+
 \newunicodechar{∂}{\partial}
 \newunicodechar{Δ}{\Delta}
 \usepackage{microtype}
-\setmainfont{DejaVu Serif}
-\usepackage[unicode]{hyperref}
-\usepackage[unicode]{href}
-\newfontfamily\cyrillicfont{DejaVu Serif}
-\setmonofont{DejaVu Sans Mono}
+% unicode=true is key for cyrillic in bookmarks/links, and bookmarks options improve navigation
+\usepackage[unicode=true, bookmarks=true, bookmarksopen=true]{hyperref} 
 """
 
 # The preamble for single formulas (this should now also be updated for consistency)
@@ -129,6 +151,7 @@ def convert_html_to_telegram_html(html_content: str) -> str:
     # Clean up extra newlines and spaces
     lines = [line.strip() for line in html_content.split('\n')]
     return '\n'.join(filter(None, lines))
+
 def _pmatrix_hline_fixer(match: re.Match) -> str:
     """
     Callback for re.sub to replace a pmatrix environment with an array environment
@@ -162,6 +185,7 @@ def _pmatrix_hline_fixer(match: re.Match) -> str:
     
     # If no \hline is found, return the original pmatrix environment unchanged.
     return match.group(0)
+
 # --- LaTeX Rendering ---
 def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_override: bool | None = None) -> io.BytesIO:
     """Синхронная функция для рендеринга LaTeX в PNG с использованием latex и dvipng, с добавлением отступов."""
@@ -368,7 +392,6 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
     else:
         author_string = "Matplobbot" # Запасной вариант
 
-    # Используем дату последнего изменения или текущую дату как запасной вариант
     date_string = last_modified_date or datetime.datetime.now().strftime("%d %B %Y")
     
     cleanup_log_path = '/tmp/pandoc_cleanup.log'
@@ -376,10 +399,8 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
         os.remove(cleanup_log_path)
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        # A minimal, correct header for XeLaTeX
         header_path = os.path.join(temp_dir, 'header.tex')
         with open(header_path, 'w', encoding='utf-8') as f:
-            # PANDOC_HEADER_INCLUDES must be defined globally and correctly for XeLaTeX
             f.write(PANDOC_HEADER_INCLUDES)
 
         try:
@@ -399,7 +420,6 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
                 '--variable', 'sansfont=DejaVu Sans', '--variable', 'monofont=DejaVu Sans Mono',
                 '--variable', f'title={title}', '--variable', f'author={author_string}',
                 '--variable', f'date={date_string}', '--variable', 'documentclass=article',
-                # --- ИЗМЕНЕНИЕ ЗДЕСЬ: Устанавливаем поля в 2см ---
                 '--variable', 'geometry:margin=2cm',
                 '-o', tex_path
             ]
@@ -497,11 +517,10 @@ async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[
                 # For LaTeX/PDF, use \href{url}{text}. We need to escape special LaTeX chars in text.
                 # A simple escape for common characters.
                 escaped_display_text = display_text.replace('&', r'\&').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#').replace('_', r'\_').replace('{', r'\{').replace('}', r'\}').replace('~', r'\textasciitilde ').replace('^', r'\textasciicircum ')
-                # --- NEW FIX: Also escape special characters in the URL for LaTeX ---
-                # Characters like _, #, %, & can break the \href command if not escaped.
-                # The `url` is already URL-encoded, but LaTeX needs its own escaping.
+                # --- Also escape special characters in the URL for LaTeX ---
                 escaped_url = url.replace('\\', r'\textbackslash ').replace('&', r'\&').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#').replace('_', r'\_').replace('{', r'\{').replace('}', r'\}').replace('~', r'\textasciitilde{}')
-                return f"\\href{{{escaped_url}}}{{{escaped_display_text}}}"
+                # --- CRITICAL FIX: Wrap href in \text{} to make it safe inside math environments ---
+                return f"\\text{{\\href{{{escaped_url}}}{{{escaped_display_text}}}}}"
             else: # Default to Markdown
                 return f"[{display_text}]({url})"
         else:
@@ -515,7 +534,6 @@ async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[
     
     resolved_content = re.sub(wikilink_regex, replace_wikilink, content)
     return resolved_content
-
 
 # --- Code Execution ---
 async def execute_code_and_send_results(message: Message, code_to_execute: str):
@@ -1150,7 +1168,6 @@ async def _prepare_html_from_markdown(content: str, settings: dict, file_path: s
 </body>
 </html>"""
     return full_html_doc, latex_formulas
-
 
 async def display_lec_all_path(message: Message, repo_path: str, path: str, is_edit: bool = False):
     """Helper to fetch and display contents of a path in the lec_all repo."""
