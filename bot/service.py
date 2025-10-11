@@ -474,70 +474,56 @@ async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[
     Finds all [[wikilinks]] in the content and replaces them with standard
     links for the specified target format ('md' or 'latex').
     Handles both [[Page Name]] and [[Page Name|display text]] syntaxes.
+    Crucially, this version avoids processing wikilinks inside LaTeX math environments.
     """
-    if not all_repo_files:
+    if not all_repo_files or '[[' not in content:
         return content
 
-    # --- NEW: Isolate math environments to prevent replacements inside them ---
-    math_blocks = []
-    def store_math_and_replace(match):
-        placeholder = f"__MATH_BLOCK_{len(math_blocks)}__"
-        math_blocks.append(match.group(0))
-        return placeholder
-
-    # This regex captures both inline ($...$) and display ($$...) math
-    math_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$)'
-    content_no_math = re.sub(math_regex, store_math_and_replace, content, flags=re.DOTALL)
-    # --- END NEW ---
-
     # Create a mapping from "wikilink-friendly" names to full paths
-    # e.g., "my page" -> "path/to/My Page.md"
     file_map = {os.path.splitext(os.path.basename(f))[0].lower(): f for f in all_repo_files}
 
     def replace_wikilink(match):
-        # The content inside [[...]]
         inner_content = match.group(1).strip()
-        
-        # Split by '|' to separate file name from display text
         parts = inner_content.split('|', 1)
         file_name_part = parts[0].strip()
         display_text = parts[1].strip() if len(parts) > 1 else file_name_part
-
-        # Find a matching file in the map using the file name part
         found_path = file_map.get(file_name_part.lower())
 
         if found_path:
-            # Construct the full URL to the file on GitHub
-            # We use quote() to properly encode spaces and other special characters in the path
             url = f"https://github.com/{repo_path}/blob/{github_service.MD_SEARCH_BRANCH}/{quote(found_path)}"
-
             if target_format == 'latex':
-                # For LaTeX/PDF, use \href{url}{text}. We need to escape special LaTeX chars in text.
-                # A simple escape for common characters.
                 escaped_display_text = display_text.replace('&', r'\&').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#').replace('_', r'\_').replace('{', r'\{').replace('}', r'\}').replace('~', r'\textasciitilde ').replace('^', r'\textasciicircum ')
-                # --- Also escape special characters in the URL for LaTeX ---
                 escaped_url = url.replace('\\', r'\textbackslash ').replace('&', r'\&').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#').replace('_', r'\_').replace('{', r'\{').replace('}', r'\}').replace('~', r'\textasciitilde{}')
-                # --- CRITICAL FIX: Wrap href in \text{} to make it safe inside math environments ---
-                return f"\\text{{\\href{{{escaped_url}}}{{{escaped_display_text}}}}}"
-            else: # Default to Markdown
+                # The \text{} wrapper is no longer needed as replacements are only done in non-math contexts.
+                return f"\\href{{{escaped_url}}}{{{escaped_display_text}}}"
+            else:  # Default to Markdown
                 return f"[{display_text}]({url})"
         else:
-            # If no file is found, return the original wikilink text but not as a link.
-            # This makes it clear that the link is broken.
             return f"_{display_text}_"
 
-    # This regex finds [[wikilinks]] but avoids grabbing the middle of other links.
-    # It looks for [[ followed by any characters except ] until it finds ]].
+    # This regex is designed to find wikilinks.
     wikilink_regex = r"\[\[([^\]]+)\]\]"
-    
-    resolved_content_no_math = re.sub(wikilink_regex, replace_wikilink, content_no_math)
 
-    # --- NEW: Restore math blocks ---
-    final_content = resolved_content_no_math
-    for i, block in enumerate(math_blocks):
-        final_content = final_content.replace(f"__MATH_BLOCK_{i}__", block)
-    # --- END NEW ---
-    return final_content
+    # This regex captures common LaTeX math environments.
+    # It includes display math ($$), inline math ($), and various environments.
+    math_env_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$|\\\[.*?\\\]|\\\(.*?\\\)|\\begin\{(?:equation|align|gather|math|displaymath|matrix|pmatrix|array)[\*]?\}.*?\\end\{(?:equation|align|gather|math|displaymath|matrix|pmatrix|array)[\*]?\})'
+    
+    # Split the content into math and non-math parts.
+    # The list 'parts' will alternate: [non-math, math, non-math, math, ...]
+    parts = re.split(math_env_regex, content, flags=re.DOTALL)
+
+    processed_parts = []
+    for i, part in enumerate(parts):
+        # If the index 'i' is even, it's a non-math part.
+        if i % 2 == 0:
+            # Resolve wikilinks only in non-math parts.
+            processed_parts.append(re.sub(wikilink_regex, replace_wikilink, part))
+        else:
+            # If the index is odd, it's a math part, so we add it back without changes.
+            processed_parts.append(part)
+
+    # Join all the parts back into a single string.
+    return "".join(processed_parts)
 
 # --- Code Execution ---
 async def execute_code_and_send_results(message: Message, code_to_execute: str):
