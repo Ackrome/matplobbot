@@ -428,6 +428,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             if os.path.exists(log_path):
                 with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
                     log_content = f.read()
+                    logger.info(f"latexmk compilation output for {base_name}.tex:\n{compile_process.stdout}\n--------------------------------------------------------------- LOG ---------------------------------------------------------------\n{log_content}\n--------------------------------------------------------------- END LOG -----------------------------------------------------------\n")
                     # A successful latexmk run will have this line near the end.
                     if re.search(r"Output written on .*?\.pdf", log_content):
                         compilation_successful = True
