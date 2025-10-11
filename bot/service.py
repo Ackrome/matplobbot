@@ -52,7 +52,6 @@ PANDOC_HEADER_INCLUDES = r"""
 \usepackage{microtype}
 
 % Explicitly link babel's language support to the fontspec fonts.
-% This should fix "Missing character" errors for bold/italic Cyrillic text.
 \babelfont{rm}[
   Ligatures=TeX,
   BoldFont = DejaVu Serif Bold,
@@ -69,19 +68,8 @@ PANDOC_HEADER_INCLUDES = r"""
 
 \newunicodechar{∂}{\partial}
 \newunicodechar{Δ}{\Delta}
-
-% Configure hyperref, which is loaded by Pandoc's default template.
-% This avoids the "Option clash for package hyperref" error.
-\hypersetup{
-  bookmarks=true,
-  bookmarksopen=true,
-  colorlinks=true,
-  linkcolor=blue,
-  urlcolor=cyan
-}
 """
 
-print("PANDOC_HEADER_INCLUDES has been updated.")
 # The preamble for single formulas (this should now also be updated for consistency)
 LATEX_PREAMBLE = r"""
 \documentclass[12pt,varwidth=500pt]{standalone}
