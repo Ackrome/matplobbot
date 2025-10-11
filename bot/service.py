@@ -500,12 +500,16 @@ async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[
             # Construct the full URL to the file on GitHub
             # We use quote() to properly encode spaces and other special characters in the path
             url = f"https://github.com/{repo_path}/blob/{github_service.MD_SEARCH_BRANCH}/{quote(found_path)}"
-            
+
             if target_format == 'latex':
                 # For LaTeX/PDF, use \href{url}{text}. We need to escape special LaTeX chars in text.
                 # A simple escape for common characters.
                 escaped_display_text = display_text.replace('&', r'\&').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#').replace('_', r'\_').replace('{', r'\{').replace('}', r'\}').replace('~', r'\textasciitilde ').replace('^', r'\textasciicircum ')
-                return f"\\href{{{url}}}{{{escaped_display_text}}}"
+                # --- NEW FIX: Also escape special characters in the URL for LaTeX ---
+                # Characters like _, #, %, & can break the \href command if not escaped.
+                # The `url` is already URL-encoded, but LaTeX needs its own escaping.
+                escaped_url = url.replace('\\', r'\textbackslash ').replace('&', r'\&').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#').replace('_', r'\_').replace('{', r'\{').replace('}', r'\}').replace('~', r'\textasciitilde ')
+                return f"\\href{{{escaped_url}}}{{{escaped_display_text}}}"
             else: # Default to Markdown
                 return f"[{display_text}]({url})"
         else:
@@ -787,7 +791,14 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
                 await message.answer_document(document=BufferedInputFile(pdf_buffer.getvalue(), filename=file_name), caption=f"PDF-версия конспекта: `{file_path}`", parse_mode='markdown')
             except Exception as e:
                 logger.error(f"Ошибка при создании PDF для '{file_path}': {e}", exc_info=True)
-                await message.answer(f"Произошла ошибка при создании PDF-файла: {e}. Отправляю как простой текст.")
+                # --- NEW FIX: Truncate long error messages to avoid TelegramBadRequest ---
+                error_message = str(e)
+                max_len = 4000 # A bit less than 4096 to be safe
+                if len(error_message) > max_len:
+                    truncated_error = error_message[:max_len] + "\n\n... (сообщение об ошибке было сокращено)"
+                else:
+                    truncated_error = error_message
+                await message.answer(f"Произошла ошибка при создании PDF-файла: {truncated_error}. Отправляю как простой текст.")
                 await send_as_plain_text(message, file_path, content) # Fallback
         # Option 3: .html file
         elif md_mode == 'html_file':
