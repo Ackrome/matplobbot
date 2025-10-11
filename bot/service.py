@@ -55,6 +55,10 @@ PANDOC_HEADER_INCLUDES = r"""
 \newunicodechar{∂}{\partial}
 \newunicodechar{Δ}{\Delta}
 \usepackage{microtype}
+\setmainfont{DejaVu Serif}
+\usepackage[unicode]{hyperref}
+\newfontfamily\cyrillicfont{DejaVu Serif}
+\setmonofont{DejaVu Sans Mono}
 """
 
 # The preamble for single formulas (this should now also be updated for consistency)
