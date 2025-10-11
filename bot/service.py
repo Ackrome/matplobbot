@@ -381,7 +381,11 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
 
             # --- STAGE 1: Convert Markdown to a standalone .tex file ---
             pandoc_to_tex_command = [
-                'pandoc', '--filter', '/app/bot/pandoc_mermaid_filter.py',
+                'pandoc', 
+                '--filter', '/app/bot/pandoc_mermaid_filter.py',
+                # --- NEW FIX: Add a Lua filter to sanitize math environments ---
+                '--lua-filter', '/app/bot/pandoc_math_filter.lua',
+                # --- END NEW FIX ---
                 '--from=markdown+tex_math_dollars+raw_tex+escaped_line_breaks+backtick_code_blocks', '--to=latex',
                 '--pdf-engine=xelatex', '--include-in-header', header_path,
                 '--variable', 'lang=russian', '--variable', 'mainfont=DejaVu Serif',
