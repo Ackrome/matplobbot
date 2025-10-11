@@ -508,7 +508,7 @@ async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[
                 # --- NEW FIX: Also escape special characters in the URL for LaTeX ---
                 # Characters like _, #, %, & can break the \href command if not escaped.
                 # The `url` is already URL-encoded, but LaTeX needs its own escaping.
-                escaped_url = url.replace('\\', r'\textbackslash ').replace('&', r'\&').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#').replace('_', r'\_').replace('{', r'\{').replace('}', r'\}').replace('~', r'\textasciitilde ')
+                escaped_url = url.replace('\\', r'\textbackslash ').replace('&', r'\&').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#').replace('_', r'\_').replace('{', r'\{').replace('}', r'\}').replace('~', r'\textasciitilde{}')
                 return f"\\href{{{escaped_url}}}{{{escaped_display_text}}}"
             else: # Default to Markdown
                 return f"[{display_text}]({url})"
@@ -793,7 +793,7 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
                 logger.error(f"Ошибка при создании PDF для '{file_path}': {e}", exc_info=True)
                 # --- NEW FIX: Truncate long error messages to avoid TelegramBadRequest ---
                 error_message = str(e)
-                max_len = 4000 # A bit less than 4096 to be safe
+                max_len = 3900 # Even more safe to account for prefix text
                 if len(error_message) > max_len:
                     truncated_error = error_message[:max_len] + "\n\n... (сообщение об ошибке было сокращено)"
                 else:

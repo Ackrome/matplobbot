@@ -99,7 +99,8 @@ async def get_all_repo_files_cached(repo_path: str, session: aiohttp.ClientSessi
                 return file_paths
             else:
                 error_text = await response.text()
-                logger.error(f"GitHub API trees fetch failed for repo '{repo_path}' with status {response.status}: {error_text}")
+                # Log the detailed error from GitHub API for better diagnostics
+                logger.error(f"GitHub API trees fetch failed for repo '{repo_path}' with status {response.status}. Response: {error_text}")
                 return None
     except Exception as e:
         logger.error(f"Error during GitHub API trees request for repo '{repo_path}': {e}", exc_info=True)
