@@ -1,48 +1,64 @@
 -- pandoc_math_filter.lua
 -- A Pandoc Lua filter to sanitize math environments, specifically for fixing
--- matrix environments like 'pmatrix' that contain '\hline', which is invalid syntax.
+-- various matrix environments that contain '\hline', which is invalid syntax for them.
+
+-- A mapping of matrix environments to their corresponding delimiters.
+local matrix_delimiters = {
+  pmatrix = {'\\left(', '\\right)'},
+  bmatrix = {'\\left[', '\\right]'},
+  Bmatrix = {'\\left\\{', '\\right\\}'},
+  vmatrix = {'\\left|', '\\right|'},
+  Vmatrix = {'\\left\\|', '\\right\\|'},
+}
 
 -- This function is the core of the filter. It's called for each 'Math' element
 -- in the Pandoc Abstract Syntax Tree (AST).
 function Math(el)
   -- el.text contains the raw LaTeX code of the math element.
   local math_text = el.text
-
-  -- This is a generic replacer function. It takes the name of a matrix environment
-  -- (like 'pmatrix') and its content.
-  local function sanitize_matrix(env_name, content)
-    -- We only intervene if the content of the matrix contains '\hline'.
-    if content:find('\\hline') then
-      -- If '\hline' is found, we must convert the environment to 'array',
-      -- which supports '\hline'.
-
-      -- To create a valid 'array', we need to know the number of columns.
-      -- We determine this by finding the line with the most alignment tabs ('&').
+  
+  -- This function will be called for each matrix environment found.
+  local function sanitize_matrix(content)
+    -- The first part of the content is the environment name, e.g., "pmatrix".
+    -- The rest is the actual matrix data.
+    local env_name, matrix_content = content:match("^(%w+)%s*(.*)")
+    
+    -- Check if this is a matrix type we handle and if it contains \hline.
+    if matrix_delimiters[env_name] and matrix_content:find('\\hline') then
+      -- It's an unsupported matrix with \hline. We need to convert it to an 'array'.
+      
+      -- 1. Determine the number of columns.
+      -- We find the line with the most alignment tabs ('&').
       local max_cols = 0
-      for line in content:gmatch("[^\\\\]+") do -- Split by '\\'
-        local clean_line = line:gsub('%s*\\hline%s*', '') -- Ignore \hline lines for counting
+      -- We iterate over lines, splitting by the line break command '\\'.
+      for line in matrix_content:gmatch("([^\\\\]+)") do
+        -- Remove any \hline commands from the line before counting columns.
+        local clean_line = line:gsub('%s*\\hline%s*', '')
         if #clean_line > 0 then
-          local cols = 1 + select(2, clean_line:gsub('&', ''))
-          if cols > max_cols then
-            max_cols = cols
+          -- The number of columns is the number of '&' characters plus one.
+          local cols_in_line = 1 + select(2, clean_line:gsub('&', ''))
+          if cols_in_line > max_cols then
+            max_cols = cols_in_line
           end
         end
       end
-
-      -- Construct the column specification string, e.g., 'ccc' for 3 columns.
+      
+      -- 2. Build the replacement string.
       local col_spec = string.rep('c', max_cols)
-      -- Return the new LaTeX code, wrapping the array in appropriate delimiters.
-      return '\\left(\\begin{array}{' .. col_spec .. '}' .. content .. '\\end{array}\\right)'
+      local delimiters = matrix_delimiters[env_name]
+      -- We reconstruct the matrix using the 'array' environment and wrap it
+      -- with the correct delimiters for the original matrix type.
+      return delimiters[1] .. '\\begin{array}{' .. col_spec .. '}' .. matrix_content .. '\\end{array}' .. delimiters[2]
     end
-    -- If '\hline' is not found, we return nil, which tells gsub to not replace anything.
+    -- If no replacement is needed, return nil to keep the original text.
     return nil
   end
 
-  -- We use string.gsub with a function to find and replace all pmatrix environments.
-  -- The pattern captures the environment name and its content.
-  -- The 'sanitize_matrix' function is called for each match.
-  math_text = string.gsub(math_text, '\\begin{pmatrix}(.-)\\end{pmatrix}', function(content)
-    return sanitize_matrix('pmatrix', content)
+  -- This pattern finds any \begin{...}...\end{...} block.
+  -- The 'sanitize_matrix' function is then called on the content inside.
+  math_text = string.gsub(math_text, '\\begin{(.-)}(.-)\\end{%1}', function(env_name, content)
+    -- We pass the environment name and content to our sanitizer.
+    return sanitize_matrix(env_name .. content) or ('\\begin{'..env_name..'}'..content..'\\end{'..env_name..'}')
   end)
 
   -- Update the element's text with the potentially modified LaTeX code.

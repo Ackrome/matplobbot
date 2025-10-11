@@ -407,27 +407,6 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
                 raise RuntimeError(f"Ошибка Pandoc: {pandoc_process.stderr.decode('utf-8', 'ignore')}")
 
             # --- STAGE 2: Sanitize the generated LaTeX code ---
-            with open(tex_path, 'r', encoding='utf-8') as f:
-                latex_content = f.read()
-
-            def _sanitize_latex_matrices(match: re.Match) -> str:
-                env_name, content = match.groups()
-                if r'\hline' in content:
-                    lines = re.split(r'\s*\\\\\s*', content.strip())
-                    max_cols = max((line.count('&') + 1 for line in lines if line.strip() and r'\hline' not in line), default=1)
-                    col_spec = 'c' * max_cols
-                    if env_name == 'pmatrix': return f'\\left(\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right)'
-                    if env_name in ('bmatrix', 'Bmatrix'): return f'\\left[\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right]'
-                    if env_name == 'vmatrix': return f'\\left|\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right|'
-                    if env_name == 'Vmatrix': return f'\\left\\|\\begin{{array}}{{{col_spec}}} {content} \\end{{array}}\\right\\|'
-                return match.group(0)
-            
-            matrix_finder_regex = re.compile(r'\\begin\{(pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix)\}(.*?)\\end\{\1\*?\}', re.DOTALL)
-            sanitized_latex = matrix_finder_regex.sub(_sanitize_latex_matrices, latex_content)
-            
-            with open(tex_path, 'w', encoding='utf-8') as f:
-                f.write(sanitized_latex)
-            
             # --- STAGE 3: Compile with latexmk, the robust industry standard ---
             compile_command = [
                 'latexmk',
