@@ -478,6 +478,18 @@ async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[
     if not all_repo_files:
         return content
 
+    # --- NEW: Isolate math environments to prevent replacements inside them ---
+    math_blocks = []
+    def store_math_and_replace(match):
+        placeholder = f"__MATH_BLOCK_{len(math_blocks)}__"
+        math_blocks.append(match.group(0))
+        return placeholder
+
+    # This regex captures both inline ($...$) and display ($$...) math
+    math_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$)'
+    content_no_math = re.sub(math_regex, store_math_and_replace, content, flags=re.DOTALL)
+    # --- END NEW ---
+
     # Create a mapping from "wikilink-friendly" names to full paths
     # e.g., "my page" -> "path/to/My Page.md"
     file_map = {os.path.splitext(os.path.basename(f))[0].lower(): f for f in all_repo_files}
@@ -518,8 +530,14 @@ async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[
     # It looks for [[ followed by any characters except ] until it finds ]].
     wikilink_regex = r"\[\[([^\]]+)\]\]"
     
-    resolved_content = re.sub(wikilink_regex, replace_wikilink, content)
-    return resolved_content
+    resolved_content_no_math = re.sub(wikilink_regex, replace_wikilink, content_no_math)
+
+    # --- NEW: Restore math blocks ---
+    final_content = resolved_content_no_math
+    for i, block in enumerate(math_blocks):
+        final_content = final_content.replace(f"__MATH_BLOCK_{i}__", block)
+    # --- END NEW ---
+    return final_content
 
 # --- Code Execution ---
 async def execute_code_and_send_results(message: Message, code_to_execute: str):
