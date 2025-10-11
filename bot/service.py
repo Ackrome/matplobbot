@@ -20,7 +20,6 @@ from PIL import Image
 import datetime
 import html # Added for HTML escaping
 from bs4 import BeautifulSoup
-from telegraph.aio import Telegraph
 from aiogram.types import Message, CallbackQuery, FSInputFile, BufferedInputFile, InlineKeyboardButton
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -55,6 +54,7 @@ PANDOC_HEADER_INCLUDES = r"""
 \usepackage{blindtext}
 \newunicodechar{∂}{\partial}
 \newunicodechar{Δ}{\Delta}
+\usepackage{microtype}
 """
 
 # The preamble for single formulas (this should now also be updated for consistency)
@@ -185,18 +185,21 @@ def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_ove
         flags=re.DOTALL
     )
     
-    # --- NEW FIX START ---
+    # --- 
+    # NOTE: pmatrix->array conversion is handled by pandoc_math_filter.lua
+    # (we skip the Python-level regex to avoid double-conversion that corrupts math).
+
     # Heuristic fix for pmatrix environments containing \hline.
     # The pmatrix environment does not support \hline, causing a compilation error.
     # This fix replaces the pmatrix with a functionally equivalent array environment
     # which does support \hline.
-    processed_latex = re.sub(
-        r'\\begin{pmatrix}(.*?)\\end{pmatrix}', 
-        _pmatrix_hline_fixer, 
-        processed_latex, 
-        flags=re.DOTALL
-    )
-    # --- NEW FIX END ---
+    # processed_latex = re.sub(
+    #     r'\\begin{pmatrix}(.*?)\\end{pmatrix}', 
+    #     _pmatrix_hline_fixer, 
+    #     processed_latex, 
+    #     flags=re.DOTALL
+    # )
+    # --- 
 
     # Более интеллектуальная обработка переносов строк.
     if not re.search(r'\\begin\{[a-zA-Z\*]+\}.*?\\end\{[a-zA-Z\*]+\}', processed_latex, re.DOTALL):
@@ -383,13 +386,9 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             pandoc_to_tex_command = [
                 'pandoc', 
                 '--filter', '/app/bot/pandoc_mermaid_filter.py',
-                # --- NEW FIX: Add a Lua filter to sanitize math environments ---
                 '--lua-filter', '/app/bot/pandoc_math_filter.lua',
-                # --- END NEW FIX ---
-                # --- NEW FIX: Ignore YAML metadata blocks to prevent conversion errors ---
                 '--from=markdown-yaml_metadata_block+tex_math_dollars+raw_tex+escaped_line_breaks+backtick_code_blocks',
-                # --- END NEW FIX ---
-                '--to=latex',
+                '--to=latex', "-file-line-error",
                 '--pdf-engine=xelatex', '--include-in-header', header_path,
                 '--variable', 'lang=russian', '--variable', 'mainfont=DejaVu Serif',
                 '--variable', 'sansfont=DejaVu Sans', '--variable', 'monofont=DejaVu Sans Mono',
