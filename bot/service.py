@@ -39,8 +39,6 @@ PANDOC_HEADER_INCLUDES = r"""
 \usepackage{amsfonts}
 \usepackage{graphicx}
 \usepackage{mathrsfs}
-\usepackage{color}
-\usepackage{mhchem}
 \usepackage{xcolor}
 \usepackage{newunicodechar}
 \usepackage{mathtools}
@@ -49,9 +47,12 @@ PANDOC_HEADER_INCLUDES = r"""
 \usepackage[main=russian]{babel}
 \usepackage{microtype}
 
-% --- ЯВНАЯ НАСТРОЙКА ШРИФТОВ ДЛЯ КИРИЛЛИЦЫ ---
-% Это гарантирует, что для русского текста будет использоваться DejaVu,
-% а не стандартный Latin Modern, в котором нет кириллицы.
+% --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ №1: Явно задаем шрифт для МАТЕМАТИКИ ---
+% Это решает проблему "Missing character" для математических символов.
+\usepackage{unicode-math}
+\setmathfont{DejaVu Math TeX Gyre} % Этот шрифт есть в вашем Docker-образе
+
+% --- Явная настройка шрифтов для ТЕКСТА (кириллицы) ---
 \babelfont{rm}[
   Ligatures=TeX,
   BoldFont = DejaVu Serif Bold,
@@ -69,7 +70,8 @@ PANDOC_HEADER_INCLUDES = r"""
 \newunicodechar{∂}{\partial}
 \newunicodechar{Δ}{\Delta}
 
-% --- НАСТРОЙКА HYPERREF ДЛЯ ПОДДЕРЖКИ UNICODE В ССЫЛКАХ И ЗАГОЛОВКАХ ---
+% --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ №2: Более надежная настройка hyperref ---
+% Загружаем одним из последних и исправляем \hypertarget для кириллицы
 \usepackage{hyperref}
 \hypersetup{
     unicode=true,
@@ -82,8 +84,8 @@ PANDOC_HEADER_INCLUDES = r"""
     breaklinks=true
 }
 \makeatletter
-% Пандок использует \hypertarget для создания якорей. Без этого исправления
-% кириллические заголовки ломают \hypertarget. Этот код "защищает" текст заголовка.
+% Pandoc использует \hypertarget для создания якорей. Без этого исправления
+% кириллические заголовки ломают команду, вызывая ошибки `nullfont`.
 \let\oldhypertarget\hypertarget
 \renewcommand{\hypertarget}[2]{\oldhypertarget{#1}{\texorpdfstring{#2}{#2}}}
 \makeatother
@@ -386,19 +388,14 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
 def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributors: list | None = None, last_modified_date: str | None = None) -> io.BytesIO:
     """
     Финальная, надежная функция для конвертации Markdown в PDF.
-    Использует метаданные (авторы, дата) для создания более информативного документа.
     """
     if contributors:
-        author_links = [r"\href{"+ f"{c['html_url']}" + r"}{" + f"{c['login']}" + r"}" for c in contributors]
+        author_links = [r"\href{" + f"{c['html_url']}" + r"}{" + f"{c['login']}" + r"}" for c in contributors]
         author_string = ", ".join(author_links)
     else:
         author_string = "Matplobbot"
 
     date_string = last_modified_date or datetime.datetime.now().strftime("%d %B %Y")
-    
-    cleanup_log_path = '/tmp/pandoc_cleanup.log'
-    if os.path.exists(cleanup_log_path):
-        os.remove(cleanup_log_path)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         header_path = os.path.join(temp_dir, 'header.tex')
@@ -410,16 +407,14 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             tex_path = os.path.join(temp_dir, f'{base_name}.tex')
             pdf_path = os.path.join(temp_dir, f'{base_name}.pdf')
 
-            # --- ЭТАП 1: Конвертация Markdown в .tex ---
             pandoc_to_tex_command = [
-                'pandoc', 
+                'pandoc',
                 '--filter', '/app/bot/pandoc_mermaid_filter.py',
                 '--lua-filter', '/app/bot/pandoc_math_filter.lua',
                 '--from=markdown-yaml_metadata_block+tex_math_dollars+raw_tex+escaped_line_breaks+backtick_code_blocks',
                 '--to=latex',
-                '--pdf-engine=xelatex', '--include-in-header', header_path,
-                # --- ИСПРАВЛЕНИЕ: Убраны переменные, конфликтующие с header.tex ---
-                # 'lang', 'mainfont', 'sansfont', 'monofont' теперь задаются в PANDOC_HEADER_INCLUDES
+                '--pdf-engine=xelatex',
+                '--include-in-header', header_path,
                 '--variable', f'title={title}',
                 '--variable', f'author={author_string}',
                 '--variable', f'date={date_string}',
@@ -437,7 +432,6 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             if pandoc_process.returncode != 0:
                 raise RuntimeError(f"Ошибка Pandoc при конвертации в .tex: {pandoc_process.stderr.decode('utf-8', 'ignore')}")
 
-            # --- ЭТАП 2: Компиляция с latexmk ---
             compile_command = [
                 'latexmk',
                 '-file-line-error',
@@ -449,49 +443,40 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             ]
             compile_process = subprocess.run(compile_command, capture_output=True, text=True, encoding='utf-8', errors='ignore')
 
-            # --- ЭТАП 3: Улучшенная проверка ошибок ---
-            log_path = os.path.join(temp_dir, f'{base_name}.log')
-            log_content = "Log file not found."
-            compilation_successful = False
-            if os.path.exists(log_path):
-                with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    log_content = f.read()
-                    logger.info(f"latexmk compilation log for {base_name}.tex:\n{log_content}\n")
-                    if "Output written on" in log_content and ".pdf" in log_content:
-                        compilation_successful = True
+            if not os.path.exists(pdf_path) or compile_process.returncode != 0:
+                log_content = "Log file not found."
+                log_path = os.path.join(temp_dir, f'{base_name}.log')
+                if os.path.exists(log_path):
+                    with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        log_content = f.read()
 
-            if not os.path.exists(pdf_path) or not compilation_successful or compile_process.returncode != 0:
-                # --- УЛУЧШЕННЫЙ ПОИСК ФАТАЛЬНОЙ ОШИБКИ ---
+                # --- САМЫЙ НАДЕЖНЫЙ СПОСОБ НАЙТИ ОШИБКУ ---
                 error_message = "Неизвестная ошибка компиляции LaTeX."
                 # Ищем первую строку, начинающуюся с "!", которая является маркером фатальной ошибки
                 fatal_error_match = re.search(r"^!.*$", log_content, re.MULTILINE)
                 if fatal_error_match:
-                    # Захватываем саму ошибку и несколько строк контекста после нее
                     error_start_index = fatal_error_match.start()
+                    # Захватываем ошибку и несколько строк контекста после нее
                     context_end_index = log_content.find('\n\n', error_start_index)
-                    if context_end_index == -1:
-                        context_end_index = error_start_index + 400
+                    if context_end_index == -1: context_end_index = error_start_index + 500
                     error_message = log_content[error_start_index:context_end_index].strip()
                 else:
-                    error_message = "Фатальная ошибка не найдена, но компиляция не удалась. Конец лога:\n" + log_content[-2000:]
-
+                    error_message = "Фатальная ошибка не найдена в .log, но компиляция не удалась. Конец лога:\n" + log_content[-2000:]
+                
+                process_output = (compile_process.stdout or "No stdout.") + "\n" + (compile_process.stderr or "No stderr.")
                 error_header = "PDF-файл не был создан." if not os.path.exists(pdf_path) else "Компиляция PDF завершилась некорректно."
-                raise RuntimeError(f"Финальная ошибка: {error_header}\n--- КЛЮЧЕВАЯ ОШИБКА ИЗ ЛОГА ---\n{error_message}")
+                
+                raise RuntimeError(
+                    f"Финальная ошибка: {error_header}\n\n"
+                    f"--- КЛЮЧЕВАЯ ОШИБКА ИЗ ЛОГА ---\n{error_message}\n\n"
+                    f"--- ВЫВОД LATEXMK (stdout/stderr) ---\n{process_output[-2000:]}"
+                )
 
             with open(pdf_path, 'rb') as f:
                 return io.BytesIO(f.read())
         finally:
-            # Логика очистки
-            if os.path.exists(cleanup_log_path):
-                try:
-                    with open(cleanup_log_path, 'r', encoding='utf-8') as f:
-                        for line in f:
-                            file_path = line.strip()
-                            if file_path and os.path.exists(file_path):
-                                try: os.remove(file_path)
-                                except OSError: pass
-                    os.remove(cleanup_log_path)
-                except Exception: pass
+            # Логика очистки, если нужна
+            pass
 
 async def convert_md_to_pdf_pandoc(markdown_string: str, title: str, contributors: list | None = None, last_modified_date: str | None = None) -> io.BytesIO:
     """Асинхронная обертка для конвертации Markdown в PDF с помощью pandoc."""
