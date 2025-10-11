@@ -769,20 +769,16 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
         elif md_mode == 'pdf_file':
             try:
                 page_title = file_path.split('/')[-1].replace('.md', '')
-                # Directly convert markdown content to PDF using pandoc
-                async with aiohttp.ClientSession() as session:
-                    contributors = await github_service.get_repo_contributors(repo_path, session)
-                    last_modified_date = await github_service.get_file_last_modified_date(repo_path, file_path, session)
-
-                # Передаем метаданные в функцию конвертации
-                pdf_buffer = await convert_md_to_pdf_pandoc(content, page_title, contributors, last_modified_date)
                 file_name = f"{page_title}.pdf"
 
-                # --- WIKILINK INTEGRATION ---
-                all_repo_files = await github_service.get_all_repo_files_cached(repo_path, session) # Re-use session
-                resolved_content = await _resolve_wikilinks(content, repo_path, all_repo_files, target_format='latex')
-                pdf_buffer = await convert_md_to_pdf_pandoc(resolved_content, page_title, contributors, last_modified_date)
-                # --- END WIKILINK INTEGRATION ---
+                async with aiohttp.ClientSession() as session:
+                    # --- WIKILINK INTEGRATION ---
+                    all_repo_files = await github_service.get_all_repo_files_cached(repo_path, session)
+                    resolved_content = await _resolve_wikilinks(content, repo_path, all_repo_files, target_format='latex')
+                    # --- END WIKILINK INTEGRATION ---
+                    contributors = await github_service.get_repo_contributors(repo_path, session)
+                    last_modified_date = await github_service.get_file_last_modified_date(repo_path, file_path, session)
+                    pdf_buffer = await convert_md_to_pdf_pandoc(resolved_content, page_title, contributors, last_modified_date)
 
                 await message.answer_document(document=BufferedInputFile(pdf_buffer.getvalue(), filename=file_name), caption=f"PDF-версия конспекта: `{file_path}`", parse_mode='markdown')
             except Exception as e:
