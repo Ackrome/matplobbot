@@ -14,7 +14,7 @@ services:
       - bot_db_data:/app/db_data  # Именованный volume для хранения БД
       - bot_logs:/app/logs        # Именованный volume для логов бота
       - matplobblib_lib:/usr/local/lib/python3.11/site-packages/matplobblib # Persist library updates
-
+      - ./examples:/app/examples    # Volume для файлов-примеров
 
 
   mpb-fastapi-stats:
