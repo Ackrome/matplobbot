@@ -57,6 +57,7 @@ PANDOC_HEADER_INCLUDES = r"""
 \usepackage{microtype}
 \setmainfont{DejaVu Serif}
 \usepackage[unicode]{hyperref}
+\usepackage[unicode]{href}
 \newfontfamily\cyrillicfont{DejaVu Serif}
 \setmonofont{DejaVu Sans Mono}
 """
