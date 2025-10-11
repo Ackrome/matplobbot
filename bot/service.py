@@ -13,6 +13,7 @@ import os
 import json
 import base64
 import hashlib
+from urllib.parse import quote
 import aiohttp
 import aiofiles
 from PIL import Image
@@ -381,7 +382,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             # --- STAGE 1: Convert Markdown to a standalone .tex file ---
             pandoc_to_tex_command = [
                 'pandoc', '--filter', '/app/bot/pandoc_mermaid_filter.py',
-                '--from=markdown+tex_math_dollars+raw_tex+escaped_line_breaks+backtick_code_blocks+empty_paragraphs', '--to=latex',
+                '--from=markdown+tex_math_dollars+raw_tex+escaped_line_breaks+backtick_code_blocks', '--to=latex',
                 '--pdf-engine=xelatex', '--include-in-header', header_path,
                 '--variable', 'lang=russian', '--variable', 'mainfont=DejaVu Serif',
                 '--variable', 'sansfont=DejaVu Sans', '--variable', 'monofont=DejaVu Sans Mono',
@@ -465,6 +466,55 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
 async def convert_md_to_pdf_pandoc(markdown_string: str, title: str, contributors: list | None = None, last_modified_date: str | None = None) -> io.BytesIO:
     """Асинхронная обертка для конвертации Markdown в PDF с помощью pandoc."""
     return await asyncio.to_thread(_convert_md_to_pdf_pandoc_sync, markdown_string, title, contributors, last_modified_date)
+
+async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[str], target_format: str = 'md') -> str:
+    """
+    Finds all [[wikilinks]] in the content and replaces them with standard
+    links for the specified target format ('md' or 'latex').
+    Handles both [[Page Name]] and [[Page Name|display text]] syntaxes.
+    """
+    if not all_repo_files:
+        return content
+
+    # Create a mapping from "wikilink-friendly" names to full paths
+    # e.g., "my page" -> "path/to/My Page.md"
+    file_map = {os.path.splitext(os.path.basename(f))[0].lower(): f for f in all_repo_files}
+
+    def replace_wikilink(match):
+        # The content inside [[...]]
+        inner_content = match.group(1).strip()
+        
+        # Split by '|' to separate file name from display text
+        parts = inner_content.split('|', 1)
+        file_name_part = parts[0].strip()
+        display_text = parts[1].strip() if len(parts) > 1 else file_name_part
+
+        # Find a matching file in the map using the file name part
+        found_path = file_map.get(file_name_part.lower())
+
+        if found_path:
+            # Construct the full URL to the file on GitHub
+            # We use quote() to properly encode spaces and other special characters in the path
+            url = f"https://github.com/{repo_path}/blob/{github_service.MD_SEARCH_BRANCH}/{quote(found_path)}"
+            
+            if target_format == 'latex':
+                # For LaTeX/PDF, use \href{url}{text}. We need to escape special LaTeX chars in text.
+                # A simple escape for common characters.
+                escaped_display_text = display_text.replace('&', r'\&').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#').replace('_', r'\_').replace('{', r'\{').replace('}', r'\}').replace('~', r'\textasciitilde ').replace('^', r'\textasciicircum ')
+                return f"\\href{{{url}}}{{{escaped_display_text}}}"
+            else: # Default to Markdown
+                return f"[{display_text}]({url})"
+        else:
+            # If no file is found, return the original wikilink text but not as a link.
+            # This makes it clear that the link is broken.
+            return f"_{display_text}_"
+
+    # This regex finds [[wikilinks]] but avoids grabbing the middle of other links.
+    # It looks for [[ followed by any characters except ] until it finds ]].
+    wikilink_regex = r"\[\[([^\]]+)\]\]"
+    
+    resolved_content = re.sub(wikilink_regex, replace_wikilink, content)
+    return resolved_content
 
 
 # --- Code Execution ---
@@ -727,6 +777,13 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
                 # Передаем метаданные в функцию конвертации
                 pdf_buffer = await convert_md_to_pdf_pandoc(content, page_title, contributors, last_modified_date)
                 file_name = f"{page_title}.pdf"
+
+                # --- WIKILINK INTEGRATION ---
+                all_repo_files = await github_service.get_all_repo_files_cached(repo_path, session) # Re-use session
+                resolved_content = await _resolve_wikilinks(content, repo_path, all_repo_files, target_format='latex')
+                pdf_buffer = await convert_md_to_pdf_pandoc(resolved_content, page_title, contributors, last_modified_date)
+                # --- END WIKILINK INTEGRATION ---
+
                 await message.answer_document(document=BufferedInputFile(pdf_buffer.getvalue(), filename=file_name), caption=f"PDF-версия конспекта: `{file_path}`", parse_mode='markdown')
             except Exception as e:
                 logger.error(f"Ошибка при создании PDF для '{file_path}': {e}", exc_info=True)
@@ -736,8 +793,13 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
         elif md_mode == 'html_file':
             try:
                 page_title = file_path.split('/')[-1].replace('.md', '')
-                # Use the new KaTeX-based HTML generation for a pure client-side rendering experience.
-                full_html_doc = await _prepare_html_with_katex(content, page_title)
+                # --- WIKILINK INTEGRATION ---
+                async with aiohttp.ClientSession() as session:
+                    all_repo_files = await github_service.get_all_repo_files_cached(repo_path, session)
+                resolved_content = await _resolve_wikilinks(content, repo_path, all_repo_files, target_format='md')
+                full_html_doc = await _prepare_html_with_katex(resolved_content, page_title)
+                # --- END WIKILINK INTEGRATION ---
+
                 file_bytes = full_html_doc.encode('utf-8')
                 file_name = f"{page_title}.html"
                 await message.answer_document(
@@ -795,6 +857,13 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     for heading in headings:
         text = heading.get_text()
         # Create a URL-friendly "slug" for the ID
+        # --- WIKILINK FIX: Use original heading text for TOC, not slugified version ---
+        # The slug is only for the 'id' attribute. The visible text should be original.
+        # This was already correct, just adding a comment for clarity.
+        # slug_base = re.sub(r'[^\w\s-]', '', text.lower()).strip().replace(' ', '-')
+        # ...
+        # toc_items.append({'level': level, 'text': text, 'id': slug})
+
         slug_base = re.sub(r'[^\w\s-]', '', text.lower()).strip().replace(' ', '-')
         slug = slug_base
         counter = 1

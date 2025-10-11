@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 # Caches for GitHub API calls to reduce rate-limiting and speed up responses
 github_content_cache = TTLCache(maxsize=200, ttl=300)  # Cache for file contents (5 min)
 github_dir_cache = TTLCache(maxsize=50, ttl=180)      # Cache for directory listings (3 min)
+github_repo_files_cache = TTLCache(maxsize=20, ttl=600) # Cache for full repo file lists (10 min)
 
 # --- Constants ---
 MD_SEARCH_BRANCH = "main"
@@ -58,6 +59,50 @@ async def get_github_repo_contents(repo_path: str, path: str = "") -> list[dict]
                     return None
     except Exception as e:
         logger.error(f"Error during GitHub API contents request for path '{path}': {e}", exc_info=True)
+        return None
+
+async def get_all_repo_files_cached(repo_path: str, session: aiohttp.ClientSession) -> list[str] | None:
+    """
+    Fetches a list of all file paths in a repository using the Git Trees API.
+    Results are cached to minimize API calls.
+    """
+    # Check cache first
+    if repo_path in github_repo_files_cache:
+        logger.info(f"Cache hit for repo file list: {repo_path}")
+        return github_repo_files_cache[repo_path]
+
+    github_token = os.getenv("GITHUB_TOKEN")
+    if not github_token:
+        logger.error("GITHUB_TOKEN environment variable not set. Cannot fetch repo file list.")
+        return None
+
+    url = f"https://api.github.com/repos/{repo_path}/git/trees/{MD_SEARCH_BRANCH}?recursive=1"
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Authorization": f"Bearer {github_token}"
+    }
+
+    try:
+        async with session.get(url, headers=headers) as response:
+            if response.status == 200:
+                data = await response.json()
+                if data.get("truncated"):
+                    logger.warning(f"File list for repo {repo_path} is truncated. Wikilink resolution may be incomplete.")
+                
+                # We are only interested in files ('blob')
+                file_paths = [item['path'] for item in data.get('tree', []) if item['type'] == 'blob']
+                
+                # Store in cache on success
+                github_repo_files_cache[repo_path] = file_paths
+                logger.info(f"Fetched and cached {len(file_paths)} file paths for repo {repo_path}")
+                return file_paths
+            else:
+                error_text = await response.text()
+                logger.error(f"GitHub API trees fetch failed for repo '{repo_path}' with status {response.status}: {error_text}")
+                return None
+    except Exception as e:
+        logger.error(f"Error during GitHub API trees request for repo '{repo_path}': {e}", exc_info=True)
         return None
 
 
