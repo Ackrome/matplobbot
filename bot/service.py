@@ -492,15 +492,15 @@ async def convert_md_to_pdf_pandoc(markdown_string: str, title: str, contributor
 
 async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[str], target_format: str = 'md') -> str:
     """
-    Finds all [[wikilinks]] in the content and replaces them with standard
-    links for the specified target format ('md' or 'latex').
-    Handles both [[Page Name]] and [[Page Name|display text]] syntaxes.
-    Crucially, this version avoids processing wikilinks inside LaTeX math environments.
+    Находит все [[wikilinks]] и заменяет их стандартными Markdown-ссылками.
+    Эта версия избегает обработки ссылок внутри математических окружений LaTeX.
+    Она *всегда* выводит Markdown-ссылки, позволяя Pandoc корректно выполнять
+    финальную конвертацию в LaTeX или HTML, что является более надежным подходом.
     """
     if not all_repo_files or '[[' not in content:
         return content
 
-    # Create a mapping from "wikilink-friendly" names to full paths
+    # Создаем карту для быстрого поиска файлов по их "вики-именам"
     file_map = {os.path.splitext(os.path.basename(f))[0].lower(): f for f in all_repo_files}
 
     def replace_wikilink(match):
@@ -511,41 +511,37 @@ async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[
         found_path = file_map.get(file_name_part.lower())
 
         if found_path:
+            # Создаем полную URL-ссылку на файл в GitHub
             url = f"https://github.com/{repo_path}/blob/{github_service.MD_SEARCH_BRANCH}/{quote(found_path)}"
-            if target_format == 'latex':
-                escaped_display_text = display_text.replace('&', r'\&').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#').replace('_', r'\_').replace('{', r'\{').replace('}', r'\}').replace('~', r'\textasciitilde ').replace('^', r'\textasciicircum ')
-                escaped_url = url.replace('\\', r'\textbackslash ').replace('&', r'\&').replace('%', r'\%').replace('$', r'\$').replace('#', r'\#').replace('_', r'\_').replace('{', r'\{').replace('}', r'\}').replace('~', r'\textasciitilde{}')
-                # The \text{} wrapper is no longer needed as replacements are only done in non-math contexts.
-                return f"\\href{{{escaped_url}}}{{{escaped_display_text}}}"
-            else:  # Default to Markdown
-                return f"[{display_text}]({url})"
+            
+            # --- ВСЕГДА ВОЗВРАЩАЕМ СТАНДАРТНУЮ MARKDOWN-ССЫЛКУ ---
+            # Pandoc сам корректно преобразует [текст](url) в \href{url}{текст}
+            # и экранирует спецсимволы. Разделение на 'md' и 'latex' здесь не нужно.
+            return f"[{display_text}]({url})"
         else:
+            # Если файл не найден, просто возвращаем текст
             return f"_{display_text}_"
 
-    # This regex is designed to find wikilinks.
+    # Регулярное выражение для поиска [[wikilinks]]
     wikilink_regex = r"\[\[([^\]]+)\]\]"
 
-    # This regex captures common LaTeX math environments.
-    # It includes display math ($$), inline math ($), and various environments.
+    # Регулярное выражение для захвата математических блоков LaTeX, чтобы их не трогать
     math_env_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$|\\\[.*?\\\]|\\\(.*?\\\)|\\begin\{(?:equation|align|gather|math|displaymath|matrix|pmatrix|array)[\*]?\}.*?\\end\{(?:equation|align|gather|math|displaymath|matrix|pmatrix|array)[\*]?\})'
     
-    # Split the content into math and non-math parts.
-    # The list 'parts' will alternate: [non-math, math, non-math, math, ...]
+    # Разбиваем контент на математические и текстовые части
     parts = re.split(math_env_regex, content, flags=re.DOTALL)
 
     processed_parts = []
     for i, part in enumerate(parts):
-        # If the index 'i' is even, it's a non-math part.
+        # Четные элементы - это обычный текст, в них ищем и заменяем ссылки
         if i % 2 == 0:
-            # Resolve wikilinks only in non-math parts.
             processed_parts.append(re.sub(wikilink_regex, replace_wikilink, part))
+        # Нечетные элементы - это математика, оставляем их без изменений
         else:
-            # If the index is odd, it's a math part, so we add it back without changes.
             processed_parts.append(part)
 
-    # Join all the parts back into a single string.
+    # Собираем все части обратно в одну строку
     return "".join(processed_parts)
-
 # --- Code Execution ---
 async def execute_code_and_send_results(message: Message, code_to_execute: str):
 
