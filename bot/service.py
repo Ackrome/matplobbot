@@ -407,14 +407,22 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             tex_path = os.path.join(temp_dir, f'{base_name}.tex')
             pdf_path = os.path.join(temp_dir, f'{base_name}.pdf')
 
+            # --- ЭТАП 1: Конвертация Markdown в .tex ---
             pandoc_to_tex_command = [
-                'pandoc',
+                'pandoc', 
                 '--filter', '/app/bot/pandoc_mermaid_filter.py',
                 '--lua-filter', '/app/bot/pandoc_math_filter.lua',
-                '--from=markdown-yaml_metadata_block+tex_math_dollars+raw_tex+escaped_line_breaks+backtick_code_blocks',
+                
+                # --- СТАРАЯ СТРОКА (нужно заменить) ---
+                # '--from=markdown-yaml_metadata_block+tex_math_dollars+raw_tex+escaped_line_breaks+backtick_code_blocks',
+                
+                # --- НОВАЯ СТРОКА ---
+                # Используем GitHub Flavored Markdown (gfm) для лучшей обработки списков,
+                # и добавляем нужные расширения для метаданных и LaTeX.
+                '--from=gfm-yaml_metadata_block+tex_math_dollars+raw_tex',
+
                 '--to=latex',
-                '--pdf-engine=xelatex',
-                '--include-in-header', header_path,
+                '--pdf-engine=xelatex', '--include-in-header', header_path,
                 '--variable', f'title={title}',
                 '--variable', f'author={author_string}',
                 '--variable', f'date={date_string}',
