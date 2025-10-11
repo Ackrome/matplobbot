@@ -388,7 +388,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
                 '--filter', '/app/bot/pandoc_mermaid_filter.py',
                 '--lua-filter', '/app/bot/pandoc_math_filter.lua',
                 '--from=markdown-yaml_metadata_block+tex_math_dollars+raw_tex+escaped_line_breaks+backtick_code_blocks',
-                '--to=latex', "-file-line-error",
+                '--to=latex',
                 '--pdf-engine=xelatex', '--include-in-header', header_path,
                 '--variable', 'lang=russian', '--variable', 'mainfont=DejaVu Serif',
                 '--variable', 'sansfont=DejaVu Sans', '--variable', 'monofont=DejaVu Sans Mono',
@@ -412,6 +412,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             # --- STAGE 3: Compile with latexmk, the robust industry standard ---
             compile_command = [
                 'latexmk',
+                '-file-line-error',
                 '-pdf',          # Explicitly demand a PDF as the final output
                 '-xelatex',      # Use the correct, Unicode-aware engine. Removed '-f' to fail on errors.
                 '-interaction=nonstopmode',
