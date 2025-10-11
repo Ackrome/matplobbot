@@ -386,7 +386,10 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
                 # --- NEW FIX: Add a Lua filter to sanitize math environments ---
                 '--lua-filter', '/app/bot/pandoc_math_filter.lua',
                 # --- END NEW FIX ---
-                '--from=markdown+tex_math_dollars+raw_tex+escaped_line_breaks+backtick_code_blocks', '--to=latex',
+                # --- NEW FIX: Ignore YAML metadata blocks to prevent conversion errors ---
+                '--from=markdown-yaml_metadata_block+tex_math_dollars+raw_tex+escaped_line_breaks+backtick_code_blocks',
+                # --- END NEW FIX ---
+                '--to=latex',
                 '--pdf-engine=xelatex', '--include-in-header', header_path,
                 '--variable', 'lang=russian', '--variable', 'mainfont=DejaVu Serif',
                 '--variable', 'sansfont=DejaVu Sans', '--variable', 'monofont=DejaVu Sans Mono',
