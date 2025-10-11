@@ -33,16 +33,7 @@ from . import github_service
 
 logger = logging.getLogger(__name__)
 
-# --- Constants ---
-# This new constant contains all the packages and settings needed by BOTH
-# single formula rendering AND the full PDF document generation.
-# This is the implementation of your excellent suggestion.
-# service.py
 
-# --- Constants ---
-# This new constant contains all the packages and settings needed by BOTH
-# single formula rendering AND the full PDF document generation.
-# This is the implementation of your excellent suggestion.
 PANDOC_HEADER_INCLUDES = r"""
 \usepackage{amsmath}
 \usepackage{amssymb}
@@ -54,36 +45,43 @@ PANDOC_HEADER_INCLUDES = r"""
 \usepackage{xcolor}
 \usepackage{newunicodechar}
 \usepackage{mathtools}
-\usepackage{fontspec}      % Must be before font settings
-\usepackage{babel}         % Must be after fontspec for language-specific settings
+\usepackage{fontspec}
+\usepackage[main=russian]{babel}
 \usepackage{tikz,pgfplots}
 \usepackage{blindtext}
+\usepackage{microtype}
 
-% Explicitly define main fonts with bold/italic variants
-% This helps LaTeX find the correct Cyrillic font for bold/italic text
-\setmainfont{DejaVu Serif}[
+% Explicitly link babel's language support to the fontspec fonts.
+% This should fix "Missing character" errors for bold/italic Cyrillic text.
+\babelfont{rm}[
+  Ligatures=TeX,
   BoldFont = DejaVu Serif Bold,
   ItalicFont = DejaVu Serif Italic,
   BoldItalicFont = DejaVu Serif Bold Italic
-]
-\setsansfont{DejaVu Sans}[
+]{DejaVu Serif}
+\babelfont{sf}[
+  Ligatures=TeX,
   BoldFont = DejaVu Sans Bold,
   ItalicFont = DejaVu Sans Oblique,
   BoldItalicFont = DejaVu Sans Bold Oblique
-]
-\setmonofont{DejaVu Sans Mono}[
-  BoldFont = DejaVu Sans Mono Bold,
-  ItalicFont = DejaVu Sans Mono Oblique,
-  BoldItalicFont = DejaVu Sans Mono Bold Oblique
-]
+]{DejaVu Sans}
+\babelfont{tt}{DejaVu Sans Mono}
 
 \newunicodechar{∂}{\partial}
 \newunicodechar{Δ}{\Delta}
-\usepackage{microtype}
-% unicode=true is key for cyrillic in bookmarks/links, and bookmarks options improve navigation
-\usepackage[unicode=true, bookmarks=true, bookmarksopen=true]{hyperref} 
+
+% Configure hyperref, which is loaded by Pandoc's default template.
+% This avoids the "Option clash for package hyperref" error.
+\hypersetup{
+  bookmarks=true,
+  bookmarksopen=true,
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=cyan
+}
 """
 
+print("PANDOC_HEADER_INCLUDES has been updated.")
 # The preamble for single formulas (this should now also be updated for consistency)
 LATEX_PREAMBLE = r"""
 \documentclass[12pt,varwidth=500pt]{standalone}
