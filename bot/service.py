@@ -33,7 +33,6 @@ from . import github_service
 
 logger = logging.getLogger(__name__)
 
-
 PANDOC_HEADER_INCLUDES = r"""
 \usepackage{amsmath}
 \usepackage{amssymb}
@@ -45,13 +44,10 @@ PANDOC_HEADER_INCLUDES = r"""
 \usepackage{xcolor}
 \usepackage{newunicodechar}
 \usepackage{mathtools}
+\usepackage{longtable}
 \usepackage{fontspec}
 \usepackage[main=russian]{babel}
-\usepackage{tikz,pgfplots}
-\usepackage{blindtext}
 \usepackage{microtype}
-
-% Explicitly link babel's language support to the fontspec fonts.
 \babelfont{rm}[
   Ligatures=TeX,
   BoldFont = DejaVu Serif Bold,
@@ -68,6 +64,19 @@ PANDOC_HEADER_INCLUDES = r"""
 
 \newunicodechar{∂}{\partial}
 \newunicodechar{Δ}{\Delta}
+\usepackage{hyperref}
+\hypersetup{
+    unicode=true,          % разрешить символы не-Latin в закладках PDF
+    pdftitle={\@title},
+    pdfauthor={\@author},
+    pdfsubject={},
+    pdfkeywords={},
+    colorlinks=true,       % цветные ссылки вместо рамок
+    linkcolor=blue,        % цвет внутренних ссылок
+    citecolor=green,       % цвет ссылок на библиографию
+    urlcolor=magenta,      % цвет внешних ссылок
+    breaklinks=true        % разрешить переносы в длинных ссылках
+}
 """
 
 # The preamble for single formulas (this should now also be updated for consistency)
