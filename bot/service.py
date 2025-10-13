@@ -78,39 +78,39 @@ def convert_html_to_telegram_html(html_content: str) -> str:
     lines = [line.strip() for line in html_content.split('\n')]
     return '\n'.join(filter(None, lines))
 
-def _pmatrix_hline_fixer(match: re.Match) -> str:
-    """
-    Callback for re.sub to replace a pmatrix environment with an array environment
-    if the pmatrix contains a \\hline command, which is not supported by pmatrix.
-    """
-    matrix_content = match.group(1)
-    # Check if \hline is present inside the matched pmatrix content
-    if r'\hline' in matrix_content:
-        # \hline is not supported by pmatrix, so we convert it to a compatible array.
-        # To determine the number of columns, we find the line with the maximum number of alignment tabs (&).
-        lines = matrix_content.strip().split(r'\\')
-        num_cols = 0
-        for line in lines:
-            # This is a simple heuristic to avoid counting '&' inside other commands like \text{...}.
-            # It's not foolproof but covers many common cases.
-            clean_line = re.sub(r'\\text\{.*?\}', '', line)
-            # Count alignment tabs in the current line and add 1 for the number of columns.
-            current_cols = clean_line.count('&') + 1
-            if current_cols > num_cols:
-                num_cols = current_cols
+# def _pmatrix_hline_fixer(match: re.Match) -> str:
+#     """
+#     Callback for re.sub to replace a pmatrix environment with an array environment
+#     if the pmatrix contains a \\hline command, which is not supported by pmatrix.
+#     """
+#     matrix_content = match.group(1)
+#     # Check if \hline is present inside the matched pmatrix content
+#     if r'\hline' in matrix_content:
+#         # \hline is not supported by pmatrix, so we convert it to a compatible array.
+#         # To determine the number of columns, we find the line with the maximum number of alignment tabs (&).
+#         lines = matrix_content.strip().split(r'\\')
+#         num_cols = 0
+#         for line in lines:
+#             # This is a simple heuristic to avoid counting '&' inside other commands like \text{...}.
+#             # It's not foolproof but covers many common cases.
+#             clean_line = re.sub(r'\\text\{.*?\}', '', line)
+#             # Count alignment tabs in the current line and add 1 for the number of columns.
+#             current_cols = clean_line.count('&') + 1
+#             if current_cols > num_cols:
+#                 num_cols = current_cols
         
-        # Fallback to 1 column if no '&' are found (unlikely for a matrix with \hline, but safe).
-        if num_cols == 0 and len(lines) > 0:
-            num_cols = 1
+#         # Fallback to 1 column if no '&' are found (unlikely for a matrix with \hline, but safe).
+#         if num_cols == 0 and len(lines) > 0:
+#             num_cols = 1
         
-        if num_cols > 0:
-            # Create the column specification string (e.g., 'ccc' for 3 columns).
-            col_spec = 'c' * num_cols
-            # Reconstruct the matrix using the array environment, wrapped in parentheses.
-            return f'\\left(\\begin{{array}}{{{col_spec}}}{matrix_content}\\end{{array}}\\right)'
+#         if num_cols > 0:
+#             # Create the column specification string (e.g., 'ccc' for 3 columns).
+#             col_spec = 'c' * num_cols
+#             # Reconstruct the matrix using the array environment, wrapped in parentheses.
+#             return f'\\left(\\begin{{array}}{{{col_spec}}}{matrix_content}\\end{{array}}\\right)'
     
-    # If no \hline is found, return the original pmatrix environment unchanged.
-    return match.group(0)
+#     # If no \hline is found, return the original pmatrix environment unchanged.
+#     return match.group(0)
 
 # --- LaTeX Rendering ---
 def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_override: bool | None = None) -> io.BytesIO:
@@ -304,18 +304,44 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
     """Асинхронная обертка для рендеринга Mermaid, выполняемая в отдельном потоке."""
     return await asyncio.to_thread(_render_mermaid_sync, mermaid_code)
 
+def _pmatrix_hline_fixer(match: re.Match) -> str:
+    """
+    Callback для re.sub для исправления \hline внутри pmatrix.
+    Заменяет pmatrix на эквивалентный array, который поддерживает \hline.
+    """
+    matrix_content = match.group(1)
+    if r'\hline' in matrix_content:
+        lines = matrix_content.strip().split(r'\\')
+        num_cols = 0
+        for line in lines:
+            if r'\hline' in line: continue
+            clean_line = re.sub(r'\\text\{.*?\}', '', line)
+            current_cols = clean_line.count('&') + 1
+            if current_cols > num_cols:
+                num_cols = current_cols
+        
+        if num_cols == 0 and len(lines) > 0:
+            num_cols = 1
+        
+        if num_cols > 0:
+            col_spec = 'c' * num_cols
+            return f'\\left(\\begin{{array}}{{{col_spec}}}{matrix_content}\\end{{array}}\\right)'
+    
+    return match.group(0)
+
 def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributors: list | None = None, last_modified_date: str | None = None) -> io.BytesIO:
     """
     Финальная, надежная функция для конвертации Markdown в PDF.
     """
+    
     markdown_string = re.sub(
-        r'\$\$([\s\n]*\\begin\{(?:align|gather|equation|multline|matrix|pmatrix|array)[\*]?\}.*?\\end\{(?:align|gather|equation|multline|matrix|pmatrix|array)[\*]?\})[\s\n]*\$\$',
-        r'\1',  # Заменяем `$$...$$` только на внутреннее содержимое
+        r'\$\$([\s\n]*\\begin\{(?:align|gather|equation|multline|matrix|pmatrix|array|cases)[\*]?\}.*?\\end\{(?:align|gather|equation|multline|matrix|pmatrix|array|cases)[\*]?\})[\s\n]*\$\$',
+        r'\1',
         markdown_string,
         flags=re.DOTALL
     )
 
-    # 2. Перемещение \tag{...} из позиции *после* окружения *внутрь* него.
+    # 2. Перемещение \tag{...} внутрь окружений.
     markdown_string = re.sub(
         r'(\\end\{([a-zA-Z\*]+)\})(\s*\\tag\{.*?\})',
         r'\3 \1',
@@ -323,7 +349,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
         flags=re.DOTALL
     )
 
-    # 3. Обработка устаревшей команды \atop для подписей после окружения.
+    # 3. Обработка устаревшей команды \atop.
     markdown_string = re.sub(
         r'(\\end\{([a-zA-Z\*]+)\})(\s*\\atop\s*(\\text\{.*?\}))',
         r'\\ \4 \1',
@@ -345,6 +371,48 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
         markdown_string,
         flags=re.DOTALL
     )
+
+    # 5. Исправление \hline внутри pmatrix.
+    markdown_string = re.sub(
+        r'\\begin{pmatrix}(.*?)\\end{pmatrix}',
+        _pmatrix_hline_fixer,
+        markdown_string,
+        flags=re.DOTALL
+    )
+    
+    # 6. Оборачивание кириллицы в \text{} внутри математических окружений.
+    def sanitize_cyrillic_in_math(match):
+        math_block = match.group(0)
+        
+        protected_blocks = []
+        def protect(m):
+            placeholder = f"__PROTECTED_BLOCK_{len(protected_blocks)}__"
+            protected_blocks.append(m.group(0))
+            return placeholder
+
+        # Защищаем существующие \text и другие команды
+        temp_block = re.sub(r'\\text\{.*?\}|\\mathrm\{.*?\}|\\mathbf\{.*?\}', protect, math_block, flags=re.DOTALL)
+        
+        # Оборачиваем оставшуюся кириллицу
+        temp_block = re.sub(r'([\u0400-\u04FF]+(?:[\s.,][\u0400-\u04FF]+)*)', r'\\text{\1}', temp_block)
+        
+        # Возвращаем защищенные блоки
+        for i, block in enumerate(protected_blocks):
+            temp_block = temp_block.replace(f"__PROTECTED_BLOCK_{i}__", block)
+            
+        return temp_block
+
+    math_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$|\\\[.*?\\\]|\\\(.*?\\\)|\\begin\{.*?\}.*?\\end\{.*?\})'
+    parts = re.split(math_regex, markdown_string, flags=re.DOTALL)
+    processed_parts = []
+    for i, part in enumerate(parts):
+        if i % 2 != 0: # Это математическая часть
+            processed_parts.append(sanitize_cyrillic_in_math(part))
+        else: # Это текстовая часть
+            processed_parts.append(part)
+    markdown_string = "".join(processed_parts)
+
+    
     if contributors:
         author_links = [r"\href{" + f"{c['html_url']}" + r"}{" + f"{c['login']}" + r"}" for c in contributors]
         author_string = ", ".join(author_links)
