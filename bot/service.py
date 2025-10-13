@@ -309,13 +309,13 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
     Финальная, надежная функция для конвертации Markdown в PDF.
     """
     markdown_string = re.sub(
-        r'\$\$([\s\n]*\\begin\{(?:align|gather|equation|multline)[\*]?\}.*?\\end\{.*?\})[\s\n]*\$\$',
-        r'\1', # Заменяем `$$...$$` только на внутреннее содержимое
+        r'\$\$([\s\n]*\\begin\{(?:align|gather|equation|multline|matrix|pmatrix|array)[\*]?\}.*?\\end\{(?:align|gather|equation|multline|matrix|pmatrix|array)[\*]?\})[\s\n]*\$\$',
+        r'\1',  # Заменяем `$$...$$` только на внутреннее содержимое
         markdown_string,
         flags=re.DOTALL
     )
 
-    # 2. Перемещение \tag{...} внутрь окружений.
+    # 2. Перемещение \tag{...} из позиции *после* окружения *внутрь* него.
     markdown_string = re.sub(
         r'(\\end\{([a-zA-Z\*]+)\})(\s*\\tag\{.*?\})',
         r'\3 \1',
@@ -323,7 +323,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
         flags=re.DOTALL
     )
 
-    # 3. Обработка устаревшей команды \atop.
+    # 3. Обработка устаревшей команды \atop для подписей после окружения.
     markdown_string = re.sub(
         r'(\\end\{([a-zA-Z\*]+)\})(\s*\\atop\s*(\\text\{.*?\}))',
         r'\\ \4 \1',
