@@ -310,23 +310,34 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
     """
     markdown_string = re.sub(
         r'(\\end\{([a-zA-Z\*]+)\})(\s*\\tag\{.*?\})',
-        r'\2 \1',
+        r'\3 \1',  # \3 это \tag{...}, \1 это \end{...}
         markdown_string,
         flags=re.DOTALL
     )
-    def sanitize_display_math(match):
-        content = match.group(1)
-        content = content.replace(r'\atop', r'\\')
-        
-        if '\\' in content or '\n' in content.strip():
-            if not re.match(r'\s*\\begin\{', content, re.DOTALL):
-                 content = f"\\begin{{gathered}}\n{content.strip()}\n\\end{{gathered}}"
-        
-        return f"$${content}$$"
+
+    # 2. Обработка устаревшей команды \atop для подписей после окружения.
+    #    НЕПРАВИЛЬНО: \end{align}\atop\text{...} -> ПРАВИЛЬНО: ... \\ \text{...}\end{align}
+    markdown_string = re.sub(
+        r'(\\end\{([a-zA-Z\*]+)\})(\s*\\atop\s*(\\text\{.*?\}))',
+        r'\\ \4 \1', # \4 это \text{...}, \1 это \end{...}
+        markdown_string,
+        flags=re.DOTALL
+    )
+
+    # 3. Конвертация align* в align, если внутри используется \tag.
+    #    \tag не работает в un-starred версиях (например, align*).
+    def fix_starred_env_with_tag(match):
+        env_name = match.group(1)
+        content = match.group(2)
+        if r'\tag' in content:
+            # Если нашли \tag, убираем звездочку у окружения
+            return f"\\begin{{{env_name}}}{content}\\end{{{env_name}}}"
+        # Если \tag нет, оставляем как есть
+        return match.group(0)
 
     markdown_string = re.sub(
-        r'\$\$(.*?)\$\$',
-        sanitize_display_math,
+        r'\\begin\{([a-zA-Z]+)\*\}(.*?)\\end\{\1\*\}',
+        fix_starred_env_with_tag,
         markdown_string,
         flags=re.DOTALL
     )
