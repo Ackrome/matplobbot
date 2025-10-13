@@ -333,7 +333,6 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
     """
     Финальная, надежная функция для конвертации Markdown в PDF.
     """
-    
     markdown_string = re.sub(
         r'\$\$([\s\n]*\\begin\{(?:align|gather|equation|multline|matrix|pmatrix|array|cases)[\*]?\}.*?\\end\{(?:align|gather|equation|multline|matrix|pmatrix|array|cases)[\*]?\})[\s\n]*\$\$',
         r'\1',
@@ -344,7 +343,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
     # 2. Перемещение \tag{...} внутрь окружений.
     markdown_string = re.sub(
         r'(\\end\{([a-zA-Z\*]+)\})(\s*\\tag\{.*?\})',
-        r'\3 \1',
+        r'\3 \1',  # <--- ИСПРАВЛЕНО ЗДЕСЬ! БЫЛО r'\2 \1'
         markdown_string,
         flags=re.DOTALL
     )
