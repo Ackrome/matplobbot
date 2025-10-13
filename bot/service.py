@@ -310,16 +310,23 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
     """
     markdown_string = re.sub(
         r'(\\end\{([a-zA-Z\*]+)\})(\s*\\tag\{.*?\})',
-        r'\3 \1',
+        r'\2 \1',
         markdown_string,
         flags=re.DOTALL
     )
+    def sanitize_display_math(match):
+        content = match.group(1)
+        content = content.replace(r'\atop', r'\\')
+        
+        if '\\' in content or '\n' in content.strip():
+            if not re.match(r'\s*\\begin\{', content, re.DOTALL):
+                 content = f"\\begin{{gathered}}\n{content.strip()}\n\\end{{gathered}}"
+        
+        return f"$${content}$$"
 
-    # 2. Обработка команды \atop, используемой для подписей после окружения.
-    #    НЕПРАВИЛЬНО: \end{align}\atop\text{...} -> ПРАВИЛЬНО: ... \\ \text{...}\end{align}
     markdown_string = re.sub(
-        r'(\\end\{([a-zA-Z\*]+)\})(\s*\\atop\s*(\\text\{.*?\}))',
-        r'\\ \4 \1',
+        r'\$\$(.*?)\$\$',
+        sanitize_display_math,
         markdown_string,
         flags=re.DOTALL
     )
