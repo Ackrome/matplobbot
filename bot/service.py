@@ -390,28 +390,16 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             protected_blocks.append(m.group(0))
             return placeholder
 
-        # Защищаем существующие \text и другие команды
         temp_block = re.sub(r'\\text\{.*?\}|\\mathrm\{.*?\}|\\mathbf\{.*?\}', protect, math_block, flags=re.DOTALL)
-        
-        # Оборачиваем оставшуюся кириллицу
         temp_block = re.sub(r'([\u0400-\u04FF]+(?:[\s.,][\u0400-\u04FF]+)*)', r'\\text{\1}', temp_block)
         
-        # Возвращаем защищенные блоки
         for i, block in enumerate(protected_blocks):
             temp_block = temp_block.replace(f"__PROTECTED_BLOCK_{i}__", block)
             
         return temp_block
 
     math_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$|\\\[.*?\\\]|\\\(.*?\\\)|\\begin\{.*?\}.*?\\end\{.*?\})'
-    parts = re.split(math_regex, markdown_string, flags=re.DOTALL)
-    processed_parts = []
-    for i, part in enumerate(parts):
-        if i % 2 != 0: # Это математическая часть
-            processed_parts.append(sanitize_cyrillic_in_math(part))
-        else: # Это текстовая часть
-            processed_parts.append(part)
-    markdown_string = "".join(processed_parts)
-
+    markdown_string = re.sub(math_regex, sanitize_cyrillic_in_math, markdown_string, flags=re.DOTALL)
     
     if contributors:
         author_links = [r"\href{" + f"{c['html_url']}" + r"}{" + f"{c['login']}" + r"}" for c in contributors]
