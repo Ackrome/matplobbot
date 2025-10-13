@@ -309,30 +309,34 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
     Финальная, надежная функция для конвертации Markdown в PDF.
     """
     markdown_string = re.sub(
-        r'(\\end\{([a-zA-Z\*]+)\})(\s*\\tag\{.*?\})',
-        r'\3 \1',  # \3 это \tag{...}, \1 это \end{...}
+        r'\$\$([\s\n]*\\begin\{(?:align|gather|equation|multline)[\*]?\}.*?\\end\{.*?\})[\s\n]*\$\$',
+        r'\1', # Заменяем `$$...$$` только на внутреннее содержимое
         markdown_string,
         flags=re.DOTALL
     )
 
-    # 2. Обработка устаревшей команды \atop для подписей после окружения.
-    #    НЕПРАВИЛЬНО: \end{align}\atop\text{...} -> ПРАВИЛЬНО: ... \\ \text{...}\end{align}
+    # 2. Перемещение \tag{...} внутрь окружений.
+    markdown_string = re.sub(
+        r'(\\end\{([a-zA-Z\*]+)\})(\s*\\tag\{.*?\})',
+        r'\3 \1',
+        markdown_string,
+        flags=re.DOTALL
+    )
+
+    # 3. Обработка устаревшей команды \atop.
     markdown_string = re.sub(
         r'(\\end\{([a-zA-Z\*]+)\})(\s*\\atop\s*(\\text\{.*?\}))',
-        r'\\ \4 \1', # \4 это \text{...}, \1 это \end{...}
+        r'\\ \4 \1',
         markdown_string,
         flags=re.DOTALL
     )
 
-    # 3. Конвертация align* в align, если внутри используется \tag.
-    #    \tag не работает в un-starred версиях (например, align*).
+    # 4. Конвертация align* в align, если внутри используется \tag.
     def fix_starred_env_with_tag(match):
         env_name = match.group(1)
         content = match.group(2)
         if r'\tag' in content:
-            # Если нашли \tag, убираем звездочку у окружения
             return f"\\begin{{{env_name}}}{content}\\end{{{env_name}}}"
-        # Если \tag нет, оставляем как есть
         return match.group(0)
 
     markdown_string = re.sub(
