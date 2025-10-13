@@ -25,96 +25,15 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import markdown
 from markdown_it import MarkdownIt
+from pathlib import Path
 
 from . import database
 import matplobblib
 from . import keyboards as kb
 from . import github_service
+from .config import *
 
 logger = logging.getLogger(__name__)
-
-PANDOC_HEADER_INCLUDES = r"""
-\usepackage{amsmath}
-\usepackage{amssymb}
-\usepackage{amsfonts}
-\usepackage{graphicx}
-\usepackage{mathrsfs}
-\usepackage{xcolor}
-\usepackage{newunicodechar}
-\usepackage{mathtools}
-\usepackage{longtable}
-\usepackage{fontspec}
-\usepackage[main=russian]{babel}
-\usepackage{microtype}
-
-% --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ №1: Явно задаем шрифт для МАТЕМАТИКИ ---
-% Это решает проблему "Missing character" для математических символов.
-\usepackage{unicode-math}
-\setmathfont{DejaVu Math TeX Gyre} % Этот шрифт есть в вашем Docker-образе
-
-% --- Явная настройка шрифтов для ТЕКСТА (кириллицы) ---
-\babelfont{rm}[
-  Ligatures=TeX,
-  BoldFont = DejaVu Serif Bold,
-  ItalicFont = DejaVu Serif Italic,
-  BoldItalicFont = DejaVu Serif Bold Italic
-]{DejaVu Serif}
-\babelfont{sf}[
-  Ligatures=TeX,
-  BoldFont = DejaVu Sans Bold,
-  ItalicFont = DejaVu Sans Oblique,
-  BoldItalicFont = DejaVu Sans Bold Oblique
-]{DejaVu Sans}
-\babelfont{tt}{DejaVu Sans Mono}
-
-\newunicodechar{∂}{\partial}
-\newunicodechar{Δ}{\Delta}
-
-% --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ №2: Более надежная настройка hyperref ---
-% Загружаем одним из последних и исправляем \hypertarget для кириллицы
-\usepackage{hyperref}
-\hypersetup{
-    unicode=true,
-    pdftitle={\@title},
-    pdfauthor={\@author},
-    colorlinks=true,
-    linkcolor=blue,
-    citecolor=green,
-    urlcolor=magenta,
-    breaklinks=true
-}
-\makeatletter
-% Pandoc использует \hypertarget для создания якорей. Без этого исправления
-% кириллические заголовки ломают команду, вызывая ошибки `nullfont`.
-\let\oldhypertarget\hypertarget
-\renewcommand{\hypertarget}[2]{\oldhypertarget{#1}{\texorpdfstring{#2}{#2}}}
-\makeatother
-"""
-
-# The preamble for single formulas (this should now also be updated for consistency)
-LATEX_PREAMBLE = r"""
-\documentclass[12pt,varwidth=500pt]{standalone}
-\usepackage[utf8]{inputenc}
-\usepackage[T2A]{fontenc}
-\usepackage[russian]{babel}
-\usepackage{amsmath}
-\usepackage{amssymb}
-\usepackage{amsfonts}
-\usepackage{graphicx}
-\usepackage{mathrsfs}
-\usepackage{color}
-\usepackage{mhchem}
-\usepackage{tikz,pgfplots}
-\usepackage{blindtext}
-\usepackage{xcolor}
-\usepackage{newunicodechar}
-\newunicodechar{∂}{\partial}
-\newunicodechar{Δ}{\Delta}
-\begin{document}
-"""
-
-LATEX_POSTAMBLE = r"\end{document}"
-MD_LATEX_PADDING = 15
 
 # --- HTML Conversion ---
 def convert_html_to_telegram_html(html_content: str) -> str:
@@ -362,7 +281,7 @@ def _render_mermaid_sync(mermaid_code: str) -> io.BytesIO:
         # Запуск Mermaid CLI (mmdc)
         process = subprocess.run(
             [
-                mmdc_path, '-p', '/app/bot/puppeteer-config.json',
+                mmdc_path, '-p', str(PUPPETEER_CONFIG_PATH),
                 '-i', input_path, '-o', output_path, '-b', 'transparent'
             ],
             capture_output=True, text=True, encoding='utf-8', errors='ignore'
@@ -389,6 +308,21 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
     """
     Финальная, надежная функция для конвертации Markdown в PDF.
     """
+    markdown_string = re.sub(
+        r'(\\end\{([a-zA-Z\*]+)\})(\s*\\tag\{.*?\})',
+        r'\3 \1',
+        markdown_string,
+        flags=re.DOTALL
+    )
+
+    # 2. Обработка команды \atop, используемой для подписей после окружения.
+    #    НЕПРАВИЛЬНО: \end{align}\atop\text{...} -> ПРАВИЛЬНО: ... \\ \text{...}\end{align}
+    markdown_string = re.sub(
+        r'(\\end\{([a-zA-Z\*]+)\})(\s*\\atop\s*(\\text\{.*?\}))',
+        r'\\ \4 \1',
+        markdown_string,
+        flags=re.DOTALL
+    )
     if contributors:
         author_links = [r"\href{" + f"{c['html_url']}" + r"}{" + f"{c['login']}" + r"}" for c in contributors]
         author_string = ", ".join(author_links)
@@ -410,15 +344,8 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             # --- ЭТАП 1: Конвертация Markdown в .tex ---
             pandoc_to_tex_command = [
                 'pandoc', 
-                '--filter', '/app/bot/pandoc_mermaid_filter.py',
-                '--lua-filter', '/app/bot/pandoc_math_filter.lua',
-                
-                # --- СТАРАЯ СТРОКА (нужно заменить) ---
-                # '--from=markdown-yaml_metadata_block+tex_math_dollars+raw_tex+escaped_line_breaks+backtick_code_blocks',
-                
-                # --- НОВАЯ СТРОКА ---
-                # Используем GitHub Flavored Markdown (gfm) для лучшей обработки списков,
-                # и добавляем нужные расширения для метаданных и LaTeX.
+                '--filter', str(MERMAID_FILTER_PATH),
+                '--lua-filter', str(MATH_FILTER_PATH),
                 '--from=gfm-yaml_metadata_block+tex_math_dollars+raw_tex',
 
                 '--to=latex',
@@ -542,7 +469,7 @@ async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[
 
     # Собираем все части обратно в одну строку
     return "".join(processed_parts)
-# --- Code Execution ---
+
 async def execute_code_and_send_results(message: Message, code_to_execute: str):
 
     """Helper function to execute code and send results back to the user."""
