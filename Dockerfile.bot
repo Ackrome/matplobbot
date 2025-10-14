@@ -5,6 +5,8 @@ FROM node:20-slim
 ENV DEBIAN_FRONTEND=noninteractive \
     APT_OPTS="-y --no-install-recommends"
 
+ARG DOCKER_GID=999
+
 # 1) small essentials + python
 RUN set -eux; \
     find /etc/apt -name "*.list" -exec sed -i 's|http://deb\.debian\.org|http://mirror.truenetwork.ru|g' {} + || true; \
@@ -82,7 +84,8 @@ RUN command -v python3 >/dev/null && python3 --version \
     && command -v npm >/dev/null && npm --version \
     && command -v pdflatex >/dev/null && pdflatex --version
 
-RUN groupadd -g 180106 docker && usermod -aG docker botuser
+RUN useradd -ms /bin/bash -u 1001 botuser
+RUN groupadd -g ${DOCKER_GID} docker && usermod -aG docker botuser
 
 COPY bot/puppeteer-config.json /app/bot/
 
