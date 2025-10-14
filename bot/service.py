@@ -772,7 +772,9 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
         # Get user settings to decide how to display the file
         settings = await database.get_user_settings(user_id)
         md_mode = settings.get('md_display_mode', 'md_file')
-
+        
+        await message.answer_chat_action("upload_document") 
+        
         # Option 1: .md file
         if md_mode == 'md_file':
             file_name = file_path.split('/')[-1]
