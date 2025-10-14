@@ -322,10 +322,19 @@ def _pmatrix_hline_fixer(match: re.Match) -> str:
             return f'\\left(\\begin{{array}}{{{col_spec}}}{matrix_content}\\end{{array}}\\right)'
     return match.group(0)
 
+# service.py
+
+# ... (импорты и другие функции) ...
+
 def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributors: list | None = None, last_modified_date: str | None = None) -> io.BytesIO:
     """
     Финальная, надежная функция для конвертации Markdown в PDF.
+    Новая стратегия: Минимальная предобработка MD, затем постобработка сгенерированного .tex файла.
     """
+    # --- ЭТАП 1: Минимальная предобработка Markdown ---
+    # Мы оставляем только самые безопасные исправления, которые Pandoc не может сделать сам.
+
+    # 1. Перемещение \tag{...} внутрь окружений. Это исправляет ошибки пользователя.
     markdown_string = re.sub(
         r'(\\end\{([a-zA-Z\*]+)\})(\s*\\tag\{.*?\})',
         r'\3 \1',
@@ -333,32 +342,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
         flags=re.DOTALL
     )
 
-    # 2. Теперь, когда \tag на месте, убираем внешние $$ вокруг окружений.
-    # После предыдущего шага между \end{...} и $$ будет только пробел, и выражение сработает.
-    markdown_string = re.sub(
-        r'\$\$([\s\n]*\\begin\{(?:align|gather|equation|multline|matrix|pmatrix|array|cases)[\*]?\}.*?\\end\{(?:align|gather|equation|multline|matrix|pmatrix|array|cases)[\*]?\})[\s\n]*\$\$',
-        r'\1',
-        markdown_string,
-        flags=re.DOTALL
-    )
-
-    # 3. Обработка устаревшей команды \atop. (остается без изменений)
-    markdown_string = re.sub(
-        r'(\\end\{([a-zA-Z\*]+)\})(\s*\\atop\s*(\\text\{.*?\}))',
-        r'\\ \4 \1',
-        markdown_string,
-        flags=re.DOTALL
-    )
-
-    # 3. Обработка устаревшей команды \atop.
-    markdown_string = re.sub(
-        r'(\\end\{([a-zA-Z\*]+)\})(\s*\\atop\s*(\\text\{.*?\}))',
-        r'\\ \4 \1',
-        markdown_string,
-        flags=re.DOTALL
-    )
-
-    # 4. Конвертация align* в align, если внутри используется \tag.
+    # 2. Конвертация align* в align, если внутри используется \tag.
     def fix_starred_env_with_tag(match):
         env_name = match.group(1)
         content = match.group(2)
@@ -373,35 +357,17 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
         flags=re.DOTALL
     )
 
-    # 5. Исправление \hline внутри pmatrix.
+    # 3. Исправление \hline внутри pmatrix.
     markdown_string = re.sub(
         r'\\begin{pmatrix}(.*?)\\end{pmatrix}',
         _pmatrix_hline_fixer,
         markdown_string,
         flags=re.DOTALL
     )
-    
-    # 6. Оборачивание кириллицы в \text{} внутри математических окружений.
-    def sanitize_cyrillic_in_math(match):
-        math_block = match.group(0)
-        
-        protected_blocks = []
-        def protect(m):
-            placeholder = f"__PROTECTED_BLOCK_{len(protected_blocks)}__"
-            protected_blocks.append(m.group(0))
-            return placeholder
 
-        temp_block = re.sub(r'\\text\{.*?\}|\\mathrm\{.*?\}|\\mathbf\{.*?\}', protect, math_block, flags=re.DOTALL)
-        temp_block = re.sub(r'([\u0400-\u04FF]+(?:[\s.,][\u0400-\u04FF]+)*)', r'\\text{\1}', temp_block)
-        
-        for i, block in enumerate(protected_blocks):
-            temp_block = temp_block.replace(f"__PROTECTED_BLOCK_{i}__", block)
-            
-        return temp_block
+    # ВАЖНО: Мы убрали рискованную обработку кириллицы и удаление $$.
+    # Наш pandoc_header.tex с xelatex и unicode-math должен справиться с этим.
 
-    math_regex = r'(\$\$.*?\$\$|\$[^$\n]*?\$|\\\[.*?\\\]|\\\(.*?\\\)|\\begin\{.*?\}.*?\\end\{.*?\})'
-    markdown_string = re.sub(math_regex, sanitize_cyrillic_in_math, markdown_string, flags=re.DOTALL)
-    
     if contributors:
         author_links = [r"\href{" + f"{c['html_url']}" + r"}{" + f"{c['login']}" + r"}" for c in contributors]
         author_string = ", ".join(author_links)
@@ -420,13 +386,12 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             tex_path = os.path.join(temp_dir, f'{base_name}.tex')
             pdf_path = os.path.join(temp_dir, f'{base_name}.pdf')
 
-            # --- ЭТАП 1: Конвертация Markdown в .tex ---
+            # --- ЭТАП 2: Конвертация Markdown в .tex с помощью Pandoc ---
             pandoc_to_tex_command = [
-                'pandoc', 
+                'pandoc',
                 '--filter', str(MERMAID_FILTER_PATH),
                 '--lua-filter', str(MATH_FILTER_PATH),
                 '--from=gfm-yaml_metadata_block+tex_math_dollars+raw_tex',
-
                 '--to=latex',
                 '--pdf-engine=xelatex', '--include-in-header', header_path,
                 '--variable', f'title={title}',
@@ -436,7 +401,6 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
                 '--variable', 'geometry:margin=2cm',
                 '-o', tex_path
             ]
-            
             if re.search(r'^# ', markdown_string, re.MULTILINE):
                 pandoc_to_tex_command.append('--toc')
 
@@ -446,6 +410,30 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             if pandoc_process.returncode != 0:
                 raise RuntimeError(f"Ошибка Pandoc при конвертации в .tex: {pandoc_process.stderr.decode('utf-8', 'ignore')}")
 
+            # --- ЭТАП 3: Постобработка сгенерированного .tex файла ---
+            # Это КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ. Мы исправляем вывод Pandoc.
+            if not os.path.exists(tex_path):
+                raise RuntimeError(f"Pandoc не смог создать .tex файл.Stderr: {pandoc_process.stderr.decode('utf-8', 'ignore')}")
+
+            with open(tex_path, 'r', encoding='utf-8') as f:
+                tex_content = f.read()
+
+            # Регулярное выражение, которое находит окружения amsmath,
+            # ошибочно обернутые в \[ ... \], и убирает эту обертку.
+            # Оно ищет `\begin{...}`...`\end{...}` (захватывает в группу 1)
+            # которые находятся внутри `\[` и `\]`.
+            # Затем заменяет всю конструкцию только содержимым группы 1.
+            math_envs = r'(?:align|gather|equation|multline)'
+            pattern = re.compile(
+                r'\\\[\s*(\\begin\{' + math_envs + r'\*?\}.*?\\end\{' + math_envs + r'\*?\})\s*\\\]',
+                re.DOTALL
+            )
+            tex_content_fixed = pattern.sub(r'\1', tex_content)
+
+            with open(tex_path, 'w', encoding='utf-8') as f:
+                f.write(tex_content_fixed)
+
+            # --- ЭТАП 4: Компиляция исправленного .tex в PDF ---
             compile_command = [
                 'latexmk',
                 '-file-line-error',
@@ -464,13 +452,9 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
                     with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
                         log_content = f.read()
 
-                # --- САМЫЙ НАДЕЖНЫЙ СПОСОБ НАЙТИ ОШИБКУ ---
-                error_message = "Неизвестная ошибка компиляции LaTeX."
-                # Ищем первую строку, начинающуюся с "!", которая является маркером фатальной ошибки
                 fatal_error_match = re.search(r"^!.*$", log_content, re.MULTILINE)
                 if fatal_error_match:
                     error_start_index = fatal_error_match.start()
-                    # Захватываем ошибку и несколько строк контекста после нее
                     context_end_index = log_content.find('\n\n', error_start_index)
                     if context_end_index == -1: context_end_index = error_start_index + 500
                     error_message = log_content[error_start_index:context_end_index].strip()
@@ -489,8 +473,7 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             with open(pdf_path, 'rb') as f:
                 return io.BytesIO(f.read())
         finally:
-            # Логика очистки, если нужна
-            pass
+            pass # temp_dir очищается автоматически
 
 async def convert_md_to_pdf_pandoc(markdown_string: str, title: str, contributors: list | None = None, last_modified_date: str | None = None) -> io.BytesIO:
     """Асинхронная обертка для конвертации Markdown в PDF с помощью pandoc."""
