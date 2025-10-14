@@ -27,7 +27,7 @@ import markdown
 from markdown_it import MarkdownIt
 from pathlib import Path
 import docker
-from docker.errors import ContainerError, ImageNotFound, APIError
+from docker.errors import ContainerError, ImageNotFound, APIError, DockerException
 from docker.types import LogConfig
 
 from . import database

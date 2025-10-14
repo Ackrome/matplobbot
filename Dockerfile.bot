@@ -82,7 +82,7 @@ RUN command -v python3 >/dev/null && python3 --version \
     && command -v npm >/dev/null && npm --version \
     && command -v pdflatex >/dev/null && pdflatex --version
 
-RUN groupadd -g 999 docker && usermod -aG docker botuser
+RUN groupadd -g 180106 docker && usermod -aG docker botuser
 
 COPY bot/puppeteer-config.json /app/bot/
 
