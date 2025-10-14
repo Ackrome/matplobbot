@@ -5,7 +5,7 @@ FROM node:20-slim
 ENV DEBIAN_FRONTEND=noninteractive \
     APT_OPTS="-y --no-install-recommends"
 
-ARG DOCKER_GID=999
+ARG DOCKER_GID=997
 
 # 1) small essentials + python
 RUN set -eux; \
