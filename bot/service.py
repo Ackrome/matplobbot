@@ -305,28 +305,21 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
     return await asyncio.to_thread(_render_mermaid_sync, mermaid_code)
 
 def _pmatrix_hline_fixer(match: re.Match) -> str:
-    """
-    Callback для re.sub для исправления \hline внутри pmatrix.
-    Заменяет pmatrix на эквивалентный array, который поддерживает \hline.
-    """
+    """Callback-функция для исправления \hline внутри pmatrix."""
     matrix_content = match.group(1)
     if r'\hline' in matrix_content:
         lines = matrix_content.strip().split(r'\\')
         num_cols = 0
         for line in lines:
-            if r'\hline' in line: continue
+            if r'\hline' in line.strip(): continue
             clean_line = re.sub(r'\\text\{.*?\}', '', line)
             current_cols = clean_line.count('&') + 1
             if current_cols > num_cols:
                 num_cols = current_cols
-        
-        if num_cols == 0 and len(lines) > 0:
-            num_cols = 1
-        
+        if num_cols == 0 and len(lines) > 0: num_cols = 1
         if num_cols > 0:
             col_spec = 'c' * num_cols
             return f'\\left(\\begin{{array}}{{{col_spec}}}{matrix_content}\\end{{array}}\\right)'
-    
     return match.group(0)
 
 def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributors: list | None = None, last_modified_date: str | None = None) -> io.BytesIO:
@@ -334,16 +327,25 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
     Финальная, надежная функция для конвертации Markdown в PDF.
     """
     markdown_string = re.sub(
+        r'(\\end\{([a-zA-Z\*]+)\})(\s*\\tag\{.*?\})',
+        r'\3 \1',
+        markdown_string,
+        flags=re.DOTALL
+    )
+
+    # 2. Теперь, когда \tag на месте, убираем внешние $$ вокруг окружений.
+    # После предыдущего шага между \end{...} и $$ будет только пробел, и выражение сработает.
+    markdown_string = re.sub(
         r'\$\$([\s\n]*\\begin\{(?:align|gather|equation|multline|matrix|pmatrix|array|cases)[\*]?\}.*?\\end\{(?:align|gather|equation|multline|matrix|pmatrix|array|cases)[\*]?\})[\s\n]*\$\$',
         r'\1',
         markdown_string,
         flags=re.DOTALL
     )
 
-    # 2. Перемещение \tag{...} внутрь окружений.
+    # 3. Обработка устаревшей команды \atop. (остается без изменений)
     markdown_string = re.sub(
-        r'(\\end\{([a-zA-Z\*]+)\})(\s*\\tag\{.*?\})',
-        r'\3 \1',  # <--- ИСПРАВЛЕНО ЗДЕСЬ! БЫЛО r'\2 \1'
+        r'(\\end\{([a-zA-Z\*]+)\})(\s*\\atop\s*(\\text\{.*?\}))',
+        r'\\ \4 \1',
         markdown_string,
         flags=re.DOTALL
     )
