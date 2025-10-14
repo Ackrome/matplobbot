@@ -533,25 +533,6 @@ async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[
     # Собираем все части обратно в одну строку
     return "".join(processed_parts)
 
-# ... (другие импорты)
-import docker
-from docker.errors import ContainerError, ImageNotFound, APIError
-from docker.types import LogConfig
-
-# --- Новые импорты ---
-import tempfile
-import shutil
-import os
-import traceback
-
-# ...
-
-# --- ЗАМЕНИТЕ СТАРУЮ ФУНКЦИЮ НА ЭТУ ---
-
-# Имя образа, который мы создали в docker-compose.yml
-RUNNER_IMAGE_NAME = "matplobbot_runner"
-# Ограничение по времени выполнения кода в секундах
-EXECUTION_TIMEOUT = 15 # 15 секунд
 
 async def execute_code_and_send_results(message: Message, code_to_execute: str):
     """
