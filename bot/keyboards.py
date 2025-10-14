@@ -67,40 +67,9 @@ def get_main_reply_keyboard(user_id: int) -> ReplyKeyboardMarkup:
         one_time_keyboard=True,
     )
 
-# Function to get the submodules ReplyKeyboardMarkup
-def get_submodules_reply_keyboard(user_id: int) -> ReplyKeyboardMarkup:
-    keyboard_buttons = [[KeyboardButton(text=i)] for i in matplobblib.submodules]
-    keyboard_buttons.append([KeyboardButton(text="Отмена")])
-    return ReplyKeyboardMarkup(
-        keyboard=keyboard_buttons,
-        resize_keyboard=True,
-        input_field_placeholder='Выберите подмодуль или нажмите "Отмена"',
-        one_time_keyboard=True,
-    )
 
-# Function to get the topics ReplyKeyboardMarkup for a specific submodule
-def get_topics_reply_keyboard(user_id: int, submodule_name: str) -> ReplyKeyboardMarkup:
-    topics = topics_data.get(submodule_name, {}).get('topics', [])
-    keyboard_buttons = [[KeyboardButton(text=i)] for i in topics]
-    keyboard_buttons.append([KeyboardButton(text="Отмена")])
-    return ReplyKeyboardMarkup(
-        keyboard=keyboard_buttons,
-        resize_keyboard=True,
-        input_field_placeholder='Выберите тему или нажмите "Отмена"',
-        one_time_keyboard=True,
-    )
 
-# Function to get the codes ReplyKeyboardMarkup for a specific submodule and topic
-def get_codes_reply_keyboard(user_id: int, submodule_name: str, topic_name: str) -> ReplyKeyboardMarkup:
-    codes = topics_data.get(submodule_name, {}).get('codes', {}).get(topic_name, [])
-    keyboard_buttons = [[KeyboardButton(text=i)] for i in codes]
-    keyboard_buttons.append([KeyboardButton(text="Отмена")])
-    return ReplyKeyboardMarkup(
-        keyboard=keyboard_buttons,
-        resize_keyboard=True,
-        input_field_placeholder='Выберите задачу или нажмите "Отмена"',
-        one_time_keyboard=True,
-    )
+
 
 
 # Function to get the help InlineKeyboardMarkup

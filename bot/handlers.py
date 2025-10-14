@@ -8,8 +8,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import aiohttp
-from telegraph import Telegraph
-from telegraph.exceptions import TelegraphException
 
 import asyncio
 import sys

@@ -145,9 +145,6 @@ ADMIN_USER_ID=123456789
 # Required for /lec_search, /lec_all, and uploading rendered LaTeX images
 GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-# (Optional) Telegra.ph access token. If not provided, a new account
-# will be created on the first run and the token will be logged.
-TELEGRAPH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ### 3. Running with Docker Compose

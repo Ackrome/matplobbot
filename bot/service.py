@@ -477,7 +477,30 @@ def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributor
             with open(pdf_path, 'rb') as f:
                 return io.BytesIO(f.read())
         finally:
-            pass
+            # Эта логика выполнится всегда, даже если в try возникнет ошибка.
+            cleanup_log_file = '/tmp/pandoc_cleanup.log'
+            if os.path.exists(cleanup_log_file):
+                try:
+                    with open(cleanup_log_file, 'r', encoding='utf-8') as f:
+                        files_to_delete = f.readlines()
+                    
+                    for file_path in files_to_delete:
+                        path = file_path.strip()
+                        if path:  # Убедимся, что строка не пустая
+                            try:
+                                os.remove(path)
+                                logger.debug(f"Успешно удален временный файл Mermaid: {path}")
+                            except FileNotFoundError:
+                                # Файл уже удален, это не ошибка
+                                logger.warning(f"Временный файл Mermaid не найден для удаления: {path}")
+                            except Exception as e:
+                                # Логируем другие возможные ошибки при удалении
+                                logger.error(f"Ошибка при удалении временного файла {path}: {e}")
+                    
+                    # После обработки удаляем сам файл лога, чтобы он не рос бесконечно
+                    os.remove(cleanup_log_file)
+                except Exception as e:
+                    logger.error(f"Не удалось обработать или удалить файл лога очистки {cleanup_log_file}: {e}")
 
 async def convert_md_to_pdf_pandoc(markdown_string: str, title: str, contributors: list | None = None, last_modified_date: str | None = None) -> io.BytesIO:
     """Асинхронная обертка для конвертации Markdown в PDF с помощью pandoc."""
@@ -1067,109 +1090,6 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
 </body>
 </html>"""
     return full_html_doc
-
-async def _prepare_html_from_markdown(content: str, settings: dict, file_path: str) -> tuple[str, list]:
-    """
-    A helper function that processes markdown content into a full HTML document.
-    This logic is shared between 'html_file' and 'pdf_file' modes.
-    Returns a tuple of (full_html_string, list_of_latex_formulas).
-    """
-    # 1. Find all LaTeX formulas, replace with placeholders, and store them.
-    latex_formulas = []
-
-    def store_latex_match(match):
-        is_display = match.group(1) is not None
-        code = match.group(1) if is_display else match.group(2)
-        if code is not None:
-            placeholder = f'<latex-placeholder id="{len(latex_formulas)}"></latex-placeholder>'
-            latex_formulas.append({
-                'code': code.strip(),
-                'is_display': is_display,
-                'placeholder': placeholder,
-                'original': match.group(0)
-            })
-            return placeholder
-        return match.group(0)
-
-    latex_regex = r'\$\$(.*?)\$\$|(?<!\$)\$([^$]+)\$(?!\$)'
-    content_with_placeholders = re.sub(latex_regex, store_latex_match, content, flags=re.DOTALL)
-
-    # 2. Convert Markdown to HTML.
-    html_with_placeholders = markdown.markdown(content_with_placeholders, extensions=['fenced_code', 'tables'])
-    html_with_placeholders = html_with_placeholders.replace('<pre><code class="language-mermaid">', '<pre class="mermaid">').replace('</code></pre>', '</pre>')
-
-    # 3. Asynchronously render formulas and get image URLs.
-    padding = MD_LATEX_PADDING
-    dpi = settings['latex_dpi']
-    async with aiohttp.ClientSession() as session:
-        async def render_and_upload(formula_data):
-            try:
-                if not formula_data['code']: return None
-                current_padding = padding if formula_data['is_display'] else max(0, padding - 10)
-                formula_key = f"{formula_data['code']}|{current_padding}|{dpi}|{formula_data['is_display']}"
-                formula_hash = hashlib.sha1(formula_key.encode()).hexdigest()
-                cached_url = await database.get_latex_cache(formula_hash)
-                if cached_url: return cached_url
-
-                image_buffer = await render_latex_to_image(formula_data['code'], current_padding, dpi, is_display_override=formula_data['is_display'])
-                image_buffer.seek(0)
-                image_url = await github_service.upload_image_to_github(image_buffer, session)
-                if image_url: await database.add_latex_cache(formula_hash, image_url)
-                return image_url
-            except Exception as e:
-                logger.warning(f"Failed to render/upload LaTeX ('{formula_data['code']}'): {e}")
-                return None
-
-        semaphore = asyncio.Semaphore(5)
-        async def guarded_render(formula_data):
-            async with semaphore:
-                return await render_and_upload(formula_data)
-
-        tasks = [guarded_render(f) for f in latex_formulas]
-        image_urls = await asyncio.gather(*tasks)
-
-    # 4. Replace placeholders with <img> tags.
-    html_content = html_with_placeholders
-    for i, formula_data in enumerate(latex_formulas):
-        url = image_urls[i]
-        if url:
-            if formula_data['is_display']:
-                replacement = f'<figure><img src="{url}" style="max-width: 80%; height: auto; display: block; margin-left: auto; margin-right: auto;"></figure>'
-            else:
-                replacement = f'<img src="{url}" style="height: 1.8em; vertical-align: -0.6em;">'
-        else:
-            replacement = f'<i>[Ошибка рендеринга LaTeX: {formula_data["original"]}]</i>'
-        html_content = html_content.replace(formula_data['placeholder'], replacement)
-
-    # 5. Wrap in a full HTML document.
-    page_title = file_path.split('/')[-1].replace('.md', '')
-    full_html_doc = f"""
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{page_title}</title>
-    <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; margin: 0 auto; padding: 20px; max-width: 800px; }}
-        img {{ max-width: 100%; height: auto; }}
-        figure {{ margin: 1.5em 0; }}
-        pre {{ background-color: #f6f8fa; padding: 16px; overflow: auto; border-radius: 6px; }}
-        code {{ font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace; }}
-        table {{ border-collapse: collapse; width: 100%; margin: 1em 0; border: 1px solid #dfe2e5; }}
-        th, td {{ border: 1px solid #dfe2e5; padding: 6px 13px; }}
-        tr {{ border-top: 1px solid #c6cbd1; }}
-        tr:nth-child(2n) {{ background-color: #f6f8fa; }}
-        h1, h2, h3, h4, h5, h6 {{ border-bottom: 1px solid #eaecef; padding-bottom: .3em; margin-top: 24px; margin-bottom: 16px; }}
-        /* Weasyprint does not support JS, so Mermaid diagrams will appear as code blocks. This is expected. */
-        pre.mermaid {{ background-color: #f0f8ff; border-left: 5px solid #add8e6; }}
-    </style>
-</head>
-<body>
-    {html_content}
-</body>
-</html>"""
-    return full_html_doc, latex_formulas
 
 async def display_lec_all_path(message: Message, repo_path: str, path: str, is_edit: bool = False):
     """Helper to fetch and display contents of a path in the lec_all repo."""

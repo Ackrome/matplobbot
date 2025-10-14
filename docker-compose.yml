@@ -9,7 +9,6 @@ services:
       - BOT_TOKEN=${BOT_TOKEN} 
       - ADMIN_USER_ID=${ADMIN_USER_ID}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
-      - TELEGRAPH_TOKEN=${TELEGRAPH_TOKEN}
     volumes:
       - bot_db_data:/app/db_data  # Именованный volume для хранения БД
       - bot_logs:/app/logs        # Именованный volume для логов бота
