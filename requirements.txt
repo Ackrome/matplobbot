@@ -14,3 +14,4 @@ ipython
 aiohttp>=3.8.0
 setuptools
 httpx
+docker

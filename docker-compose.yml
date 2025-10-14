@@ -5,6 +5,7 @@ services:
       context: .
       dockerfile: Dockerfile.bot
     container_name: mpb-telegram-bot
+    restart: unless-stopped
     environment:
       - BOT_TOKEN=${BOT_TOKEN} 
       - ADMIN_USER_ID=${ADMIN_USER_ID}
@@ -14,6 +15,14 @@ services:
       - bot_logs:/app/logs        # Именованный volume для логов бота
       - matplobblib_lib:/usr/local/lib/python3.11/site-packages/matplobblib # Persist library updates
       - ./examples:/app/examples    # Volume для файлов-примеров
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - runner
+  runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.runner
+    image: mpb-runner
 
 
   mpb-fastapi-stats:

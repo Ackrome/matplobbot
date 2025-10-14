@@ -82,11 +82,12 @@ RUN command -v python3 >/dev/null && python3 --version \
     && command -v npm >/dev/null && npm --version \
     && command -v pdflatex >/dev/null && pdflatex --version
 
-
+RUN groupadd -g 999 docker && usermod -aG docker botuser
 
 COPY bot/puppeteer-config.json /app/bot/
 
 COPY bot/ /app/bot/
-RUN pip install --no-cache-dir weasyprint
+
+RUN pip install --no-cache-dir weasyprint docker
 
 CMD ["python3", "-m", "bot.main"]

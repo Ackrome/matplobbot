@@ -1,0 +1,31 @@
+# Используем slim-образ для экономии места
+FROM python:3.11-slim
+
+# Устанавливаем системные зависимости, необходимые для matplotlib и других научных библиотек
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    libffi-dev \
+    pkg-config \
+    libfreetype6-dev \
+    libpng-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Устанавливаем Python-библиотеки, которые должны быть доступны пользователю
+# Обновляем pip и устанавливаем библиотеки одним слоем для эффективности
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir \
+    matplotlib \
+    numpy \
+    scipy \
+    matplobblib \
+    Pillow
+
+# Создаем не-рутового пользователя для дополнительной безопасности
+RUN useradd -ms /bin/bash appuser
+USER appuser
+
+# Устанавливаем рабочую директорию, куда будет монтироваться код
+WORKDIR /app/code
+
+# Команда по умолчанию не нужна, так как она будет передаваться при запуске контейнера

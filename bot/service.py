@@ -26,6 +26,9 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import markdown
 from markdown_it import MarkdownIt
 from pathlib import Path
+import docker
+from docker.errors import ContainerError, ImageNotFound, APIError
+from docker.types import LogConfig
 
 from . import database
 import matplobblib
@@ -34,6 +37,10 @@ from . import github_service
 from .config import *
 
 logger = logging.getLogger(__name__)
+
+RUNNER_IMAGE_NAME = "mpb-runner"
+# Ограничение по времени выполнения кода в секундах
+EXECUTION_TIMEOUT = 15 # 15 секунд
 
 # --- HTML Conversion ---
 def convert_html_to_telegram_html(html_content: str) -> str:
@@ -78,39 +85,6 @@ def convert_html_to_telegram_html(html_content: str) -> str:
     lines = [line.strip() for line in html_content.split('\n')]
     return '\n'.join(filter(None, lines))
 
-# def _pmatrix_hline_fixer(match: re.Match) -> str:
-#     """
-#     Callback for re.sub to replace a pmatrix environment with an array environment
-#     if the pmatrix contains a \\hline command, which is not supported by pmatrix.
-#     """
-#     matrix_content = match.group(1)
-#     # Check if \hline is present inside the matched pmatrix content
-#     if r'\hline' in matrix_content:
-#         # \hline is not supported by pmatrix, so we convert it to a compatible array.
-#         # To determine the number of columns, we find the line with the maximum number of alignment tabs (&).
-#         lines = matrix_content.strip().split(r'\\')
-#         num_cols = 0
-#         for line in lines:
-#             # This is a simple heuristic to avoid counting '&' inside other commands like \text{...}.
-#             # It's not foolproof but covers many common cases.
-#             clean_line = re.sub(r'\\text\{.*?\}', '', line)
-#             # Count alignment tabs in the current line and add 1 for the number of columns.
-#             current_cols = clean_line.count('&') + 1
-#             if current_cols > num_cols:
-#                 num_cols = current_cols
-        
-#         # Fallback to 1 column if no '&' are found (unlikely for a matrix with \hline, but safe).
-#         if num_cols == 0 and len(lines) > 0:
-#             num_cols = 1
-        
-#         if num_cols > 0:
-#             # Create the column specification string (e.g., 'ccc' for 3 columns).
-#             col_spec = 'c' * num_cols
-#             # Reconstruct the matrix using the array environment, wrapped in parentheses.
-#             return f'\\left(\\begin{{array}}{{{col_spec}}}{matrix_content}\\end{{array}}\\right)'
-    
-#     # If no \hline is found, return the original pmatrix environment unchanged.
-#     return match.group(0)
 
 # --- LaTeX Rendering ---
 def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_override: bool | None = None) -> io.BytesIO:
@@ -559,156 +533,137 @@ async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[
     # Собираем все части обратно в одну строку
     return "".join(processed_parts)
 
+# ... (другие импорты)
+import docker
+from docker.errors import ContainerError, ImageNotFound, APIError
+from docker.types import LogConfig
+
+# --- Новые импорты ---
+import tempfile
+import shutil
+import os
+import traceback
+
+# ...
+
+# --- ЗАМЕНИТЕ СТАРУЮ ФУНКЦИЮ НА ЭТУ ---
+
+# Имя образа, который мы создали в docker-compose.yml
+RUNNER_IMAGE_NAME = "matplobbot_runner"
+# Ограничение по времени выполнения кода в секундах
+EXECUTION_TIMEOUT = 15 # 15 секунд
+
 async def execute_code_and_send_results(message: Message, code_to_execute: str):
-
-    """Helper function to execute code and send results back to the user."""
-    output_capture = io.StringIO()
-    execution_error = None
+    """
+    Безопасно выполняет код в изолированном Docker-контейнере.
+    """
     temp_dir = None
-    original_cwd = os.getcwd()
-    rich_outputs = []
-    exec_globals = { 
-        "asyncio": asyncio,
-        "message": message,
-        "os": os,
-        "sys": sys,
-        "__builtins__": __builtins__,
-    }
+    status_msg = await message.answer("Готовлю безопасное окружение для выполнения...")
 
-    # 2. Попытка импорта "rich display" библиотек и внедрение кастомных функций
     try:
-        from IPython.display import display as ipython_display, Markdown, HTML
-        
-
-        def custom_display(*objs, **kwargs):
-            """Перехватывает вызовы display, обрабатывает Markdown/HTML и делегирует остальное."""
-            for obj in objs:
-                if isinstance(obj, Markdown):
-                    html_content = markdown.markdown(obj.data, extensions=['fenced_code'])
-                    tg_html = convert_html_to_telegram_html(html_content)
-                    rich_outputs.append({'type': 'html', 'content': tg_html})
-                elif isinstance(obj, HTML):
-                    tg_html = convert_html_to_telegram_html(obj.data)
-                    rich_outputs.append({'type': 'html', 'content': tg_html})
-                else:
-                    # For other objects, capture their string representation.
-                    # This avoids unexpected behavior from ipython_display outside an IPython kernel.
-                    output_capture.write(repr(obj) + '\n')
-
-        # Внедряем наши функции и классы в окружение для выполнения 
-        exec_globals['display'] = custom_display 
-        exec_globals['Markdown'] = Markdown
-        exec_globals['HTML'] = HTML
-
-    except ImportError:
-        logger.warning("IPython или markdown не установлены. Rich display отключен для /execute.")
-        pass
-
-    # 3. Выполнение кода пользователя в контролируемом окружении
-    try:
+        # 1. Создаем временную директорию на хосте
         temp_dir = tempfile.mkdtemp()
-        os.chdir(temp_dir)
+        script_path = os.path.join(temp_dir, "script.py")
 
-        with contextlib.redirect_stdout(output_capture), contextlib.redirect_stderr(output_capture):
-            local_scope = {} # Словарь для получения результата exec (самой функции)
-            wrapped_code = f"async def __exec_code():\n"
-            wrapped_code += "".join([f"    {line}\n" for line in code_to_execute.splitlines()])
+        # Асинхронно записываем код пользователя в файл
+        async with aiofiles.open(script_path, 'w', encoding='utf-8') as f:
+            await f.write(code_to_execute)
+
+        # 2. Инициализируем Docker-клиент
+        try:
+            client = docker.from_env()
+        except DockerException:
+            await status_msg.edit_text("❌ Ошибка: Не удалось подключиться к Docker-демону. Убедитесь, что Docker запущен и сокет проброшен в контейнер.")
+            return
             
-            exec(wrapped_code, exec_globals, local_scope)
-            await local_scope["__exec_code"]()
-            
-    except Exception:
-        execution_error = f"--- ОШИБКА ВЫПОЛНЕНИЯ ---\n{traceback.format_exc()}"
-    finally:
-        os.chdir(original_cwd)
+        await status_msg.edit_text("Запускаю код в песочнице...")
 
-        # --- Отправка результатов ---
-        if execution_error:
-            await message.answer(f"```\n{execution_error}\n```", parse_mode='markdown')
+        # 3. Запускаем контейнер с ограничениями
+        container = None
+        output_logs = ""
+        try:
+            container = client.containers.run(
+                image=RUNNER_IMAGE_NAME,
+                command=f"python script.py",
+                volumes={temp_dir: {'bind': '/app/code', 'mode': 'rw'}},
+                working_dir='/app/code',
+                remove=False, # Не удаляем сразу, чтобы можно было получить логи
+                detach=True,  # Запускаем в фоне
+                mem_limit='256m',       # Ограничение памяти
+                pids_limit=100,         # Ограничение на количество процессов (защита от fork-бомб)
+                network_disabled=True,  # Отключаем сеть для безопасности
+                log_config=LogConfig(type=LogConfig.types.JSON, config={}) # Для лучшего сбора логов
+            )
 
-        # Отправляем rich-вывод (HTML)
-        for output in rich_outputs: 
-            content_to_send = output['content'] # This is the raw HTML or Markdown string
-            parse_mode = None # Default to no parse mode, will be set based on type
+            # Ожидаем завершения контейнера с таймаутом
+            result = container.wait(timeout=EXECUTION_TIMEOUT)
+            output_logs = container.logs().decode('utf-8', 'ignore')
 
-            if output['type'] == 'markdown':
-                # Convert Markdown to HTML first
-                
-                content_to_send = markdown.markdown(content_to_send, extensions=['fenced_code'])
-                # Then apply Telegram-specific HTML conversion for basic tags
-                content_to_send = convert_html_to_telegram_html(content_to_send)
-                parse_mode = 'HTML'
-            elif output['type'] == 'html':
-                # For explicit HTML objects, try to send raw HTML and let Telegram parse it.
-                # convert_html_to_telegram_html is NOT applied here, relying on Telegram's parser.
-                parse_mode = 'HTML'
+            if result['StatusCode'] != 0:
+                 # Если код завершился с ошибкой, логи уже содержат stderr
+                 pass
 
-            if content_to_send:
+        except asyncio.TimeoutError: # Это исключение от wait() не ловится, но оставим логику
+            output_logs = f"--- ОШИБКА: ПРВЫШЕН ЛИМИТ ВРЕМЕНИ ---\nКод выполнялся дольше {EXECUTION_TIMEOUT} секунд и был принудительно остановлен."
+            if container:
+                container.stop()
+        except ContainerError as e:
+            output_logs = f"--- ОШИБКА ВНУТРИ КОНТЕЙНЕРА ---\n{e.stderr.decode('utf-8', 'ignore') if e.stderr else 'Нет данных об ошибке.'}"
+        except ImageNotFound:
+            await status_msg.edit_text(f"❌ Ошибка: Docker-образ '{RUNNER_IMAGE_NAME}' не найден. Убедитесь, что вы собрали его командой `docker-compose build`.")
+            return
+        except APIError as e:
+            await status_msg.edit_text(f"❌ Ошибка Docker API: {e}")
+            return
+        finally:
+            if container:
                 try:
-                    await message.answer(content_to_send, parse_mode=parse_mode)
-                except TelegramBadRequest as e:
-                    logger.warning(f"TelegramBadRequest when sending rich output (type: {output['type']}): {e}. Attempting to send as file.")
-                    # If Telegram HTML fails, save as .html file and send
-                    file_name = f"output_{output['type']}_{len(rich_outputs)}.html"
-                    file_path = os.path.join(temp_dir, file_name)
-                    
-                    # Ensure the content written to file is the original, full HTML
-                    # For markdown, this would be the markdown-converted HTML
-                    # For HTML, this would be the raw HTML from obj.data
-                    content_to_write = output['content'] # Original content
-                    if output['type'] == 'markdown':
-                        
-                        content_to_write = markdown.markdown(content_to_write, extensions=['fenced_code'])
+                    container.remove(v=True, force=True) # Удаляем контейнер и его анонимные тома
+                except APIError as e:
+                    logger.error(f"Не удалось удалить контейнер {container.id}: {e}")
 
-                    with open(file_path, 'w', encoding='utf-8') as f:
-                        f.write(content_to_write)
-                    try:
-                        await message.answer_document(
-                            document=FSInputFile(file_path),
-                            caption=f"Вывод ({output['type']}) был отправлен как файл, так как он слишком сложен для отображения в Telegram."
-                        )
-                    except Exception as file_e:
-                        logger.error(f"Failed to send rich output as file {file_path}: {file_e}")
-                        await message.answer(f"Не удалось отправить rich-вывод как файл: {file_e}")
-                except Exception as e:
-                    logger.error(f"Unexpected error when sending rich output: {e}")
-                    await message.answer(f"Произошла ошибка при отправке rich-вывода: {e}")
 
-        # Ищем и отправляем сгенерированные изображения 
-        image_files = [] 
-        if temp_dir: 
-            for ext in ['*.png', '*.jpg', '*.jpeg', '*.gif']:
-                image_files.extend(glob.glob(os.path.join(temp_dir, ext)))
-            
+        # 4. Собираем и отправляем результаты
+        await status_msg.edit_text("Обрабатываю результаты...")
+
+        # Отправляем текстовый вывод (stdout/stderr)
+        if output_logs:
+            if len(output_logs) > 4000:
+                header = "Текстовый вывод (слишком длинный, отправляю как файл):"
+                log_file = os.path.join(temp_dir, "output.log")
+                with open(log_file, "w", encoding='utf-8') as f:
+                    f.write(output_logs)
+                await message.answer_document(document=FSInputFile(log_file), caption=header)
+            else:
+                await message.answer(f"```\n{output_logs}\n```", parse_mode='markdown')
+
+        # Ищем и отправляем сгенерированные изображения
+        image_files = []
+        for ext in ['*.png', '*.jpg', '*.jpeg', '*.gif']:
+            image_files.extend(glob.glob(os.path.join(temp_dir, ext)))
+        
+        if image_files:
+            await message.answer("Обнаружены сгенерированные изображения:")
             for img_path in image_files:
                 try:
                     await message.answer_photo(photo=FSInputFile(img_path))
                 except Exception as e:
-                    logger.error(f"Failed to send photo {img_path}: {e}")
-                    await message.answer(f"Не удалось отправить изображение {os.path.basename(img_path)}: {e}")
+                    logger.error(f"Не удалось отправить фото {img_path}: {e}")
 
-        # Отправляем текстовый вывод, если он есть
-        text_output = output_capture.getvalue()
-        if text_output:
-            if len(text_output) > 4096:
-                await message.answer('Текстовый вывод слишком длинный, отправляю частями.')
-                for x in range(0, len(text_output), 4096):
-                    await message.answer(f"```\n{text_output[x:x+4096]}\n```", parse_mode='markdown')
-            else:
-                await message.answer(f"```\n{text_output}\n```", parse_mode='markdown')
+        if not output_logs and not image_files:
+            await message.answer("Код выполнен успешно без текстового вывода или сгенерированных файлов.")
 
-        # Сообщение, если не было ни вывода, ни картинок, ни ошибок
-        if not execution_error and not image_files and not text_output and not rich_outputs:
-            await message.answer("Код выполнен успешно без какого-либо вывода.")
-
-        # Очищаем временную директорию
+    except Exception as e:
+        # Ловим любые другие непредвиденные ошибки
+        tb_str = traceback.format_exc()
+        logger.error(f"Критическая ошибка в execute_code_and_send_results: {e}\n{tb_str}")
+        await message.answer(f"Произошла непредвиденная ошибка на стороне бота при выполнении кода: `{e}`")
+    finally:
+        # 5. Очищаем временную директорию
         if temp_dir and os.path.exists(temp_dir):
-            try:
-                shutil.rmtree(temp_dir)
-            except Exception as e:
-                logger.error(f"Ошибка при удалении временной директории {temp_dir}: {e}")
-
-        # Возвращаем основную клавиатуру
+            shutil.rmtree(temp_dir)
+        
+        await status_msg.delete()
         await message.answer("Выполнение завершено.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
 
 async def send_as_plain_text(message: Message, file_path: str, content: str):
