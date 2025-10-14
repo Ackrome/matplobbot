@@ -345,6 +345,7 @@ async def execute_command(message: Message, state: FSMContext):
 async def process_execution_from_user(message: Message, state: FSMContext):
     """Executes the received Python code and sends back the output, including images and rich display objects."""
     await state.clear()
+    await message.bot.send_chat_action(message.chat.id, "typing")
     await service.execute_code_and_send_results(message, message.text)
 
 ##################################################################################################
@@ -365,7 +366,7 @@ async def process_latex_formula(message: Message, state: FSMContext):
     formula = message.text
     
     status_msg = await message.answer("🖼️ Рендеринг формулы...")
-
+    await message.bot.send_chat_action(message.chat.id, "upload_photo") 
     try:
         settings = await database.get_user_settings(message.from_user.id)
         padding = settings['latex_padding']
@@ -411,7 +412,7 @@ async def process_mermaid_code(message: Message, state: FSMContext):
     mermaid_code = message.text
     
     status_msg = await message.answer("🎨 Рендеринг диаграммы...")
-
+    await message.bot.send_chat_action(message.chat.id, "upload_photo")
     try:
         image_buffer = await service.render_mermaid_to_image(mermaid_code)
         
