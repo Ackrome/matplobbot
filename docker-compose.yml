@@ -17,7 +17,7 @@ services:
       - matplobblib_lib:/usr/local/lib/python3.11/site-packages/matplobblib # Persist library updates
       - ./examples:/app/examples    # Volume для файлов-примеров
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./code_runner_tmp:/app/run
+      - code_runner_data:/app/run
     depends_on:
       - runner
   runner:
@@ -47,3 +47,4 @@ volumes:
   bot_db_data:
   bot_logs:
   matplobblib_lib:
+  code_runner_data:

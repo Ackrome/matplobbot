@@ -43,8 +43,8 @@ RUNNER_IMAGE_NAME = "mpb-runner"
 EXECUTION_TIMEOUT = 15 # 15 секунд
 
 SHARED_DIR_INSIDE_BOT = "/app/run"
-# Путь к этой же папке на хосте (как указано в docker-compose)
-SHARED_DIR_ON_HOST = "./code_runner_tmp"
+# Имя нашего Docker-тома из docker-compose.yml
+SHARED_VOLUME_NAME = "code_runner_data"
 
 # --- HTML Conversion ---
 def convert_html_to_telegram_html(html_content: str) -> str:
@@ -539,94 +539,82 @@ async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[
 
 async def execute_code_and_send_results(message: Message, code_to_execute: str):
     """
-    Безопасно выполняет код в изолированном Docker-контейнере.
+    Безопасно выполняет код в изолированном Docker-контейнере, используя общий именованный том.
     """
-    temp_dir_in_bot = None
-    status_msg = await message.answer("Готовлю безопасное окружение для выполнения...")
+    temp_dir = None
+    status_msg = await message.answer("Готовлю безопасное окружение...")
 
     try:
-        # 1. Создаем временную директорию в общем пространстве
-        # Теперь Python создаст папку внутри /app/run
-        temp_dir_in_bot = tempfile.mkdtemp(dir=SHARED_DIR_INSIDE_BOT)
-        script_path_in_bot = os.path.join(temp_dir_in_bot, "script.py")
-
-        # Асинхронно записываем код пользователя в файл
-        async with aiofiles.open(script_path_in_bot, 'w', encoding='utf-8') as f:
+        # 1. Создаем временную директорию в общем томе (/app/run)
+        temp_dir = tempfile.mkdtemp(dir=SHARED_DIR_INSIDE_BOT)
+        script_path = os.path.join(temp_dir, "script.py")
+        
+        async with aiofiles.open(script_path, 'w', encoding='utf-8') as f:
             await f.write(code_to_execute)
 
-        # --- КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ---
-        # Нам нужно сказать Docker-демону путь к этой папке на ХОСТЕ
-        temp_dir_on_host = os.path.join(SHARED_DIR_ON_HOST, os.path.basename(temp_dir_in_bot))
-        # Docker требует абсолютный путь
-        abs_temp_dir_on_host = os.path.abspath(temp_dir_on_host)
-
+        # Получаем имя нашей временной папки (например, "tmpXYZ")
+        temp_dir_name = os.path.basename(temp_dir)
+        
         # 2. Инициализируем Docker-клиент
-        # ... (эта часть остается без изменений)
         try:
             client = docker.from_env()
-        except Exception as e: # Используем более общий Exception
+        except Exception as e:
             logger.error(f"Ошибка подключения к Docker: {e}")
-            await status_msg.edit_text("❌ Ошибка: Не удалось подключиться к Docker-демону. Убедитесь, что Docker запущен и сокет проброшен в контейнер.")
+            await status_msg.edit_text("❌ Ошибка: Не удалось подключиться к Docker-демону.")
             return
 
         await status_msg.edit_text("Запускаю код в песочнице...")
-
+        
         # 3. Запускаем контейнер
         container = None
         output_logs = ""
         try:
             container = client.containers.run(
-                image="mpb-runner", # Убедитесь, что имя совпадает с тем, что в docker-compose.yml
-                command="python script.py",
-                # Монтируем папку с ХОСТА в контейнер-исполнитель
-                volumes={abs_temp_dir_on_host: {'bind': '/app/code', 'mode': 'rw'}},
+                image="mpb-runner",
+                # Команда теперь выполняется относительно корня /app/code, куда монтируется весь том
+                command=f"python {temp_dir_name}/script.py", 
+                # Монтируем наш общий ИМЕНОВАННЫЙ ТОМ
+                volumes={SHARED_VOLUME_NAME: {'bind': '/app/code', 'mode': 'rw'}},
                 working_dir='/app/code',
-                remove=True, # Можно удалять контейнер сразу после выполнения
-                detach=False, # Ждем выполнения синхронно
+                remove=True,
+                detach=False,
                 mem_limit='256m',
                 pids_limit=100,
                 network_disabled=True,
-                log_config=LogConfig(type=LogConfig.types.JSON, config={})
             )
-            # Если detach=False, результат выполнения (stdout/stderr) будет в `container`
             output_logs = container.decode('utf-8', 'ignore')
 
         except ContainerError as e:
-            # Ошибки выполнения кода (например, SyntaxError) попадут сюда
-            output_logs = e.stderr.decode('utf-8', 'ignore') if e.stderr else "Произошла ошибка в контейнере без вывода в stderr."
+            output_logs = e.stderr.decode('utf-8', 'ignore') if e.stderr else "Произошла ошибка в контейнере."
         except ImageNotFound:
-            await status_msg.edit_text(f"❌ Ошибка: Docker-образ 'mpb-runner' не найден. Убедитесь, что вы собрали его командой `docker-compose build`.")
+            await status_msg.edit_text("❌ Ошибка: Docker-образ 'mpb-runner' не найден. Выполните `docker-compose build`.")
             return
         except APIError as e:
             await status_msg.edit_text(f"❌ Ошибка Docker API: {e}")
             logger.error(f"Ошибка Docker API: {e}")
             return
-        # Убираем блок с ожиданием и таймаутом, так как detach=False делает это за нас
 
         # 4. Собираем и отправляем результаты
-        # ... (эта часть почти не меняется)
         await status_msg.edit_text("Обрабатываю результаты...")
 
         if output_logs:
-            # ... (логика отправки логов)
+            # ... (логика отправки текстового вывода - без изменений)
             if len(output_logs) > 4000:
                 header = "Текстовый вывод (слишком длинный, отправляю как файл):"
-                log_file = os.path.join(temp_dir_in_bot, "output.log")
+                log_file = os.path.join(temp_dir, "output.log")
                 async with aiofiles.open(log_file, "w", encoding='utf-8') as f:
                     await f.write(output_logs)
                 await message.answer_document(document=FSInputFile(log_file), caption=header)
             else:
                 await message.answer(f"```\n{output_logs}\n```", parse_mode='markdown')
 
-
-        # Ищем и отправляем изображения из нашей общей папки
         image_files = []
         for ext in ['*.png', '*.jpg', '*.jpeg', '*.gif']:
-            # Искать нужно в той папке, которая видна боту
-            image_files.extend(glob.glob(os.path.join(temp_dir_in_bot, ext)))
+            # Ищем файлы в той же временной директории, которую создал бот
+            image_files.extend(glob.glob(os.path.join(temp_dir, ext)))
 
         if image_files:
-            # ... (логика отправки изображений)
+            # ... (логика отправки изображений - без изменений)
             await message.answer("Обнаружены сгенерированные изображения:")
             for img_path in image_files:
                 try:
@@ -635,23 +623,21 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
                     logger.error(f"Не удалось отправить фото {img_path}: {e}")
 
         if not output_logs and not image_files:
-            await message.answer("Код выполнен успешно без текстового вывода или сгенерированных файлов.")
+            await message.answer("Код выполнен успешно без вывода.")
 
     except Exception as e:
-        # ... (обработка ошибок)
         tb_str = traceback.format_exc()
         logger.error(f"Критическая ошибка в execute_code_and_send_results: {e}\n{tb_str}")
-        await message.answer(f"Произошла непредвиденная ошибка на стороне бота при выполнении кода: `{e}`")
-
+        await message.answer(f"Произошла непредвиденная ошибка на стороне бота: `{e}`")
     finally:
-        # 5. Очищаем временную директорию
-        if temp_dir_in_bot and os.path.exists(temp_dir_in_bot):
-            # shutil.rmtree работает с папками, которые видит бот
-            shutil.rmtree(temp_dir_in_bot)
+        # 5. Очищаем нашу временную директорию внутри тома
+        if temp_dir and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
 
-        await status_msg.delete()
+        if 'status_msg' in locals() and status_msg:
+          await status_msg.delete()
         await message.answer("Выполнение завершено.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
-        
+
 async def send_as_plain_text(message: Message, file_path: str, content: str):
     """Helper to send content as plain text, handling long messages."""
     header = f"Файл: `{file_path}` (простой текст)\n\n"

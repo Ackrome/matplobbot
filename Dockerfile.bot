@@ -86,6 +86,7 @@ RUN command -v python3 >/dev/null && python3 --version \
 
 RUN useradd -ms /bin/bash -u 1001 botuser
 RUN groupadd -g ${DOCKER_GID} docker && usermod -aG docker botuser
+RUN mkdir -p /app/run && chown botuser:botuser /app/run
 
 COPY bot/puppeteer-config.json /app/bot/
 
