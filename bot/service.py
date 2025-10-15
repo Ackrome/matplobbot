@@ -582,34 +582,32 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
 
         await status_msg.edit_text("Запускаю код в песочнице...")
 
-        # 5. Запускаем контейнер (без изменений)
+        # 5. Запускаем контейнер
         output_logs = ""
         try:
-            # --- ИСПРАВЛЕНИЕ: Запускаем блокирующую операцию Docker в отдельном потоке ---
-            # Это предотвращает блокировку основного потока asyncio и позволяет использовать timeout.
-            container = await asyncio.to_thread(
-                client.containers.run,
-                image=RUNNER_IMAGE_NAME,
-                command=["python", absolute_script_path_in_runner],
-                volumes={SHARED_VOLUME_NAME: {'bind': '/app/code', 'mode': 'rw'}},
-                remove=False, # Не удаляем сразу, чтобы можно было получить логи
-                detach=True,  # Запускаем в фоне
-                mem_limit='256m',
-                pids_limit=100,
-                network_disabled=True,
-            )
-            # Ожидаем завершения контейнера с таймаутом
-            result = container.wait(timeout=EXECUTION_TIMEOUT)
-            output_logs = container.logs().decode('utf-8', 'ignore')
-            container.remove() # Удаляем контейнер после получения логов
-
+            # --- ИСПРАВЛЕНИЕ: Запускаем блокирующую операцию Docker в отдельном потоке.
+            # `client.containers.run` с `detach=False` является блокирующей операцией.
+            # `asyncio.to_thread` правильно выполнит ее в фоновом потоке, дождется
+            # ее полного завершения и вернет результат (логи).
+            # Это гарантирует, что блок `finally` не выполнится преждевременно.
+            def run_container_sync():
+                return client.containers.run(
+                    image=RUNNER_IMAGE_NAME,
+                    command=["python", absolute_script_path_in_runner],
+                    volumes={SHARED_VOLUME_NAME: {'bind': '/app/code', 'mode': 'rw'}},
+                    remove=True, # Контейнер будет удален после выполнения
+                    detach=False, # Ждем завершения
+                    mem_limit='256m',
+                    pids_limit=100,
+                    network_disabled=True,
+                )
+            
+            logs_bytes = await asyncio.wait_for(asyncio.to_thread(run_container_sync), timeout=EXECUTION_TIMEOUT)
+            output_logs = logs_bytes.decode('utf-8', 'ignore')
         except docker.errors.ContainerError as e:
             output_logs = e.stderr.decode('utf-8', 'ignore')
         except asyncio.TimeoutError:
-            # Эта ошибка возникает, если container.wait() превышает таймаут
-            output_logs = f"TimeoutError: Выполнение кода превысило лимит в {EXECUTION_TIMEOUT} секунд и было принудительно остановлено."
-            container.kill()
-            container.remove()
+            output_logs = f"TimeoutError: Выполнение кода превысило лимит в {EXECUTION_TIMEOUT} секунд."
         except Exception as e:
             # ... обработка других ошибок Docker
             await status_msg.edit_text(f"❌ Ошибка Docker: {e}")
