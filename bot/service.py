@@ -29,12 +29,14 @@ from pathlib import Path
 import docker
 from docker.errors import ContainerError, ImageNotFound, APIError, DockerException
 from docker.types import LogConfig
+import stat
 
 from . import database
 import matplobblib
 from . import keyboards as kb
 from . import github_service
 from .config import *
+
 
 logger = logging.getLogger(__name__)
 
@@ -537,84 +539,74 @@ async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[
     # Собираем все части обратно в одну строку
     return "".join(processed_parts)
 
+
 async def execute_code_and_send_results(message: Message, code_to_execute: str):
     """
-    Безопасно выполняет код в изолированном Docker-контейнере, используя общий именованный том.
+    Безопасно выполняет код в Docker-контейнере, используя общий том и
+    явно устанавливая права доступа для предотвращения ошибок.
     """
     temp_dir = None
-    status_msg = await message.answer("Готовлю безопасное окружение...")
+    status_msg = await message.answer("Подготовка окружения...")
 
-    def sync_write_to_file(path, content):
-        try:
-            with open(path, 'w', encoding='utf-8') as f:
-                f.write(content)
-                # flush и fsync здесь уже не так критичны, т.к. close() их подразумевает,
-                # но для паранойи можно оставить.
-                f.flush()
-                os.fsync(f.fileno())
-            logger.info(f"Файл успешно записан и синхронизирован: {path}")
-            return True
-        except Exception as e:
-            logger.error(f"Ошибка при синхронной записи файла {path}: {e}")
-            return False
-    
+    def sync_write_and_set_permissions(path, content):
+        """Вспомогательная функция для записи и установки прав."""
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        # Устанавливаем права "чтение/запись для владельца, чтение для остальных"
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH) # Это эквивалентно 0o644
+
     try:
-        # 1. Создаем временную директорию в общем томе (/app/run)
+        # 1. Создаем временную директорию
         temp_dir = tempfile.mkdtemp(dir=SHARED_DIR_INSIDE_BOT)
+        # --- КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ---
+        # Делаем директорию доступной для всех на чтение и вход
+        os.chmod(temp_dir, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH) # Это эквивалентно 0o755
+
         script_path = os.path.join(temp_dir, "script.py")
-        
-        write_success = await asyncio.to_thread(sync_write_to_file, script_path, code_to_execute)
-        if not write_success:
-            await status_msg.edit_text("❌ Критическая ошибка: не удалось записать скрипт для выполнения.")
-            return
-        
-        # Получаем имя нашей временной папки (например, "tmpXYZ")
+
+        # 2. Надежно записываем файл и устанавливаем права на него
+        await asyncio.to_thread(sync_write_and_set_permissions, script_path, code_to_execute)
+
+        # 3. Готовим пути (без изменений)
         temp_dir_name = os.path.basename(temp_dir)
         absolute_script_path_in_runner = f"/app/code/{temp_dir_name}/script.py"
-        # 2. Инициализируем Docker-клиент
+
+        # 4. Инициализируем Docker-клиент (без изменений)
         try:
             client = docker.from_env()
         except Exception as e:
-            logger.error(f"Ошибка подключения к Docker: {e}")
-            await status_msg.edit_text("❌ Ошибка: Не удалось подключиться к Docker-демону.")
+            await status_msg.edit_text(f"❌ Ошибка подключения к Docker: {e}")
             return
 
         await status_msg.edit_text("Запускаю код в песочнице...")
-        
-        # 3. Запускаем контейнер
-        container = None
+
+        # 5. Запускаем контейнер (без изменений)
         output_logs = ""
         try:
-            # Используем detach=False, что делает вызов блокирующим и возвращает логи сразу
             logs = client.containers.run(
                 image="mpb-runner",
-                # Передаем команду списком с АБСОЛЮТНЫМ путем
                 command=["python", absolute_script_path_in_runner],
                 volumes={SHARED_VOLUME_NAME: {'bind': '/app/code', 'mode': 'rw'}},
-                remove=True,  # Удаляем контейнер сразу после выполнения
+                remove=True,
                 detach=False,
                 mem_limit='256m',
                 pids_limit=100,
                 network_disabled=True,
             )
             output_logs = logs.decode('utf-8', 'ignore')
-
-        except ContainerError as e:
-            # Эта ошибка возникает, если код внутри контейнера завершился с ошибкой (ненулевой код)
+        except docker.errors.ContainerError as e:
             output_logs = e.stderr.decode('utf-8', 'ignore')
-        except ImageNotFound:
-            await status_msg.edit_text("❌ Ошибка: Docker-образ 'mpb-runner' не найден.")
-            return
         except Exception as e:
-            await status_msg.edit_text(f"❌ Непредвиденная ошибка Docker: {e}")
-            logger.error(f"Непредвиденная ошибка Docker: {e}", exc_info=True)
+            # ... обработка других ошибок Docker
+            await status_msg.edit_text(f"❌ Ошибка Docker: {e}")
+            logger.error(f"Ошибка Docker: {e}", exc_info=True)
             return
 
-        # 4. Собираем и отправляем результаты
-        await status_msg.edit_text("Обрабатываю результаты...")
-
+        # 6. Обрабатываем результаты (без изменений)
+        await status_msg.edit_text("Обработка результатов...")
+        # ... (вся логика вывода логов и изображений остается прежней)
+        
         if output_logs:
-            # ... (логика отправки текстового вывода - без изменений)
             if len(output_logs) > 4000:
                 header = "Текстовый вывод (слишком длинный, отправляю как файл):"
                 log_file = os.path.join(temp_dir, "output.log")
@@ -623,14 +615,12 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
                 await message.answer_document(document=FSInputFile(log_file), caption=header)
             else:
                 await message.answer(f"```\n{output_logs}\n```", parse_mode='markdown')
-
+        
         image_files = []
         for ext in ['*.png', '*.jpg', '*.jpeg', '*.gif']:
-            # Ищем файлы в той же временной директории, которую создал бот
             image_files.extend(glob.glob(os.path.join(temp_dir, ext)))
 
         if image_files:
-            # ... (логика отправки изображений - без изменений)
             await message.answer("Обнаружены сгенерированные изображения:")
             for img_path in image_files:
                 try:
@@ -642,16 +632,16 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
             await message.answer("Код выполнен успешно без вывода.")
 
     except Exception as e:
+        # ... (общая обработка ошибок)
         tb_str = traceback.format_exc()
-        logger.error(f"Критическая ошибка в execute_code_and_send_results: {e}\n{tb_str}")
+        logger.error(f"Критическая ошибка: {e}\n{tb_str}")
         await message.answer(f"Произошла непредвиденная ошибка на стороне бота: `{e}`")
     finally:
-        # 5. Очищаем нашу временную директорию внутри томаыы
+        # 7. Очистка (без изменений)
         if temp_dir and os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
-
         if 'status_msg' in locals() and status_msg:
-          await status_msg.delete()
+            await status_msg.delete()
         await message.answer("Выполнение завершено.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
 
 async def send_as_plain_text(message: Message, file_path: str, content: str):
