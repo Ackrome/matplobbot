@@ -63,6 +63,10 @@ RUN set -eux; \
     npm install -g @mermaid-js/mermaid-cli --no-fund --no-update-notifier; \
     mmdc --version || true
 
+RUN rm -rf /var/lib/apt/lists/*
+
+
+
 
 
 
@@ -71,36 +75,25 @@ WORKDIR /app
 COPY requirements.txt .
 RUN python3 -m venv /usr/local
 ENV PATH="/usr/local/bin:$PATH" \
-    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-
-ENV HOME=/home/appuser \
+    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    HOME=/home/appuser \
     MPLCONFIGDIR=/home/appuser/.config/matplotlib \
     NUMBA_DISABLE_JITCACHE=1
 
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir markdown-it-py
 
-# Install python deps if you have requirements.txt
-# (use pip3 so it uses the system python3)
-
-
-# Optional: sanity checks (uncomment if you want build to fail when a binary is missing)
-RUN command -v python3 >/dev/null && python3 --version \
-    && command -v node >/dev/null && node --version \
-    && command -v npm >/dev/null && npm --version \
-    && command -v pdflatex >/dev/null && pdflatex --version
-
 COPY bot/puppeteer-config.json /app/bot/
-
 COPY bot/ /app/bot/
-
 RUN pip install --no-cache-dir weasyprint docker aiodocker
 
+# Копируем наш entrypoint скрипт
 COPY entrypoint.sh /entrypoint.sh
-# Делаем скрипт исполняемым
-RUN chmod +x /entrypoint.sh
 
-# Создаем директории и назначаем права (это все еще полезно для не-томов)
+# --- ИЗМЕНЕНИЕ 2: Преобразуем концы строк и делаем скрипт исполняемым ---
+RUN dos2unix /entrypoint.sh && chmod +x /entrypoint.sh
+
+# Создаем директории и назначаем права
 RUN mkdir -p /app/db_data /app/logs /app/code \
     /home/appuser/.config/matplotlib \
     && chown -R appuser:appuser /app \
@@ -112,5 +105,5 @@ USER appuser
 # Указываем Docker, что нужно сначала запустить наш скрипт
 ENTRYPOINT ["/entrypoint.sh"]
 
-# Эта команда теперь будет передана в entrypoint скрипт как аргументы "$@"
+# Эта команда теперь будет передана в entrypoint скрипт
 CMD ["python3", "-m", "bot.main"]
