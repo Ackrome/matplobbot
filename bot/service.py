@@ -581,6 +581,12 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
 
         await status_msg.edit_text("Запускаю код в песочнице...")
 
+        # --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Предотвращение Race Condition ---
+        # Добавляем крошечную паузу. Это дает Docker-демону время для синхронизации
+        # создания новой временной директории в общем томе перед тем, как runner-контейнер
+        # попытается ее использовать. Это решает ошибку "No such file or directory".
+        await asyncio.sleep(0.1)
+
         # 5. Запускаем контейнер с использованием aio-docker
         output_logs = ""
         container = None
