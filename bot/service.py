@@ -551,6 +551,8 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
         
         async with aiofiles.open(script_path, 'w', encoding='utf-8') as f:
             await f.write(code_to_execute)
+            await f.flush()         # 1. Сбрасываем буфер из Python в ОС
+            os.fsync(f.fileno())    # 2. Принудительно записываем из буфера ОС на диск (том)
 
         # Получаем имя нашей временной папки (например, "tmpXYZ")
         temp_dir_name = os.path.basename(temp_dir)
