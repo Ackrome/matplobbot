@@ -54,6 +54,7 @@ RUN set -eux; \
       ghostscript \
       texlive-lang-all \
       latexmk \
+      su-exec \
       dos2unix && \
     rm -rf /var/lib/apt/lists/*
 
