@@ -1,4 +1,4 @@
-# Dockerfile.fixed-B-with-tex
+# Dockerfile.bot
 FROM node:20-slim
 
 # noninteractive to avoid tzdata/ui prompts
