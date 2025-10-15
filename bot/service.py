@@ -557,12 +557,9 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
 
     try:
         # 1. Создаем временную директорию
-        temp_dir = tempfile.mkdtemp(dir=SHARED_DIR_INSIDE_BOT)
-        # --- КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ---
-        # Делаем директорию полностью доступной для всех пользователей (read, write, execute).
-        # Это самый надежный способ гарантировать, что пользователь 'appuser' (UID 1001)
-        # из runner-контейнера сможет получить доступ к файлам, созданным 'botuser' (UID 1001).
-        os.chmod(temp_dir, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO) # Это эквивалентно 0o777
+        # tempfile.mkdtemp по умолчанию создает директорию с безопасными правами (0o700),
+        # что идеально, так как оба контейнера теперь работают под одним и тем же UID.
+        temp_dir = tempfile.mkdtemp(dir=SHARED_DIR_INSIDE_BOT) 
 
         script_path = os.path.join(temp_dir, "script.py")
 

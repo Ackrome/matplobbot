@@ -94,4 +94,7 @@ COPY bot/ /app/bot/
 
 RUN pip install --no-cache-dir weasyprint docker aiodocker
 
+# Switch to the non-root user before running the application
+USER botuser
+
 CMD ["python3", "-m", "bot.main"]
