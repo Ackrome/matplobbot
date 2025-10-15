@@ -585,19 +585,31 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
         # 5. Запускаем контейнер (без изменений)
         output_logs = ""
         try:
-            logs = client.containers.run(
-                image="mpb-runner",
+            # --- ИСПРАВЛЕНИЕ: Запускаем блокирующую операцию Docker в отдельном потоке ---
+            # Это предотвращает блокировку основного потока asyncio и позволяет использовать timeout.
+            container = await asyncio.to_thread(
+                client.containers.run,
+                image=RUNNER_IMAGE_NAME,
                 command=["python", absolute_script_path_in_runner],
                 volumes={SHARED_VOLUME_NAME: {'bind': '/app/code', 'mode': 'rw'}},
-                remove=True,
-                detach=False,
+                remove=False, # Не удаляем сразу, чтобы можно было получить логи
+                detach=True,  # Запускаем в фоне
                 mem_limit='256m',
                 pids_limit=100,
                 network_disabled=True,
             )
-            output_logs = logs.decode('utf-8', 'ignore')
+            # Ожидаем завершения контейнера с таймаутом
+            result = container.wait(timeout=EXECUTION_TIMEOUT)
+            output_logs = container.logs().decode('utf-8', 'ignore')
+            container.remove() # Удаляем контейнер после получения логов
+
         except docker.errors.ContainerError as e:
             output_logs = e.stderr.decode('utf-8', 'ignore')
+        except asyncio.TimeoutError:
+            # Эта ошибка возникает, если container.wait() превышает таймаут
+            output_logs = f"TimeoutError: Выполнение кода превысило лимит в {EXECUTION_TIMEOUT} секунд и было принудительно остановлено."
+            container.kill()
+            container.remove()
         except Exception as e:
             # ... обработка других ошибок Docker
             await status_msg.edit_text(f"❌ Ошибка Docker: {e}")
