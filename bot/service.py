@@ -26,7 +26,6 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import markdown
 from markdown_it import MarkdownIt
 from pathlib import Path
-import docker
 import aiodocker
 from aiodocker.exceptions import DockerError
 import stat
@@ -41,11 +40,8 @@ from .config import *
 logger = logging.getLogger(__name__)
 
 RUNNER_IMAGE_NAME = "mpb-runner"
-# Ограничение по времени выполнения кода в секундах
-EXECUTION_TIMEOUT = 15 # 15 секунд
-
-SHARED_DIR_INSIDE_BOT = "/app/code" # ИЗМЕНЕНИЕ: Стандартизируем путь для общего тома
-# Имя нашего Docker-тома из docker-compose.yml
+EXECUTION_TIMEOUT = 15
+SHARED_DIR_INSIDE_BOT = "/app/code"
 SHARED_VOLUME_NAME = "code_runner_data"
 
 # --- HTML Conversion ---
@@ -540,7 +536,6 @@ async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[
     return "".join(processed_parts)
 
 
-
 async def execute_code_and_send_results(message: Message, code_to_execute: str):
     """
     Безопасно выполняет код в Docker-контейнере, используя общий том и
@@ -548,44 +543,38 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
     """
     temp_dir = None
     status_msg = await message.answer("Подготовка окружения...")
+    async_client = None
 
     def sync_write_and_set_permissions(path, content):
-        """Вспомогательная функция для записи и установки прав."""
+        """Вспомогательная синхронная функция для записи файла и установки прав."""
         with open(path, 'w', encoding='utf-8') as f:
             f.write(content)
-        # Устанавливаем права "чтение/запись для владельца, чтение для остальных" (0o644)
+        # Устанавливаем права 0o644 (чтение/запись для владельца, чтение для остальных)
         os.chmod(path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
 
     try:
-        # 1. Создаем временную директорию в общем томе
+        # 1. Создаем временную директорию внутри общего тома
         temp_dir = tempfile.mkdtemp(dir=SHARED_DIR_INSIDE_BOT)
 
         script_path = os.path.join(temp_dir, "script.py")
 
-        # 2. Надежно записываем файл и устанавливаем права на него
+        # 2. Асинхронно вызываем синхронную функцию записи файла и установки прав
         await asyncio.to_thread(sync_write_and_set_permissions, script_path, code_to_execute)
 
-        # 3. Готовим пути
+        # 3. Готовим пути для контейнера runner
         temp_dir_name = os.path.basename(temp_dir)
         absolute_script_path_in_runner = f"/app/code/{temp_dir_name}/script.py"
 
-        # 4. Инициализируем асинхронный Docker-клиент
-        async_client = None
-        try:
-            async_client = aiodocker.Docker()
-        except Exception as e:
-            await status_msg.edit_text(f"❌ Ошибка подключения к Docker: {e}")
-            return
-
+        # 4. Инициализируем Docker-клиент
+        async_client = aiodocker.Docker()
         await status_msg.edit_text("Запускаю код в песочнице...")
 
-        # --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Предотвращение Race Condition ---
-        # Добавляем паузу в 1 секунду. Это дает Docker-демону время для синхронизации
-        # файловой системы тома перед тем, как runner-контейнер попытается
-        # прочитать из него. Это решает ошибку "No such file or directory".
+        # --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: ПАУЗА ДЛЯ СИНХРОНИЗАЦИИ ТОМА ---
+        # Эта пауза дает Docker-демону время, чтобы "увидеть" созданный файл
+        # в томе перед тем, как runner попытается его прочитать.
         await asyncio.sleep(1)
 
-        # 5. Запускаем контейнер с использованием aio-docker
+        # 5. Запуск контейнера
         output_logs = ""
         container = None
         try:
@@ -594,48 +583,47 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
                 'Cmd': ["python", absolute_script_path_in_runner],
                 'HostConfig': {
                     'Binds': [f'{SHARED_VOLUME_NAME}:/app/code:rw'],
-                    'AutoRemove': False, # Управляем удалением контейнера вручную для надежности
-                    'Memory': 256 * 1024 * 1024, # Ограничение памяти 256MB
+                    'AutoRemove': False,  # Управляем удалением вручную
+                    'Memory': 256 * 1024 * 1024,
                     'PidsLimit': 100,
                 },
                 'NetworkDisabled': True,
             }
             container = await async_client.containers.create(config=config)
             await container.start()
-            
-            # Ожидаем либо завершения контейнера, либо таймаута
-            try:
-                await asyncio.wait_for(container.wait(), timeout=EXECUTION_TIMEOUT)
-                log_lines = await container.log(stdout=True, stderr=True)
-                output_logs = "".join(log_lines)
-            except asyncio.TimeoutError:
-                output_logs = f"TimeoutError: Выполнение кода превысило лимит в {EXECUTION_TIMEOUT} секунд."
 
+            # Ждем завершения с таймаутом
+            await asyncio.wait_for(container.wait(), timeout=EXECUTION_TIMEOUT)
+            
+            log_lines = await container.log(stdout=True, stderr=True)
+            output_logs = "".join(log_lines)
+
+        except asyncio.TimeoutError:
+            output_logs = f"TimeoutError: Выполнение кода превысило лимит в {EXECUTION_TIMEOUT} секунд."
         except DockerError as e:
-            output_logs = f"DockerError: {e.message}"
+            # Логируем полную ошибку для отладки
+            logger.error(f"DockerError при выполнении кода: {e.message}")
+            output_logs = f"Ошибка Docker: Не удалось выполнить код в изолированном окружении."
+
         finally:
-            # Гарантированная очистка контейнера и клиента
             if container:
                 await container.delete(force=True)
-            if async_client:
-                await async_client.close()
 
-        # 6. Обрабатываем результаты
+        # 6. Обработка результатов
         await status_msg.edit_text("Обработка результатов...")
         
         if output_logs:
             if len(output_logs) > 4000:
-                header = "Текстовый вывод (слишком длинный, отправляю как файл):"
-                # Используем временный файл внутри временной директории
-                log_file = os.path.join(temp_dir, "output.log")
-                async with aiofiles.open(log_file, "w", encoding='utf-8') as f:
-                    await f.write(output_logs)
-                await message.answer_document(document=FSInputFile(log_file), caption=header)
+                await message.answer("Текстовый вывод слишком длинный, отправляю как файл:")
+                log_file_buffer = io.BytesIO(output_logs.encode('utf-8'))
+                await message.answer_document(document=BufferedInputFile(log_file_buffer.read(), filename="output.log"))
             else:
                 await message.answer(f"```\n{output_logs}\n```", parse_mode='markdown')
-        
+
+        # Поиск изображений
         image_files = []
         for ext in ['*.png', '*.jpg', '*.jpeg', '*.gif']:
+            # Важно: glob.glob выполняется синхронно, но здесь это приемлемо
             image_files.extend(glob.glob(os.path.join(temp_dir, ext)))
 
         if image_files:
@@ -652,12 +640,17 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
     except Exception as e:
         tb_str = traceback.format_exc()
         logger.error(f"Критическая ошибка в execute_code_and_send_results: {e}\n{tb_str}")
-        await message.answer(f"Произошла непредвиденная ошибка на стороне бота: `{e}`")
+        await message.answer(f"Произошла непредвиденная ошибка на стороне бота.")
+        
     finally:
-        # 7. Финальная очистка
+        # 7. Гарантированная очистка
+        if async_client:
+            await async_client.close()
         if 'status_msg' in locals() and status_msg:
-            await status_msg.delete()
-        # Удаляем временную директорию со всем содержимым
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass # Сообщение могло быть уже удалено
         if temp_dir and os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
         await message.answer("Выполнение завершено.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
