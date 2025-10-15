@@ -96,15 +96,21 @@ COPY bot/ /app/bot/
 
 RUN pip install --no-cache-dir weasyprint docker aiodocker
 
-RUN mkdir -p /app/db_data /app/logs /app/code && \
-    chown -R appuser:appuser /app
+COPY entrypoint.sh /entrypoint.sh
+# Делаем скрипт исполняемым
+RUN chmod +x /entrypoint.sh
 
+# Создаем директории и назначаем права (это все еще полезно для не-томов)
 RUN mkdir -p /app/db_data /app/logs /app/code \
     /home/appuser/.config/matplotlib \
     && chown -R appuser:appuser /app \
     && chown -R appuser:appuser /home/appuser
 
+# Переключаемся на непривилегированного пользователя
 USER appuser
 
+# Указываем Docker, что нужно сначала запустить наш скрипт
+ENTRYPOINT ["/entrypoint.sh"]
 
+# Эта команда теперь будет передана в entrypoint скрипт как аргументы "$@"
 CMD ["python3", "-m", "bot.main"]
