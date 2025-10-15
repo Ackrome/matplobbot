@@ -5,7 +5,8 @@ FROM node:20-slim
 ENV DEBIAN_FRONTEND=noninteractive \
     APT_OPTS="-y --no-install-recommends"
 
-ARG DOCKER_GID=997
+ARG UID=1001
+RUN adduser --system --uid ${UID} --group appuser
 
 # 1) small essentials + python
 RUN set -eux; \
@@ -89,5 +90,11 @@ COPY bot/puppeteer-config.json /app/bot/
 COPY bot/ /app/bot/
 
 RUN pip install --no-cache-dir weasyprint docker aiodocker
+
+RUN mkdir -p /app/db_data /app/logs /app/code && \
+    chown -R appuser:appuser /app
+
+USER appuser
+
 
 CMD ["python3", "-m", "bot.main"]
