@@ -84,18 +84,10 @@ RUN command -v python3 >/dev/null && python3 --version \
     && command -v npm >/dev/null && npm --version \
     && command -v pdflatex >/dev/null && pdflatex --version
 
-RUN useradd -ms /bin/bash -u 1001 botuser
-RUN groupadd -g ${DOCKER_GID} docker && usermod -aG docker botuser
-RUN mkdir -p /app/logs /app/db_data /app/code && \
-    chown -R botuser:botuser /app/logs /app/db_data /app/code
-
 COPY bot/puppeteer-config.json /app/bot/
 
 COPY bot/ /app/bot/
 
 RUN pip install --no-cache-dir weasyprint docker aiodocker
-
-# Switch to the non-root user before running the application
-USER botuser
 
 CMD ["python3", "-m", "bot.main"]

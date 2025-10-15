@@ -20,11 +20,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     scipy \
     matplobblib \
     Pillow
-
-# Создаем не-рутового пользователя для дополнительной безопасности
-RUN useradd -ms /bin/bash appuser
-USER appuser
-
+ 
 # Устанавливаем рабочую директорию, куда будет монтироваться код
 WORKDIR /app/code
 
