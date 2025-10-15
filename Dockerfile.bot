@@ -54,7 +54,7 @@ RUN set -eux; \
       ghostscript \
       texlive-lang-all \
       latexmk \
-      su-exec \
+      gosu \
       dos2unix && \
     rm -rf /var/lib/apt/lists/*
 
@@ -94,7 +94,7 @@ RUN echo '#!/bin/sh' > /entrypoint.sh && \
     echo '# Этот скрипт запускается от root' >> /entrypoint.sh && \
     echo 'chown -R appuser:appuser /app/logs /app/db_data' >> /entrypoint.sh && \
     echo '# Теперь переключаемся на пользователя "appuser" и запускаем основную команду' >> /entrypoint.sh && \
-    echo 'exec su-exec appuser "$@"' >> /entrypoint.sh && \
+    echo 'exec gosu appuser "$@"' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
 
 # Создаем директории (владельца менять не обязательно, entrypoint это сделает)
