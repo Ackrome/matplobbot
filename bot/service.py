@@ -626,9 +626,13 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
             # --- НОВЫЙ БЛОК: Гарантированная очистка контейнера ---
             if container:
                 try:
-                    await container.delete(force=True) # Принудительно удаляем контейнер
+                    await container.delete(force=True)  # Принудительно удаляем контейнер
                 except DockerError as e:
                     logger.warning(f"Не удалось удалить контейнер {container.id[:12]}: {e.message}")
+            # --- ИСПРАВЛЕНИЕ: Переносим очистку директории сюда ---
+            # Это гарантирует, что директория удаляется только после завершения работы с контейнером.
+            if temp_dir and os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
 
         await status_msg.edit_text("Обработка результатов...")
         # ... (вся логика вывода логов и изображений остается прежней)
@@ -665,8 +669,6 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
         await message.answer(f"Произошла непредвиденная ошибка на стороне бота: `{e}`")
     finally:
         # 7. Очистка (без изменений)
-        if temp_dir and os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
         if 'async_client' in locals():
             await async_client.close()
         if 'status_msg' in locals() and status_msg:
