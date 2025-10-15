@@ -24,7 +24,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.runner
-    image: mpb-runner
+    image: mpb-runner # The image name used by the bot to run containers
+    # Keep the service alive and ensure the volume is correctly initialized and attached.
+    command: tail -f /dev/null
+    volumes:
+      - code_runner_data:/app/code # Mount the shared volume
 
 
   mpb-fastapi-stats:
