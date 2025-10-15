@@ -70,8 +70,6 @@ RUN rm -rf /var/lib/apt/lists/*
 
 
 
-
-# App setup
 WORKDIR /app
 COPY requirements.txt .
 RUN python3 -m venv /usr/local
@@ -88,11 +86,14 @@ COPY bot/puppeteer-config.json /app/bot/
 COPY bot/ /app/bot/
 RUN pip install --no-cache-dir weasyprint docker aiodocker
 
-# Копируем наш entrypoint скрипт
-COPY entrypoint.sh /entrypoint.sh
-
-# --- ИЗМЕНЕНИЕ 2: Преобразуем концы строк и делаем скрипт исполняемым ---
-RUN dos2unix /entrypoint.sh && chmod +x /entrypoint.sh
+# --- КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Создаем entrypoint.sh прямо здесь ---
+# Этот многострочный RUN-блок создает файл с правильными Unix-концами строк
+# и сразу делает его исполняемым.
+RUN echo '#!/bin/sh' > /entrypoint.sh && \
+    echo 'set -e' >> /entrypoint.sh && \
+    echo 'chown -R appuser:appuser /app/logs /app/db_data' >> /entrypoint.sh && \
+    echo 'exec "$@"' >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh
 
 # Создаем директории и назначаем права
 RUN mkdir -p /app/db_data /app/logs /app/code \
