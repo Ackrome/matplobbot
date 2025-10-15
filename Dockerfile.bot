@@ -6,7 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     APT_OPTS="-y --no-install-recommends"
 
 ARG UID=1001
-RUN adduser --system --uid ${UID} --group appuser
+RUN adduser --system --uid ${UID} --group --home /home/appuser appuser
 
 # 1) small essentials + python
 RUN set -eux; \
@@ -72,6 +72,11 @@ COPY requirements.txt .
 RUN python3 -m venv /usr/local
 ENV PATH="/usr/local/bin:$PATH" \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+
+ENV HOME=/home/appuser \
+    MPLCONFIGDIR=/home/appuser/.config/matplotlib \
+    NUMBA_DISABLE_JITCACHE=1
+
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir markdown-it-py
 
@@ -93,6 +98,11 @@ RUN pip install --no-cache-dir weasyprint docker aiodocker
 
 RUN mkdir -p /app/db_data /app/logs /app/code && \
     chown -R appuser:appuser /app
+
+RUN mkdir -p /app/db_data /app/logs /app/code \
+    /home/appuser/.config/matplotlib \
+    && chown -R appuser:appuser /app \
+    && chown -R appuser:appuser /home/appuser
 
 USER appuser
 
