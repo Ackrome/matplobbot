@@ -602,17 +602,25 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
             container = await async_client.containers.create(config=config)
             await container.start()
             
-            # Ожидаем завершения с таймаутом
-            await container.wait(timeout=EXECUTION_TIMEOUT)
-            
-            # Получаем логи
-            logs = await container.log(stdout=True, stderr=True)
-            output_logs = "".join(logs)
+            # --- ИСПРАВЛЕНИЕ: Потоковая передача логов и ожидание с таймаутом ---
+            # Этот подход является самым надежным для сбора вывода.
+            try:
+                log_stream = container.log(stdout=True, stderr=True, follow=True)
+                log_task = asyncio.create_task(asyncio.gather(*(line async for line in log_stream)))
+                
+                # Ожидаем либо завершения контейнера, либо таймаута
+                await asyncio.wait_for(container.wait(), timeout=EXECUTION_TIMEOUT)
+                
+                # Дожидаемся сбора всех логов
+                log_lines = await log_task
+                output_logs = "".join(log_lines)
+
+            except asyncio.TimeoutError:
+                output_logs = f"TimeoutError: Выполнение кода превысило лимит в {EXECUTION_TIMEOUT} секунд."
+                await container.kill() # Принудительно останавливаем контейнер при таймауте
 
         except DockerError as e:
             output_logs = f"DockerError: {e.message}"
-        except asyncio.TimeoutError:
-            output_logs = f"TimeoutError: Выполнение кода превысило лимит в {EXECUTION_TIMEOUT} секунд."
         except Exception as e:
             # ... обработка других ошибок Docker
             await status_msg.edit_text(f"❌ Ошибка Docker: {e}")
