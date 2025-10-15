@@ -92,6 +92,6 @@ COPY bot/puppeteer-config.json /app/bot/
 
 COPY bot/ /app/bot/
 
-RUN pip install --no-cache-dir weasyprint docker
+RUN pip install --no-cache-dir weasyprint docker aio-docker
 
 CMD ["python3", "-m", "bot.main"]

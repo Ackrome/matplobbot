@@ -27,8 +27,8 @@ import markdown
 from markdown_it import MarkdownIt
 from pathlib import Path
 import docker
-from docker.errors import ContainerError, ImageNotFound, APIError, DockerException
-from docker.types import LogConfig
+import aiodocker
+from aiodocker.exceptions import DockerError
 import stat
 
 from . import database
@@ -576,38 +576,45 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
         # 4. Инициализируем Docker-клиент (без изменений)
         try:
             client = docker.from_env()
+            # --- НОВЫЙ АСИНХРОННЫЙ КЛИЕНТ ---
+            async_client = aiodocker.Docker()
         except Exception as e:
             await status_msg.edit_text(f"❌ Ошибка подключения к Docker: {e}")
             return
 
         await status_msg.edit_text("Запускаю код в песочнице...")
 
-        # 5. Запускаем контейнер
+        # 5. Запускаем контейнер с использованием aio-docker
         output_logs = ""
+        container = None
         try:
-            # --- ИСПРАВЛЕНИЕ: Запускаем блокирующую операцию Docker в отдельном потоке.
-            # `client.containers.run` с `detach=False` является блокирующей операцией.
-            # `asyncio.to_thread` правильно выполнит ее в фоновом потоке, дождется
-            # ее полного завершения и вернет результат (логи).
-            # Это гарантирует, что блок `finally` не выполнится преждевременно.
-            def run_container_sync():
-                return client.containers.run(
-                    image=RUNNER_IMAGE_NAME,
-                    command=["python", absolute_script_path_in_runner],
-                    volumes={SHARED_VOLUME_NAME: {'bind': '/app/code', 'mode': 'rw'}},
-                    remove=True, # Контейнер будет удален после выполнения
-                    detach=False, # Ждем завершения
-                    mem_limit='256m',
-                    pids_limit=100,
-                    network_disabled=True,
-                )
+            config = {
+                'Image': RUNNER_IMAGE_NAME,
+                'Cmd': ["python", absolute_script_path_in_runner],
+                'HostConfig': {
+                    'Binds': [f'{SHARED_VOLUME_NAME}:/app/code:rw'],
+                    'AutoRemove': True,
+                    'Memory': 256 * 1024 * 1024, # 256MB
+                    'PidsLimit': 100,
+                },
+                'NetworkDisabled': True,
+            }
+            container = await async_client.containers.create(config=config)
+            await container.start()
             
-            logs_bytes = await asyncio.wait_for(asyncio.to_thread(run_container_sync), timeout=EXECUTION_TIMEOUT)
-            output_logs = logs_bytes.decode('utf-8', 'ignore')
-        except docker.errors.ContainerError as e:
-            output_logs = e.stderr.decode('utf-8', 'ignore')
+            # Ожидаем завершения с таймаутом
+            await container.wait(timeout=EXECUTION_TIMEOUT)
+            
+            # Получаем логи
+            logs = await container.log(stdout=True, stderr=True)
+            output_logs = "".join(logs)
+
+        except DockerError as e:
+            output_logs = f"DockerError: {e.message}"
         except asyncio.TimeoutError:
             output_logs = f"TimeoutError: Выполнение кода превысило лимит в {EXECUTION_TIMEOUT} секунд."
+            if container:
+                await container.kill() # Принудительно останавливаем контейнер
         except Exception as e:
             # ... обработка других ошибок Docker
             await status_msg.edit_text(f"❌ Ошибка Docker: {e}")
@@ -652,6 +659,8 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
         # 7. Очистка (без изменений)
         if temp_dir and os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
+        if 'async_client' in locals():
+            await async_client.close()
         if 'status_msg' in locals() and status_msg:
             await status_msg.delete()
         await message.answer("Выполнение завершено.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
