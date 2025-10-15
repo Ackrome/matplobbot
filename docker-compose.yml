@@ -16,8 +16,8 @@ services:
       - bot_logs:/app/logs        # Именованный volume для логов бота
       - matplobblib_lib:/usr/local/lib/python3.11/site-packages/matplobblib # Persist library updates
       - ./examples:/app/examples    # Volume для файлов-примеров
-      - /var/run/docker.sock:/var/run/docker.sock
-      - code_runner_data:/app/run
+      - /var/run/docker.sock:/var/run/docker.sock # Для управления Docker из бота
+      - code_runner_data:/app/code # ИЗМЕНЕНИЕ: Стандартизируем путь для общего тома
     depends_on:
       - runner
   runner:

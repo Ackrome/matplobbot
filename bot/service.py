@@ -44,7 +44,7 @@ RUNNER_IMAGE_NAME = "mpb-runner"
 # Ограничение по времени выполнения кода в секундах
 EXECUTION_TIMEOUT = 15 # 15 секунд
 
-SHARED_DIR_INSIDE_BOT = "/app/run"
+SHARED_DIR_INSIDE_BOT = "/app/code" # ИЗМЕНЕНИЕ: Стандартизируем путь для общего тома
 # Имя нашего Docker-тома из docker-compose.yml
 SHARED_VOLUME_NAME = "code_runner_data"
 
