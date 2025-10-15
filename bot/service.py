@@ -593,7 +593,7 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
                 'Cmd': ["python", absolute_script_path_in_runner],
                 'HostConfig': {
                     'Binds': [f'{SHARED_VOLUME_NAME}:/app/code:rw'],
-                    'AutoRemove': True,
+                    'AutoRemove': False, # ИЗМЕНЕНИЕ: Управляем удалением контейнера вручную
                     'Memory': 256 * 1024 * 1024, # 256MB
                     'PidsLimit': 100,
                 },
@@ -613,8 +613,6 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
             output_logs = f"DockerError: {e.message}"
         except asyncio.TimeoutError:
             output_logs = f"TimeoutError: Выполнение кода превысило лимит в {EXECUTION_TIMEOUT} секунд."
-            if container:
-                await container.kill() # Принудительно останавливаем контейнер
         except Exception as e:
             # ... обработка других ошибок Docker
             await status_msg.edit_text(f"❌ Ошибка Docker: {e}")
@@ -622,6 +620,14 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
             return
 
         # 6. Обрабатываем результаты (без изменений)
+        finally:
+            # --- НОВЫЙ БЛОК: Гарантированная очистка контейнера ---
+            if container:
+                try:
+                    await container.delete(force=True) # Принудительно удаляем контейнер
+                except DockerError as e:
+                    logger.warning(f"Не удалось удалить контейнер {container.id[:12]}: {e.message}")
+
         await status_msg.edit_text("Обработка результатов...")
         # ... (вся логика вывода логов и изображений остается прежней)
         
