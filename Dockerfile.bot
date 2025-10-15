@@ -53,7 +53,8 @@ RUN set -eux; \
       dvipng \
       ghostscript \
       texlive-lang-all \
-      latexmk && \
+      latexmk \
+      dos2unix && \
     rm -rf /var/lib/apt/lists/*
 
 # 3) Install mermaid-cli globally (npm already exists in node:20-slim)
