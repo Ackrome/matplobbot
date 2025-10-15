@@ -544,19 +544,33 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
     temp_dir = None
     status_msg = await message.answer("Готовлю безопасное окружение...")
 
+    def sync_write_to_file(path, content):
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(content)
+                # flush и fsync здесь уже не так критичны, т.к. close() их подразумевает,
+                # но для паранойи можно оставить.
+                f.flush()
+                os.fsync(f.fileno())
+            logger.info(f"Файл успешно записан и синхронизирован: {path}")
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка при синхронной записи файла {path}: {e}")
+            return False
+    
     try:
         # 1. Создаем временную директорию в общем томе (/app/run)
         temp_dir = tempfile.mkdtemp(dir=SHARED_DIR_INSIDE_BOT)
         script_path = os.path.join(temp_dir, "script.py")
         
-        async with aiofiles.open(script_path, 'w', encoding='utf-8') as f:
-            await f.write(code_to_execute)
-            await f.flush()         # 1. Сбрасываем буфер из Python в ОС
-            os.fsync(f.fileno())    # 2. Принудительно записываем из буфера ОС на диск (том)
-
+        write_success = await asyncio.to_thread(sync_write_to_file, script_path, code_to_execute)
+        if not write_success:
+            await status_msg.edit_text("❌ Критическая ошибка: не удалось записать скрипт для выполнения.")
+            return
+        
         # Получаем имя нашей временной папки (например, "tmpXYZ")
         temp_dir_name = os.path.basename(temp_dir)
-        
+        absolute_script_path_in_runner = f"/app/code/{temp_dir_name}/script.py"
         # 2. Инициализируем Docker-клиент
         try:
             client = docker.from_env()
@@ -571,29 +585,29 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
         container = None
         output_logs = ""
         try:
-            container = client.containers.run(
+            # Используем detach=False, что делает вызов блокирующим и возвращает логи сразу
+            logs = client.containers.run(
                 image="mpb-runner",
-                # Команда теперь выполняется относительно корня /app/code, куда монтируется весь том
-                command=f"python {temp_dir_name}/script.py", 
-                # Монтируем наш общий ИМЕНОВАННЫЙ ТОМ
+                # Передаем команду списком с АБСОЛЮТНЫМ путем
+                command=["python", absolute_script_path_in_runner],
                 volumes={SHARED_VOLUME_NAME: {'bind': '/app/code', 'mode': 'rw'}},
-                working_dir='/app/code',
-                remove=True,
+                remove=True,  # Удаляем контейнер сразу после выполнения
                 detach=False,
                 mem_limit='256m',
                 pids_limit=100,
                 network_disabled=True,
             )
-            output_logs = container.decode('utf-8', 'ignore')
+            output_logs = logs.decode('utf-8', 'ignore')
 
         except ContainerError as e:
-            output_logs = e.stderr.decode('utf-8', 'ignore') if e.stderr else "Произошла ошибка в контейнере."
+            # Эта ошибка возникает, если код внутри контейнера завершился с ошибкой (ненулевой код)
+            output_logs = e.stderr.decode('utf-8', 'ignore')
         except ImageNotFound:
-            await status_msg.edit_text("❌ Ошибка: Docker-образ 'mpb-runner' не найден. Выполните `docker-compose build`.")
+            await status_msg.edit_text("❌ Ошибка: Docker-образ 'mpb-runner' не найден.")
             return
-        except APIError as e:
-            await status_msg.edit_text(f"❌ Ошибка Docker API: {e}")
-            logger.error(f"Ошибка Docker API: {e}")
+        except Exception as e:
+            await status_msg.edit_text(f"❌ Непредвиденная ошибка Docker: {e}")
+            logger.error(f"Непредвиденная ошибка Docker: {e}", exc_info=True)
             return
 
         # 4. Собираем и отправляем результаты
@@ -632,7 +646,7 @@ async def execute_code_and_send_results(message: Message, code_to_execute: str):
         logger.error(f"Критическая ошибка в execute_code_and_send_results: {e}\n{tb_str}")
         await message.answer(f"Произошла непредвиденная ошибка на стороне бота: `{e}`")
     finally:
-        # 5. Очищаем нашу временную директорию внутри тома
+        # 5. Очищаем нашу временную директорию внутри томаыы
         if temp_dir and os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
 
