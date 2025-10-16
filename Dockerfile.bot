@@ -5,8 +5,6 @@ FROM node:20-slim
 ENV DEBIAN_FRONTEND=noninteractive \
     APT_OPTS="-y --no-install-recommends"
 
-ARG UID=1001
-RUN adduser --system --uid ${UID} --group --home /home/appuser appuser
 
 # 1) small essentials + python
 RUN set -eux; \
