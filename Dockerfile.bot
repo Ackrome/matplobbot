@@ -85,28 +85,8 @@ RUN pip install --no-cache-dir markdown-it-py
 
 COPY bot/puppeteer-config.json /app/bot/
 COPY bot/ /app/bot/
-RUN pip install --no-cache-dir weasyprint docker aiodocker
+RUN pip install --no-cache-dir weasyprint  
 
-# --- ИЗМЕНЕНИЕ 2: Обновляем entrypoint.sh ---
-# Теперь он запускается от root, меняет владельца и затем запускает CMD от имени appuser
-RUN echo '#!/bin/sh' > /entrypoint.sh && \
-    echo 'set -e' >> /entrypoint.sh && \
-    echo '# Этот скрипт запускается от root' >> /entrypoint.sh && \
-    echo 'chown -R appuser:appuser /app/logs /app/db_data' >> /entrypoint.sh && \
-    echo '# Теперь переключаемся на пользователя "appuser" и запускаем основную команду' >> /entrypoint.sh && \
-    echo 'exec gosu appuser "$@"' >> /entrypoint.sh && \
-    chmod +x /entrypoint.sh
-
-# Создаем директории (владельца менять не обязательно, entrypoint это сделает)
-RUN mkdir -p /app/db_data /app/logs /app/code /home/appuser/.config/matplotlib \
-    && chown -R appuser:appuser /home/appuser
-
-# --- ИЗМЕНЕНИЕ 3: Удаляем `USER appuser` ---
-# Контейнер должен запуститься от root, чтобы entrypoint имел права на chown.
-# USER appuser
-
-# Указываем Docker, что нужно сначала запустить наш скрипт
-ENTRYPOINT ["/entrypoint.sh"]
 
 # Эта команда будет передана в entrypoint скрипт (`$@`) и выполнена от имени appuser
 CMD ["python3", "-m", "bot.main"]

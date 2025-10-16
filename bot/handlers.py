@@ -300,51 +300,7 @@ async def clear_cache_command(message: Message):
 
     await status_msg.edit_text("✅ Весь кэш приложения был успешно очищен.")
     await message.answer("Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
-##################################################################################################
-# EXECUTE
-##################################################################################################
-class Execution(StatesGroup):
-    code = State()
-EXECUTE_HELP_TEXT = (
-    "Пожалуйста, отправьте код Python для выполнения. Если ваш код генерирует изображения (например, с помощью `matplotlib.pyplot.savefig`), они будут отправлены вам.\n\n"
-    "**Поддерживаемый вывод:**\n"
-    "1.  **Текстовый вывод** (stdout/stderr).\n"
-    "2.  **Изображения**, сохраненные в файл (png, jpg, jpeg, gif).\n"
-    "3.  **Форматированный текст** (Markdown/HTML).\n\n"
-    "**Пример с Matplotlib:**\n"
-    "```python\n"
-    "import matplotlib.pyplot as plt\n"
-    "plt.plot([1, 2, 3], [1, 4, 9])\n"
-    "plt.savefig('my_plot.png')\n"
-    "plt.close()\n"
-    "```\n\n"
-    "**Пример с форматированным текстом:**\n"
-    "Функции `display`, `Markdown`, `HTML` доступны без импорта.\n"
-    "```python\n"
-    "display(Markdown('# Заголовок 1\\n## Заголовок 2\\n*Курсив*'))\n"
-    "```"
-)
 
-@router.message(Command('execute'))
-async def execute_command(message: Message, state: FSMContext):
-    # """Handles the /execute command, admin-only."""
-    # if message.from_user.id != ADMIN_USER_ID:
-    #     await message.reply("У вас нет прав на использование этой команды.", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
-    #     return
-
-    await state.set_state(Execution.code)
-    await message.answer(
-        EXECUTE_HELP_TEXT,
-        reply_markup=ReplyKeyboardRemove(),
-        parse_mode='markdown'
-    )
-
-@router.message(Execution.code)
-async def process_execution_from_user(message: Message, state: FSMContext):
-    """Executes the received Python code and sends back the output, including images and rich display objects."""
-    await state.clear()
-    await message.bot.send_chat_action(message.chat.id, "typing")
-    await service.execute_code_and_send_results(message, message.text)
 
 ##################################################################################################
 # LATEX
@@ -953,21 +909,6 @@ async def cq_show_favorite(callback: CallbackQuery):
     await callback.answer()
     await service.show_code_by_path(callback.message, callback.from_user.id, code_path, "Избранное")
 
-@router.callback_query(F.data.startswith("run_hash:"))
-async def cq_run_code_from_lib(callback: CallbackQuery):
-    path_hash = callback.data.split(":", 1)[1]
-    code_path = kb.code_path_cache.get(path_hash)
-    if not code_path:
-        await callback.answer("Ошибка: информация о коде устарела. Пожалуйста, запросите код заново.", show_alert=True)
-        return
-
-    submodule, topic, code_name = code_path.split('.')
-    
-    module = matplobblib._importlib.import_module(f'matplobblib.{submodule}')
-    code_to_run = module.themes_list_dicts_full_nd[topic][code_name] # Берем код без docstring для корректного выполнения
-
-    await callback.answer("▶️ Запускаю пример...")
-    await service.execute_code_and_send_results(callback.message, code_to_run)
 ##################################################################################################
 # SETTINGS
 ##################################################################################################
@@ -1323,21 +1264,6 @@ async def cq_help_cmd_clear_cache(callback: CallbackQuery):
     # clear_cache_command ожидает объект Message, callback.message подходит
     await clear_cache_command(callback.message)
 
-@router.callback_query(F.data == "help_cmd_execute")
-async def cq_help_cmd_execute(callback: CallbackQuery, state: FSMContext):
-    """Handler for '/execute' button from help menu."""
-    #if callback.from_user.id != ADMIN_USER_ID:
-        #await callback.answer("У вас нет прав на использование этой команды.", show_alert=True)
-        #return
-
-    await callback.answer()
-    # Повторяем логику команды /execute
-    await state.set_state(Execution.code)
-    await callback.message.answer(
-        EXECUTE_HELP_TEXT,
-        reply_markup=ReplyKeyboardRemove(),
-        parse_mode='markdown'
-    )
 
 @router.callback_query(F.data == "help_cmd_help")
 async def cq_help_cmd_help(callback: CallbackQuery):
