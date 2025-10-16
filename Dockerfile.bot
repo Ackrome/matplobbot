@@ -86,5 +86,4 @@ COPY bot/ /app/bot/
 RUN pip install --no-cache-dir weasyprint  
 
 
-# Эта команда будет передана в entrypoint скрипт (`$@`) и выполнена от имени appuser
 CMD ["python3", "-m", "bot.main"]

@@ -1,6 +1,6 @@
 
 from pathlib import Path
-
+import os
 BASE_DIR = Path(__file__).parent 
 
 PANDOC_HEADER_PATH = BASE_DIR / "templates" / "pandoc_header.tex"
@@ -11,7 +11,8 @@ MATH_FILTER_PATH = BASE_DIR / "pandoc_math_filter.lua"
 
 LATEX_POSTAMBLE = r"\end{document}"
 MD_LATEX_PADDING = 15
-
+SEARCH_RESULTS_PER_PAGE = 10
+ADMIN_USER_ID = int(os.getenv('ADMIN_USER_ID'))
 
 
 
