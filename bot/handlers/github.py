@@ -18,13 +18,12 @@ from cachetools import TTLCache
 import re
 # ... прочие импорты
 from .. import keyboards as kb, database
+from .. import redis_client
 from ..services import github_display # <-- обновим импорт на Шаге 2
 from ..config import *
 
 router = Router()
 
-# Кэши и состояния, специфичные для этого модуля
-user_search_results_cache = {}
 ##################################################################################################
 # MARKDOWN SEARCH & ABSTRACTS
 ##################################################################################################
@@ -38,9 +37,6 @@ class RepoManagement(StatesGroup):
     choose_repo_for_search = State()
     choose_repo_for_browse = State()
 
-# Cache for markdown search results
-# {user_id: {'query': str, 'results': list[dict]}}
-md_search_results_cache = {}
 # Cache for GitHub markdown search results to reduce API calls
 github_search_cache = TTLCache(maxsize=100, ttl=600) # Cache search results for 10 minutes
 
@@ -121,7 +117,7 @@ async def cq_lec_all_show_file(callback: CallbackQuery):
 
 async def get_md_search_results_keyboard(user_id: int, page: int = 0) -> InlineKeyboardMarkup | None:
     """Создает инлайн-клавиатуру для страницы результатов поиска по конспектам с пагинацией."""
-    search_data = md_search_results_cache.get(user_id)
+    search_data = await redis_client.get_user_cache(user_id, 'md_search')
     if not search_data or not search_data.get('results'):
         return None
 
@@ -251,7 +247,7 @@ async def process_md_search_query(message: Message, state: FSMContext):
         return
 
     user_id = message.from_user.id
-    md_search_results_cache[user_id] = {'query': query, 'results': results, 'repo_path': repo_to_search}
+    await redis_client.set_user_cache(user_id, 'md_search', {'query': query, 'results': results, 'repo_path': repo_to_search})
 
     keyboard = await get_md_search_results_keyboard(user_id, page=0)
     total_pages = (len(results) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
@@ -265,7 +261,7 @@ async def process_md_search_query(message: Message, state: FSMContext):
 async def cq_md_search_pagination(callback: CallbackQuery):
     """Обрабатывает нажатия на кнопки пагинации в результатах поиска по конспектам."""
     user_id = callback.from_user.id
-    search_data = md_search_results_cache.get(user_id)
+    search_data = await redis_client.get_user_cache(user_id, 'md_search')
     if not search_data:
         await callback.answer("Результаты поиска устарели. Пожалуйста, выполните поиск заново.", show_alert=True)
         await callback.message.delete()
@@ -295,7 +291,7 @@ async def cq_show_md_result(callback: CallbackQuery):
     """Fetches and displays the content of a markdown file from GitHub search results."""
     path_hash = callback.data.split(":", 1)[1]
     relative_path = kb.code_path_cache.get(path_hash)
-    search_data = md_search_results_cache.get(callback.from_user.id)
+    search_data = await redis_client.get_user_cache(callback.from_user.id, 'md_search')
 
     if not relative_path or not search_data:
         await callback.answer("Информация о файле устарела. Пожалуйста, выполните поиск заново.", show_alert=True)

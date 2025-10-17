@@ -13,10 +13,9 @@ import pkg_resources
 
 from .. import database
 from .. import keyboards as kb
+from .. import redis_client
 from .. import github_service
 from ..config import *
-
-from .github import user_search_results_cache, md_search_results_cache, github_search_cache
 
 import importlib
 
@@ -81,13 +80,12 @@ async def clear_cache_command(message: Message):
 
     status_msg = await message.answer("Начинаю очистку кэша...")
 
-    # 1. Clear in-memory caches in handlers.py
-    user_search_results_cache.clear()
-    md_search_results_cache.clear()
-    github_search_cache.clear() # This is a local cache in handlers.py
+    # 1. Clear Redis user caches
+    await redis_client.clear_all_user_cache()
     
     # 2. Clear in-memory caches from other modules
     kb.code_path_cache.clear()
+    # github_search_cache is a TTLCache and will expire on its own
     github_service.github_content_cache.clear()
     github_service.github_dir_cache.clear()
 

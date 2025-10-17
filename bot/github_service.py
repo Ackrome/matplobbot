@@ -7,7 +7,7 @@ import asyncio
 import datetime
 
 from cachetools import TTLCache
-
+from .config import *
 logger = logging.getLogger(__name__)
 
 # Caches for GitHub API calls to reduce rate-limiting and speed up responses
@@ -15,13 +15,12 @@ github_content_cache = TTLCache(maxsize=200, ttl=300)  # Cache for file contents
 github_dir_cache = TTLCache(maxsize=50, ttl=180)      # Cache for directory listings (3 min)
 github_repo_files_cache = TTLCache(maxsize=20, ttl=600) # Cache for full repo file lists (10 min)
 
-# --- Constants ---
-MD_SEARCH_BRANCH = "main"
+
 
 
 async def get_github_repo_contents(repo_path: str, path: str = "") -> list[dict] | None:
     """Fetches directory contents from the GitHub repository."""
-    github_token = os.getenv("GITHUB_TOKEN")
+    github_token = GITHUB_TOKEN
     if not github_token:
         logger.error("GITHUB_TOKEN environment variable not set. /lec_all command is disabled.")
         return None
@@ -71,7 +70,7 @@ async def get_all_repo_files_cached(repo_path: str, session: aiohttp.ClientSessi
         logger.info(f"Cache hit for repo file list: {repo_path}")
         return github_repo_files_cache[repo_path]
 
-    github_token = os.getenv("GITHUB_TOKEN")
+    github_token = GITHUB_TOKEN
     if not github_token:
         logger.error("GITHUB_TOKEN environment variable not set. Cannot fetch repo file list.")
         return None
@@ -112,7 +111,7 @@ async def get_repo_contributors(repo_path: str, session: aiohttp.ClientSession) 
     Получает список контрибьюторов для указанного репозитория.
     Возвращает список словарей {'login': username, 'html_url': profile_url} или None в случае ошибки.
     """
-    github_token = os.getenv("GITHUB_TOKEN")
+    github_token = GITHUB_TOKEN
     url = f"https://api.github.com/repos/{repo_path}/contributors"
     headers = {'Accept': 'application/vnd.github.v3+json'}
     if github_token:
@@ -136,7 +135,7 @@ async def get_file_last_modified_date(repo_path: str, file_path: str, session: a
     Получает дату последнего коммита для указанного файла.
     Возвращает отформатированную строку с датой или None в случае ошибки.
     """
-    github_token = os.getenv("GITHUB_TOKEN")
+    github_token = GITHUB_TOKEN
     url = f"https://api.github.com/repos/{repo_path}/commits?path={file_path}&page=1&per_page=1"
     headers = {'Accept': 'application/vnd.github.v3+json'}
     if github_token:

@@ -8,124 +8,104 @@
 
 ## 🚀 Project Overview
 
-This project is a system of two tightly integrated, Docker-deployed components:
+This project is a powerful, dual-component system designed for advanced interaction with programming content and real-time monitoring, all containerized with Docker for seamless deployment.
 
-1.  **Telegram Bot (`matplobbot`)**: An asynchronous bot built with `aiogram 3`. It provides users with access to code examples, remote code execution, rendering of LaTeX formulas and Mermaid diagrams, and much more. All user activities are logged into a shared SQLite database.
-2.  **Stats Web Dashboard (`fastapi_stats_app`)**: A `FastAPI` application with a `Vanilla JS` and `Chart.js` frontend. It visualizes bot usage statistics in real-time and streams its logs via WebSockets.
+1.  **Matplobbot (Telegram Bot)**: A sophisticated asynchronous bot built on `aiogram 3`. It serves as an intelligent gateway to programming libraries and educational materials. Its core features include interactive library browsing, full-text search, and a powerful on-demand rendering engine for LaTeX equations and Mermaid diagrams. All user interactions are meticulously logged to a shared SQLite database.
 
-Both services utilize shared Docker volumes for the database and log files, ensuring seamless data flow and consistent operation.
+2.  **Stats Dashboard (FastAPI Web App)**: A real-time monitoring dashboard powered by `FastAPI`. It features a clean, responsive frontend built with vanilla JavaScript and `Chart.js`. The dashboard provides deep insights into bot usage statistics by querying the shared database and streams live log events directly from the bot's log file via WebSockets.
 
-## ✨ Features
+The entire ecosystem is orchestrated by Docker Compose, utilizing shared volumes for the database and logs, which ensures data consistency and perfect integration between the two services.
+
+## ✨ Key Features
 
 ### 🤖 Telegram Bot
 
-The bot offers a rich set of features for developers, students, and researchers.
+The bot provides a rich, interactive experience for developers, students, and researchers.
 
 #### Content Interaction
--   **Library Browsing**: Interactive navigation through `matplobblib` modules (`/matp_all`) and user-configured GitHub repositories (`/lec_all`).
--   **Full-Text Search**: Powerful search capabilities across `matplobblib` code (`/matp_search`) and Markdown notes in GitHub repositories (`/lec_search`).
+-   **Library Browsing**: Interactively navigate the `matplobblib` library by modules and topics (`/matp_all`).
+-   **GitHub Repository Browsing**: Explore user-configured GitHub repositories file by file (`/lec_all`).
+-   **Full-Text Search**: Perform deep searches within the `matplobblib` source code (`/matp_search`) and across Markdown files in your linked GitHub repositories (`/lec_search`).
 
-#### Dynamic Rendering
--   **LaTeX Rendering**: Converts LaTeX formulas into high-quality PNG images via the `/latex` command.
--   **Mermaid.js Rendering**: Transforms Mermaid diagram syntax into PNG images using the `/mermaid` command.
+#### 🔬 Dynamic On-Demand Rendering
+-   **LaTeX Rendering**: Convert LaTeX equations into crisp, high-quality PNG images using the `/latex` command. Results are cached in the database for instant retrieval on subsequent requests.
+-   **Mermaid.js Rendering**: Transform Mermaid diagram syntax into PNG images via the `/mermaid` command, utilizing a headless Chrome instance managed by Puppeteer.
 
-#### Advanced Markdown Handling
-The bot can display `.md` files from GitHub in multiple user-selectable formats, with full support for embedded LaTeX and Mermaid diagrams.
+#### 📄 Advanced Markdown Processing
+The bot features a sophisticated pipeline for displaying `.md` files from GitHub. It uses **Pandoc** augmented with **custom Lua and Python filters** to correctly process and render complex documents containing embedded LaTeX and Mermaid code.
 
-| Format | Description |
+| Display Mode | Description |
 | :--- | :--- |
-| 🌐 **Telegra.ph** | Publishes a clean, readable web article. LaTeX and Mermaid diagrams are automatically rendered and embedded. |
-| 📄 **Text + Images** | Sends the content directly into the chat as a series of text messages and rendered formula images. |
-| 📁 **HTML File** | Generates a self-contained `.html` file with all styles, rendered LaTeX, and interactive Mermaid diagrams. |
-| 📁 **MD File** | Sends the original, raw `.md` file. |
+| 🖼 **Text + Images** | Renders the document directly into the chat, splitting it into a series of text messages and generated images for equations and diagrams. |
+| 📄 **HTML File** | Generates a fully self-contained `.html` file, bundling all necessary CSS and JS. Mermaid diagrams are interactive. |
+| ⚫ **MD File** | Sends the original, raw `.md` file without any processing. |
 
-#### Code Execution
--   **Remote Execution (`/execute`)**: Executes Python code in an isolated environment. The bot captures and returns:
-    -   Standard output and errors.
-    -   Generated image files (e.g., Matplotlib plots).
-    -   Rich display outputs (Markdown, HTML) via `IPython.display` compatibility.
+#### ⚙️ Personalization & User Management
+-   **Favorites (`/favorites`)**: Bookmark useful code examples from your searches for quick access later.
+-   **Settings (`/settings`)**: A comprehensive inline menu allows users to:
+    -   Toggle the display of code docstrings.
+    -   Select their preferred Markdown display mode.
+    -   Fine-tune LaTeX rendering quality (DPI and padding).
+    -   Manage their personal list of GitHub repositories.
 
-#### Personalization
--   ⭐ **Favorites (`/favorites`)**: Save and quickly access frequently used code examples.
--   ⚙️ **Settings (`/settings`)**: A comprehensive menu for user-specific preferences:
-    -   Toggle docstring visibility for code examples.
-    -   Select the preferred Markdown display mode.
-    -   Adjust LaTeX rendering quality (DPI) and padding.
-    -   Manage a personal list of GitHub repositories for browsing and searching.
-
-#### Administration
--   **Live Updates (`/update`)**: Fetches the latest version of the `matplobblib` library.
--   **Cache Management (`/clear_cache`)**: Clears all application caches (in-memory and database) to ensure fresh data.
-
----
+#### 👑 Administration
+-   **Live Library Updates (`/update`)**: (Admin-only) Fetches the latest version of the `matplobblib` library from PyPI and dynamically reloads the module without bot downtime.
+-   **Cache Management (`/clear_cache`)**: (Admin-only) Instantly purges all application caches, including in-memory `TTLCache` for API calls and the persistent LaTeX cache in the database.
 
 ### 📊 Web Dashboard
 
-The dashboard provides a live, insightful look into the bot's usage and health.
+The dashboard provides a live, data-rich view of the bot's health and user engagement.
 
 <div align="center">
   <img src="https://github.com/Ackrome/matplobbot/blob/main/image/notes/Dashboard.png" alt="Dashboard Screenshot" width="800">
 </div>
 
--   **Real-time Updates**: All statistics on the page update instantly via **WebSockets** without requiring a page refresh.
--   **Data Visualization**:
-    -   Total actions counter.
+-   **Real-time Updates**: All statistical charts and counters update instantly via **WebSocket** connections, providing a true live monitoring experience.
+-   **Rich Data Visualization**:
+    -   Total user actions counter.
     -   Leaderboard of the most active users, complete with their Telegram avatars.
-    -   Bar charts for popular commands and text messages.
-    -   Pie chart showing the distribution of action types.
-    -   Line chart illustrating user activity over time.
--   **Live Log Streaming**: A live feed of the `bot.log` file is streamed directly to the web interface, allowing for real-time monitoring of the bot's operations.
--   **Modern UI**: A clean, responsive interface with support for both **light and dark themes**.
+    -   Bar charts for the most frequently used commands and text messages.
+    -   A pie chart visualizing the distribution of action types (e.g., command vs. callback query).
+    -   A line chart illustrating user activity over time.
+-   **Live Log Streaming**: A live feed of the `bot.log` file is streamed directly to the web UI, enabling real-time operational monitoring.
+-   **Modern UI**: A clean, responsive interface with automatic **light and dark theme** support.
 
----
+## 🛠️ Architecture & Tech Stack
 
-## ⌨️ Bot Commands
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI">
+  <img src="https://img.shields.io/badge/Aiogram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Aiogram">
+  <img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite">
+  <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black" alt="JavaScript">
+  <img src="https://img.shields.io/badge/Pandoc-5A5A5A?style=for-the-badge&logo=pandoc&logoColor=white" alt="Pandoc">
+  <img src="https://img.shields.io/badge/LaTeX-008080?style=for-the-badge&logo=latex&logoColor=white" alt="LaTeX">
+</p>
 
-Here is a detailed list of all commands available in the bot.
+The project is built on modern, asynchronous frameworks with a strong emphasis on modularity and separation of concerns.
 
-| Command | Description | Usage |
-| :--- | :--- | :--- |
-| **General** | | |
-| `/start` | Initializes the bot and displays the main command keyboard. | Send the command to begin or reset your session. |
-| `/help` | Shows an interactive menu with descriptions of all available commands. | Send the command to get a quick overview of the bot's features. |
-| `/cancel` | Aborts any ongoing operation or conversation state. | Use this if you get stuck waiting for input or want to return to the main menu. |
-| **Content Browsing & Search** | | |
-| `/matp_all` | Interactively browse the `matplobblib` library by modules and topics. | Send the command and navigate the library structure using inline buttons. |
-| `/matp_search` | Performs a full-text search for code examples within `matplobblib`. | Send the command, then type your search query (e.g., "line plot"). |
-| `/lec_all` | Interactively browse files in your configured GitHub repositories. | Send the command. If you have multiple repos, you'll be asked to choose one. |
-| `/lec_search` | Performs a full-text search within `.md` files in a chosen GitHub repository. | Send the command, choose a repository, then enter your search query. |
-| **Dynamic Rendering** | | |
-| `/latex` | Renders a LaTeX formula into a high-quality PNG image. | Send the command, then provide the LaTeX code (e.g., `\frac{a}{b}`). |
-| `/mermaid` | Renders a Mermaid.js diagram into a PNG image. | Send the command, then provide the Mermaid diagram code (e.g., `graph TD; A-->B;`). |
-| **Tools & Personalization** | | |
-| `/execute` | Executes a Python code snippet in an isolated environment. | Send the command, then provide the Python code. The bot will return text output and any generated images. |
-| `/favorites` | View, manage, and run your saved favorite code examples. | Send the command to see your list. You can add items from search results or library browsing. |
-| `/settings` | Access and modify your personal settings. | Configure docstring visibility, Markdown display format, LaTeX quality, and manage your GitHub repositories. |
-| **Admin Commands** | | |
-| `/update` | Updates the `matplobblib` library to the latest version from PyPI. | *(Admin only)* Send the command to perform a live update. |
-| `/clear_cache` | Clears all application caches (in-memory and database). | *(Admin only)* Useful for forcing the bot to fetch fresh data. |
-
----
-
-## 🛠️ Tech Stack
-
-| Category | Technology |
+| Category | Technology & Key Libraries |
 | :--- | :--- |
 | **Backend** | Python 3.11+ |
-| **Bot Framework** | Aiogram 3 |
-| **Web Framework** | FastAPI, Uvicorn |
-| **Database** | SQLite (via `aiosqlite`) |
-| **Frontend** | HTML5, CSS3, Vanilla JavaScript, Chart.js |
-| **Containerization** | Docker, Docker Compose |
-| **Rendering** | **LaTeX**: TeX Live, dvipng <br> **Mermaid**: Mermaid-CLI, Puppeteer |
-| **APIs** | Telegram Bot API, GitHub API, Telegra.ph API |
-| **Libraries** | Matplotlib, `matplobblib`, `cachetools`, `aiohttp` |
+| **Bot Framework** | **Aiogram 3** (utilizing `Router` for modular handlers) |
+| **Web Framework** | **FastAPI**, Uvicorn |
+| **Database** | **SQLite** (accessed asynchronously via `aiosqlite`) |
+| **Frontend** | HTML5, CSS3, Vanilla JavaScript, **Chart.js** |
+| **Containerization** | **Docker, Docker Compose** |
+| **Rendering Pipeline** | **Pandoc** with custom Lua & Python filters, **TeX Live**, dvipng, **Mermaid-CLI**, Puppeteer |
+| **Key Libraries** | `aiohttp`, `cachetools`, `python-dotenv` |
 
----
+### Architectural Highlights
+-   **Decoupled Services**: The bot and the web dashboard run in separate Docker containers but communicate through a shared database and log volume, creating a robust, microservice-like architecture.
+-   **Modular Handlers**: The bot's logic is cleanly organized into feature-specific modules (`admin`, `rendering`, `settings`, etc.), each with its own `aiogram.Router`.
+-   **Service Layer**: Complex business logic, such as rendering documents and interacting with the GitHub API, is abstracted into a dedicated `services` package.
+-   **Asynchronous Everywhere**: From database calls (`aiosqlite`) to external API requests (`aiohttp`), the entire stack is asynchronous to ensure high performance and scalability.
+-   **Intelligent Caching**: In-memory `TTLCache` is used extensively to cache GitHub API responses, reducing rate-limiting and speeding up user-facing operations.
 
-## ⚙️ Installation and Setup
+## ⚙️ Installation & Setup
 
-The project is fully containerized, making setup straightforward with Docker.
+The project is fully containerized, enabling a simple and reproducible setup.
 
 ### 1. Prerequisites
 -   **Docker** and **Docker Compose** must be installed on your system.
@@ -144,7 +124,6 @@ ADMIN_USER_ID=123456789
 # GitHub Personal Access Token with 'repo' scope for reading repositories
 # Required for /lec_search, /lec_all, and uploading rendered LaTeX images
 GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-
 ```
 
 ### 3. Running with Docker Compose
@@ -159,7 +138,7 @@ This is the recommended method for running the project.
 
 2.  **Ensure your `.env` file is created and configured** as described above.
 
-3.  **Build and run the services:**
+3.  **Build and run the services in detached mode:**
     ```bash
     docker-compose up --build -d
     ```
@@ -171,9 +150,30 @@ This is the recommended method for running the project.
 
 ### 5. Stopping the Services
 
-To stop all running containers, execute:
-```bash
-docker-compose down
-```
+-   To stop all running containers, execute:
+    ```bash
+    docker-compose down
+    ```-   Your database and log files will persist in named volumes. To remove all data, run `docker-compose down -v`.
 
-Your database and log files will persist thanks to the named volumes (`bot_db_data`, `bot_logs`). To remove all data, run `docker-compose down -v`.
+## 📚 Bot Command Reference
+
+| Command | Description | Usage |
+| :--- | :--- | :--- |
+| **General** | | |
+| `/start` | Initializes the bot and displays the main command keyboard. | Send to begin or reset your session. |
+| `/help` | Shows an interactive inline menu with descriptions of all available commands. | Send to get a quick overview of the bot's features. |
+| `/cancel` | Aborts any ongoing operation or conversation state. | Use if you get stuck waiting for input or want to return to the main menu. |
+| **Content Browsing & Search** | | |
+| `/matp_all` | Interactively browse the `matplobblib` library by modules and topics. | Send the command and navigate the library structure using inline buttons. |
+| `/matp_search` | Performs a full-text search for code examples within `matplobblib`. | Send the command, then type your search query (e.g., "line plot"). |
+| `/lec_all` | Interactively browse files in your configured GitHub repositories. | Send the command. If you have multiple repos, you'll be asked to choose one. |
+| `/lec_search` | Performs a full-text search within `.md` files in a chosen GitHub repository. | Send the command, choose a repository, then enter your search query. |
+| **Dynamic Rendering** | | |
+| `/latex` | Renders a LaTeX formula into a high-quality PNG image. | Send the command, then provide the LaTeX code (e.g., `\frac{a}{b}`). |
+| `/mermaid` | Renders a Mermaid.js diagram into a PNG image. | Send the command, then provide the Mermaid diagram code (e.g., `graph TD; A-->B;`). |
+| **Personalization** | | |
+| `/favorites` | View, manage, and access your saved favorite code examples. | Send the command to see your list. You can add items from search results or library browsing. |
+| `/settings` | Access and modify your personal settings. | Configure docstring visibility, Markdown display format, LaTeX quality, and manage your GitHub repositories. |
+| **Admin Commands** | | |
+| `/update` | Updates the `matplobblib` library to the latest version from PyPI. | *(Admin-only)* Send the command to perform a live update. |
+| `/clear_cache` | Clears all application caches (in-memory and database). | *(Admin-only)* Useful for forcing the bot to fetch fresh data. |

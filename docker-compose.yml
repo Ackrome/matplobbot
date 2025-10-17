@@ -1,5 +1,12 @@
 version: '3.8'
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: mpb-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
   mpb-telegram-bot:
     build:
       context: .
@@ -7,7 +14,7 @@ services:
     container_name: mpb-telegram-bot
     restart: unless-stopped
     environment:
-      - BOT_TOKEN=${BOT_TOKEN} 
+      - BOT_TOKEN=${BOT_TOKEN}
       - ADMIN_USER_ID=${ADMIN_USER_ID}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
     volumes:
@@ -15,6 +22,9 @@ services:
       - bot_logs:/app/logs        # Именованный volume для логов бота
       - matplobblib_lib:/usr/local/lib/python3.11/site-packages/matplobblib # Persist library updates
       - ./examples:/app/examples    # Volume для файлов-примеров
+    depends_on:
+      - redis
+
 
 
   mpb-fastapi-stats:
@@ -37,4 +47,3 @@ volumes:
   bot_db_data:
   bot_logs:
   matplobblib_lib:
-  code_runner_data:

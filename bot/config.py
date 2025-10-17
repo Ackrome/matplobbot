@@ -13,7 +13,8 @@ LATEX_POSTAMBLE = r"\end{document}"
 MD_LATEX_PADDING = 15
 SEARCH_RESULTS_PER_PAGE = 10
 ADMIN_USER_ID = int(os.getenv('ADMIN_USER_ID'))
-
+MD_SEARCH_BRANCH = "main"
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 
 with open(PANDOC_HEADER_PATH, 'r', encoding='utf-8') as f:
