@@ -15,12 +15,13 @@ import logging
 from .. import keyboards as kb, database
 from ..services import library_display # <-- обновим импорт на Шаге 2
 from ..config import *
+from . import github
+
 
 router = Router()
 
 # Cache for search results to avoid long callback_data
 # {user_id: {'query': str, 'results': list}}
-user_search_results_cache = {}
 
 ##################################################################################################
 # ASK
@@ -168,7 +169,7 @@ async def cq_matp_all_show_code(callback: CallbackQuery):
 
 async def get_search_results_keyboard(user_id: int, page: int = 0) -> InlineKeyboardMarkup | None:
     """Создает инлайн-клавиатуру для страницы результатов поиска с пагинацией."""
-    search_data = user_search_results_cache.get(user_id)
+    search_data = github.user_search_results_cache.get(user_id)
     if not search_data or not search_data.get('results'):
         return None
 
@@ -267,7 +268,7 @@ async def process_search_query(message: Message, state: FSMContext):
 
     # Store query and results in cache for this user
     user_id = message.from_user.id
-    user_search_results_cache[user_id] = {'query': query, 'results': results}
+    github.user_search_results_cache[user_id] = {'query': query, 'results': results}
 
     keyboard = await get_search_results_keyboard(user_id, page=0)
     total_pages = (len(results) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
@@ -281,7 +282,7 @@ async def process_search_query(message: Message, state: FSMContext):
 async def cq_search_pagination(callback: CallbackQuery):
     """Обрабатывает нажатия на кнопки пагинации в результатах поиска."""
     user_id = callback.from_user.id
-    search_data = user_search_results_cache.get(user_id)
+    search_data = github.user_search_results_cache.get(user_id)
     if not search_data:
         await callback.answer("Результаты поиска устарели. Пожалуйста, выполните поиск заново.", show_alert=True)
         await callback.message.delete()
@@ -380,7 +381,7 @@ async def cq_noop(callback: CallbackQuery):
 async def cq_show_search_result_by_index(callback: CallbackQuery):
     """Handles clicks on search result buttons."""
     user_id = callback.from_user.id
-    search_data = user_search_results_cache.get(user_id)
+    search_data = github.user_search_results_cache.get(user_id)
     if not search_data:
         await callback.answer("Результаты поиска устарели. Пожалуйста, выполните поиск заново.", show_alert=True)
         return
