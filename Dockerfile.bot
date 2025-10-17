@@ -83,7 +83,6 @@ RUN pip install --no-cache-dir markdown-it-py
 
 COPY bot/puppeteer-config.json /app/bot/
 COPY bot/ /app/bot/
-RUN pip install --no-cache-dir weasyprint  
 
 
 CMD ["python3", "-m", "bot.main"]
