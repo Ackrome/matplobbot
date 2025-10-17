@@ -30,7 +30,6 @@ for submodule_name in matplobblib.submodules:
         # regardless of show_docstring, as the keyboard structure should be consistent.
         # The content (code with/without docstring) is handled in handlers.py.
         module_full_dict = module.themes_list_dicts_full # Assuming this always exists and has all keys
-
         module_topics = list(module_full_dict.keys())
         logger.debug(f"Темы для {submodule_name}: {module_topics}")
 
@@ -43,6 +42,9 @@ for submodule_name in matplobblib.submodules:
             'codes': sub_topics_codes
         }
         logger.debug(f"Успешно сгенерированы данные для подмодуля: {submodule_name}")
+    except NameError as e: # <-- Ловим конкретно эту ошибку
+        logger.error(f"КРИТИЧЕСКАЯ ОШИБКА в библиотеке matplobblib, подмодуль '{submodule_name}' не будет загружен: {e}")
+        continue
     except Exception as e:
         logger.error(f"Ошибка генерации данных для подмодуля {submodule_name}: {e}", exc_info=True)
 
