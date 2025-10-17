@@ -13,7 +13,7 @@ import pkg_resources
 
 from .. import database
 from .. import keyboards as kb
-from .. import redis_client
+from ..redis_client import redis_client
 from .. import github_service
 from ..config import *
 

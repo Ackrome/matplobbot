@@ -13,7 +13,7 @@ import hashlib
 import logging
 
 from .. import keyboards as kb, database
-from .. import redis_client
+from ..redis_client import redis_client
 from ..services import library_display # <-- обновим импорт на Шаге 2
 from ..config import *
 

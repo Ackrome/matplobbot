@@ -18,7 +18,7 @@ from cachetools import TTLCache
 import re
 # ... прочие импорты
 from .. import keyboards as kb, database
-from .. import redis_client
+from ..redis_client import redis_client
 from ..services import github_display # <-- обновим импорт на Шаге 2
 from ..config import *
 
