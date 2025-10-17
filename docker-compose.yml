@@ -10,7 +10,6 @@ services:
       - BOT_TOKEN=${BOT_TOKEN} 
       - ADMIN_USER_ID=${ADMIN_USER_ID}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
-      - DOCKER_GID=${DOCKER_GID}
     volumes:
       - bot_db_data:/app/db_data  # Именованный volume для хранения БД
       - bot_logs:/app/logs        # Именованный volume для логов бота
