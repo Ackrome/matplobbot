@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
 from .. import keyboards as kb, database
-from ..services import rendering_display
+from ..services import document_renderer
 
 router = Router()
 
@@ -39,7 +39,7 @@ async def process_latex_formula(message: Message, state: FSMContext):
         settings = await database.get_user_settings(message.from_user.id)
         padding = settings['latex_padding']
         dpi = settings['latex_dpi']
-        image_buffer = await rendering_display.render_latex_to_image(formula, padding, dpi)
+        image_buffer = await document_renderer.render_latex_to_image(formula, padding, dpi)
         
         await status_msg.delete()
         await message.answer_photo(
@@ -82,7 +82,7 @@ async def process_mermaid_code(message: Message, state: FSMContext):
     status_msg = await message.answer("🎨 Рендеринг диаграммы...")
     await message.bot.send_chat_action(message.chat.id, "upload_photo")
     try:
-        image_buffer = await rendering_display.render_mermaid_to_image(mermaid_code)
+        image_buffer = await document_renderer.render_mermaid_to_image(mermaid_code)
         
         await status_msg.delete()
         await message.answer_photo(
