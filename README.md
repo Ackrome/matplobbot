@@ -177,3 +177,25 @@ This is the recommended method for running the project.
 | **Admin Commands** | | |
 | `/update` | Updates the `matplobblib` library to the latest version from PyPI. | *(Admin-only)* Send the command to perform a live update. |
 | `/clear_cache` | Clears all application caches (in-memory and database). | *(Admin-only)* Useful for forcing the bot to fetch fresh data. |
+
+
+
+### 🚀 CI/CD Pipeline
+
+The project utilizes a robust CI/CD pipeline orchestrated by GitHub Actions and Jenkins to ensure continuous integration and automated deployment.
+
+
+```mermaid
+graph TD
+    A[Developer pushes code to GitHub] --> B{GitHub Actions};
+    B --> C{Lint & Test};
+    C --> |Success| D{Build Docker Images};
+    C --> |Failure| E[Send Failure Notification];
+    D --> F[Push Images to GHCR];
+    F --> |Success| G{Trigger Jenkins Job};
+    G --> H[Jenkins Server];
+    H --> |Via Tailscale Network| I[Deployment VPS];
+    I --> J{Pull new images from GHCR};
+    J --> K[Restart Docker Compose];
+    K --> L[New version is live!];
+```
