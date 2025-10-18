@@ -5,57 +5,46 @@ on:
     branches: [ "main" ]
 
 env:
-  # Replace with your GitHub username (lowercase)
   REGISTRY: ghcr.io
-  IMAGE_OWNER: ackrome
+  IMAGE_OWNER: ackrome # Use your GitHub username (lowercase)
 
 jobs:
-  test:
-    name: Run Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3
+  test-build-and-push:
+    # IMPORTANT: This tells GitHub to run this job on YOUR runner
+    name: Test, Build and Push
+    runs-on: self-hosted 
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          # pip install pytest pytest-asyncio if they aren't in requirements
-
-      # Uncomment this step if you add a testing suite
-      # - name: Run Pytest
-      #   run: pytest
-
-  build-and-push:
-    name: Build and Push Docker Images
-    needs: test # This job will only run if the 'test' job succeeds
-    runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write # This is required to push to GHCR
+      packages: write
 
     steps:
       - name: Check out code
         uses: actions/checkout@v3
+
+      # Note: We are no longer using setup-python because we assume Python,
+      # Docker, etc., are already installed on our self-hosted runner.
+      # If not, you would add steps here to install them.
+
+      # --- This 'test' step is now optional, as you could run it in Jenkins ---
+      # - name: Run Pytest
+      #   run: |
+      #     pip install -r requirements.txt
+      #     pytest
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v2
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
+          # The runner automatically uses a temporary GITHUB_TOKEN
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push matplobbot-bot
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: ./Dockerfile.bot # Make sure this path is correct
+          file: ./Dockerfile.bot
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-bot:${{ github.sha }}
@@ -64,7 +53,7 @@ jobs:
       - name: Build and push matplobbot-api
         uses: docker/build-push-action@v4
         with:
-          context: ./fastapi_stats_app # Make sure this path is correct
+          context: ./fastapi_stats_app
           file: ./fastapi_stats_app/Dockerfile
           push: true
           tags: |
@@ -73,17 +62,15 @@ jobs:
 
   trigger-deployment:
     name: Trigger Jenkins Deployment
-    needs: build-and-push
-    runs-on: ubuntu-latest
+    needs: test-build-and-push
+    # Also runs on your machine
+    runs-on: self-hosted 
+
     steps:
-      - name: Trigger Jenkins Job
-        uses: appleboy/jenkins-action@master
-        with:
-          url: ${{ secrets.JENKINS_URL }}
-          user: ${{ secrets.JENKINS_USER }}
-          token: ${{ secrets.JENKINS_TOKEN }}
-          job: "matplobbot-deploy"
-          # Pass the commit SHA as the image tag
-          params: |
-            BOT_IMAGE_TAG=${{ github.sha }}
-            API_IMAGE_TAG=${{ github.sha }}
+      - name: Trigger Jenkins Job via cURL
+        run: |
+          # The runner can resolve the Tailscale IP directly and securely.
+          curl -X POST "${{ secrets.JENKINS_URL }}/job/matplobbot-deploy/buildWithParameters" \
+            --user "${{ secrets.JENKINS_USER }}:${{ secrets.JENKINS_TOKEN }}" \
+            --data-urlencode "BOT_IMAGE_TAG=${{ github.sha }}" \
+            --data-urlencode "API_IMAGE_TAG=${{ github.sha }}"
