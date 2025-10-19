@@ -74,20 +74,27 @@ jobs:
           echo "base_tag_for_log=$BASE_TAG_FOR_LOG" >> $GITHUB_OUTPUT
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
-      - name: Get Commit Log
+      - name: Get Commit Log and Verify Changes
         id: commit-log
         run: |
-          # Use the intelligently determined base tag for generating the log
-          echo "Gathering commits between ${{ steps.versioning.outputs.base_tag_for_log }} and HEAD..."
-          git log --pretty=format:"- %s (%h)" ${{ steps.versioning.outputs.base_tag_for_log }}..HEAD > changes.txt
+          echo "Checking for new commits since tag ${{ steps.versioning.outputs.base_tag_for_log }}..."
           
-          # --- START OF THE FIX ---
-          # Generate a unique, random string to use as a delimiter.
-          # This prevents the content of the log from accidentally closing the multi-line string.
-          DELIMITER=$(uuidgen)
-          echo "commit_log<<${DELIMITER}" >> $GITHUB_OUTPUT
-          cat changes.txt >> $GITHUB_OUTPUT
-          echo "${DELIMITER}" >> $GITHUB_OUTPUT
+          # Get the full commit log into a variable
+          COMMIT_CONTENT=$(git log --pretty=format:"- %s (%h)" ${{ steps.versioning.outputs.base_tag_for_log }}..HEAD)
+          
+          # Check if the commit log is empty
+          if [ -z "$COMMIT_CONTENT" ]; then
+            # Use GitHub Actions' own error logging for a nice red message in the UI
+            echo "::error::No new commits found since tag ${{ steps.versioning.outputs.base_tag_for_log }}. Cannot create an empty release."
+            exit 1
+          else
+            echo "Found new commits. Proceeding with release note generation."
+            # Use the robust unique delimiter method to set the output
+            DELIMITER=$(uuidgen)
+            echo "commit_log<<${DELIMITER}" >> $GITHUB_OUTPUT
+            echo "$COMMIT_CONTENT" >> $GITHUB_OUTPUT
+            echo "${DELIMITER}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Generate Changelog Section with Gemini AI
         id: gemini-notes
