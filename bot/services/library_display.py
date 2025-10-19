@@ -2,11 +2,13 @@ import logging
 from aiogram.types import Message
 import matplobblib
 from .. import keyboards as kb, database
+from ..i18n import translator
 
 
 async def show_code_by_path(message: Message, user_id: int, code_path: str, header: str):
     """Helper function to send code to the user based on its path."""
     try:
+        lang = await translator.get_user_language(user_id)
         submodule, topic, code_name = code_path.split('.')
         
         module = matplobblib._importlib.import_module(f'matplobblib.{submodule}')
@@ -27,9 +29,9 @@ async def show_code_by_path(message: Message, user_id: int, code_path: str, head
         else:
             await message.answer(f'''```python\n{repl}\n```''', parse_mode='markdown')
         
-        await message.answer("Что делаем дальше?", reply_markup=kb.get_code_action_keyboard(code_path))
-        await message.answer("Или выберите другую команду.", reply_markup=kb.get_main_reply_keyboard(user_id))
+        await message.answer(translator.gettext(lang, "what_to_do_next"), reply_markup=kb.get_code_action_keyboard(code_path))
+        await message.answer(translator.gettext(lang, "or_choose_another_command"), reply_markup=await kb.get_main_reply_keyboard(user_id))
 
     except (ValueError, KeyError, AttributeError, ImportError) as e:
         logging.error(f"Ошибка при показе кода (path: {code_path}): {e}")
-        await message.answer("Не удалось найти или отобразить этот пример кода. Возможно, он был удален или перемещен.")
+        await message.answer(translator.gettext(await translator.get_user_language(user_id), "show_code_error"))

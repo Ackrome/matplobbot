@@ -6,6 +6,7 @@ import hashlib
 import matplobblib
 import os # Import os to access environment variables like ADMIN_USER_ID
 from . import database # Import database to check for user repos
+from .i18n import translator
 
 logger = logging.getLogger(__name__)
 
@@ -59,13 +60,14 @@ def _get_user_commands(user_id: int) -> list[str]:
     return commands
 
 # Function to get the main ReplyKeyboardMarkup (used for /start, after /code)
-def get_main_reply_keyboard(user_id: int) -> ReplyKeyboardMarkup:
+async def get_main_reply_keyboard(user_id: int) -> ReplyKeyboardMarkup:
     current_commands = _get_user_commands(user_id)
     keyboard_buttons = [[KeyboardButton(text=cmd)] for cmd in current_commands]
+    lang = await translator.get_user_language(user_id)
     return ReplyKeyboardMarkup(
         keyboard=keyboard_buttons,
         resize_keyboard=True,
-        input_field_placeholder='Что выберем, хозяин?',
+        input_field_placeholder=translator.gettext(lang, 'main_menu_placeholder'),
         one_time_keyboard=True,
     )
 
@@ -75,23 +77,25 @@ def get_main_reply_keyboard(user_id: int) -> ReplyKeyboardMarkup:
 
 
 # Function to get the help InlineKeyboardMarkup
-def get_help_inline_keyboard(user_id: int) -> InlineKeyboardMarkup:
+async def get_help_inline_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    lang = await translator.get_user_language(user_id)
+
     inline_keyboard_rows = [
-        [InlineKeyboardButton(text="📂 /matp_all - Просмотр библиотеки", callback_data="help_cmd_matp_all")],
-        [InlineKeyboardButton(text="🔍 /matp_search - Поиск по библиотеке", callback_data="help_cmd_matp_search")],
-        [InlineKeyboardButton(text="📚 /lec_search - Поиск по конспектам", callback_data="help_cmd_lec_search")],
-        [InlineKeyboardButton(text="📂 /lec_all - Просмотр конспектов", callback_data="help_cmd_lec_all")],
-        [InlineKeyboardButton(text="⭐ /favorites - Избранное", callback_data="help_cmd_favorites")],
-        [InlineKeyboardButton(text="⚙️ /settings - Настройки", callback_data="help_cmd_settings")],
-        [InlineKeyboardButton(text="🧮 /latex - Рендер LaTeX", callback_data="help_cmd_latex")],
-        [InlineKeyboardButton(text="🎨 /mermaid - Рендер Mermaid", callback_data="help_cmd_mermaid")]
+        [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_matp_all"), callback_data="help_cmd_matp_all")],
+        [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_matp_search"), callback_data="help_cmd_matp_search")],
+        [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_lec_search"), callback_data="help_cmd_lec_search")],
+        [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_lec_all"), callback_data="help_cmd_lec_all")],
+        [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_favorites"), callback_data="help_cmd_favorites")],
+        [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_settings"), callback_data="help_cmd_settings")],
+        [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_latex"), callback_data="help_cmd_latex")],
+        [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_mermaid"), callback_data="help_cmd_mermaid")]
     ]
     admin_id = os.getenv('ADMIN_USER_ID')
     if admin_id and user_id == int(admin_id):
-        inline_keyboard_rows.append([InlineKeyboardButton(text="🔄 /update - Обновить (admin)", callback_data="help_cmd_update")])
-        inline_keyboard_rows.append([InlineKeyboardButton(text="🗑️ /clear_cache - Очистить кэш (admin)", callback_data="help_cmd_clear_cache")])
+        inline_keyboard_rows.append([InlineKeyboardButton(text=translator.gettext(lang, "help_btn_update"), callback_data="help_cmd_update")])
+        inline_keyboard_rows.append([InlineKeyboardButton(text=translator.gettext(lang, "help_btn_clear_cache"), callback_data="help_cmd_clear_cache")])
     
-    inline_keyboard_rows.append([InlineKeyboardButton(text="ℹ️ /help - Эта справка", callback_data="help_cmd_help")])
+    inline_keyboard_rows.append([InlineKeyboardButton(text=translator.gettext(lang, "help_btn_help"), callback_data="help_cmd_help")])
     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard_rows)
 
 def get_code_action_keyboard(code_path: str) -> InlineKeyboardMarkup:
@@ -112,6 +116,7 @@ def get_code_action_keyboard(code_path: str) -> InlineKeyboardMarkup:
 
 async def get_repo_management_keyboard(user_id: int) -> InlineKeyboardMarkup:
     """Creates an inline keyboard for managing user repositories."""
+    lang = await translator.get_user_language(user_id)
     repos = await database.get_user_repos(user_id)
     builder = InlineKeyboardBuilder()
 
@@ -121,8 +126,8 @@ async def get_repo_management_keyboard(user_id: int) -> InlineKeyboardMarkup:
         builder.row(
             InlineKeyboardButton(text=f"Repo: {repo_path}", callback_data="noop"),
             InlineKeyboardButton(text="✏️", callback_data=f"repo_edit_hash:{repo_hash}"),
-            InlineKeyboardButton(text="❌", callback_data=f"repo_del_hash:{repo_hash}")
+            InlineKeyboardButton(text=translator.gettext(lang, "favorites_remove_btn"), callback_data=f"repo_del_hash:{repo_hash}")
         )
-    builder.row(InlineKeyboardButton(text="➕ Добавить новый репозиторий", callback_data="repo_add_new"))
-    builder.row(InlineKeyboardButton(text="⬅️ Назад в настройки", callback_data="back_to_settings"))
+    builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_add_repo"), callback_data="repo_add_new"))
+    builder.row(InlineKeyboardButton(text=translator.gettext(lang, "back_to_settings"), callback_data="back_to_settings"))
     return builder.as_markup()

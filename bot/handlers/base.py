@@ -2,28 +2,87 @@
 import logging
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove, InlineKeyboardButton
 from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.fsm.context import FSMContext
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from .. import keyboards as kb
+from .. import keyboards as kb, database
 from . import library, github, rendering, settings # Импортируем для колбэков помощи
+from ..i18n import translator
 
 router = Router()
 
-@router.message(CommandStart())
-async def comand_start(message: Message):
+class Onboarding(StateFilter):
+    async def __call__(self, message: Message) -> bool:
+        return not await database.is_onboarding_completed(message.from_user.id)
+
+@router.message(CommandStart(), Onboarding())
+async def command_start_onboarding(message: Message, state: FSMContext):
+    """Handles the very first /start command from a new user."""
+    user_id = message.from_user.id
+    lang = await translator.get_user_language(user_id)
+    await state.set_state("onboarding:step1")
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="onboarding_next"))
+
     await message.answer(
-        f'Привет, {message.from_user.full_name}!',
-        reply_markup=kb.get_main_reply_keyboard(message.from_user.id)
+        translator.gettext(lang, "start_onboarding_1"),
+        reply_markup=builder.as_markup()
+    )
+
+@router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:step1"))
+async def onboarding_step2(callback: CallbackQuery, state: FSMContext):
+    lang = await translator.get_user_language(callback.from_user.id)
+    await state.set_state("onboarding:step2")
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_add_repo"), callback_data="manage_repos"))
+    await callback.message.edit_text(
+        translator.gettext(lang, "start_onboarding_2"),
+        reply_markup=builder.as_markup()
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:step3"))
+async def onboarding_step4(callback: CallbackQuery, state: FSMContext):
+    lang = await translator.get_user_language(callback.from_user.id)
+    await state.set_state("onboarding:step4")
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_try_latex"), callback_data="help_cmd_latex"))
+    await callback.message.edit_text(
+        translator.gettext(lang, "start_onboarding_4"),
+        reply_markup=builder.as_markup()
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:step5"))
+async def onboarding_finish(callback: CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    lang = await translator.get_user_language(user_id)
+    await state.clear()
+    await database.set_onboarding_completed(user_id)
+    await callback.message.edit_text(translator.gettext(lang, "start_onboarding_5"))
+    await callback.message.answer(
+        translator.gettext(lang, "choose_next_command"),
+        reply_markup=await kb.get_main_reply_keyboard(user_id)
+    )
+    await callback.answer()
+
+@router.message(CommandStart())
+async def command_start_regular(message: Message):
+    lang = await translator.get_user_language(message.from_user.id)
+    await message.answer(
+        translator.gettext(lang, "start_welcome", full_name=message.from_user.full_name),
+        reply_markup=await kb.get_main_reply_keyboard(message.from_user.id)
     )
     
 @router.message(Command('help'))
 async def comand_help(message: Message):
+    lang = await translator.get_user_language(message.from_user.id)
     await message.answer(
-        'Это бот для поиска примеров кода по библиотеке matplobblib.\n\n'
-        'Нажмите на кнопку, чтобы выполнить команду:',
-        reply_markup=kb.get_help_inline_keyboard(message.from_user.id)
+        translator.gettext(lang, "help_menu_header"),
+        reply_markup=await kb.get_help_inline_keyboard(message.from_user.id)
     )
 
 @router.message(StateFilter('*'), Command("cancel"))
@@ -32,20 +91,22 @@ async def cancel_handler(message: Message, state: FSMContext) -> None:
     """
     Позволяет пользователю отменить любое действие (выйти из любого состояния).
     """
+    user_id = message.from_user.id
+    lang = await translator.get_user_language(user_id)
     current_state = await state.get_state()
     if current_state is None:
         await message.answer(
-            "Нет активной команды для отмены.",
-            reply_markup=kb.get_main_reply_keyboard(message.from_user.id)
+            translator.gettext(lang, "cancel_no_active_command"),
+            reply_markup=await kb.get_main_reply_keyboard(user_id)
         )
         return
 
-    logging.info(f"Cancelling state {current_state} for user {message.from_user.id}")
+    logging.info(f"Cancelling state {current_state} for user {user_id}")
     await state.clear()
     # Убираем клавиатуру предыдущего шага и ставим основную
     await message.answer(
-        "Действие отменено.",
-        reply_markup=kb.get_main_reply_keyboard(message.from_user.id),
+        translator.gettext(lang, "cancel_action_cancelled"),
+        reply_markup=await kb.get_main_reply_keyboard(user_id),
     )
 
 
@@ -121,19 +182,17 @@ async def cq_help_cmd_settings(callback: CallbackQuery):
 @router.callback_query(F.data == "help_cmd_help")
 async def cq_help_cmd_help(callback: CallbackQuery):
     """Handler for '/help' button from help menu. Edits the message."""
+    user_id = callback.from_user.id
+    lang = await translator.get_user_language(user_id)
     try:
         # Пытаемся отредактировать сообщение, чтобы обновить его до актуального состояния
         await callback.message.edit_text(
-            'Это бот для поиска примеров кода по библиотеке matplobblib.\n\n'
-            'Нажмите на кнопку, чтобы выполнить команду:',
-            reply_markup=kb.get_help_inline_keyboard(callback.from_user.id)
+            translator.gettext(lang, "help_menu_header"),
+            reply_markup=await kb.get_help_inline_keyboard(user_id)
         )
         await callback.answer()
     except TelegramBadRequest as e:
-        # Если сообщение не изменилось, Telegram выдаст ошибку.
-        # Мы просто отвечаем на колбэк, чтобы убрать "часики" с кнопки.
         if "message is not modified" in e.message:
-            await callback.answer("Вы уже в меню помощи.")
+            await callback.answer(translator.gettext(lang, "help_already_in_menu"))
         else:
-            # Перевыбрасываем другие, непредвиденные ошибки
             raise

@@ -12,28 +12,31 @@ import logging
 
 from .. import database, keyboards as kb, github_service
 from . import document_renderer
+from ..i18n import translator
 
 
 logger = logging.getLogger(__name__)
 
-async def send_as_plain_text(message: Message, file_path: str, content: str):
+async def send_as_plain_text(message: Message, user_id: int, file_path: str, content: str):
     """Helper to send content as plain text, handling long messages."""
-    header = f"Файл: `{file_path}` (простой текст)\n\n"
+    lang = await translator.get_user_language(user_id)
+    header = translator.gettext(lang, "github_file_header_plain", file_path=file_path) + "\n\n"
     
     await message.answer(header, parse_mode='markdown')
     # Send content in chunks
     if len(content) == 0:
-        await message.answer("_(файл пуст)_", parse_mode='markdown')
+        await message.answer(translator.gettext(lang, "github_file_empty"), parse_mode='markdown')
         return
 
     for x in range(0, len(content), 4000): # Use a slightly smaller chunk size for safety with markdown ```
         chunk = content[x:x+4000]
         await message.answer(f"```\n{chunk}\n```", parse_mode='markdown')
 
-async def send_as_document_from_url(message: Message, file_url: str, file_path: str):
+async def send_as_document_from_url(message: Message, user_id: int, file_url: str, file_path: str):
     """Downloads a file from a URL by chunks and sends it as a document."""
+    lang = await translator.get_user_language(user_id)
     file_name = os.path.basename(file_path)
-    status_msg = await message.answer(f"Загружаю файл `{file_name}`...", parse_mode='markdown')
+    status_msg = await message.answer(translator.gettext(lang, "github_downloading_file", file_name=file_name), parse_mode='markdown')
     
     temp_file_path = None
     try:
@@ -53,14 +56,14 @@ async def send_as_document_from_url(message: Message, file_url: str, file_path: 
         # Send the downloaded file
         await message.answer_document(
             document=FSInputFile(temp_file_path, filename=file_name),
-            caption=f"Файл: `{file_path}`",
+            caption=translator.gettext(lang, "github_file_caption", file_path=file_path),
             parse_mode='markdown'
         )
         await status_msg.delete()
 
     except Exception as e:
         logger.error(f"Failed to download/send file from {file_url}: {e}", exc_info=True)
-        await status_msg.edit_text(f"Не удалось загрузить или отправить файл `{file_name}`. Ошибка: {e}")
+        await status_msg.edit_text(translator.gettext(lang, "github_download_error", file_name=file_name, error=e))
     finally:
         if temp_file_path and os.path.exists(temp_file_path):
             os.remove(temp_file_path)
@@ -122,6 +125,7 @@ async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[
 async def display_github_file(message: Message, user_id: int, repo_path: str, file_path: str, status_msg_to_delete: Message | None = None):
     """
     Fetches a file from GitHub and displays it, using Telegra.ph for Markdown files."""
+    lang = await translator.get_user_language(user_id)
     # The initial "Processing..." message is now sent from the handler.
     raw_url = f"https://raw.githubusercontent.com/{repo_path}/{github_service.MD_SEARCH_BRANCH}/{file_path}"
 
@@ -141,14 +145,14 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
                             content = await response.text(encoding='utf-8', errors='ignore')
                             github_service.github_content_cache[file_path] = content # Store in cache
                         else:
-                            await message.answer(f"Не удалось загрузить файл. Ошибка: {response.status}")
+                            await message.answer(translator.gettext(lang, "github_fetch_error", status_code=response.status))
                             return
             except Exception as e:
-                await message.answer(f"Произошла ошибка при загрузке файла: {e}")
+                await message.answer(translator.gettext(lang, "github_fetch_exception", error=e))
                 return
 
         if content is None:
-            await message.answer("Не удалось получить содержимое файла.")
+            await message.answer(translator.gettext(lang, "github_content_error"))
             return
 
         # Get user settings to decide how to display the file
@@ -163,7 +167,7 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
             file_bytes = content.encode('utf-8')
             await message.answer_document(
                 document=BufferedInputFile(file_bytes, filename=file_name),
-                caption=f"Файл конспекта: `{file_path}`",
+                caption=translator.gettext(lang, "github_caption_md", file_path=file_path),
                 parse_mode='markdown'
             )
 
@@ -182,7 +186,10 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
                     last_modified_date = await github_service.get_file_last_modified_date(repo_path, file_path, session)
                     pdf_buffer = await document_renderer.convert_md_to_pdf_pandoc(resolved_content, page_title, contributors, last_modified_date)
 
-                await message.answer_document(document=BufferedInputFile(pdf_buffer.getvalue(), filename=file_name), caption=f"PDF-версия конспекта: `{file_path}`", parse_mode='markdown')
+                await message.answer_document(
+                    document=BufferedInputFile(pdf_buffer.getvalue(), filename=file_name),
+                    caption=translator.gettext(lang, "github_caption_pdf", file_path=file_path),
+                    parse_mode='markdown')
             except Exception as e:
                 logger.error(f"Ошибка при создании PDF для '{file_path}': {e}", exc_info=True)
                 # --- NEW FIX: Truncate long error messages to avoid TelegramBadRequest ---
@@ -192,8 +199,8 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
                     truncated_error = error_message[:max_len] + "\n\n... (сообщение об ошибке было сокращено)"
                 else:
                     truncated_error = error_message
-                await message.answer(f"Произошла ошибка при создании PDF-файла: {truncated_error}. Отправляю как простой текст.")
-                await send_as_plain_text(message, file_path, content) # Fallback
+                await message.answer(translator.gettext(lang, "github_pdf_error", error=truncated_error))
+                await send_as_plain_text(message, user_id, file_path, content) # Fallback
         # Option 3: .html file
         elif md_mode == 'html_file':
             try:
@@ -209,21 +216,21 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
                 file_name = f"{page_title}.html"
                 await message.answer_document(
                     document=BufferedInputFile(file_bytes, filename=file_name),
-                    caption=f"HTML-версия конспекта: `{file_path}`",
+                    caption=translator.gettext(lang, "github_caption_html", file_path=file_path),
                     parse_mode='markdown'
                 )
             except Exception as e:
                 logger.error(f"Ошибка при создании HTML-файла с KaTeX для '{file_path}': {e}", exc_info=True)
-                await message.answer(f"Произошла ошибка при создании HTML-файла: {e}. Отправляю как простой текст.")
-                await send_as_plain_text(message, file_path, content) # Fallback
+                await message.answer(translator.gettext(lang, "github_html_error", error=e))
+                await send_as_plain_text(message, user_id, file_path, content) # Fallback
         
         # Fallback for unknown mode
         else:
             logger.warning(f"Unknown md_display_mode '{md_mode}' for user {user_id}. Falling back to plain text.")
-            await send_as_plain_text(message, file_path, content)
+            await send_as_plain_text(message, user_id, file_path, content)
     else:
         # Not a markdown file, download and send as a document
-        await send_as_document_from_url(message, raw_url, file_path)
+        await send_as_document_from_url(message, user_id, raw_url, file_path)
     
     # Finally, delete the status message and show the main keyboard
     if status_msg_to_delete:
@@ -231,21 +238,24 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
             await status_msg_to_delete.delete()
         except TelegramBadRequest:
             pass # Message might have been deleted already
-    await message.answer("Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(user_id))
+    await message.answer(translator.gettext(lang, "choose_next_command"), reply_markup=await kb.get_main_reply_keyboard(user_id))
 
-async def display_lec_all_path(message: Message, repo_path: str, path: str, is_edit: bool = False):
+async def display_lec_all_path(message: Message, repo_path: str, path: str, is_edit: bool = False, user_id: int | None = None):
     """Helper to fetch and display contents of a path in the lec_all repo."""
+    effective_user_id = user_id or message.from_user.id
+    lang = await translator.get_user_language(effective_user_id)
     status_msg = None
     if is_edit:
         # The callback is already answered, so we just edit the text.
         pass
     else:
-        status_msg = await message.answer(f"Загружаю содержимое `/{path or 'корня'}` из `{repo_path}`...", parse_mode='markdown')
+        loading_key = "github_loading_contents" if path else "github_loading_root"
+        status_msg = await message.answer(translator.gettext(lang, loading_key, path=path, repo_path=repo_path), parse_mode='markdown')
 
     contents = await github_service.get_github_repo_contents(repo_path, path)
 
     if contents is None:
-        error_text = "Не удалось получить содержимое репозитория. Возможно, проблема с токеном GitHub или API."
+        error_text = translator.gettext(lang, "github_repo_content_error")
         if status_msg:
             await status_msg.edit_text(error_text)
         elif is_edit:
@@ -287,12 +297,12 @@ async def display_lec_all_path(message: Message, repo_path: str, path: str, is_e
                     callback_data=f"abs_show_hash:{path_hash}"
                 ))
     
-    message_text = f"Содержимое: `/{path}` в `{repo_path}`" if path else f"Содержимое `{repo_path}`"
+    message_text = translator.gettext(lang, "github_repo_contents_of", path=path, repo_path=repo_path) if path else translator.gettext(lang, "github_repo_contents_of_root", repo_path=repo_path)
     
     if not contents and not path: # Root is empty
-        message_text = "Репозиторий пуст."
+        message_text = translator.gettext(lang, "github_repo_empty")
     elif not contents and path: # Sub-directory is empty
-        message_text = f"Папка `/{path}` пуста."
+        message_text = translator.gettext(lang, "github_folder_empty", path=path)
 
     reply_markup = builder.as_markup() if builder.buttons else None
 
@@ -306,3 +316,4 @@ async def display_lec_all_path(message: Message, repo_path: str, path: str, is_e
         await status_msg.edit_text(message_text, reply_markup=reply_markup, parse_mode='markdown')
     else:
         await message.answer(message_text, reply_markup=reply_markup, parse_mode='markdown')
+    await message.answer(translator.gettext(lang, "choose_next_command"), reply_markup=await kb.get_main_reply_keyboard(effective_user_id))

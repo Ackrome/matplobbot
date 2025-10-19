@@ -16,6 +16,7 @@ from .. import keyboards as kb, database
 from ..redis_client import redis_client
 from ..services import library_display # <-- обновим импорт на Шаге 2
 from ..config import *
+from ..i18n import translator
 
 router = Router()
 
@@ -28,6 +29,7 @@ class Search(StatesGroup):
 
 async def display_matp_all_navigation(message: Message, path: str = "", page: int = 0, is_edit: bool = False):
     """Helper to display navigation for /matp_all command."""
+    lang = await translator.get_user_language(message.from_user.id)
     path_parts = path.split('.') if path else []
     level = len(path_parts)
     
@@ -36,7 +38,7 @@ async def display_matp_all_navigation(message: Message, path: str = "", page: in
 
     # Level 0: Submodules
     if level == 0:
-        header_text = "Выберите подмодуль"
+        header_text = translator.gettext(lang, "matp_all_select_submodule")
         items = sorted(matplobblib.submodules)
         # No pagination for submodules, assuming list is short
         for item in items:
@@ -47,7 +49,7 @@ async def display_matp_all_navigation(message: Message, path: str = "", page: in
     # Level 1: Topics
     elif level == 1:
         submodule = path_parts[0]
-        header_text = f"Подмодуль `{submodule}`. Выберите тему"
+        header_text = translator.gettext(lang, "matp_all_select_topic", submodule=submodule)
         all_topics = sorted(kb.topics_data.get(submodule, {}).get('topics', []))
         
         start = page * SEARCH_RESULTS_PER_PAGE
@@ -61,7 +63,7 @@ async def display_matp_all_navigation(message: Message, path: str = "", page: in
             builder.row(InlineKeyboardButton(text=f"📚 {item}", callback_data=f"matp_all_nav_hash:{path_hash}:0"))
         
         # Back button
-        builder.row(InlineKeyboardButton(text="⬅️ .. (Назад к подмодулям)", callback_data="matp_all_nav_hash:root:0"))
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "matp_all_back_to_submodules"), callback_data="matp_all_nav_hash:root:0"))
         
         total_pages = (len(all_topics) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
         if total_pages > 1:
@@ -78,7 +80,7 @@ async def display_matp_all_navigation(message: Message, path: str = "", page: in
     # Level 2: Codes
     elif level == 2:
         submodule, topic = path_parts
-        header_text = f"Тема `{topic}`. Выберите задачу"
+        header_text = translator.gettext(lang, "matp_all_select_code", topic=topic)
         all_codes = sorted(kb.topics_data.get(submodule, {}).get('codes', {}).get(topic, []))
 
         start = page * SEARCH_RESULTS_PER_PAGE
@@ -95,7 +97,7 @@ async def display_matp_all_navigation(message: Message, path: str = "", page: in
         back_path = submodule
         path_hash = hashlib.sha1(back_path.encode()).hexdigest()[:16]
         kb.code_path_cache[path_hash] = back_path
-        builder.row(InlineKeyboardButton(text=f"⬅️ .. (Назад к темам)", callback_data=f"matp_all_nav_hash:{path_hash}:0"))
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "matp_all_back_to_topics"), callback_data=f"matp_all_nav_hash:{path_hash}:0"))
 
         total_pages = (len(all_codes) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
         if total_pages > 1:
@@ -110,7 +112,7 @@ async def display_matp_all_navigation(message: Message, path: str = "", page: in
             builder.row(*pagination_buttons)
 
     else:
-        header_text = "Ошибка навигации."
+        header_text = translator.gettext(lang, "matp_all_navigation_error")
 
     reply_markup = builder.as_markup()
     
@@ -140,8 +142,9 @@ async def cq_matp_all_navigate(callback: CallbackQuery):
     else:
         path = kb.code_path_cache.get(path_hash)
 
+    lang = await translator.get_user_language(callback.from_user.id)
     if path is None:
-        await callback.answer("Ошибка: информация о навигации устарела. Пожалуйста, начните с /matp_all.", show_alert=True)
+        await callback.answer(translator.gettext(lang, "matp_all_show_error"), show_alert=True)
         return
 
     await callback.answer()
@@ -151,13 +154,14 @@ async def cq_matp_all_navigate(callback: CallbackQuery):
 async def cq_matp_all_show_code(callback: CallbackQuery):
     """Shows the selected code from the /matp_all navigation."""
     path_hash = callback.data.split(":", 1)[1]
+    lang = await translator.get_user_language(callback.from_user.id)
     code_path = kb.code_path_cache.get(path_hash)
     if not code_path:
-        await callback.answer("Ошибка: информация о коде устарела. Пожалуйста, начните с /matp_all.", show_alert=True)
+        await callback.answer(translator.gettext(lang, "matp_all_show_error"), show_alert=True)
         return
     
     await callback.answer()
-    await library_display.show_code_by_path(callback.message, callback.from_user.id, code_path, "Выбранный пример")
+    await library_display.show_code_by_path(callback.message, callback.from_user.id, code_path, translator.gettext(lang, "matp_all_selected_example"))
 
 
 ##################################################################################################
@@ -176,6 +180,7 @@ async def get_search_results_keyboard(user_id: int, page: int = 0) -> InlineKeyb
     start = page * SEARCH_RESULTS_PER_PAGE
     end = start + SEARCH_RESULTS_PER_PAGE
     page_items = results[start:end]
+    lang = await translator.get_user_language(user_id)
 
     for i, result in enumerate(page_items):
         global_index = start + i
@@ -189,12 +194,12 @@ async def get_search_results_keyboard(user_id: int, page: int = 0) -> InlineKeyb
     if total_pages > 1:
         pagination_buttons = []
         if page > 0:
-            pagination_buttons.append(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"search_page:{page - 1}"))
+            pagination_buttons.append(InlineKeyboardButton(text=translator.gettext(lang, "pagination_back"), callback_data=f"search_page:{page - 1}"))
         
         pagination_buttons.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop"))
 
         if end < len(results):
-            pagination_buttons.append(InlineKeyboardButton(text="Вперед ➡️", callback_data=f"search_page:{page + 1}"))
+            pagination_buttons.append(InlineKeyboardButton(text=translator.gettext(lang, "pagination_forward"), callback_data=f"search_page:{page + 1}"))
         
         builder.row(*pagination_buttons)
 
@@ -244,34 +249,35 @@ async def perform_full_text_search(query: str) -> list[dict]:
 
 @router.message(Command('matp_search'))
 async def search_command(message: Message, state: FSMContext):
+    lang = await translator.get_user_language(message.from_user.id)
     await state.set_state(Search.query)
-    await message.answer("Введите ключевые слова для поиска по примерам кода:", reply_markup=ReplyKeyboardRemove())
+    await message.answer(translator.gettext(lang, "search_prompt_library"), reply_markup=ReplyKeyboardRemove())
 
 @router.message(Search.query)
 async def process_search_query(message: Message, state: FSMContext):
     await state.clear()
+    user_id = message.from_user.id
+    lang = await translator.get_user_language(user_id)
     query = message.text
-    status_msg = await message.answer(f"Идет поиск по запросу '{query}'...")
+    status_msg = await message.answer(translator.gettext(lang, "search_in_progress", query=query))
     results = await perform_full_text_search(query)
 
     if not results:
         await status_msg.edit_text(
-            f"По вашему запросу '{query}' ничего не найдено.\n"
-            "Попробуйте другие ключевые слова или воспользуйтесь командой /ask для пошагового выбора."
+            translator.gettext(lang, "search_no_results", query=query)
         )
         # Отправляем основную клавиатуру отдельным сообщением, так как edit_text не может ее использовать
-        await message.answer("Выберите следующую команду:", reply_markup=kb.get_main_reply_keyboard(message.from_user.id))
+        await message.answer(translator.gettext(lang, "choose_next_command"), reply_markup=await kb.get_main_reply_keyboard(user_id))
         return
 
     # Store query and results in cache for this user
-    user_id = message.from_user.id
     await redis_client.set_user_cache(user_id, 'lib_search', {'query': query, 'results': results})
 
     keyboard = await get_search_results_keyboard(user_id, page=0)
     total_pages = (len(results) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
 
     await status_msg.edit_text(
-        f"Найдено {len(results)} примеров по запросу '{query}'. Страница 1/{total_pages}:",
+        translator.gettext(lang, "search_results_found", count=len(results), query=query, page=1, total_pages=total_pages),
         reply_markup=keyboard
     )
 
@@ -279,9 +285,10 @@ async def process_search_query(message: Message, state: FSMContext):
 async def cq_search_pagination(callback: CallbackQuery):
     """Обрабатывает нажатия на кнопки пагинации в результатах поиска."""
     user_id = callback.from_user.id
+    lang = await translator.get_user_language(user_id)
     search_data = await redis_client.get_user_cache(user_id, 'lib_search')
     if not search_data:
-        await callback.answer("Результаты поиска устарели. Пожалуйста, выполните поиск заново.", show_alert=True)
+        await callback.answer(translator.gettext(lang, "search_results_outdated"), show_alert=True)
         await callback.message.delete()
         return
 
@@ -293,7 +300,7 @@ async def cq_search_pagination(callback: CallbackQuery):
     total_pages = (len(results) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
 
     await callback.message.edit_text(
-        f"Найдено {len(results)} примеров по запросу '{query}'. Страница {page + 1}/{total_pages}:",
+        translator.gettext(lang, "search_results_found", count=len(results), query=query, page=page + 1, total_pages=total_pages),
         reply_markup=keyboard
     )
     await callback.answer()
@@ -301,9 +308,10 @@ async def cq_search_pagination(callback: CallbackQuery):
 @router.message(Command('favorites'))
 async def favorites_command(message: Message):
     user_id = message.from_user.id
+    lang = await translator.get_user_language(user_id)
     favs = await database.get_favorites(user_id)
     if not favs:
-        await message.answer("У вас пока нет избранных примеров. Вы можете добавить их, нажав на кнопку '⭐ В избранное' под примером кода.", reply_markup=kb.get_main_reply_keyboard(user_id))
+        await message.answer(translator.gettext(lang, "favorites_empty"), reply_markup=await kb.get_main_reply_keyboard(user_id))
         return
 
     builder = InlineKeyboardBuilder()
@@ -312,44 +320,46 @@ async def favorites_command(message: Message):
         kb.code_path_cache[path_hash] = code_path
         builder.row(
             InlineKeyboardButton(text=f"📄 {code_path}", callback_data=f"show_fav_hash:{path_hash}"),
-            InlineKeyboardButton(text="❌ Удалить", callback_data=f"fav_del_hash:{path_hash}")
+            InlineKeyboardButton(text=translator.gettext(lang, "favorites_remove_btn"), callback_data=f"fav_del_hash:{path_hash}")
         )
     
-    await message.answer("Ваши избранные примеры:", reply_markup=builder.as_markup())
+    await message.answer(translator.gettext(lang, "favorites_header"), reply_markup=builder.as_markup())
 
 @router.callback_query(F.data.startswith("fav_hash:"))
 async def cq_add_favorite(callback: CallbackQuery):
     path_hash = callback.data.split(":", 1)[1]
+    lang = await translator.get_user_language(callback.from_user.id)
     code_path = kb.code_path_cache.get(path_hash)
     if not code_path:
-        await callback.answer("Ошибка: информация о коде устарела. Пожалуйста, запросите код заново.", show_alert=True)
+        await callback.answer(translator.gettext(lang, "matp_all_show_error"), show_alert=True)
         return
 
     success = await database.add_favorite(callback.from_user.id, code_path)
     if success:
-        await callback.answer("✅ Добавлено в избранное!", show_alert=False)
+        await callback.answer(translator.gettext(lang, "favorites_added_success"), show_alert=False)
     else:
-        await callback.answer("Уже в избранном.", show_alert=False)
+        await callback.answer(translator.gettext(lang, "favorites_already_exists"), show_alert=False)
 
 @router.callback_query(F.data.startswith("fav_del_hash:"))
 async def cq_delete_favorite(callback: CallbackQuery):
     """Обрабатывает удаление примера из избранного."""
     user_id = callback.from_user.id
+    lang = await translator.get_user_language(user_id)
     path_hash = callback.data.split(":", 1)[1]
     code_path = kb.code_path_cache.get(path_hash)
 
     if not code_path:
-        await callback.answer("Ошибка: информация об избранном устарела. Пожалуйста, вызовите /favorites снова.", show_alert=True)
+        await callback.answer(translator.gettext(lang, "favorites_info_outdated"), show_alert=True)
         return
 
     # Удаляем из БД
     await database.remove_favorite(user_id, code_path)
-    await callback.answer("Пример удален из избранного.", show_alert=False)
+    await callback.answer(translator.gettext(lang, "favorites_removed"), show_alert=False)
 
     # Обновляем сообщение со списком избранного
     favs = await database.get_favorites(user_id)
     if not favs:
-        await callback.message.edit_text("Ваш список избранного пуст.")
+        await callback.message.edit_text(translator.gettext(lang, "favorites_list_empty"))
         return
 
     # Пересобираем клавиатуру
@@ -359,7 +369,7 @@ async def cq_delete_favorite(callback: CallbackQuery):
         kb.code_path_cache[new_path_hash] = new_code_path
         builder.row(
             InlineKeyboardButton(text=f"📄 {new_code_path}", callback_data=f"show_fav_hash:{new_path_hash}"),
-            InlineKeyboardButton(text="❌ Удалить", callback_data=f"fav_del_hash:{new_path_hash}")
+            InlineKeyboardButton(text=translator.gettext(lang, "favorites_remove_btn"), callback_data=f"fav_del_hash:{new_path_hash}")
         )
     
     try:
@@ -378,9 +388,10 @@ async def cq_noop(callback: CallbackQuery):
 async def cq_show_search_result_by_index(callback: CallbackQuery):
     """Handles clicks on search result buttons."""
     user_id = callback.from_user.id
+    lang = await translator.get_user_language(user_id)
     search_data = await redis_client.get_user_cache(user_id, 'lib_search')
     if not search_data:
-        await callback.answer("Результаты поиска устарели. Пожалуйста, выполните поиск заново.", show_alert=True)
+        await callback.answer(translator.gettext(lang, "search_results_outdated"), show_alert=True)
         return
 
     try:
@@ -393,23 +404,24 @@ async def cq_show_search_result_by_index(callback: CallbackQuery):
         code_path = results[index]['path']
         
         await callback.answer() # Acknowledge the callback
-        await library_display.show_code_by_path(callback.message, callback.from_user.id, code_path, "Результат поиска")
+        await library_display.show_code_by_path(callback.message, callback.from_user.id, code_path, translator.gettext(lang, "search_show_result_header"))
 
     except (ValueError, IndexError) as e:
         logging.warning(f"Invalid search index from user {user_id}. Data: {callback.data}. Error: {e}")
-        await callback.answer("Неверный результат поиска. Возможно, он устарел.", show_alert=True)
+        await callback.answer(translator.gettext(lang, "search_invalid_result"), show_alert=True)
     except Exception as e:
         logging.error(f"Error showing search result by index for user {user_id}: {e}", exc_info=True)
-        await callback.answer("Произошла ошибка при отображении результата.", show_alert=True)
+        await callback.answer(translator.gettext(lang, "latex_unexpected_error", error=e), show_alert=True)
 
 @router.callback_query(F.data.startswith("show_fav_hash:"))
 async def cq_show_favorite(callback: CallbackQuery):
     """Handles clicks on favorite item buttons."""
     path_hash = callback.data.split(":", 1)[1]
+    lang = await translator.get_user_language(callback.from_user.id)
     code_path = kb.code_path_cache.get(path_hash)
     if not code_path:
-        await callback.answer("Ошибка: информация об избранном устарела. Пожалуйста, вызовите /favorites снова.", show_alert=True)
+        await callback.answer(translator.gettext(lang, "favorites_info_outdated"), show_alert=True)
         return
 
     await callback.answer()
-    await library_display.show_code_by_path(callback.message, callback.from_user.id, code_path, "Избранное")
+    await library_display.show_code_by_path(callback.message, callback.from_user.id, code_path, translator.gettext(lang, "search_show_favorite_header"))

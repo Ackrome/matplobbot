@@ -17,6 +17,7 @@ DEFAULT_SETTINGS = {
     'latex_padding': 15,
     'md_display_mode': 'md_file',
     'latex_dpi': 300,
+    'language': 'en',
 }
 
 async def init_db():
@@ -36,7 +37,8 @@ async def init_db():
                 username TEXT,
                 full_name TEXT NOT NULL,
                 avatar_pic_url TEXT,
-                settings TEXT DEFAULT '{}' -- Новое поле для хранения настроек в JSON
+                settings TEXT DEFAULT '{}', -- Новое поле для хранения настроек в JSON
+                onboarding_completed BOOLEAN DEFAULT FALSE
             )
         ''')
         # Проверяем, существует ли столбец 'settings' (для обновления существующих БД)
@@ -46,6 +48,9 @@ async def init_db():
         if 'settings' not in column_names:
             await db.execute("ALTER TABLE users ADD COLUMN settings TEXT DEFAULT '{}';")
             logger.info("Добавлен столбец 'settings' в таблицу 'users'.")
+        if 'onboarding_completed' not in column_names:
+            await db.execute("ALTER TABLE users ADD COLUMN onboarding_completed BOOLEAN DEFAULT FALSE;")
+            logger.info("Добавлен столбец 'onboarding_completed' в таблицу 'users'.")
         await db.execute('''
             CREATE TABLE IF NOT EXISTS user_actions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -212,3 +217,20 @@ async def update_user_repo(user_id: int, old_repo_path: str, new_repo_path: str)
         await db.execute("UPDATE user_github_repos SET repo_path = ? WHERE user_id = ? AND repo_path = ?", (new_repo_path, user_id, old_repo_path))
         await db.commit()
         logger.info(f"User {user_id} updated repo from {old_repo_path} to {new_repo_path}")
+
+# --- Onboarding ---
+
+async def is_onboarding_completed(user_id: int) -> bool:
+    """Checks if the user has completed the onboarding process."""
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute("SELECT onboarding_completed FROM users WHERE user_id = ?", (user_id,))
+        result = await cursor.fetchone()
+        # If user exists and flag is True, return True. Otherwise, False.
+        return result[0] if result else False
+
+async def set_onboarding_completed(user_id: int):
+    """Marks the onboarding process as completed for a user."""
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("UPDATE users SET onboarding_completed = TRUE WHERE user_id = ?", (user_id,))
+        await db.commit()
+        logger.info(f"Onboarding marked as completed for user {user_id}")

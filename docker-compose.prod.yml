@@ -8,10 +8,8 @@ services:
     restart: unless-stopped
     ports:
       - "6379:6379"
-
   mpb-telegram-bot:
-    # Replace ackrome with your GitHub username
-    image: ghcr.io/ackrome/matplobbot-bot:latest
+    image: ghcr.io/ackrome/matplobbot-bot:${BOT_TAG:-latest}
     restart: unless-stopped
     env_file: ./.env
     container_name: mpb-telegram-bot
@@ -23,8 +21,7 @@ services:
       - redis
 
   mpb-fastapi-stats:
-    # Replace ackrome with your GitHub username
-    image: ghcr.io/ackrome/matplobbot-api:latest
+    image: ghcr.io/ackrome/matplobbot-api:${API_TAG:-latest} 
     restart: unless-stopped
     env_file: ./.env
     container_name: mpb-fastapi-stats
