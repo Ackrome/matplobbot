@@ -4,7 +4,7 @@ import logging
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
-from aiogram.filters import  Command
+from aiogram.filters import  Command, StateFilter
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -320,14 +320,14 @@ async def cq_show_md_result(callback: CallbackQuery):
 # REPO MANAGEMENT
 ##################################################################################################
 
-@router.callback_query(F.data == "manage_repos")
-async def cq_manage_repos(callback: CallbackQuery):
+@router.callback_query(F.data == "manage_repos", StateFilter(None, "onboarding:step2"))
+async def cq_manage_repos(callback: CallbackQuery, state: FSMContext):
     """Displays the repository management interface."""
     # This handler can be called from settings or onboarding.
     # We don't change state here, just display the menu.
     user_id = callback.from_user.id
     lang = await translator.get_user_language(user_id)
-    keyboard = await kb.get_repo_management_keyboard(user_id)
+    keyboard = await kb.get_repo_management_keyboard(user_id, state)
     await callback.message.edit_text(translator.gettext(lang, "repo_management_header"), reply_markup=keyboard)
     await callback.answer()
 
@@ -359,11 +359,11 @@ async def process_add_repo(message: Message, state: FSMContext):
 
     await state.clear()
     # Show updated repo list
-    keyboard = await kb.get_repo_management_keyboard(user_id)
+    keyboard = await kb.get_repo_management_keyboard(user_id, state)
     await message.answer(translator.gettext(lang, "repo_management_header"), reply_markup=keyboard)
 
 @router.callback_query(F.data.startswith("repo_del_hash:"))
-async def cq_delete_repo(callback: CallbackQuery):
+async def cq_delete_repo(callback: CallbackQuery, state: FSMContext):
     """Deletes a repository from the user's list."""
     user_id = callback.from_user.id
     lang = await translator.get_user_language(user_id)
@@ -377,7 +377,7 @@ async def cq_delete_repo(callback: CallbackQuery):
     await callback.answer(translator.gettext(lang, "repo_deleted", repo_path=repo_path), show_alert=False)
 
     # Refresh the keyboard
-    keyboard = await kb.get_repo_management_keyboard(user_id)
+    keyboard = await kb.get_repo_management_keyboard(user_id, state)
     await callback.message.edit_reply_markup(reply_markup=keyboard)
 
 @router.callback_query(F.data.startswith("repo_edit_hash:"))
@@ -412,5 +412,5 @@ async def process_edit_repo(message: Message, state: FSMContext):
 
     await state.clear()
     # Show updated repo list
-    keyboard = await kb.get_repo_management_keyboard(user_id)
+    keyboard = await kb.get_repo_management_keyboard(user_id, state)
     await message.answer(translator.gettext(lang, "repo_management_header"), reply_markup=keyboard)

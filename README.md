@@ -2,6 +2,25 @@
   <img src="image/notes/thelogo.png" alt="Matplobbot Logo" width="400" style="border: none; outline: none;">
   <h1>Matplobbot & Stats Dashboard</h1>
   <strong>A comprehensive solution: An Aiogram 3 Telegram bot for advanced code interaction and a FastAPI dashboard for real-time analytics.</strong>
+  <br>
+  </br>
+  <p align="center">
+    <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
+    <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
+    <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI">
+    <img src="https://img.shields.io/badge/Aiogram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Aiogram">
+    <img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite">
+    <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black" alt="JavaScript">
+    <img src="https://img.shields.io/badge/Pandoc-5A5A5A?style=for-the-badge&logo=pandoc&logoColor=white" alt="Pandoc">
+    <img src="https://img.shields.io/badge/LaTeX-008080?style=for-the-badge&logo=latex&logoColor=white" alt="LaTeX">
+    <img src ="https://img.shields.io/badge/Tailscale-000000?style=for-the-badge&logo=tailscale&logoColor=white">
+    <img src="https://img.shields.io/badge/Jenkins-D24939?style=for-the-badge&logo=jenkins&logoColor=white">
+    <img src="https://img.shields.io/badge/Ubuntu-E95420?style=for-the-badge&logo=ubuntu&logoColor=white">
+    <img src="https://img.shields.io/badge/markdown-%23000000.svg?style=for-the-badge&logo=markdown&logoColor=white" alt="Markdown">
+    <img src="https://img.shields.io/badge/Pydantic-E92063?style=for-the-badge&logo=Pydantic&logoColor=white" alt="Pydantic">
+    <img src="https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=github-actions&logoColor=white" alt="GithubActions">
+    <img src="https://img.shields.io/badge/redis-%23DD0031.svg?&style=for-the-badge&logo=redis&logoColor=white" alt="Redis">
+  </p>
 </div>
 
 ---
@@ -72,16 +91,7 @@ The dashboard provides a live, data-rich view of the bot's health and user engag
 
 ## 🛠️ Architecture & Tech Stack
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
-  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI">
-  <img src="https://img.shields.io/badge/Aiogram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Aiogram">
-  <img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite">
-  <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black" alt="JavaScript">
-  <img src="https://img.shields.io/badge/Pandoc-5A5A5A?style=for-the-badge&logo=pandoc&logoColor=white" alt="Pandoc">
-  <img src="https://img.shields.io/badge/LaTeX-008080?style=for-the-badge&logo=latex&logoColor=white" alt="LaTeX">
-</p>
+
 
 The project is built on modern, asynchronous frameworks with a strong emphasis on modularity and separation of concerns.
 
@@ -179,7 +189,42 @@ This is the recommended method for running the project.
 | `/update` | Updates the `matplobblib` library to the latest version from PyPI. | *(Admin-only)* Send the command to perform a live update. |
 | `/clear_cache` | Clears all application caches (in-memory and database). | *(Admin-only)* Useful for forcing the bot to fetch fresh data. |
 
+### On-boarding users
+```mermaid
+graph TD
+    subgraph "User's First Interaction"
+        A[User sends /start] --> B{Is onboarding_completed == false?};
+    end
 
+    B -- Yes --> C[Onboarding Starts: Show Welcome Message & 'Next' button];
+    B -- No --> Z[Show Regular Welcome Message];
+
+    C --> D{User clicks 'Next'};
+    D --> E[Show GitHub Repo Feature & 'Add Repository' button];
+
+    subgraph "Feature Interaction 1: GitHub"
+        E --> F{User clicks 'Add Repository'};
+        F --> G[User interacts with Repo Management];
+        G --> H[Show Library Feature & 'Next' button];
+    end
+
+    H --> I{User clicks 'Next'};
+    I --> J[Show Rendering Feature & 'Try LaTeX' button];
+
+    subgraph "Feature Interaction 2: Rendering"
+        J --> K{User can try LaTeX};
+    end
+
+    J --> L{User clicks 'Next'};
+    L --> M[Show Final Message & 'Finish Tour' button];
+
+    M --> N{User clicks 'Finish Tour'};
+    N --> O[Set onboarding_completed = true];
+    O --> P[Show Main Menu Keyboard];
+
+    style Z fill:#f9f,stroke:#333,stroke-width:2px
+    style P fill:#ccf,stroke:#333,stroke-width:2px
+```
 
 ### 🚀 CI/CD Pipeline
 

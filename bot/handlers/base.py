@@ -44,6 +44,20 @@ async def onboarding_step2(callback: CallbackQuery, state: FSMContext):
     )
     await callback.answer()
 
+@router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:step2"))
+async def onboarding_step3(callback: CallbackQuery, state: FSMContext):
+    """Continues onboarding after user is done with repo management."""
+    lang = await translator.get_user_language(callback.from_user.id)
+    await state.set_state("onboarding:step3")
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_browse_library"), callback_data="help_cmd_matp_all"))
+    builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="onboarding_next"))
+    await callback.message.edit_text(
+        translator.gettext(lang, "start_onboarding_3"),
+        reply_markup=builder.as_markup()
+    )
+    await callback.answer()
+
 @router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:step3"))
 async def onboarding_step4(callback: CallbackQuery, state: FSMContext):
     lang = await translator.get_user_language(callback.from_user.id)

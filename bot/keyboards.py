@@ -1,4 +1,5 @@
 import logging
+from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from cachetools import LRUCache
@@ -114,11 +115,12 @@ def get_code_action_keyboard(code_path: str) -> InlineKeyboardMarkup:
     )
     return builder.as_markup()
 
-async def get_repo_management_keyboard(user_id: int) -> InlineKeyboardMarkup:
+async def get_repo_management_keyboard(user_id: int, state: FSMContext | None = None) -> InlineKeyboardMarkup:
     """Creates an inline keyboard for managing user repositories."""
     lang = await translator.get_user_language(user_id)
     repos = await database.get_user_repos(user_id)
     builder = InlineKeyboardBuilder()
+    current_state_str = await state.get_state() if state else None
 
     for repo_path in repos:
         repo_hash = hashlib.sha1(repo_path.encode()).hexdigest()[:16]
@@ -129,5 +131,10 @@ async def get_repo_management_keyboard(user_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text=translator.gettext(lang, "favorites_remove_btn"), callback_data=f"repo_del_hash:{repo_hash}")
         )
     builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_add_repo"), callback_data="repo_add_new"))
-    builder.row(InlineKeyboardButton(text=translator.gettext(lang, "back_to_settings"), callback_data="back_to_settings"))
+    
+    # Conditionally add the correct "back" button
+    if current_state_str == "onboarding:step2":
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_back_to_tour"), callback_data="onboarding_next"))
+    else:
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "back_to_settings"), callback_data="back_to_settings"))
     return builder.as_markup()

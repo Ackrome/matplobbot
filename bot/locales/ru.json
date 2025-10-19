@@ -135,5 +135,6 @@
     "admin_clear_cache_start": "Начинаю очистку кэша...",
     "admin_clear_cache_success": "✅ Весь кэш приложения был успешно очищен.",
     "admin_clear_cache_finished": "Очистка кэша завершена. Выберите следующую команду:",
-    "admin_update_starting_callback": "Начинаю обновление..."
+    "admin_update_starting_callback": "Начинаю обновление...",
+    "onboarding_back_to_tour": "⬅️ Назад к туру"
 }
