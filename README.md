@@ -140,7 +140,7 @@ This is the recommended method for running the project.
 
 3.  **Build and run the services in detached mode:**
     ```bash
-    docker-compose up --build -d
+    docker compose up --build -d
     ```
 
 ### 4. Accessing the Services
@@ -152,8 +152,9 @@ This is the recommended method for running the project.
 
 -   To stop all running containers, execute:
     ```bash
-    docker-compose down
-    ```-   Your database and log files will persist in named volumes. To remove all data, run `docker-compose down -v`.
+    docker compose down
+    ```
+    -   Your database and log files will persist in named volumes. To remove all data, run `docker-compose down -v`.
 
 ## 📚 Bot Command Reference
 
@@ -182,20 +183,64 @@ This is the recommended method for running the project.
 
 ### 🚀 CI/CD Pipeline
 
-The project utilizes a robust CI/CD pipeline orchestrated by GitHub Actions and Jenkins to ensure continuous integration and automated deployment.
+The project is built around a modern, secure, and fully automated CI/CD pipeline that handles everything from code validation to production deployment. This pipeline leverages a hybrid approach, using a self-hosted GitHub Runner to securely bridge the public cloud (GitHub) with a private deployment environment (Proxmox/Tailscale).
 
+**Key Technologies:**
+*   **Continuous Integration**: GitHub Actions
+*   **Continuous Deployment**: Jenkins
+*   **Containerization**: Docker & Docker Compose
+*   **Secure Networking**: Tailscale
+
+#### The Workflow
+
+The entire process is event-driven, starting with a simple `git push` and ending with the new version of the application running live, with no manual intervention required.
 
 ```mermaid
 graph TD
-    A[Developer pushes code to GitHub] --> B{GitHub Actions};
-    B --> C{Lint & Test};
-    C --> |Success| D{Build Docker Images};
-    C --> |Failure| E[Send Failure Notification];
-    D --> F[Push Images to GHCR];
-    F --> |Success| G{Trigger Jenkins Job};
-    G --> H[Jenkins Server];
-    H --> |Via Tailscale Network| I[Deployment VPS];
-    I --> J{Pull new images from GHCR};
-    J --> K[Restart Docker Compose];
-    K --> L[New version is live!];
+    subgraph "GitHub (Public Cloud)"
+        A[Developer pushes to main branch] --> B{GitHub Actions Trigger};
+    end
+
+    subgraph "Your Proxmox Network (Private & Secure)"
+        direction LR
+        C(Self-Hosted GitHub Runner VM)
+        D(Jenkins VM)
+        E(Application VM)
+
+        C -- "Executes Job Locally" --> F{Test, Build & Push};
+        F -- "Pushes images" --> G[GitHub Container Registry];
+        F -- "Triggers Deploy via Tailscale IP" --> D;
+        D -- "Executes Deploy via SSH" --> E;
+    end
+    
+    B -- "Assigns Job" --> C;
+    G -- "Images are pulled by App VM" --> E;
+
+    subgraph "Deployment Steps on Application VM"
+        direction TB
+        E --> H{1. Jenkins creates .env file from secrets};
+        H --> I{2. Pull new Docker images};
+        I --> J{3. docker-compose up -d};
+        J --> K[🚀 New version is live!];
+    end
 ```
+
+#### Step-by-Step Breakdown:
+
+1.  **Commit & Push**: A developer pushes new code to the `main` branch on the GitHub repository.
+2.  **Job Assignment**: GitHub Actions detects the push and assigns a new workflow job to the registered **self-hosted runner**.
+3.  **CI on Self-Hosted Runner**: The runner, running on a dedicated VM within your private network, picks up the job. It performs the **Continuous Integration** steps locally:
+    *   Checks out the source code.
+    *   Sets up the Docker Buildx environment.
+    *   Builds the `matplobbot-bot` and `matplobbot-api` Docker images.
+    *   Pushes the newly tagged images to the GitHub Container Registry (GHCR).
+4.  **Secure Trigger for CD**: Upon successful completion of the CI stage, a subsequent step in the same workflow on the self-hosted runner sends a secure webhook (`cURL` request) to the Jenkins server. This communication is safe because the runner and Jenkins are on the same private Tailscale network.
+5.  **Deployment Orchestration**: Jenkins receives the webhook and triggers the `matplobbot-deploy` pipeline. This **Continuous Deployment** pipeline performs the final steps:
+    *   It securely loads the application's production secrets (like `BOT_TOKEN`) from its encrypted credentials store.
+    *   It connects to the dedicated **Application VM** via SSH.
+    *   It dynamically writes the secrets into a `.env` file on the Application VM.
+    *   It executes the `deploy.sh` script on the Application VM.
+6.  **Final Rollout**: The `deploy.sh` script orchestrates the final rollout by:
+    *   Pulling the new Docker images from GHCR.
+    *   Running `docker-compose up -d` to gracefully restart the services with the updated images and configuration.
+    *   Running `docker compose up -d` to gracefully restart the services with the updated images and configuration.

@@ -1,18 +1,20 @@
-version: '3.8'
+# version: '3.8'
 
 # This file is for production. It uses pre-built images from GHCR.
 services:
   redis:
     image: redis:7-alpine
-    container_name: mpb-redis
+    # container_name: mpb-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
   mpb-telegram-bot:
     image: ghcr.io/ackrome/matplobbot-bot:${BOT_TAG:-latest}
     restart: unless-stopped
     env_file: ./.env
-    container_name: mpb-telegram-bot
+    # container_name: mpb-telegram-bot
     volumes:
       - bot_db_data:/app/db_data
       - bot_logs:/app/logs
@@ -24,7 +26,7 @@ services:
     image: ghcr.io/ackrome/matplobbot-api:${API_TAG:-latest} 
     restart: unless-stopped
     env_file: ./.env
-    container_name: mpb-fastapi-stats
+    # container_name: mpb-fastapi-stats
     ports:
       - "9583:9583"
     volumes:
@@ -37,3 +39,4 @@ volumes:
   bot_db_data:
   bot_logs:
   matplobblib_lib:
+  redis_data:
