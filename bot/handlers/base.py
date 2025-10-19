@@ -3,7 +3,7 @@ import logging
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove, InlineKeyboardButton
-from aiogram.filters import CommandStart, Command, StateFilter
+from aiogram.filters import CommandStart, Command, StateFilter, Filter
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -13,7 +13,7 @@ from ..i18n import translator
 
 router = Router()
 
-class Onboarding(StateFilter):
+class Onboarding(Filter):
     async def __call__(self, message: Message) -> bool:
         return not await database.is_onboarding_completed(message.from_user.id)
 
