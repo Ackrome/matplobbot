@@ -200,15 +200,17 @@ graph TD
     B -- No --> Z[Show Regular Welcome Message];
 
     C --> D{User clicks 'Next'};
-    D --> E[Show GitHub Repo Feature & 'Add Repository' button];
+    D --> E[Show GitHub Feature & 'Add Repository' button];
 
     subgraph "Feature Interaction 1: GitHub"
         E --> F{User clicks 'Add Repository'};
         F --> G[User interacts with Repo Management];
-        G --> H[Show Library Feature & 'Next' button];
+        G --> H{User clicks 'Back to Tour'};
     end
 
-    H --> I{User clicks 'Next'};
+    E --> H;
+
+    H --> I[Show Library Feature & 'Next' button];
     I --> J[Show Rendering Feature & 'Try LaTeX' button];
 
     subgraph "Feature Interaction 2: Rendering"
@@ -216,7 +218,9 @@ graph TD
     end
 
     J --> L{User clicks 'Next'};
-    L --> M[Show Final Message & 'Finish Tour' button];
+    I --> L;
+
+    L --> M[Show Final Message & 'Finish Tour' button]
 
     M --> N{User clicks 'Finish Tour'};
     N --> O[Set onboarding_completed = true];

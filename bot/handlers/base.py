@@ -63,7 +63,8 @@ async def onboarding_step4(callback: CallbackQuery, state: FSMContext):
     lang = await translator.get_user_language(callback.from_user.id)
     await state.set_state("onboarding:step4")
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_try_latex"), callback_data="help_cmd_latex"))
+    builder.add(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_try_latex"), callback_data="help_cmd_latex"))
+    builder.add(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="onboarding_next"))
     await callback.message.edit_text(
         translator.gettext(lang, "start_onboarding_4"),
         reply_markup=builder.as_markup()
