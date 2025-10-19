@@ -71,13 +71,25 @@ async def onboarding_step4(callback: CallbackQuery, state: FSMContext):
     )
     await callback.answer()
 
+@router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:step4"))
+async def onboarding_step5(callback: CallbackQuery, state: FSMContext):
+    """Shows the final onboarding message."""
+    lang = await translator.get_user_language(callback.from_user.id)
+    await state.set_state("onboarding:step5")
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_finish"), callback_data="onboarding_next"))
+    await callback.message.edit_text(
+        translator.gettext(lang, "start_onboarding_5"),
+        reply_markup=builder.as_markup()
+    )
+    await callback.answer()
+
 @router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:step5"))
 async def onboarding_finish(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     lang = await translator.get_user_language(user_id)
     await state.clear()
     await database.set_onboarding_completed(user_id)
-    await callback.message.edit_text(translator.gettext(lang, "start_onboarding_5"))
     await callback.message.answer(
         translator.gettext(lang, "choose_next_command"),
         reply_markup=await kb.get_main_reply_keyboard(user_id)
