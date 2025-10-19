@@ -77,10 +77,17 @@ jobs:
       - name: Get Commit Log
         id: commit-log
         run: |
+          # Use the intelligently determined base tag for generating the log
+          echo "Gathering commits between ${{ steps.versioning.outputs.base_tag_for_log }} and HEAD..."
           git log --pretty=format:"- %s (%h)" ${{ steps.versioning.outputs.base_tag_for_log }}..HEAD > changes.txt
-          echo "commit_log<<EOF" >> $GITHUB_OUTPUT
+          
+          # --- START OF THE FIX ---
+          # Generate a unique, random string to use as a delimiter.
+          # This prevents the content of the log from accidentally closing the multi-line string.
+          DELIMITER=$(uuidgen)
+          echo "commit_log<<${DELIMITER}" >> $GITHUB_OUTPUT
           cat changes.txt >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "${DELIMITER}" >> $GITHUB_OUTPUT
 
       - name: Generate Changelog Section with Gemini AI
         id: gemini-notes
