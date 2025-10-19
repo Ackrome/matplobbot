@@ -1,0 +1,147 @@
+name: Create AI-Powered Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'The type of version bump (patch, minor, or major)'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: 'patch'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Determine Semantic Base and New Version
+        id: versioning
+        run: |
+          npm install semver
+
+          SORTED_TAGS=$(git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | node -e "
+              const semver = require('semver');
+              const fs = require('fs');
+              const tags = fs.readFileSync(0, 'utf-8').split('\n').filter(Boolean);
+              console.log(tags.sort(semver.compare).join('\n'));
+          ")
+
+          if [ -z "$SORTED_TAGS" ]; then
+            echo "No semantic version tags found. Please create an initial tag like 'v0.1.0'."
+            exit 1
+          fi
+
+          LATEST_TAG=$(echo "$SORTED_TAGS" | tail -n 1)
+          BASE_TAG_FOR_LOG=$LATEST_TAG # Default for patch releases
+
+          VERSION_TYPE="${{ github.event.inputs.version_type }}"
+
+          if [ "$VERSION_TYPE" == "minor" ]; then
+              # For a minor release, find the first tag of the current minor series (e.g., v1.2.0)
+              MAJOR_MINOR_PREFIX=$(echo $LATEST_TAG | cut -d'.' -f1,2)
+              FOUND_BASE=$(echo "$SORTED_TAGS" | grep "^${MAJOR_MINOR_PREFIX}\." | head -n 1)
+              if [ -n "$FOUND_BASE" ]; then
+                  BASE_TAG_FOR_LOG=$FOUND_BASE
+              fi
+          elif [ "$VERSION_TYPE" == "major" ]; then
+              # For a major release, find the first tag of the current major series (e.g., v1.0.0)
+              MAJOR_PREFIX=$(echo $LATEST_TAG | cut -d'.' -f1)
+              FOUND_BASE=$(echo "$SORTED_TAGS" | grep "^${MAJOR_PREFIX}\." | head -n 1)
+              if [ -n "$FOUND_BASE" ]; then
+                  BASE_TAG_FOR_LOG=$FOUND_BASE
+              fi
+          fi
+          
+          echo "Release type selected: $VERSION_TYPE"
+          echo "Base tag for changelog generation: $BASE_TAG_FOR_LOG"
+          
+          # The NEW version is always calculated from the absolute LATEST tag
+          VERSION=$(echo $LATEST_TAG | sed 's/^v//')
+          NEW_VERSION=$(npm --no-git-tag-version --allow-same-version=true --version="$VERSION" $VERSION_TYPE)
+          NEW_TAG="v$NEW_VERSION"
+          
+          echo "New tag to be created: $NEW_TAG"
+          
+          echo "base_tag_for_log=$BASE_TAG_FOR_LOG" >> $GITHUB_OUTPUT
+          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+
+      - name: Get Commit Log
+        id: commit-log
+        run: |
+          echo "Gathering commits between ${{ steps.versioning.outputs.base_tag_for_log }} and HEAD..."
+          git log --pretty=format:"- %s (%h)" ${{ steps.versioning.outputs.base_tag_for_log }}..HEAD > changes.txt
+          
+          echo "commit_log<<EOF" >> $GITHUB_OUTPUT
+          cat changes.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Generate Release Notes with Gemini AI
+        id: gemini-notes
+        run: |
+          PROMPT=$(cat <<EOF
+          You are an expert technical writer for the Matplobbot project.
+
+          Generate clear, concise, and well-structured release notes for the new version "${{ steps.versioning.outputs.new_tag }}". The changelog should summarize all changes since version "${{ steps.versioning.outputs.base_tag_for_log }}".
+
+          **Guidelines:**
+          - Group changes into logical categories: "✨ New Features", "🐛 Bug Fixes", "🚀 Performance & Architectural Improvements", "🛠️ CI/CD & Tooling", "📄 Documentation".
+          - Rewrite commit messages into a human-readable format. Ignore trivial commits (e.g., merges, typos).
+          - Omit categories that have no relevant commits.
+          - Start with a brief, engaging summary of the release's highlights.
+          
+          Here is the commit log to analyze:
+          ${{ steps.commit-log.outputs.commit_log }}
+          EOF
+          )
+          
+          JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" \
+            '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
+
+          RESPONSE=$(curl -s -H "Content-Type: application/json" \
+            -d "$JSON_PAYLOAD" \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${{ secrets.GEMINI_API_KEY }}")
+
+          NOTES=$(echo $RESPONSE | jq -r '.candidates[0].content.parts[0].text')
+          
+          echo "Generated Notes:"
+          echo "$NOTES"
+          
+          echo "$NOTES" > release_notes.md
+
+      - name: Create and Push New Git Tag
+        run: |
+          echo "Creating and pushing tag ${{ steps.versioning.outputs.new_tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ steps.versioning.outputs.new_tag }}
+          git push origin ${{ steps.versioning.outputs.new_tag }}
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.versioning.outputs.new_tag }}
+          release_name: Release ${{ steps.versioning.outputs.new_tag }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
