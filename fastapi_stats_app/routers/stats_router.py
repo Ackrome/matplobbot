@@ -81,11 +81,15 @@ async def get_activity_over_time():
 async def get_user_profile(
     user_id: int,
     page: int = Query(1, ge=1, description="Номер страницы"),
-    page_size: int = Query(50, ge=1, le=200, description="Количество записей на странице")
+    page_size: int = Query(50, ge=1, le=200, description="Количество записей на странице"),
+    sort_by: str = Query('timestamp', description="Поле для сортировки: id, action_type, action_details, timestamp"),
+    sort_order: str = Query('desc', description="Порядок сортировки: asc или desc")
 ):
     try:
         async with get_db_connection_obj() as db:
-            profile_data = await get_user_profile_data_from_db(db, user_id, page, page_size)
+            profile_data = await get_user_profile_data_from_db(
+                db, user_id, page, page_size, sort_by, sort_order
+            )
             if profile_data is None:
                 raise HTTPException(status_code=404, detail="Пользователь не найден.")
 
@@ -97,7 +101,9 @@ async def get_user_profile(
                 "pagination": {
                     "current_page": page,
                     "total_pages": total_pages,
-                    "page_size": page_size
+                    "page_size": page_size,
+                    "sort_by": sort_by,
+                    "sort_order": sort_order
                 }
             }
     except aiosqlite.Error as e:

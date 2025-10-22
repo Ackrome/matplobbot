@@ -16,15 +16,18 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
+    // --- State Management ---
     let isFirstLoad = true;
+    let currentSortBy = 'timestamp';
+    let currentSortOrder = 'desc';
 
     // --- Main data fetching and rendering function ---
     function fetchAndRenderPage(page = 1) {
-        loadingStatusElement.textContent = 'Загрузка данных...';
-        actionsBodyElement.innerHTML = `<tr><td colspan="4" style="text-align:center;">Загрузка...</td></tr>`;
+        loadingStatusElement.textContent = ''; // Clear previous errors
         paginationControlsElement.innerHTML = '';
+        updateSortIndicators();
 
-        fetch(`/api/users/${userId}/profile?page=${page}`)
+        fetch(`/api/users/${userId}/profile?page=${page}&sort_by=${currentSortBy}&sort_order=${currentSortOrder}`)
             .then(response => {
                 if (!response.ok) {
                     if (response.status === 404) throw new Error('Пользователь не найден.');
@@ -138,10 +141,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const sortedPages = Array.from(pagesToShow).sort((a, b) => a - b);
 
-        // "Previous" button
-        paginationControlsElement.appendChild(createButton('«', current_page - 1, current_page === 1));
-
-        // Page number buttons
         let lastPage = 0;
         for (const pageNum of sortedPages) {
             if (lastPage > 0 && pageNum - lastPage > 1) {
@@ -155,33 +154,42 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // "Next" and "Last" buttons
         paginationControlsElement.appendChild(createButton('»', total_pages, current_page === total_pages));
-        // "Next" button
-        paginationControlsElement.appendChild(createButton('»', current_page + 1, current_page === total_pages));
+    }
 
-        // "Go to page" input field
-        if (total_pages > (contextPages * 2) + 3) { // Only show if there are enough pages to justify it
-            const goToContainer = document.createElement('div');
-            goToContainer.style.marginLeft = '20px';
+    function handleSortClick(event) {
+        const newSortBy = event.target.dataset.sortBy;
+        if (!newSortBy) return;
 
-            const goToInput = document.createElement('input');
-            goToInput.type = 'number';
-            goToInput.min = 1;
-            goToInput.max = total_pages;
-            goToInput.placeholder = '...';
-            goToInput.className = 'pagination-goto-input';
-
-            const goButton = createButton('Перейти', -1); // Page number is irrelevant here
-            goButton.addEventListener('click', () => {
-                const page = parseInt(goToInput.value, 10);
-                if (page >= 1 && page <= total_pages) {
-                    fetchAndRenderPage(page);
-                }
-            });
-
-            goToContainer.appendChild(goToInput);
-            goToContainer.appendChild(goButton);
-            paginationControlsElement.appendChild(goToContainer);
+        if (newSortBy === currentSortBy) {
+            // If clicking the same column, reverse the order
+            currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+        } else {
+            // If clicking a new column, set it and default to 'desc'
+            currentSortBy = newSortBy;
+            currentSortOrder = 'desc';
         }
+        // Fetch data for the first page with the new sorting
+        fetchAndRenderPage(1);
+    }
+
+    function updateSortIndicators() {
+        document.querySelectorAll('#actions-table th.sortable').forEach(th => {
+            th.classList.remove('sort-asc', 'sort-desc');
+            if (th.dataset.sortBy === currentSortBy) {
+                th.classList.add(currentSortOrder === 'asc' ? 'sort-asc' : 'sort-desc');
+            }
+        });
+    }
+
+    // --- Debounce Utility ---
+    function debounce(func, delay) {
+        let timeoutId;
+        return function(...args) {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                func.apply(this, args);
+            }, delay);
+        };
     }
 
     // --- Search/Filter Logic ---
@@ -215,7 +223,33 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingStatusElement.textContent = (visibleRows === 0) ? 'Нет действий на этой странице, соответствующих вашему фильтру.' : '';
     }
 
-    searchInput.addEventListener('input', applySearchFilter);
+    searchInput.addEventListener('input', debounce(applySearchFilter, 300));
+
+    // --- Attach Event Listeners ---
+    document.querySelector('#actions-table thead').addEventListener('click', handleSortClick);
+
+    // --- Back to Top Button Logic ---
+    const backToTopButton = document.getElementById('back-to-top-btn');
+
+    window.onscroll = function() {
+        scrollFunction();
+    };
+
+    function scrollFunction() {
+        if (document.body.scrollTop > 100 || document.documentElement.scrollTop > 100) {
+            backToTopButton.style.display = "block";
+        } else {
+            backToTopButton.style.display = "none";
+        }
+    }
+
+    backToTopButton.addEventListener('click', function() {
+        // For Safari
+        document.body.scrollTop = 0;
+        // For Chrome, Firefox, IE and Opera
+        document.documentElement.scrollTop = 0;
+    });
+
 
     // --- Initial Load ---
     fetchAndRenderPage(1);

@@ -17,6 +17,9 @@
             <div class="stat-item" id="total-actions-item">
                 <strong>Общее количество действий:</strong> <span id="total-actions-value">Подключение...</span>
             </div>
+            <div id="last-updated-container" style="text-align: right; font-size: 0.9em; color: #666; margin-top: -5px; margin-bottom: 10px; display: none;">
+                Последнее обновление: <span id="last-updated-value">...</span>
+            </div>
 
             <!-- Контейнер для вкладок -->
             <div class="tab-container">
@@ -30,7 +33,7 @@
             <!-- Содержимое вкладок -->
             <div id="commandsTab" class="tab-content" style="display: block;"> <!-- Первая вкладка активна по умолчанию -->
                 <div class="chart-wrapper">
-                    <h2>Популярные команды</h2>
+                    <h2>Популярные команды <button class="download-csv-btn" data-chart="popularCommands" style="display: none;">💾 CSV</button></h2>
                     <canvas id="popularCommandsChart"></canvas>
                     <p id="popular-commands-status" style="text-align:center;"></p>
                 </div>
@@ -38,7 +41,7 @@
 
             <div id="messagesTab" class="tab-content">
                 <div class="chart-wrapper">
-                    <h2>Популярные сообщения</h2>
+                    <h2>Популярные сообщения <button class="download-csv-btn" data-chart="popularMessages" style="display: none;">💾 CSV</button></h2>
                     <canvas id="popularMessagesChart"></canvas>
                     <p id="popular-messages-status" style="text-align:center;"></p>
                 </div>
@@ -46,14 +49,15 @@
 
             <div id="typesTab" class="tab-content">
                 <div class="chart-wrapper" style="min-width: 300px; max-width: 500px; margin: 20px auto;"> <!-- Центрируем круговую диаграмму -->
-                    <canvas id="actionTypesChart" style="height: 400px;"></canvas> <!-- Явно задаем высоту для canvas внутри вкладки -->
+                    <h2>Типы действий <button class="download-csv-btn" data-chart="actionTypes" style="display: none;">💾 CSV</button></h2>
+                    <canvas id="actionTypesChart" style="height: 400px;"></canvas>
                     <p id="action-types-status" style="text-align:center;"></p>
                 </div>
             </div>
 
             <div id="activityTimeTab" class="tab-content">
                 <div class="chart-wrapper">
-                    <h2>Активность по времени (по дням)</h2>
+                    <h2>Активность по времени (по дням) <button class="download-csv-btn" data-chart="activityOverTime" style="display: none;">💾 CSV</button></h2>
                     <canvas id="activityOverTimeChart"></canvas>
                     <p id="activity-over-time-status" style="text-align:center;"></p>
                 </div>
@@ -80,12 +84,25 @@
                     </tr>
                 </thead>
                 <tbody id="leaderboard-body">
-                    <tr><td colspan="6" style="text-align:center;">Загрузка данных...</td></tr>
+                    <!-- Skeleton Loader for Leaderboard -->
+                    <tr class="skeleton-row">
+                        <td><div class="skeleton skeleton-text" style="width: 20px; height: 20px; margin: auto;"></div></td>
+                        <td><div class="skeleton skeleton-avatar" style="width: 60px; height: 60px; margin: auto;"></div></td>
+                        <td><div class="skeleton skeleton-text" style="width: 80%;"></div></td>
+                        <td><div class="skeleton skeleton-text" style="width: 70%;"></div></td>
+                        <td><div class="skeleton skeleton-text" style="width: 50%;"></div></td>
+                        <td><div class="skeleton skeleton-text" style="width: 90%;"></div></td>
+                    </tr>
+                    <tr class="skeleton-row"><td><div class="skeleton skeleton-text" style="width: 20px; height: 20px; margin: auto;"></div></td><td><div class="skeleton skeleton-avatar" style="width: 60px; height: 60px; margin: auto;"></div></td><td><div class="skeleton skeleton-text" style="width: 75%;"></div></td><td><div class="skeleton skeleton-text" style="width: 65%;"></div></td><td><div class="skeleton skeleton-text" style="width: 45%;"></div></td><td><div class="skeleton skeleton-text" style="width: 85%;"></div></td></tr>
+                    <tr class="skeleton-row"><td><div class="skeleton skeleton-text" style="width: 20px; height: 20px; margin: auto;"></div></td><td><div class="skeleton skeleton-avatar" style="width: 60px; height: 60px; margin: auto;"></div></td><td><div class="skeleton skeleton-text" style="width: 82%;"></div></td><td><div class="skeleton skeleton-text" style="width: 72%;"></div></td><td><div class="skeleton skeleton-text" style="width: 52%;"></div></td><td><div class="skeleton skeleton-text" style="width: 88%;"></div></td></tr>
+                    <tr class="skeleton-row"><td><div class="skeleton skeleton-text" style="width: 20px; height: 20px; margin: auto;"></div></td><td><div class="skeleton skeleton-avatar" style="width: 60px; height: 60px; margin: auto;"></div></td><td><div class="skeleton skeleton-text" style="width: 78%;"></div></td><td><div class="skeleton skeleton-text" style="width: 68%;"></div></td><td><div class="skeleton skeleton-text" style="width: 48%;"></div></td><td><div class="skeleton skeleton-text" style="width: 87%;"></div></td></tr>
                 </tbody>
             </table>
          </div>
      </div>
  
+    <button id="back-to-top-btn" title="Наверх">▲</button>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="/static/js/theme.js"></script>
     <script src="/static/js/main.js"></script>

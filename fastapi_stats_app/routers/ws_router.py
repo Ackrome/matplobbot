@@ -4,7 +4,7 @@ from starlette.websockets import WebSocketState
 import logging
 import asyncio
 import aiofiles
-import aiosqlite
+import aiosqlite, datetime
 import json # Добавляем импорт json
 import os
 
@@ -129,7 +129,8 @@ async def periodic_stats_updater():
                 "popular_commands": popular_commands_data,
                 "popular_messages": popular_messages_data,
                 "action_types_distribution": action_types_data,
-                "activity_over_time": activity_over_time_data
+                "activity_over_time": activity_over_time_data,
+                "last_updated": datetime.datetime.now().isoformat()
             }
             # Используем json.dumps для корректного сравнения и хранения JSON-строки
             current_data_json_str = json.dumps(current_data, ensure_ascii=False, sort_keys=True)

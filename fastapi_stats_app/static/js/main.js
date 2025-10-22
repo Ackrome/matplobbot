@@ -6,14 +6,16 @@ const actionTypesStatusElement = document.getElementById('action-types-status');
 const activityOverTimeStatusElement = document.getElementById('activity-over-time-status');
 const botLogContentElement = document.getElementById('bot-log-content');
 const botLogStatusElement = document.getElementById('bot-log-status');
+const lastUpdatedContainer = document.getElementById('last-updated-container');
+const lastUpdatedValueElement = document.getElementById('last-updated-value');
+const downloadButtons = {
+    popularCommands: document.querySelector('.download-csv-btn[data-chart="popularCommands"]'),
+};
 
 let popularCommandsChartInstance; // Для хранения экземпляра графика
 let popularMessagesChartInstance; // Для графика популярных сообщений
 let actionTypesChartInstance; // Для графика типов действий
 let activityOverTimeChartInstance; // Для графика активности по времени
-
-let statsSocket;
-let logSocket;
 
 // Определяем URL для WebSocket. Если используется HTTPS, нужен wss://
 const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -21,14 +23,84 @@ const wsHost = window.location.host; // localhost:9583 или ваш домен
 const statsWsUrl = `${wsProtocol}//${wsHost}/ws/stats/total_actions`;
 const logWsUrl = `${wsProtocol}//${wsHost}/ws/bot_log`;
 
-function connectWebSocket() {
-    statsSocket = new WebSocket(statsWsUrl);
+/**
+ * A map to store the latest data for each chart, used for CSV downloads.
+ */
+const chartDataStore = {};
 
-    statsSocket.onopen = function(event) {
+/**
+ * A resilient WebSocket connection manager with exponential backoff.
+ */
+class WebSocketManager {
+    constructor(url, { onOpen, onMessage, onClose, onError }) {
+        this.url = url;
+        this.onOpen = onOpen;
+        this.onMessage = onMessage;
+        this.onClose = onClose;
+        this.onError = onError;
+        
+        this.socket = null;
+        this.reconnectTimeoutId = null;
+        this.retryCount = 0;
+        this.maxRetryCount = 8; // After this, the delay will be fixed at the max
+    }
+
+    connect() {
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            console.log(`WebSocket to ${this.url} is already open.`);
+            return;
+        }
+
+        console.log(`Attempting to connect to ${this.url}...`);
+        this.socket = new WebSocket(this.url);
+
+        this.socket.onopen = (event) => {
+            console.log(`WebSocket connection established to ${this.url}.`);
+            this.retryCount = 0; // Reset retry counter on successful connection
+            if (this.onOpen) this.onOpen(event);
+        };
+
+        this.socket.onmessage = (event) => {
+            if (this.onMessage) this.onMessage(event);
+        };
+
+        this.socket.onerror = (error) => {
+            console.error(`WebSocket error on ${this.url}:`, error);
+            if (this.onError) this.onError(error);
+            // The 'onclose' event will be fired next, where we handle reconnection.
+        };
+
+        this.socket.onclose = (event) => {
+            console.log(`WebSocket to ${this.url} closed. Code: ${event.code}.`);
+            if (this.onClose) this.onClose(event);
+            this.reconnect();
+        };
+    }
+
+    reconnect() {
+        if (this.reconnectTimeoutId) {
+            clearTimeout(this.reconnectTimeoutId);
+        }
+
+        // Exponential backoff: 1s, 2s, 4s, 8s, ..., up to a max of ~60s
+        const delay = Math.min(1000 * (2 ** this.retryCount), 60000);
+        console.log(`Will attempt to reconnect to ${this.url} in ${delay / 1000} seconds.`);
+        
+        this.reconnectTimeoutId = setTimeout(() => {
+            if (this.retryCount < this.maxRetryCount) {
+                this.retryCount++;
+            }
+            this.connect();
+        }, delay);
+    }
+}
+
+function handleStatsSocketOpen() {
         console.log("WebSocket соединение установлено.");
         totalActionsValueElement.textContent = "Ожидание данных...";
     };
-    statsSocket.onmessage = function(event) {
+
+function handleStatsSocketMessage(event) {
         try {
             const data = JSON.parse(event.data);
             if (data.error) {
@@ -44,6 +116,12 @@ function connectWebSocket() {
                 activityOverTimeStatusElement.textContent = `Ошибка загрузки графика: ${data.error}`;
                 if (activityOverTimeChartInstance) { activityOverTimeChartInstance.destroy(); activityOverTimeChartInstance = null; }
             } else if (data.total_actions !== undefined) {
+                if (data.last_updated) {
+                    const date = new Date(data.last_updated);
+                    lastUpdatedValueElement.textContent = date.toLocaleString('ru-RU');
+                    lastUpdatedContainer.style.display = 'block';
+                }
+
                 totalActionsValueElement.textContent = data.total_actions;
             }
 
@@ -110,9 +188,12 @@ function connectWebSocket() {
             if (data.popular_commands && Array.isArray(data.popular_commands)) {
                 if (data.popular_commands.length === 0) {
                     popularCommandsStatusElement.textContent = "Нет данных о командах для отображения.";
+                    document.querySelector('.download-csv-btn[data-chart="popularCommands"]').style.display = 'none';
                     if (popularCommandsChartInstance) { popularCommandsChartInstance.destroy(); popularCommandsChartInstance = null; }
                 } else {
                     popularCommandsStatusElement.textContent = ""; // Очищаем статус, если есть данные
+                    chartDataStore.popularCommands = data.popular_commands;
+                    document.querySelector('.download-csv-btn[data-chart="popularCommands"]').style.display = 'inline-block';
                     updatePopularCommandsChart(data.popular_commands);
                 }
             }
@@ -120,9 +201,12 @@ function connectWebSocket() {
             if (data.popular_messages && Array.isArray(data.popular_messages)) {
                 if (data.popular_messages.length === 0) {
                     popularMessagesStatusElement.textContent = "Нет данных о сообщениях для отображения.";
+                    document.querySelector('.download-csv-btn[data-chart="popularMessages"]').style.display = 'none';
                     if (popularMessagesChartInstance) { popularMessagesChartInstance.destroy(); popularMessagesChartInstance = null; }
                 } else {
                     popularMessagesStatusElement.textContent = ""; // Очищаем статус
+                    chartDataStore.popularMessages = data.popular_messages;
+                    document.querySelector('.download-csv-btn[data-chart="popularMessages"]').style.display = 'inline-block';
                     updatePopularMessagesChart(data.popular_messages);
                 }
             }
@@ -130,9 +214,12 @@ function connectWebSocket() {
             if (data.action_types_distribution && Array.isArray(data.action_types_distribution)) {
                 if (data.action_types_distribution.length === 0) {
                     actionTypesStatusElement.textContent = "Нет данных о типах действий.";
+                    document.querySelector('.download-csv-btn[data-chart="actionTypes"]').style.display = 'none';
                     if (actionTypesChartInstance) { actionTypesChartInstance.destroy(); actionTypesChartInstance = null; }
                 } else {
                     actionTypesStatusElement.textContent = "";
+                    chartDataStore.actionTypes = data.action_types_distribution;
+                    document.querySelector('.download-csv-btn[data-chart="actionTypes"]').style.display = 'inline-block';
                     updateActionTypesChart(data.action_types_distribution);
                 }
             }
@@ -140,9 +227,12 @@ function connectWebSocket() {
             if (data.activity_over_time && Array.isArray(data.activity_over_time)) {
                 if (data.activity_over_time.length === 0) {
                     activityOverTimeStatusElement.textContent = "Нет данных об активности для отображения.";
+                    document.querySelector('.download-csv-btn[data-chart="activityOverTime"]').style.display = 'none';
                     if (activityOverTimeChartInstance) { activityOverTimeChartInstance.destroy(); activityOverTimeChartInstance = null; }
                 } else {
                     activityOverTimeStatusElement.textContent = "";
+                    chartDataStore.activityOverTime = data.activity_over_time;
+                    document.querySelector('.download-csv-btn[data-chart="activityOverTime"]').style.display = 'inline-block';
                     updateActivityOverTimeChart(data.activity_over_time);
                 }
             }
@@ -157,11 +247,10 @@ function connectWebSocket() {
             activityOverTimeStatusElement.textContent = "Ошибка обработки данных для графика.";
             }
     };
-
-    statsSocket.onerror = function(error) {
+function handleStatsSocketError(error) {
         console.error("WebSocket ошибка:", error);
         totalActionsValueElement.textContent = "Ошибка соединения WebSocket";
-        leaderboardBodyElement.innerHTML = `<tr><td colspan="6" style="text-align:center;">Ошибка соединения WebSocket.</td></tr>`;
+        leaderboardBodyElement.innerHTML = `<tr><td colspan="6" style="text-align:center;">Ошибка соединения.</td></tr>`;
         popularCommandsStatusElement.textContent = "Ошибка соединения WebSocket для графика.";
         popularMessagesStatusElement.textContent = "Ошибка соединения WebSocket для графика.";
         actionTypesStatusElement.textContent = "Ошибка соединения WebSocket для графика.";
@@ -171,9 +260,8 @@ function connectWebSocket() {
         if (actionTypesChartInstance) { actionTypesChartInstance.destroy(); actionTypesChartInstance = null; }
         if (activityOverTimeChartInstance) { activityOverTimeChartInstance.destroy(); activityOverTimeChartInstance = null; }
     };
-
-    statsSocket.onclose = function(event) {
-        console.log("WebSocket соединение закрыто. Код:", event.code, "Причина:", event.reason);
+function handleStatsSocketClose() {
+        // UI updates for reconnection attempt
         totalActionsValueElement.textContent = "Соединение потеряно. Попытка переподключения через 5с...";
         // Попытка переподключения через некоторое время
         leaderboardBodyElement.innerHTML = `<tr><td colspan="6" style="text-align:center;">Соединение потеряно. Попытка переподключения...</td></tr>`;
@@ -185,21 +273,14 @@ function connectWebSocket() {
         if (popularMessagesChartInstance) { popularMessagesChartInstance.destroy(); popularMessagesChartInstance = null; }
         if (actionTypesChartInstance) { actionTypesChartInstance.destroy(); actionTypesChartInstance = null; }
         if (activityOverTimeChartInstance) { activityOverTimeChartInstance.destroy(); activityOverTimeChartInstance = null; }
-        setTimeout(connectWebSocket, 5000);
     };
-}
 
-function connectLogWebSocket() {
-    logSocket = new WebSocket(logWsUrl);
+function handleLogSocketOpen() {
     botLogContentElement.innerHTML = ''; // Очищаем при новом подключении
-    botLogStatusElement.textContent = 'Подключение к логу...';
+    botLogStatusElement.textContent = 'Соединение с логом установлено. Ожидание данных...';
+};
 
-    logSocket.onopen = function(event) {
-        console.log("Log WebSocket соединение установлено.");
-        botLogStatusElement.textContent = 'Соединение с логом установлено. Ожидание данных...';
-    };
-
-    logSocket.onmessage = function(event) {
+function handleLogSocketMessage(event) {
         const newLogEntry = document.createElement('div');
         newLogEntry.classList.add('log-entry');
         newLogEntry.style.lineHeight = '1.4'; // Немного увеличим межстрочный интервал для читаемости
@@ -248,22 +329,56 @@ function connectLogWebSocket() {
         if (botLogStatusElement.textContent.includes('Ожидание данных')) {
             botLogStatusElement.textContent = ''; // Убираем сообщение об ожидании
         }
-    };
+};
 
-    logSocket.onerror = function(error) {
+function handleLogSocketError(error) {
         console.error("Log WebSocket ошибка:", error);
         botLogStatusElement.textContent = 'Ошибка соединения с логом WebSocket.';
         const errorEntry = document.createElement('div');
         errorEntry.textContent = `ОШИБКА СОЕДИНЕНИЯ: ${error}`;
         errorEntry.style.color = 'red';
         botLogContentElement.appendChild(errorEntry);
-    };
+};
 
-    logSocket.onclose = function(event) {
-        console.log("Log WebSocket соединение закрыто. Код:", event.code, "Причина:", event.reason);
+function handleLogSocketClose() {
         botLogStatusElement.textContent = 'Соединение с логом потеряно. Попытка переподключения через 5с...';
-        setTimeout(connectLogWebSocket, 5000);
-    };
+}
+
+/**
+ * Generates and triggers the download of a CSV file.
+ * @param {string[]} headers - The column headers for the CSV.
+ * @param {object[]} data - An array of objects representing the rows.
+ * @param {string} filename - The desired name for the downloaded file.
+ */
+function downloadCSV(headers, data, filename) {
+    if (!data || data.length === 0) {
+        console.warn("No data available to download.");
+        return;
+    }
+
+    const keys = Object.keys(data[0]);
+    const csvRows = [
+        headers.join(','), // Header row
+        ...data.map(row => 
+            keys.map(key => {
+                let cell = row[key] === null || row[key] === undefined ? '' : String(row[key]);
+                // Escape commas and quotes
+                if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+                    cell = `"${cell.replace(/"/g, '""')}"`;
+                }
+                return cell;
+            }).join(',')
+        )
+    ];
+
+    const csvContent = "data:text/csv;charset=utf-8," + csvRows.join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
 function updatePopularCommandsChart(commandsData) {
@@ -487,8 +602,39 @@ function openTab(evt, tabName) {
 
 document.addEventListener('DOMContentLoaded', function() {
     // Initial connections
-    connectWebSocket();
-    connectLogWebSocket();
+    const statsSocketManager = new WebSocketManager(statsWsUrl, {
+        onOpen: handleStatsSocketOpen,
+        onMessage: handleStatsSocketMessage,
+        onError: handleStatsSocketError,
+        onClose: handleStatsSocketClose
+    });
+    statsSocketManager.connect();
+
+    const logSocketManager = new WebSocketManager(logWsUrl, {
+        onOpen: handleLogSocketOpen,
+        onMessage: handleLogSocketMessage,
+        onError: handleLogSocketError,
+        onClose: handleLogSocketClose
+    });
+    logSocketManager.connect();
+
+    // Add event listeners for all download buttons
+    document.querySelectorAll('.download-csv-btn').forEach(button => {
+        button.addEventListener('click', (event) => {
+            const chartType = event.target.dataset.chart;
+            const data = chartDataStore[chartType];
+            if (!data) return;
+
+            const headerMap = {
+                popularCommands: ['Command', 'Count'],
+                popularMessages: ['Message', 'Count'],
+                actionTypes: ['Action Type', 'Count'],
+                activityOverTime: ['Period', 'Count']
+            };
+
+            downloadCSV(headerMap[chartType], data, `${chartType}_export.csv`);
+        });
+    });
 
     // Re-apply theme to charts when theme is changed
     const themeToggleButton = document.getElementById('theme-toggle-button');
@@ -525,6 +671,26 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
             }, 0);
+        });
+    }
+
+    // --- Back to Top Button Logic ---
+    const backToTopButton = document.getElementById('back-to-top-btn');
+
+    if (backToTopButton) {
+        window.onscroll = function() {
+            if (document.body.scrollTop > 100 || document.documentElement.scrollTop > 100) {
+                backToTopButton.style.display = "block";
+            } else {
+                backToTopButton.style.display = "none";
+            }
+        };
+
+        backToTopButton.addEventListener('click', function() {
+            // For Safari
+            document.body.scrollTop = 0;
+            // For Chrome, Firefox, IE and Opera
+            document.documentElement.scrollTop = 0;
         });
     }
 });

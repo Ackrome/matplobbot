@@ -13,7 +13,12 @@
         <a href="/" style="text-decoration: none; color: inherit; display: inline-block; margin-bottom: 20px;">&larr; Назад к статистике</a>
 
         <div id="user-profile-header" style="display: flex; align-items: center; gap: 20px; margin-bottom: 30px;">
-            <!-- User avatar and info will be loaded here -->
+            <!-- Skeleton Loader for Profile -->
+            <div class="skeleton skeleton-avatar"></div>
+            <div>
+                <div class="skeleton skeleton-h2"></div>
+                <div class="skeleton skeleton-p"></div>
+            </div>
         </div>
 
         <h2 id="actions-table-title">Действия пользователя</h2>
@@ -25,14 +30,19 @@
         <table id="actions-table">
             <thead>
                 <tr>
-                    <th>ID Действия</th>
-                    <th>Тип</th>
-                    <th>Детали</th>
-                    <th>Время</th>
+                    <th class="sortable" data-sort-by="id">ID Действия</th>
+                    <th class="sortable" data-sort-by="action_type">Тип</th>
+                    <th class="sortable" data-sort-by="action_details">Детали</th>
+                    <th class="sortable" data-sort-by="timestamp">Время</th>
                 </tr>
             </thead>
             <tbody id="actions-body">
-                <tr><td colspan="4" style="text-align:center;">Загрузка данных...</td></tr>
+                <!-- Skeleton Loader for Table -->
+                <tr class="skeleton-row"><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td></tr>
+                <tr class="skeleton-row"><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td></tr>
+                <tr class="skeleton-row"><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td></tr>
+                <tr class="skeleton-row"><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td></tr>
+                <tr class="skeleton-row"><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td></tr>
             </tbody>
         </table>
         <p id="loading-status" style="text-align:center;"></p>
@@ -42,6 +52,8 @@
         </div>
 
     </div>
+
+    <button id="back-to-top-btn" title="Наверх">▲</button>
 
     <script src="/static/js/theme.js"></script>
     <script src="/static/js/user_details.js"></script>
