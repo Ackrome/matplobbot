@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher
 
 from .handlers import router
 from .logger import UserLoggingMiddleware # Импортируем middleware
-from .database import init_db # Импортируем функцию инициализации БД
+from .database import init_db, init_db_pool # Импортируем функции инициализации БД
 
 # Загрузка переменных окружения и настройка логгирования из app.logger
 load_dotenv()
@@ -16,6 +16,9 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 
 # Асинхронная функция для запуска бота
 async def main():
+    # Инициализируем пул соединений с БД
+    await init_db_pool()
+
     # Инициализируем базу данных перед запуском бота
     await init_db()
 

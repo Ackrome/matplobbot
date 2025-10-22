@@ -1,21 +1,37 @@
-# c:/Users/ivant/Desktop/proj/matplobbot/fastapi_stats_app/db_utils.py
-import aiosqlite
+import asyncpg
 import os
 import logging
 from fastapi import HTTPException
-from .config import DB_PATH
+from .config import DATABASE_URL
 
 logger = logging.getLogger(__name__)
 
+# Global connection pool
+pool = None
+
+async def init_db_pool():
+    global pool
+    if pool is None:
+        try:
+            pool = await asyncpg.create_pool(DATABASE_URL, min_size=5, max_size=20)
+            logger.info("Database connection pool created successfully.")
+        except Exception as e:
+            logger.error(f"Failed to create database connection pool: {e}", exc_info=True)
+            raise
+
+async def close_db_pool():
+    global pool
+    if pool:
+        await pool.close()
+        logger.info("Database connection pool closed.")
+
 def get_db_connection_obj():
     """
-    Проверяет наличие файла БД и возвращает объект aiosqlite.connect(),
-    который является awaitable context manager.
+    Acquires a connection from the pool. This is an awaitable context manager.
     """
-    if not os.path.exists(DB_PATH):
-        logger.warning(f"Файл базы данных {DB_PATH} еще не существует. Возможно, бот еще не создал его.")
-        raise HTTPException(status_code=503, detail="База данных еще не инициализирована ботом. Пожалуйста, подождите или убедитесь, что бот запущен и работает корректно.")
-    return aiosqlite.connect(DB_PATH)
+    if pool is None:
+        raise HTTPException(status_code=503, detail="Database connection pool is not initialized.")
+    return pool.acquire()
 
 async def get_leaderboard_data_from_db(db_conn):
     """Извлекает данные для таблицы лидеров из БД, включая аватар."""
@@ -25,8 +41,8 @@ async def get_leaderboard_data_from_db(db_conn):
             u.full_name,
             COALESCE(u.username, 'Нет username') AS username,
             u.avatar_pic_url,
-            COUNT(ua.id) AS actions_count,
-            STRFTIME('%Y-%m-%d %H:%M:%S', MAX(ua.timestamp)) AS last_action_time
+            COUNT(ua.id)::int AS actions_count,
+            TO_CHAR(MAX(ua.timestamp), 'YYYY-MM-DD HH24:MI:SS') AS last_action_time
         FROM
             users u
         JOIN
@@ -37,19 +53,9 @@ async def get_leaderboard_data_from_db(db_conn):
             actions_count DESC
         LIMIT 100; -- Ограничиваем вывод для производительности
     """
-    async with db_conn.execute(query) as cursor:
-        rows = await cursor.fetchall()
-        leaderboard = []
-        for row_tuple in rows:
-            leaderboard.append({
-                "user_id": row_tuple[0],
-                "full_name": row_tuple[1],
-                "username": row_tuple[2],
-                "avatar_pic_url": row_tuple[3],
-                "actions_count": row_tuple[4],
-                "last_action_time": row_tuple[5]
-            })
-        return leaderboard
+    rows = await db_conn.fetch(query)
+    # asyncpg returns a list of Record objects, which behave like dicts
+    return [dict(row) for row in rows]
 
 async def get_popular_commands_data_from_db(db_conn):
     """Извлекает данные о популярных командах из БД."""
@@ -67,9 +73,8 @@ async def get_popular_commands_data_from_db(db_conn):
             command_count DESC
         LIMIT 10;
     """
-    async with db_conn.execute(query) as cursor:
-        rows = await cursor.fetchall()
-        return [{"command": row[0], "count": row[1]} for row in rows]
+    rows = await db_conn.fetch(query)
+    return [{"command": row['command'], "count": row['command_count']} for row in rows]
 
 async def get_popular_messages_data_from_db(db_conn):
     """Извлекает данные о популярных текстовых сообщениях из БД."""
@@ -90,9 +95,8 @@ async def get_popular_messages_data_from_db(db_conn):
             message_count DESC
         LIMIT 10;
     """
-    async with db_conn.execute(query) as cursor:
-        rows = await cursor.fetchall()
-        return [{"message": row[0], "count": row[1]} for row in rows]
+    rows = await db_conn.fetch(query)
+    return [{"message": row['message_snippet'], "count": row['message_count']} for row in rows]
 
 async def get_action_types_distribution_from_db(db_conn):
     """Извлекает данные о распределении типов действий из БД."""
@@ -107,30 +111,28 @@ async def get_action_types_distribution_from_db(db_conn):
         ORDER BY
             type_count DESC;
     """
-    async with db_conn.execute(query) as cursor:
-        rows = await cursor.fetchall()
-        return [{"action_type": row[0], "count": row[1]} for row in rows]
+    rows = await db_conn.fetch(query)
+    return [{"action_type": row['action_type'], "count": row['type_count']} for row in rows]
 
 async def get_activity_over_time_data_from_db(db_conn, period='day'):
     """Извлекает данные об активности пользователей по времени (день, неделя, месяц) из БД."""
     if period == 'week':
-        date_format = '%Y-W%W'  # ISO Week format, e.g., "2023-W42"
+        date_format = 'IYYY-IW'  # ISO Week format for PostgreSQL
     elif period == 'month':
-        date_format = '%Y-%m'
+        date_format = 'YYYY-MM'
     else:  # Default to 'day'
-        date_format = '%Y-%m-%d'
+        date_format = 'YYYY-MM-DD'
 
     query = f"""
         SELECT
-            STRFTIME('{date_format}', timestamp) as period_start,
+            TO_CHAR(timestamp, '{date_format}') as period_start,
             COUNT(id) as actions_count
         FROM user_actions
         GROUP BY period_start
         ORDER BY period_start ASC;
     """
-    async with db_conn.execute(query) as cursor:
-        rows = await cursor.fetchall()
-        return [{"period": row[0], "count": row[1]} for row in rows]
+    rows = await db_conn.fetch(query)
+    return [{"period": row['period_start'], "count": row['actions_count']} for row in rows]
 
 async def get_user_profile_data_from_db(
     db_conn,
@@ -142,7 +144,7 @@ async def get_user_profile_data_from_db(
 ):
     """Извлекает детали профиля пользователя и пагинированный список его действий."""
     # --- Безопасная сортировка ---
-    allowed_sort_columns = ['id', 'action_type', 'action_details', 'timestamp']
+    allowed_sort_columns = ['id', 'action_type', 'action_details', 'timestamp'] # These are ua columns
     if sort_by not in allowed_sort_columns:
         sort_by = 'timestamp' # Значение по умолчанию
     sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC' # Безопасное определение порядка
@@ -159,9 +161,9 @@ async def get_user_profile_data_from_db(
                 id,
                 action_type,
                 action_details,
-                STRFTIME('%Y-%m-%d %H:%M:%S', timestamp) AS timestamp
+                TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI:SS') AS timestamp
             FROM user_actions
-            WHERE user_id = ?
+            WHERE user_id = $1
         )
         SELECT
             u.user_id,
@@ -174,35 +176,45 @@ async def get_user_profile_data_from_db(
             ua.action_details,
             ua.timestamp
         FROM users u
-        LEFT JOIN UserActions ua
-        WHERE u.user_id = ?
+        LEFT JOIN UserActions ua ON 1=1
+        WHERE u.user_id = $2
         ORDER BY ua.{sort_by} {sort_order}
-        LIMIT ? OFFSET ?;
+        LIMIT $3 OFFSET $4;
     """
     offset = (page - 1) * page_size
-    async with db_conn.execute(query, (user_id, user_id, page_size, offset)) as cursor:
-        rows = await cursor.fetchall()
-        if not rows:
-            return None  # Пользователь не найден
+    rows = await db_conn.fetch(query, user_id, user_id, page_size, offset)
+    if not rows:
+        # If user exists but has no actions, we might get no rows. Check user existence separately.
+        user_exists = await db_conn.fetchrow("SELECT 1 FROM users WHERE user_id = $1", user_id)
+        if not user_exists:
+            return None # User not found
+        # User exists but has no actions, return empty actions list
+        user_details_row = await db_conn.fetchrow("SELECT user_id, full_name, COALESCE(username, 'Нет username') AS username, avatar_pic_url FROM users WHERE user_id = $1", user_id)
+        return {
+            "user_details": dict(user_details_row),
+            "actions": [],
+            "total_actions": 0
+        }
 
-    first_row = rows[0]
+    first_row = dict(rows[0])
     user_details = {
-        "user_id": first_row[0],
-        "full_name": first_row[1],
-        "username": first_row[2],
-        "avatar_pic_url": first_row[3]
+        "user_id": first_row["user_id"],
+        "full_name": first_row["full_name"],
+        "username": first_row["username"],
+        "avatar_pic_url": first_row["avatar_pic_url"]
     }
-    total_actions = first_row[4]
+    total_actions = first_row["total_actions"]
 
     # Собираем действия, если они есть (может быть пользователь без действий)
     actions = []
     for row in rows:
-        if row[5] is not None: # action_id не NULL
+        row_dict = dict(row)
+        if row_dict["action_id"] is not None: # action_id не NULL
             actions.append({
-                "id": row[5],
-                "action_type": row[6],
-                "action_details": row[7],
-                "timestamp": row[8]
+                "id": row_dict["action_id"],
+                "action_type": row_dict["action_type"],
+                "action_details": row_dict["action_details"],
+                "timestamp": row_dict["timestamp"]
             })
 
     return {
@@ -218,7 +230,7 @@ async def get_users_for_action(db_conn, action_type: str, action_details: str, p
     offset = (page - 1) * page_size
 
     # --- Безопасная сортировка ---
-    allowed_sort_columns = ['user_id', 'full_name', 'username']
+    allowed_sort_columns = ['user_id', 'full_name', 'username'] # These are u columns
     if sort_by not in allowed_sort_columns:
         sort_by = 'full_name' # Значение по умолчанию
     sort_order = 'DESC' if sort_order.lower() == 'desc' else 'ASC' # Безопасное определение порядка
@@ -229,11 +241,9 @@ async def get_users_for_action(db_conn, action_type: str, action_details: str, p
         SELECT COUNT(DISTINCT u.user_id)
         FROM users u
         JOIN user_actions ua ON u.user_id = ua.user_id
-        WHERE ua.action_type = ? AND ua.action_details = ?;
+        WHERE ua.action_type = $1 AND ua.action_details = $2;
     """
-    async with db_conn.execute(count_query, (db_action_type, action_details)) as cursor:
-        total_users_row = await cursor.fetchone()
-        total_users = total_users_row[0] if total_users_row else 0
+    total_users = await db_conn.fetchval(count_query, db_action_type, action_details)
 
     # Query for the paginated list of users
     users_query = f"""
@@ -243,13 +253,12 @@ async def get_users_for_action(db_conn, action_type: str, action_details: str, p
             COALESCE(u.username, 'Нет username') AS username
         FROM users u
         JOIN user_actions ua ON u.user_id = ua.user_id
-        WHERE ua.action_type = ? AND ua.action_details = ?
+        WHERE ua.action_type = $1 AND ua.action_details = $2
         {order_by_clause}
-        LIMIT ? OFFSET ?;
+        LIMIT $3 OFFSET $4;
     """
-    async with db_conn.execute(users_query, (db_action_type, action_details, page_size, offset)) as cursor:
-        rows = await cursor.fetchall()
-        users = [{"user_id": row[0], "full_name": row[1], "username": row[2]} for row in rows]
+    rows = await db_conn.fetch(users_query, db_action_type, action_details, page_size, offset)
+    users = [dict(row) for row in rows]
 
     return {
         "users": users,

@@ -4,7 +4,7 @@ from starlette.websockets import WebSocketState
 import logging
 import asyncio
 import aiofiles
-import aiosqlite, datetime
+import asyncpg, datetime
 import json # Добавляем импорт json
 import os
 
@@ -103,9 +103,10 @@ log_manager = ConnectionManager(name="bot_log")
 # Глобальное состояние для задачи обновления статистики
 stats_update_task = None
 last_sent_stats_data_str = "" # Для предотвращения отправки одних и тех же данных
+last_checked_actions_count = -1 # Для быстрой проверки изменений
 
 async def periodic_stats_updater():
-    global last_sent_stats_data_str
+    global last_sent_stats_data_str, last_checked_actions_count
     logger.info("Starting periodic_stats_updater task.")
     while True:
         if not stats_manager.active_connections: # Выполняем только если есть активные соединения
@@ -113,9 +114,16 @@ async def periodic_stats_updater():
             continue
         try:
             async with get_db_connection_obj() as db:
-                async with db.execute("SELECT COUNT(*) FROM user_actions") as cursor:
-                    row = await cursor.fetchone()
-                    current_actions = row[0] if row else 0
+                # Use fetchval to get a single value directly
+                current_actions = await db.fetchval("SELECT COUNT(*) FROM user_actions") or 0
+
+                # Если количество действий не изменилось, нет смысла пересчитывать остальное
+                if current_actions == last_checked_actions_count:
+                    await asyncio.sleep(2) # Короткая пауза и следующая итерация
+                    continue
+                
+                logger.info(f"Action count changed from {last_checked_actions_count} to {current_actions}. Fetching full stats.")
+                last_checked_actions_count = current_actions
 
                 leaderboard_data = await get_leaderboard_data_from_db(db)
                 popular_commands_data = await get_popular_commands_data_from_db(db)
@@ -145,7 +153,7 @@ async def periodic_stats_updater():
                 last_sent_stats_data_str = current_data_json_str # Сохраняем JSON-строку
                 logger.info(f"StatsUpdater: Broadcasted updated stats (total_actions: {current_actions}, leaderboard: {len(leaderboard_data)} users, ...)")
 
-        except aiosqlite.Error as e:
+        except asyncpg.PostgresError as e:
             logger.error(f"StatsUpdater: Database error: {e}", exc_info=True)
             await stats_manager.broadcast_json({"error": "Ошибка получения данных из БД для статистики"})
             await asyncio.sleep(10) # Пауза перед повторной попыткой при ошибке БД

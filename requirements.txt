@@ -2,9 +2,9 @@
 Requests==2.32.3
 aiogram==3.18.0
 matplobblib==0.3.21
-python-dotenv==1.0.1
+python-dotenv>=1.0.0
 dotenv==0.9.9
-aiosqlite
+asyncpg>=0.28.0
 matplobblib
 matplotlib
 Pillow>=9.0.0
@@ -13,6 +13,7 @@ cachetools
 ipython
 aiohttp
 setuptools
+aiosqlite # Added for migration script
 httpx
 weasyprint
 redis

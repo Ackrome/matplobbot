@@ -10,33 +10,39 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    env_file: ./.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   mpb-telegram-bot:
     image: ghcr.io/ackrome/matplobbot-bot:${BOT_TAG:-latest}
     restart: unless-stopped
     env_file: ./.env
-    # container_name: mpb-telegram-bot
     volumes:
-      - bot_db_data:/app/db_data
       - bot_logs:/app/logs
       - matplobblib_lib:/usr/local/lib/python3.11/site-packages/matplobblib # Persist library updates
     depends_on:
       - redis
+      - postgres
 
   mpb-fastapi-stats:
     image: ghcr.io/ackrome/matplobbot-api:${API_TAG:-latest} 
     restart: unless-stopped
     env_file: ./.env
-    # container_name: mpb-fastapi-stats
     ports:
       - "9583:9583"
     volumes:
-      - bot_db_data:/app/db_data
       - bot_logs:/app/logs
     depends_on:
       - mpb-telegram-bot
+      - postgres
 
 volumes:
-  bot_db_data:
   bot_logs:
   matplobblib_lib:
   redis_data:
+  postgres_data:

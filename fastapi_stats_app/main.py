@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path # Добавляем импорт pathlib
-
+from contextlib import asynccontextmanager
 from .config import LOG_DIR, FASTAPI_LOG_FILE_NAME # Импортируем константы для логгирования
 
 
@@ -29,9 +29,19 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from .routers import stats_router, ws_router
+from .db_utils import init_db_pool, close_db_pool
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # On startup
+    logger.info("Application startup: Initializing database pool...")
+    await init_db_pool()
+    yield
+    # On shutdown
+    logger.info("Application shutdown: Closing database pool...")
+    await close_db_pool()
 
-app = FastAPI(title="Bot Stats API", version="0.1.0")
+app = FastAPI(title="Bot Stats API", version="0.1.0", lifespan=lifespan)
 
 # Определяем базовую директорию приложения (где находится main.py)
 APP_BASE_DIR = Path(__file__).resolve().parent

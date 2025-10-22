@@ -5,7 +5,9 @@ WORKDIR /app/fastapi_stats_app
 # Копируем сначала файл зависимостей и устанавливаем их
 # Это позволяет использовать кэширование слоев Docker, если код приложения меняется, а зависимости нет
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update && apt-get install -y curl && \
+    pip install --no-cache-dir -r requirements.txt && \
+    rm -rf /var/lib/apt/lists/*
 
 # Копируем остальной код приложения
 # Копируем код приложения в поддиректорию, которая будет нашим Python пакетом
