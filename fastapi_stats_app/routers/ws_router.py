@@ -121,7 +121,12 @@ async def periodic_stats_updater():
                 popular_commands_data = await get_popular_commands_data_from_db(db)
                 popular_messages_data = await get_popular_messages_data_from_db(db)
                 action_types_data = await get_action_types_distribution_from_db(db)
-                activity_over_time_data = await get_activity_over_time_data_from_db(db, period='day')
+                # Fetch activity data for all periods
+                activity_over_time_data = {
+                    'day': await get_activity_over_time_data_from_db(db, period='day'),
+                    'week': await get_activity_over_time_data_from_db(db, period='week'),
+                    'month': await get_activity_over_time_data_from_db(db, period='month'),
+                }
 
             current_data = {
                 "total_actions": current_actions,

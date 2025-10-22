@@ -113,7 +113,12 @@ async def get_action_types_distribution_from_db(db_conn):
 
 async def get_activity_over_time_data_from_db(db_conn, period='day'):
     """Извлекает данные об активности пользователей по времени (день, неделя, месяц) из БД."""
-    date_format = '%Y-%m-%d' if period == 'day' else '%Y-%m'
+    if period == 'week':
+        date_format = '%Y-W%W'  # ISO Week format, e.g., "2023-W42"
+    elif period == 'month':
+        date_format = '%Y-%m'
+    else:  # Default to 'day'
+        date_format = '%Y-%m-%d'
 
     query = f"""
         SELECT
@@ -204,4 +209,49 @@ async def get_user_profile_data_from_db(
         "user_details": user_details,
         "actions": actions,
         "total_actions": total_actions
+    }
+
+async def get_users_for_action(db_conn, action_type: str, action_details: str, page: int = 1, page_size: int = 15, sort_by: str = 'full_name', sort_order: str = 'asc'):
+    """Извлекает пагинированный список уникальных пользователей, совершивших определенное действие."""
+    # Note: action_type for messages is 'text_message' in the DB
+    db_action_type = 'text_message' if action_type == 'message' else action_type
+    offset = (page - 1) * page_size
+
+    # --- Безопасная сортировка ---
+    allowed_sort_columns = ['user_id', 'full_name', 'username']
+    if sort_by not in allowed_sort_columns:
+        sort_by = 'full_name' # Значение по умолчанию
+    sort_order = 'DESC' if sort_order.lower() == 'desc' else 'ASC' # Безопасное определение порядка
+    order_by_clause = f"ORDER BY u.{sort_by} {sort_order}"
+
+    # Query for total count of distinct users
+    count_query = """
+        SELECT COUNT(DISTINCT u.user_id)
+        FROM users u
+        JOIN user_actions ua ON u.user_id = ua.user_id
+        WHERE ua.action_type = ? AND ua.action_details = ?;
+    """
+    async with db_conn.execute(count_query, (db_action_type, action_details)) as cursor:
+        total_users_row = await cursor.fetchone()
+        total_users = total_users_row[0] if total_users_row else 0
+
+    # Query for the paginated list of users
+    users_query = f"""
+        SELECT DISTINCT
+            u.user_id,
+            u.full_name,
+            COALESCE(u.username, 'Нет username') AS username
+        FROM users u
+        JOIN user_actions ua ON u.user_id = ua.user_id
+        WHERE ua.action_type = ? AND ua.action_details = ?
+        {order_by_clause}
+        LIMIT ? OFFSET ?;
+    """
+    async with db_conn.execute(users_query, (db_action_type, action_details, page_size, offset)) as cursor:
+        rows = await cursor.fetchall()
+        users = [{"user_id": row[0], "full_name": row[1], "username": row[2]} for row in rows]
+
+    return {
+        "users": users,
+        "total_users": total_users
     }

@@ -1,7 +1,6 @@
 const totalActionsValueElement = document.getElementById('total-actions-value');
 const leaderboardBodyElement = document.getElementById('leaderboard-body');
-const popularCommandsStatusElement = document.getElementById('popular-commands-status');
-const popularMessagesStatusElement = document.getElementById('popular-messages-status');
+const popularActionsStatusElement = document.getElementById('popular-actions-status');
 const actionTypesStatusElement = document.getElementById('action-types-status');
 const activityOverTimeStatusElement = document.getElementById('activity-over-time-status');
 const botLogContentElement = document.getElementById('bot-log-content');
@@ -9,11 +8,9 @@ const botLogStatusElement = document.getElementById('bot-log-status');
 const lastUpdatedContainer = document.getElementById('last-updated-container');
 const lastUpdatedValueElement = document.getElementById('last-updated-value');
 const downloadButtons = {
-    popularCommands: document.querySelector('.download-csv-btn[data-chart="popularCommands"]'),
 };
 
-let popularCommandsChartInstance; // Для хранения экземпляра графика
-let popularMessagesChartInstance; // Для графика популярных сообщений
+let popularActionsChartInstance; // Для нового комбинированного графика
 let actionTypesChartInstance; // Для графика типов действий
 let activityOverTimeChartInstance; // Для графика активности по времени
 
@@ -107,10 +104,8 @@ function handleStatsSocketMessage(event) {
                 console.error("WebSocket Server Error:", data.error); // Ошибка от сервера
                 totalActionsValueElement.textContent = `Ошибка: ${data.error}`;
                 leaderboardBodyElement.innerHTML = `<tr><td colspan="6" style="text-align:center;">Ошибка: ${data.error}</td></tr>`;
-                popularCommandsStatusElement.textContent = `Ошибка загрузки графика: ${data.error}`;
-                if (popularCommandsChartInstance) { popularCommandsChartInstance.destroy(); popularCommandsChartInstance = null; }
-                popularMessagesStatusElement.textContent = `Ошибка загрузки графика: ${data.error}`;
-                if (popularMessagesChartInstance) { popularMessagesChartInstance.destroy(); popularMessagesChartInstance = null; }
+                popularActionsStatusElement.textContent = `Ошибка загрузки графика: ${data.error}`;
+                if (popularActionsChartInstance) { popularActionsChartInstance.destroy(); popularActionsChartInstance = null; }
                 actionTypesStatusElement.textContent = `Ошибка загрузки графика: ${data.error}`;
                 if (actionTypesChartInstance) { actionTypesChartInstance.destroy(); actionTypesChartInstance = null; }
                 activityOverTimeStatusElement.textContent = `Ошибка загрузки графика: ${data.error}`;
@@ -185,55 +180,38 @@ function handleStatsSocketMessage(event) {
                 }
             }
 
-            if (data.popular_commands && Array.isArray(data.popular_commands)) {
-                if (data.popular_commands.length === 0) {
-                    popularCommandsStatusElement.textContent = "Нет данных о командах для отображения.";
-                    document.querySelector('.download-csv-btn[data-chart="popularCommands"]').style.display = 'none';
-                    if (popularCommandsChartInstance) { popularCommandsChartInstance.destroy(); popularCommandsChartInstance = null; }
-                } else {
-                    popularCommandsStatusElement.textContent = ""; // Очищаем статус, если есть данные
-                    chartDataStore.popularCommands = data.popular_commands;
-                    document.querySelector('.download-csv-btn[data-chart="popularCommands"]').style.display = 'inline-block';
-                    updatePopularCommandsChart(data.popular_commands);
-                }
-            }
-            
-            if (data.popular_messages && Array.isArray(data.popular_messages)) {
-                if (data.popular_messages.length === 0) {
-                    popularMessagesStatusElement.textContent = "Нет данных о сообщениях для отображения.";
-                    document.querySelector('.download-csv-btn[data-chart="popularMessages"]').style.display = 'none';
-                    if (popularMessagesChartInstance) { popularMessagesChartInstance.destroy(); popularMessagesChartInstance = null; }
-                } else {
-                    popularMessagesStatusElement.textContent = ""; // Очищаем статус
-                    chartDataStore.popularMessages = data.popular_messages;
-                    document.querySelector('.download-csv-btn[data-chart="popularMessages"]').style.display = 'inline-block';
-                    updatePopularMessagesChart(data.popular_messages);
-                }
+            // Store data for the combined chart
+            if (data.popular_commands) chartDataStore.popularCommands = data.popular_commands;
+            if (data.popular_messages) chartDataStore.popularMessages = data.popular_messages;
+
+            // Update the combined chart if we have data for it
+            if (chartDataStore.popularCommands || chartDataStore.popularMessages) {
+                updateCombinedPopularActionsChart();
             }
 
             if (data.action_types_distribution && Array.isArray(data.action_types_distribution)) {
                 if (data.action_types_distribution.length === 0) {
                     actionTypesStatusElement.textContent = "Нет данных о типах действий.";
-                    document.querySelector('.download-csv-btn[data-chart="actionTypes"]').style.display = 'none';
+                    document.querySelector('.download-csv-btn[data-chart="actionTypes"]').style.display = 'none'; // Keep this for other charts
                     if (actionTypesChartInstance) { actionTypesChartInstance.destroy(); actionTypesChartInstance = null; }
                 } else {
                     actionTypesStatusElement.textContent = "";
-                    chartDataStore.actionTypes = data.action_types_distribution;
+                    chartDataStore.actionTypes = data.action_types_distribution; // Keep this
                     document.querySelector('.download-csv-btn[data-chart="actionTypes"]').style.display = 'inline-block';
                     updateActionTypesChart(data.action_types_distribution);
                 }
             }
 
-            if (data.activity_over_time && Array.isArray(data.activity_over_time)) {
-                if (data.activity_over_time.length === 0) {
+            if (data.activity_over_time) { // Now an object
+                const dayData = data.activity_over_time.day || [];
+                if (dayData.length === 0) {
                     activityOverTimeStatusElement.textContent = "Нет данных об активности для отображения.";
-                    document.querySelector('.download-csv-btn[data-chart="activityOverTime"]').style.display = 'none';
+                    document.querySelector('.download-csv-btn[data-chart="activityOverTime"]').style.display = 'none'; // Keep this
                     if (activityOverTimeChartInstance) { activityOverTimeChartInstance.destroy(); activityOverTimeChartInstance = null; }
                 } else {
                     activityOverTimeStatusElement.textContent = "";
-                    chartDataStore.activityOverTime = data.activity_over_time;
-                    document.querySelector('.download-csv-btn[data-chart="activityOverTime"]').style.display = 'inline-block';
-                    updateActivityOverTimeChart(data.activity_over_time);
+                    chartDataStore.activityOverTime = data.activity_over_time; // Keep this
+                    updateActivityOverTimeChart(); // Initial render with default 'day'
                 }
             }
 
@@ -241,8 +219,7 @@ function handleStatsSocketMessage(event) {
             console.error("Ошибка парсинга WebSocket данных:", e, "Данные:", event.data);
             totalActionsValueElement.textContent = "Ошибка обработки данных";
             leaderboardBodyElement.innerHTML = `<tr><td colspan="6" style="text-align:center;">Ошибка обработки данных.</td></tr>`;
-            popularCommandsStatusElement.textContent = "Ошибка обработки данных для графика.";
-            popularMessagesStatusElement.textContent = "Ошибка обработки данных для графика.";
+            popularActionsStatusElement.textContent = "Ошибка обработки данных для графика.";
             actionTypesStatusElement.textContent = "Ошибка обработки данных для графика.";
             activityOverTimeStatusElement.textContent = "Ошибка обработки данных для графика.";
             }
@@ -251,12 +228,10 @@ function handleStatsSocketError(error) {
         console.error("WebSocket ошибка:", error);
         totalActionsValueElement.textContent = "Ошибка соединения WebSocket";
         leaderboardBodyElement.innerHTML = `<tr><td colspan="6" style="text-align:center;">Ошибка соединения.</td></tr>`;
-        popularCommandsStatusElement.textContent = "Ошибка соединения WebSocket для графика.";
-        popularMessagesStatusElement.textContent = "Ошибка соединения WebSocket для графика.";
+        popularActionsStatusElement.textContent = "Ошибка соединения WebSocket для графика.";
         actionTypesStatusElement.textContent = "Ошибка соединения WebSocket для графика.";
         activityOverTimeStatusElement.textContent = "Ошибка соединения WebSocket для графика.";
-        if (popularCommandsChartInstance) { popularCommandsChartInstance.destroy(); popularCommandsChartInstance = null; }
-        if (popularMessagesChartInstance) { popularMessagesChartInstance.destroy(); popularMessagesChartInstance = null; }
+        if (popularActionsChartInstance) { popularActionsChartInstance.destroy(); popularActionsChartInstance = null; }
         if (actionTypesChartInstance) { actionTypesChartInstance.destroy(); actionTypesChartInstance = null; }
         if (activityOverTimeChartInstance) { activityOverTimeChartInstance.destroy(); activityOverTimeChartInstance = null; }
     };
@@ -265,12 +240,10 @@ function handleStatsSocketClose() {
         totalActionsValueElement.textContent = "Соединение потеряно. Попытка переподключения через 5с...";
         // Попытка переподключения через некоторое время
         leaderboardBodyElement.innerHTML = `<tr><td colspan="6" style="text-align:center;">Соединение потеряно. Попытка переподключения...</td></tr>`;
-        popularCommandsStatusElement.textContent = "Соединение для графика потеряно. Попытка переподключения...";
-        popularMessagesStatusElement.textContent = "Соединение для графика потеряно. Попытка переподключения...";
+        popularActionsStatusElement.textContent = "Соединение для графика потеряно. Попытка переподключения...";
         actionTypesStatusElement.textContent = "Соединение для графика потеряно. Попытка переподключения...";
         activityOverTimeStatusElement.textContent = "Соединение для графика потеряно. Попытка переподключения...";
-        if (popularCommandsChartInstance) { popularCommandsChartInstance.destroy(); popularCommandsChartInstance = null; }
-        if (popularMessagesChartInstance) { popularMessagesChartInstance.destroy(); popularMessagesChartInstance = null; }
+        if (popularActionsChartInstance) { popularActionsChartInstance.destroy(); popularActionsChartInstance = null; }
         if (actionTypesChartInstance) { actionTypesChartInstance.destroy(); actionTypesChartInstance = null; }
         if (activityOverTimeChartInstance) { activityOverTimeChartInstance.destroy(); activityOverTimeChartInstance = null; }
     };
@@ -381,205 +354,311 @@ function downloadCSV(headers, data, filename) {
     document.body.removeChild(link);
 }
 
-function updatePopularCommandsChart(commandsData) {
-    const ctx = document.getElementById('popularCommandsChart').getContext('2d');
-    const labels = commandsData.map(item => item.command);
-    const counts = commandsData.map(item => item.count);
+/**
+ * A generic function to create or update a Chart.js instance.
+ * @param {object} config - The configuration for the chart.
+ * @returns {Chart} The created or updated chart instance.
+ */
+function updateChart(config) {
+    const {
+        instance,
+        ctx,
+        data,
+        type,
+        labelKey,
+        countKey,
+        datasetLabel,
+        backgroundColor,
+        borderColor,
+        extraOptions = {}
+    } = config;
+
+    const labels = data.map(item => item[labelKey]);
+    const counts = data.map(item => item[countKey]);
     const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
     const themeColors = getChartThemeColors(currentTheme);
 
-    const chartOptions = {
+    // Base options, merged with any extra options provided
+    const chartOptions = { ...{
         responsive: true,
         maintainAspectRatio: false,
-        scales: {
-            y: {
-                beginAtZero: true,
-                ticks: { color: themeColors.tickColor },
-                grid: { color: themeColors.gridColor }
-            },
-            x: {
-                ticks: { color: themeColors.tickColor },
-                grid: { color: themeColors.gridColor, drawOnChartArea: false }
-            }
-        },
         plugins: {
             legend: {
                 labels: { color: themeColors.legendColor }
             }
         }
+    }, ...extraOptions };
+
+    // Add scales for non-pie charts
+    if (type !== 'pie') {
+        chartOptions.scales = {
+            y: { beginAtZero: true, ticks: { color: themeColors.tickColor }, grid: { color: themeColors.gridColor } },
+            x: { ticks: { color: themeColors.tickColor }, grid: { color: themeColors.gridColor, drawOnChartArea: type !== 'bar' } }
+        };
+    }
+
+    // Prepare dataset
+    const dataset = {
+        label: datasetLabel,
+        data: counts,
+        borderWidth: 1
     };
 
-    if (popularCommandsChartInstance) {
-        popularCommandsChartInstance.data.labels = labels;
-        popularCommandsChartInstance.data.datasets[0].data = counts;
-        Object.assign(popularCommandsChartInstance.options, chartOptions); // Update all options
-        popularCommandsChartInstance.update();
+    // Type-specific dataset properties
+    if (type === 'pie') {
+        dataset.backgroundColor = data.map(() => `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, 0.7)`);
+        dataset.hoverOffset = 4;
+    } else if (type === 'line') {
+        dataset.backgroundColor = backgroundColor;
+        dataset.borderColor = borderColor;
+        dataset.fill = false;
+        dataset.tension = 0.1;
     } else {
-        popularCommandsChartInstance = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Количество вызовов',
-                    data: counts,
-                    backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                    borderColor: 'rgba(54, 162, 235, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: chartOptions
-        });
+        dataset.backgroundColor = backgroundColor;
+        dataset.borderColor = borderColor;
+    }
+
+    if (instance) {
+        instance.data.labels = labels;
+        instance.data.datasets[0] = dataset;
+        Object.assign(instance.options, chartOptions);
+        instance.update();
+        return instance;
+    } else {
+        return new Chart(ctx, { type, data: { labels, datasets: [dataset] }, options: chartOptions });
     }
 }
 
-function updatePopularMessagesChart(messagesData) {
-    const ctx = document.getElementById('popularMessagesChart').getContext('2d');
-    const labels = messagesData.map(item => item.message);
-    const counts = messagesData.map(item => item.count);
-    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-    const themeColors = getChartThemeColors(currentTheme);
+function renderModalContent(title, data) {
+    const modal = document.getElementById('user-list-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalBody = document.getElementById('modal-body');
+    const downloadBtn = document.getElementById('modal-download-csv-btn');
+    const paginationControls = document.getElementById('modal-pagination-controls');
 
-    const chartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-            y: {
-                beginAtZero: true,
-                ticks: { color: themeColors.tickColor },
-                grid: { color: themeColors.gridColor }
-            },
-            x: {
-                ticks: { color: themeColors.tickColor },
-                grid: { color: themeColors.gridColor, drawOnChartArea: false }
-            }
-        },
-        plugins: {
-            legend: { labels: { color: themeColors.legendColor } }
-        }
+    modalTitle.textContent = `Пользователи для: "${title}"`;
+    paginationControls.innerHTML = '';
+
+    const renderHeaders = () => {
+        const { sort_by, sort_order } = data.pagination;
+        const headers = [
+            { key: 'full_name', text: 'Полное имя' },
+            { key: 'username', text: 'Тэг' },
+            { key: 'user_id', text: 'ID' }
+        ];
+
+        return headers.map(h => {
+            const isSorted = h.key === sort_by;
+            const sortClass = isSorted ? (sort_order === 'asc' ? 'sort-asc' : 'sort-desc') : '';
+            return `<th class="sortable ${sortClass}" data-sort-by="${h.key}">${h.text}</th>`;
+        }).join('');
     };
 
-    if (popularMessagesChartInstance) {
-        popularMessagesChartInstance.data.labels = labels;
-        popularMessagesChartInstance.data.datasets[0].data = counts;
-        Object.assign(popularMessagesChartInstance.options, chartOptions);
-        popularMessagesChartInstance.update();
+    if (data.users.length === 0) {
+        modalBody.innerHTML = '<p>Нет данных о пользователях для этого действия.</p>';
+        downloadBtn.style.display = 'none';
     } else {
-        popularMessagesChartInstance = new Chart(ctx, {
-            type: 'bar', // Вертикальный бар-чарт
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Количество сообщений',
-                    data: counts,
-                    backgroundColor: 'rgba(75, 192, 192, 0.5)',
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: chartOptions
+        const userRows = data.users.map(user => `
+            <tr>
+                <td><a href="/users/${user.user_id}" target="_blank">${user.full_name}</a></td>
+                <td>${user.username}</td>
+                <td>${user.user_id}</td>
+            </tr>
+        `).join('');
+
+        modalBody.innerHTML = `<table><thead><tr>${renderHeaders()}</tr></thead><tbody>${userRows}</tbody></table>`;
+        downloadBtn.style.display = 'inline-block';
+
+        // --- CSV Download Logic ---
+        const newDownloadBtn = downloadBtn.cloneNode(true);
+        downloadBtn.parentNode.replaceChild(newDownloadBtn, downloadBtn);
+        newDownloadBtn.addEventListener('click', () => {
+            const headers = ['UserID', 'FullName', 'Username'];
+            const dataToExport = data.users.map(u => ({ user_id: u.user_id, full_name: u.full_name, username: u.username }));
+            const safeTitle = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            downloadCSV(headers, dataToExport, `users_for_${safeTitle}.csv`);
         });
-    }
-}
 
-function updateActionTypesChart(actionTypesData) {
-    const ctx = document.getElementById('actionTypesChart').getContext('2d');
-    const labels = actionTypesData.map(item => item.action_type);
-    const counts = actionTypesData.map(item => item.count);
-    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-    const themeColors = getChartThemeColors(currentTheme);
+        // --- Pagination Controls Logic ---
+        const { current_page, total_pages } = data.pagination;
+        if (total_pages > 1) {
+            const createButton = (text, page, isDisabled = false) => {
+                const button = document.createElement('button');
+                button.textContent = text;
+                button.className = 'pagination-button';
+                if (current_page === page) button.classList.add('active');
+                button.disabled = isDisabled || current_page === page;
+                if (!button.disabled) {
+                    button.addEventListener('click', () => fetchUsersForModal(title, clickedActionType, page, data.pagination.sort_by, data.pagination.sort_order));
+                }
+                return button;
+            };
 
-    const chartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: 'top',
-                labels: { color: themeColors.legendColor }
-            },
-            tooltip: {
-                callbacks: { /* existing callbacks */ }
-            }
-            // title: { display: true, text: 'Распределение типов действий', color: themeColors.titleColor } // Example title
-        }
-    };
+            paginationControls.appendChild(createButton('«', current_page - 1, current_page === 1));
+            const pageInfo = document.createElement('span');
+            pageInfo.textContent = `${current_page} / ${total_pages}`;
+            pageInfo.style.padding = '0 5px';
+            paginationControls.appendChild(pageInfo);
+            paginationControls.appendChild(createButton('»', current_page + 1, current_page === total_pages));
 
-    // Генерация случайных цветов для круговой диаграммы
-    const backgroundColors = actionTypesData.map(() => 
-        `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, 0.7)`);
+            // Add "go to page" input if there are many pages
+            if (total_pages > 5) {
+                const goToInput = document.createElement('input');
+                goToInput.type = 'number';
+                goToInput.min = 1;
+                goToInput.max = total_pages;
+                goToInput.placeholder = '...';
+                goToInput.className = 'pagination-goto-input';
+                paginationControls.appendChild(goToInput);
 
-    if (actionTypesChartInstance) {
-        actionTypesChartInstance.data.labels = labels;
-        actionTypesChartInstance.data.datasets[0].data = counts;
-        actionTypesChartInstance.data.datasets[0].backgroundColor = backgroundColors;
-        Object.assign(actionTypesChartInstance.options, chartOptions);
-        actionTypesChartInstance.update();
-    } else {
-        actionTypesChartInstance = new Chart(ctx, {
-            type: 'pie', // Тип диаграммы - круговая
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Распределение типов действий',
-                    data: counts,
-                    backgroundColor: backgroundColors,
-                    hoverOffset: 4
-                }]
-            },
-            options: chartOptions
-        });
-    }
-}
-
-function updateActivityOverTimeChart(activityData) {
-    const ctx = document.getElementById('activityOverTimeChart').getContext('2d');
-    const labels = activityData.map(item => item.period);
-    const counts = activityData.map(item => item.count);
-    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-    const themeColors = getChartThemeColors(currentTheme);
-
-    const chartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-            y: {
-                beginAtZero: true,
-                ticks: { color: themeColors.tickColor },
-                grid: { color: themeColors.gridColor }
-            },
-            x: {
-                ticks: { color: themeColors.tickColor },
-                grid: { color: themeColors.gridColor, drawOnChartArea: true } // Grid lines for time axis can be useful
-            }
-        },
-        plugins: {
-            legend: {
-                labels: { color: themeColors.legendColor }
+                const goButton = createButton('Перейти', -1);
+                goButton.addEventListener('click', () => {
+                    const page = parseInt(goToInput.value, 10);
+                    if (page >= 1 && page <= total_pages) {
+                        fetchUsersForModal(title, clickedActionType, page, data.pagination.sort_by, data.pagination.sort_order);
+                    }
+                });
+                paginationControls.appendChild(goButton);
             }
         }
-    };
 
-    if (activityOverTimeChartInstance) {
-        activityOverTimeChartInstance.data.labels = labels;
-        activityOverTimeChartInstance.data.datasets[0].data = counts;
-        Object.assign(activityOverTimeChartInstance.options, chartOptions);
-        activityOverTimeChartInstance.update();
-    } else {
-        activityOverTimeChartInstance = new Chart(ctx, {
-            type: 'line', // Тип графика - линейный
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Количество действий',
-                    data: counts,
-                    fill: false, // Не заполнять область под линией
-                    borderColor: 'rgb(255, 99, 132)', // Цвет линии
-                    tension: 0.1 // Сглаживание линии
-                }]
-            },
-            options: chartOptions
+        // Add sort event listeners
+        modalBody.querySelectorAll('th.sortable').forEach(th => {
+            th.addEventListener('click', (event) => {
+                const newSortBy = event.target.dataset.sortBy;
+                let newSortOrder = 'asc';
+                if (newSortBy === data.pagination.sort_by && data.pagination.sort_order === 'asc') {
+                    newSortOrder = 'desc';
+                }
+                fetchUsersForModal(title, clickedActionType, 1, newSortBy, newSortOrder);
+            });
         });
     }
 }
+
+let clickedActionType = ''; // Store the type of the clicked action
+
+const modalUserListCache = new Map(); // Cache for user lists in the modal
+
+function fetchUsersForModal(title, type, page = 1, sortBy = 'full_name', sortOrder = 'asc') {
+    const modalBody = document.getElementById('modal-body');
+    const cacheKey = `${type}:${title}:${page}:${sortBy}:${sortOrder}`;
+
+    // Check cache first
+    if (modalUserListCache.has(cacheKey)) {
+        console.log(`Cache hit for user list: ${cacheKey}`);
+        renderModalContent(title, modalUserListCache.get(cacheKey));
+        return;
+    }
+
+    console.log(`Cache miss for user list: ${cacheKey}. Fetching...`);
+    modalBody.innerHTML = 'Загрузка...';
+    document.getElementById('modal-pagination-controls').innerHTML = '';
+    document.getElementById('modal-download-csv-btn').style.display = 'none';
+
+    fetch(`/api/stats/action_users?action_type=${type}&action_details=${encodeURIComponent(title)}&page=${page}&sort_by=${sortBy}&sort_order=${sortOrder}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.json();
+        })
+        .then(data => {
+            // Store in cache before rendering
+            modalUserListCache.set(cacheKey, data);
+            renderModalContent(title, data);
+        })
+        .catch(error => {
+            console.error('Error fetching users for action:', error);
+            modalBody.innerHTML = '<p style="color: red;">Не удалось загрузить список пользователей.</p>';
+        });
+}
+
+
+function handleChartClick(event, chart, chartData) {
+    const points = chart.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
+
+    if (points.length) {
+        const firstPoint = points[0];
+        const clickedData = chartData[firstPoint.index];
+        if (!clickedData) return;
+
+        const { label, type } = clickedData;
+        clickedActionType = type; // Store for pagination clicks
+
+        // Show modal immediately with loading state
+        document.getElementById('user-list-modal').style.display = 'block';
+        document.getElementById('modal-title').textContent = `Пользователи для: "${label}"`;
+        
+        // Fetch the first page of data
+        fetchUsersForModal(label, type, 1);
+    }
+}
+
+function updateCombinedPopularActionsChart() {
+    const filter = document.querySelector('input[name="actionFilter"]:checked').value;
+    const commands = (chartDataStore.popularCommands || []).map(d => ({ label: d.command, count: d.count, type: 'command' }));
+    const messages = (chartDataStore.popularMessages || []).map(d => ({ label: d.message, count: d.count, type: 'message' }));
+
+    let combinedData = [];
+    if (filter === 'all') {
+        combinedData = [...commands, ...messages];
+    } else if (filter === 'commands') {
+        combinedData = commands;
+    } else if (filter === 'messages') {
+        combinedData = messages;
+    }
+
+    combinedData.sort((a, b) => b.count - a.count);
+    const topData = combinedData.slice(0, 15); // Show top 15 combined
+
+    if (topData.length === 0) {
+        popularActionsStatusElement.textContent = "Нет данных для отображения.";
+        document.querySelector('.download-csv-btn[data-chart="popularActions"]').style.display = 'none';
+        if (popularActionsChartInstance) { popularActionsChartInstance.destroy(); popularActionsChartInstance = null; }
+        return;
+    }
+
+    popularActionsStatusElement.textContent = "";
+    chartDataStore.popularActions = topData; // For CSV download
+    document.querySelector('.download-csv-btn[data-chart="popularActions"]').style.display = 'inline-block';
+
+    popularActionsChartInstance = updateChart({
+        instance: popularActionsChartInstance,
+        ctx: document.getElementById('popularActionsChart').getContext('2d'),
+        data: topData, type: 'bar', labelKey: 'label', countKey: 'count',
+        datasetLabel: 'Количество',
+        backgroundColor: topData.map(d => d.type === 'command' ? 'rgba(54, 162, 235, 0.5)' : 'rgba(75, 192, 192, 0.5)'),
+        borderColor: topData.map(d => d.type === 'command' ? 'rgba(54, 162, 235, 1)' : 'rgba(75, 192, 192, 1)'),
+        extraOptions: {
+            onClick: (event, elements, chart) => handleChartClick(event, chart, topData)
+        }
+    });
+}
+
+const updateActionTypesChart = (data) => {
+    actionTypesChartInstance = updateChart({
+        instance: actionTypesChartInstance,
+        ctx: document.getElementById('actionTypesChart').getContext('2d'),
+        data, type: 'pie', labelKey: 'action_type', countKey: 'count',
+        datasetLabel: 'Распределение типов действий',
+        extraOptions: { plugins: { legend: { position: 'top' } } }
+    });
+};
+
+const updateActivityOverTimeChart = () => {
+    const filter = document.querySelector('input[name="timeFilter"]:checked').value;
+    const data = chartDataStore.activityOverTime ? chartDataStore.activityOverTime[filter] : [];
+
+    // Update download button visibility based on filtered data
+    document.querySelector('.download-csv-btn[data-chart="activityOverTime"]').style.display = data.length > 0 ? 'inline-block' : 'none';
+
+    activityOverTimeChartInstance = updateChart({
+        instance: activityOverTimeChartInstance,
+        ctx: document.getElementById('activityOverTimeChart').getContext('2d'),
+        data, type: 'line', labelKey: 'period', countKey: 'count',
+        datasetLabel: 'Количество действий',
+        borderColor: 'rgb(255, 99, 132)',
+    });
+};
 
 function openTab(evt, tabName) {
     var i, tabcontent, tablinks;
@@ -626,15 +705,43 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!data) return;
 
             const headerMap = {
-                popularCommands: ['Command', 'Count'],
-                popularMessages: ['Message', 'Count'],
+                popularActions: ['Action', 'Count', 'Type'],
                 actionTypes: ['Action Type', 'Count'],
-                activityOverTime: ['Period', 'Count']
+                // For activity, we need to know which period is active
+                activityOverTime: ['Period', 'Count'] 
             };
 
             downloadCSV(headerMap[chartType], data, `${chartType}_export.csv`);
         });
     });
+
+    // Add event listener for the new filter radio buttons
+    document.querySelectorAll('input[name="actionFilter"]').forEach(radio => {
+        radio.addEventListener('change', updateCombinedPopularActionsChart);
+    });
+
+    // Add event listener for the activity time filter
+    document.querySelectorAll('input[name="timeFilter"]').forEach(radio => {
+        radio.addEventListener('change', updateActivityOverTimeChart);
+    });
+
+    // Add event listeners for the modal
+    const modal = document.getElementById('user-list-modal');
+    const closeBtn = document.querySelector('.modal-close-btn');
+    const closeModal = () => {
+        modal.style.display = "none";
+        // Clear the cache when the modal is closed to ensure fresh data next time
+        modalUserListCache.clear();
+        console.log("Modal user list cache cleared.");
+    };
+
+    closeBtn.onclick = closeModal;
+    window.onclick = (event) => {
+        if (event.target == modal) {
+            closeModal();
+        }
+    };
+
 
     // Re-apply theme to charts when theme is changed
     const themeToggleButton = document.getElementById('theme-toggle-button');
@@ -649,7 +756,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 Chart.defaults.color = newThemeColors.legendColor;
                 Chart.defaults.borderColor = newThemeColors.gridColor;
 
-                [popularCommandsChartInstance, popularMessagesChartInstance, actionTypesChartInstance, activityOverTimeChartInstance].forEach(chart => {
+                [popularActionsChartInstance, actionTypesChartInstance, activityOverTimeChartInstance].forEach(chart => {
                     if (chart) {
                         if (chart.options.scales) {
                             if (chart.options.scales.x) {

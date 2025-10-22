@@ -310,3 +310,53 @@ html[data-theme='dark'] .download-csv-btn {
     background-color: #3a3a3a; border-color: #555;
 }
 html[data-theme='dark'] .download-csv-btn:hover { background-color: #4a4a4a; }
+
+/* --- Modal Styles --- */
+.modal {
+    position: fixed;
+    z-index: 100;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.5);
+}
+.modal-content {
+    background-color: #fefefe;
+    margin: 15% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%;
+    max-width: 600px;
+    border-radius: 8px;
+    position: relative;
+}
+.modal-close-btn {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.modal-close-btn:hover,
+.modal-close-btn:focus {
+    color: black;
+}
+#modal-body ul {
+    list-style-type: none;
+    padding: 0;
+}
+#modal-body li {
+    padding: 5px 0;
+    border-bottom: 1px solid #eee;
+}
+html[data-theme='dark'] .modal-content {
+    background-color: #2a2a2a;
+    border-color: #555;
+}
+html[data-theme='dark'] .modal-close-btn { color: #888; }
+html[data-theme='dark'] .modal-close-btn:hover { color: #ccc; }
+html[data-theme='dark'] #modal-body li { border-bottom-color: #444; }

@@ -23,27 +23,26 @@
 
             <!-- Контейнер для вкладок -->
             <div class="tab-container">
-                <button class="tab-button active" onclick="openTab(event, 'commandsTab')">Популярные команды</button>
-                <button class="tab-button" onclick="openTab(event, 'messagesTab')">Популярные сообщения</button>
+                <button class="tab-button active" onclick="openTab(event, 'popularActionsTab')">Популярные действия</button>
                 <button class="tab-button" onclick="openTab(event, 'typesTab')">Типы действий</button>
                 <button class="tab-button" onclick="openTab(event, 'activityTimeTab')">Активность по времени</button>
                 <button class="tab-button" onclick="openTab(event, 'logTab')">Лог Бота</button>
             </div>
 
             <!-- Содержимое вкладок -->
-            <div id="commandsTab" class="tab-content" style="display: block;"> <!-- Первая вкладка активна по умолчанию -->
+            <div id="popularActionsTab" class="tab-content" style="display: block;"> <!-- Первая вкладка активна по умолчанию -->
                 <div class="chart-wrapper">
-                    <h2>Популярные команды <button class="download-csv-btn" data-chart="popularCommands" style="display: none;">💾 CSV</button></h2>
-                    <canvas id="popularCommandsChart"></canvas>
-                    <p id="popular-commands-status" style="text-align:center;"></p>
-                </div>
-            </div>
-
-            <div id="messagesTab" class="tab-content">
-                <div class="chart-wrapper">
-                    <h2>Популярные сообщения <button class="download-csv-btn" data-chart="popularMessages" style="display: none;">💾 CSV</button></h2>
-                    <canvas id="popularMessagesChart"></canvas>
-                    <p id="popular-messages-status" style="text-align:center;"></p>
+                    <h2>
+                        Популярные действия
+                        <div id="popular-actions-filter" style="display: inline-block; margin-left: 20px; font-size: 14px; font-weight: normal;">
+                            <label><input type="radio" name="actionFilter" value="all" checked> Все</label>
+                            <label style="margin-left: 10px;"><input type="radio" name="actionFilter" value="commands"> Команды</label>
+                            <label style="margin-left: 10px;"><input type="radio" name="actionFilter" value="messages"> Сообщения</label>
+                        </div>
+                        <button class="download-csv-btn" data-chart="popularActions" style="display: none;">💾 CSV</button>
+                    </h2>
+                    <canvas id="popularActionsChart"></canvas>
+                    <p id="popular-actions-status" style="text-align:center;"></p>
                 </div>
             </div>
 
@@ -57,7 +56,15 @@
 
             <div id="activityTimeTab" class="tab-content">
                 <div class="chart-wrapper">
-                    <h2>Активность по времени (по дням) <button class="download-csv-btn" data-chart="activityOverTime" style="display: none;">💾 CSV</button></h2>
+                    <h2>
+                        Активность по времени
+                        <div id="activity-time-filter" style="display: inline-block; margin-left: 20px; font-size: 14px; font-weight: normal;">
+                            <label><input type="radio" name="timeFilter" value="day" checked> По дням</label>
+                            <label style="margin-left: 10px;"><input type="radio" name="timeFilter" value="week"> По неделям</label>
+                            <label style="margin-left: 10px;"><input type="radio" name="timeFilter" value="month"> По месяцам</label>
+                        </div>
+                        <button class="download-csv-btn" data-chart="activityOverTime" style="display: none;">💾 CSV</button>
+                    </h2>
                     <canvas id="activityOverTimeChart"></canvas>
                     <p id="activity-over-time-status" style="text-align:center;"></p>
                 </div>
@@ -102,6 +109,19 @@
      </div>
  
     <button id="back-to-top-btn" title="Наверх">▲</button>
+
+    <!-- Modal for showing users -->
+    <div id="user-list-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="modal-close-btn">&times;</span>
+            <h3 id="modal-title">Пользователи, выполнившие действие</h3>
+            <div id="modal-body">Загрузка...</div>
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
+                <div id="modal-pagination-controls" class="pagination-container"></div>
+                <button id="modal-download-csv-btn" class="download-csv-btn" style="display: none;">💾 Скачать CSV</button>
+            </div>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="/static/js/theme.js"></script>

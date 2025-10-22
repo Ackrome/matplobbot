@@ -10,7 +10,8 @@ from ..db_utils import (
     get_popular_messages_data_from_db,
     get_action_types_distribution_from_db,
     get_activity_over_time_data_from_db,
-    get_user_profile_data_from_db
+    get_user_profile_data_from_db,
+    get_users_for_action
 )
 
 router = APIRouter()
@@ -109,3 +110,31 @@ async def get_user_profile(
     except aiosqlite.Error as e:
         logger.error(f"Ошибка базы данных при получении профиля пользователя {user_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Ошибка при запросе к базе данных (профиль пользователя).")
+
+@router.get("/stats/action_users", summary="Пользователи для действия", description="Возвращает список пользователей, совершивших определенное действие.")
+async def get_action_users(
+    action_type: str = Query(..., description="Тип действия ('command' или 'message')"),
+    action_details: str = Query(..., description="Детали действия (текст команды или сообщения)"),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    page_size: int = Query(15, ge=1, le=100, description="Количество пользователей на странице"),
+    sort_by: str = Query('full_name', description="Поле для сортировки: user_id, full_name, username"),
+    sort_order: str = Query('asc', description="Порядок сортировки: asc или desc")
+):
+    try:
+        async with get_db_connection_obj() as db:
+            data = await get_users_for_action(db, action_type, action_details, page, page_size, sort_by, sort_order)
+            total_users = data["total_users"]
+            total_pages = math.ceil(total_users / page_size)
+            return {
+                "users": data["users"],
+                "pagination": {
+                    "current_page": page,
+                    "total_pages": total_pages,
+                    "page_size": page_size,
+                    "sort_by": sort_by,
+                    "sort_order": sort_order
+                }
+            }
+    except aiosqlite.Error as e:
+        logger.error(f"Ошибка базы данных при получении пользователей для действия: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Ошибка при запросе к базе данных (action_users).")
