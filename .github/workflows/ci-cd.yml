@@ -12,7 +12,7 @@ jobs:
   test-build-and-push:
     # IMPORTANT: This tells GitHub to run this job on YOUR runner
     name: Test, Build and Push
-    runs-on: self-hosted 
+    runs-on: self-hosted
 
     permissions:
       contents: read
@@ -21,12 +21,12 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v3
-        
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
         with:
           platforms: all
-          
+
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v2
@@ -69,11 +69,16 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-api:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-api:latest
 
+      - name: Clean up Docker resources
+        if: always()
+        run: |
+          docker system prune --all --force
+
   trigger-deployment:
     name: Trigger Jenkins Deployment
     needs: test-build-and-push
     # Also runs on your machine
-    runs-on: self-hosted 
+    runs-on: self-hosted
 
     steps:
       - name: Trigger Jenkins Job via cURL

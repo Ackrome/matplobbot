@@ -169,3 +169,18 @@ html[data-theme='dark'] .pagination-button {
     background-color: #3a3a3a;
     border-color: #555;
 }
+.pagination-button.active {
+    background-color: #ccc;
+    font-weight: bold;
+    cursor: default;
+}
+html[data-theme='dark'] .pagination-button.active {
+    background-color: #555;
+}
+.pagination-ellipsis {
+    padding: 8px 4px;
+    color: #777;
+}
+html[data-theme='dark'] .pagination-ellipsis {
+    color: #aaa;
+}

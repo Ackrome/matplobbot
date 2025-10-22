@@ -97,32 +97,91 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function renderPaginationControls(pagination) {
+    function renderPaginationControls(pagination, contextPages = 2) {
         paginationControlsElement.innerHTML = '';
         if (pagination.total_pages <= 1) return;
 
         const { current_page, total_pages } = pagination;
 
-        // "Previous" button
+        const createButton = (text, page, isDisabled = false, isActive = false) => {
+            const button = document.createElement('button');
+            button.innerHTML = text;
+            button.className = 'pagination-button';
+            if (isActive) button.classList.add('active');
+            button.disabled = isDisabled || isActive;
+            if (!isDisabled && !isActive) {
+                button.addEventListener('click', () => fetchAndRenderPage(page));
+            }
+            return button;
+        };
+
+        const createEllipsis = () => {
+            const span = document.createElement('span');
+            span.textContent = '...';
+            span.className = 'pagination-ellipsis';
+            return span;
+        };
+
+        // "First" and "Previous" buttons
+        paginationControlsElement.appendChild(createButton('«', 1, current_page === 1));
         const prevButton = document.createElement('button');
-        prevButton.textContent = '« Назад';
-        prevButton.className = 'pagination-button';
-        prevButton.disabled = current_page === 1;
-        prevButton.addEventListener('click', () => fetchAndRenderPage(current_page - 1));
-        paginationControlsElement.appendChild(prevButton);
 
-        // Page number display
-        const pageInfo = document.createElement('span');
-        pageInfo.textContent = `Страница ${current_page} из ${total_pages}`;
-        paginationControlsElement.appendChild(pageInfo);
+        // Generate page number buttons
+        const pagesToShow = new Set();
+        pagesToShow.add(1);
+        pagesToShow.add(total_pages);
 
+        for (let i = 0; i <= contextPages; i++) {
+            if (current_page - i > 0) pagesToShow.add(current_page - i);
+            if (current_page + i <= total_pages) pagesToShow.add(current_page + i);
+        }
+
+        const sortedPages = Array.from(pagesToShow).sort((a, b) => a - b);
+
+        // "Previous" button
+        paginationControlsElement.appendChild(createButton('«', current_page - 1, current_page === 1));
+
+        // Page number buttons
+        let lastPage = 0;
+        for (const pageNum of sortedPages) {
+            if (lastPage > 0 && pageNum - lastPage > 1) {
+                paginationControlsElement.appendChild(createEllipsis());
+            }
+            paginationControlsElement.appendChild(
+                createButton(pageNum, pageNum, false, pageNum === current_page)
+            );
+            lastPage = pageNum;
+        }
+
+        // "Next" and "Last" buttons
+        paginationControlsElement.appendChild(createButton('»', total_pages, current_page === total_pages));
         // "Next" button
-        const nextButton = document.createElement('button');
-        nextButton.textContent = 'Вперед »';
-        nextButton.className = 'pagination-button';
-        nextButton.disabled = current_page === total_pages;
-        nextButton.addEventListener('click', () => fetchAndRenderPage(current_page + 1));
-        paginationControlsElement.appendChild(nextButton);
+        paginationControlsElement.appendChild(createButton('»', current_page + 1, current_page === total_pages));
+
+        // "Go to page" input field
+        if (total_pages > (contextPages * 2) + 3) { // Only show if there are enough pages to justify it
+            const goToContainer = document.createElement('div');
+            goToContainer.style.marginLeft = '20px';
+
+            const goToInput = document.createElement('input');
+            goToInput.type = 'number';
+            goToInput.min = 1;
+            goToInput.max = total_pages;
+            goToInput.placeholder = '...';
+            goToInput.className = 'pagination-goto-input';
+
+            const goButton = createButton('Перейти', -1); // Page number is irrelevant here
+            goButton.addEventListener('click', () => {
+                const page = parseInt(goToInput.value, 10);
+                if (page >= 1 && page <= total_pages) {
+                    fetchAndRenderPage(page);
+                }
+            });
+
+            goToContainer.appendChild(goToInput);
+            goToContainer.appendChild(goButton);
+            paginationControlsElement.appendChild(goToContainer);
+        }
     }
 
     // --- Search/Filter Logic ---
