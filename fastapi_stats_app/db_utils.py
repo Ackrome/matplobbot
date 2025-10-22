@@ -264,3 +264,18 @@ async def get_users_for_action(db_conn, action_type: str, action_details: str, p
         "users": users,
         "total_users": total_users
     }
+
+async def get_all_user_actions(db_conn, user_id: int):
+    """Извлекает ВСЕ действия для указанного пользователя без пагинации."""
+    query = """
+        SELECT
+            id,
+            action_type,
+            action_details,
+            TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI:SS') AS timestamp
+        FROM user_actions
+        WHERE user_id = $1
+        ORDER BY timestamp DESC;
+    """
+    rows = await db_conn.fetch(query, user_id)
+    return [dict(row) for row in rows]

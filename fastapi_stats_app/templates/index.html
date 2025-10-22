@@ -39,7 +39,8 @@
                             <label style="margin-left: 10px;"><input type="radio" name="actionFilter" value="commands"> Команды</label>
                             <label style="margin-left: 10px;"><input type="radio" name="actionFilter" value="messages"> Сообщения</label>
                         </div>
-                        <button class="download-csv-btn" data-chart="popularActions" style="display: none;">💾 CSV</button>
+                        <button class="download-btn" data-chart="popularActions" data-format="csv" style="display: none;">💾 CSV</button>
+                        <button class="download-btn" data-chart="popularActions" data-format="png" style="display: none;">🖼️ PNG</button>
                     </h2>
                     <canvas id="popularActionsChart"></canvas>
                     <p id="popular-actions-status" style="text-align:center;"></p>
@@ -48,7 +49,8 @@
 
             <div id="typesTab" class="tab-content">
                 <div class="chart-wrapper" style="min-width: 300px; max-width: 500px; margin: 20px auto;"> <!-- Центрируем круговую диаграмму -->
-                    <h2>Типы действий <button class="download-csv-btn" data-chart="actionTypes" style="display: none;">💾 CSV</button></h2>
+                    <h2>Типы действий <button class="download-btn" data-chart="actionTypes" data-format="csv" style="display: none;">💾 CSV</button>
+                    <button class="download-btn" data-chart="actionTypes" data-format="png" style="display: none;">🖼️ PNG</button></h2>
                     <canvas id="actionTypesChart" style="height: 400px;"></canvas>
                     <p id="action-types-status" style="text-align:center;"></p>
                 </div>
@@ -63,7 +65,8 @@
                             <label style="margin-left: 10px;"><input type="radio" name="timeFilter" value="week"> По неделям</label>
                             <label style="margin-left: 10px;"><input type="radio" name="timeFilter" value="month"> По месяцам</label>
                         </div>
-                        <button class="download-csv-btn" data-chart="activityOverTime" style="display: none;">💾 CSV</button>
+                        <button class="download-btn" data-chart="activityOverTime" data-format="csv" style="display: none;">💾 CSV</button>
+                        <button class="download-btn" data-chart="activityOverTime" data-format="png" style="display: none;">🖼️ PNG</button>
                     </h2>
                     <canvas id="activityOverTimeChart"></canvas>
                     <p id="activity-over-time-status" style="text-align:center;"></p>
@@ -118,7 +121,8 @@
             <div id="modal-body">Загрузка...</div>
             <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
                 <div id="modal-pagination-controls" class="pagination-container"></div>
-                <button id="modal-download-csv-btn" class="download-csv-btn" style="display: none;">💾 Скачать CSV</button>
+                <button id="modal-copy-btn" class="download-btn" style="display: none;">📋 Копировать</button>
+                <button id="modal-download-csv-btn" class="download-btn" style="display: none;">💾 Скачать CSV</button>
             </div>
         </div>
     </div>

@@ -192,12 +192,12 @@ function handleStatsSocketMessage(event) {
             if (data.action_types_distribution && Array.isArray(data.action_types_distribution)) {
                 if (data.action_types_distribution.length === 0) {
                     actionTypesStatusElement.textContent = "Нет данных о типах действий.";
-                    document.querySelector('.download-csv-btn[data-chart="actionTypes"]').style.display = 'none'; // Keep this for other charts
+                    document.querySelectorAll('.download-btn[data-chart="actionTypes"]').forEach(b => b.style.display = 'none');
                     if (actionTypesChartInstance) { actionTypesChartInstance.destroy(); actionTypesChartInstance = null; }
                 } else {
                     actionTypesStatusElement.textContent = "";
                     chartDataStore.actionTypes = data.action_types_distribution; // Keep this
-                    document.querySelector('.download-csv-btn[data-chart="actionTypes"]').style.display = 'inline-block';
+                    document.querySelectorAll('.download-btn[data-chart="actionTypes"]').forEach(b => b.style.display = 'inline-block');
                     updateActionTypesChart(data.action_types_distribution);
                 }
             }
@@ -206,7 +206,7 @@ function handleStatsSocketMessage(event) {
                 const dayData = data.activity_over_time.day || [];
                 if (dayData.length === 0) {
                     activityOverTimeStatusElement.textContent = "Нет данных об активности для отображения.";
-                    document.querySelector('.download-csv-btn[data-chart="activityOverTime"]').style.display = 'none'; // Keep this
+                    document.querySelectorAll('.download-btn[data-chart="activityOverTime"]').forEach(b => b.style.display = 'none');
                     if (activityOverTimeChartInstance) { activityOverTimeChartInstance.destroy(); activityOverTimeChartInstance = null; }
                 } else {
                     activityOverTimeStatusElement.textContent = "";
@@ -422,7 +422,8 @@ function updateChart(config) {
         instance.data.labels = labels;
         instance.data.datasets[0] = dataset;
         Object.assign(instance.options, chartOptions);
-        instance.update();
+        // Update the chart without animation for a smoother experience on frequent updates.
+        instance.update('none');
         return instance;
     } else {
         return new Chart(ctx, { type, data: { labels, datasets: [dataset] }, options: chartOptions });
@@ -433,6 +434,7 @@ function renderModalContent(title, data) {
     const modal = document.getElementById('user-list-modal');
     const modalTitle = document.getElementById('modal-title');
     const modalBody = document.getElementById('modal-body');
+    const copyBtn = document.getElementById('modal-copy-btn');
     const downloadBtn = document.getElementById('modal-download-csv-btn');
     const paginationControls = document.getElementById('modal-pagination-controls');
 
@@ -456,6 +458,7 @@ function renderModalContent(title, data) {
 
     if (data.users.length === 0) {
         modalBody.innerHTML = '<p>Нет данных о пользователях для этого действия.</p>';
+        copyBtn.style.display = 'none';
         downloadBtn.style.display = 'none';
     } else {
         const userRows = data.users.map(user => `
@@ -467,6 +470,7 @@ function renderModalContent(title, data) {
         `).join('');
 
         modalBody.innerHTML = `<table><thead><tr>${renderHeaders()}</tr></thead><tbody>${userRows}</tbody></table>`;
+        copyBtn.style.display = 'inline-block';
         downloadBtn.style.display = 'inline-block';
 
         // --- CSV Download Logic ---
@@ -477,6 +481,23 @@ function renderModalContent(title, data) {
             const dataToExport = data.users.map(u => ({ user_id: u.user_id, full_name: u.full_name, username: u.username }));
             const safeTitle = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
             downloadCSV(headers, dataToExport, `users_for_${safeTitle}.csv`);
+        });
+
+        // --- Copy to Clipboard Logic ---
+        const newCopyBtn = copyBtn.cloneNode(true);
+        copyBtn.parentNode.replaceChild(newCopyBtn, copyBtn);
+        newCopyBtn.addEventListener('click', () => {
+            const textToCopy = data.users.map(u => `${u.full_name}\t${u.username}`).join('\n');
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const originalText = newCopyBtn.textContent;
+                newCopyBtn.textContent = 'Скопировано!';
+                setTimeout(() => {
+                    newCopyBtn.textContent = originalText;
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+                alert('Не удалось скопировать текст.');
+            });
         });
 
         // --- Pagination Controls Logic ---
@@ -612,14 +633,14 @@ function updateCombinedPopularActionsChart() {
 
     if (topData.length === 0) {
         popularActionsStatusElement.textContent = "Нет данных для отображения.";
-        document.querySelector('.download-csv-btn[data-chart="popularActions"]').style.display = 'none';
+        document.querySelectorAll('.download-btn[data-chart="popularActions"]').forEach(b => b.style.display = 'none');
         if (popularActionsChartInstance) { popularActionsChartInstance.destroy(); popularActionsChartInstance = null; }
         return;
     }
 
     popularActionsStatusElement.textContent = "";
     chartDataStore.popularActions = topData; // For CSV download
-    document.querySelector('.download-csv-btn[data-chart="popularActions"]').style.display = 'inline-block';
+    document.querySelectorAll('.download-btn[data-chart="popularActions"]').forEach(b => b.style.display = 'inline-block');
 
     popularActionsChartInstance = updateChart({
         instance: popularActionsChartInstance,
@@ -649,7 +670,7 @@ const updateActivityOverTimeChart = () => {
     const data = chartDataStore.activityOverTime ? chartDataStore.activityOverTime[filter] : [];
 
     // Update download button visibility based on filtered data
-    document.querySelector('.download-csv-btn[data-chart="activityOverTime"]').style.display = data.length > 0 ? 'inline-block' : 'none';
+    document.querySelectorAll('.download-btn[data-chart="activityOverTime"]').forEach(b => b.style.display = data.length > 0 ? 'inline-block' : 'none');
 
     activityOverTimeChartInstance = updateChart({
         instance: activityOverTimeChartInstance,
@@ -697,21 +718,36 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     logSocketManager.connect();
 
-    // Add event listeners for all download buttons
-    document.querySelectorAll('.download-csv-btn').forEach(button => {
+    // Add event listeners for all chart action buttons (CSV/PNG)
+    document.querySelectorAll('.download-btn[data-chart]').forEach(button => {
         button.addEventListener('click', (event) => {
             const chartType = event.target.dataset.chart;
-            const data = chartDataStore[chartType];
-            if (!data) return;
+            const format = event.target.dataset.format;
 
-            const headerMap = {
-                popularActions: ['Action', 'Count', 'Type'],
-                actionTypes: ['Action Type', 'Count'],
-                // For activity, we need to know which period is active
-                activityOverTime: ['Period', 'Count'] 
-            };
+            if (format === 'csv') {
+                const data = chartDataStore[chartType];
+                if (!data) return;
 
-            downloadCSV(headerMap[chartType], data, `${chartType}_export.csv`);
+                const headerMap = {
+                    popularActions: ['Action', 'Count', 'Type'],
+                    actionTypes: ['Action Type', 'Count'],
+                    activityOverTime: ['Period', 'Count']
+                };
+                downloadCSV(headerMap[chartType], data, `${chartType}_export.csv`);
+            } else if (format === 'png') {
+                const chartInstanceMap = {
+                    popularActions: popularActionsChartInstance,
+                    actionTypes: actionTypesChartInstance,
+                    activityOverTime: activityOverTimeChartInstance
+                };
+                const chart = chartInstanceMap[chartType];
+                if (!chart) return;
+
+                const link = document.createElement('a');
+                link.href = chart.toBase64Image();
+                link.download = `${chartType}_chart.png`;
+                link.click();
+            }
         });
     });
 
@@ -794,10 +830,10 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         backToTopButton.addEventListener('click', function() {
-            // For Safari
-            document.body.scrollTop = 0;
-            // For Chrome, Firefox, IE and Opera
-            document.documentElement.scrollTop = 0;
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
         });
     }
 });

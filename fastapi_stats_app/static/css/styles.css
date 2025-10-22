@@ -294,8 +294,8 @@ html[data-theme='dark'] .skeleton {
 
 .skeleton-row { opacity: 0.7; }
 
-/* --- CSV Download Button --- */
-.download-csv-btn {
+/* --- Download/Action Buttons --- */
+.download-btn {
     font-size: 12px;
     padding: 4px 8px;
     margin-left: 10px;
@@ -305,11 +305,11 @@ html[data-theme='dark'] .skeleton {
     border-radius: 4px;
     vertical-align: middle;
 }
-.download-csv-btn:hover { background-color: #e0e0e0; }
-html[data-theme='dark'] .download-csv-btn {
+.download-btn:hover { background-color: #e0e0e0; }
+html[data-theme='dark'] .download-btn {
     background-color: #3a3a3a; border-color: #555;
 }
-html[data-theme='dark'] .download-csv-btn:hover { background-color: #4a4a4a; }
+html[data-theme='dark'] .download-btn:hover { background-color: #4a4a4a; }
 
 /* --- Modal Styles --- */
 .modal {

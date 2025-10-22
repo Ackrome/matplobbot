@@ -11,7 +11,8 @@ from ..db_utils import (
     get_action_types_distribution_from_db,
     get_activity_over_time_data_from_db,
     get_user_profile_data_from_db,
-    get_users_for_action
+    get_users_for_action,
+    get_all_user_actions
 )
 
 router = APIRouter()
@@ -92,3 +93,13 @@ async def get_action_users(
     except asyncpg.PostgresError as e:
         logger.error(f"Ошибка базы данных при получении пользователей для действия: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Ошибка базы данных (пользователи для действия): {e}")
+
+@router.get("/users/{user_id}/export_actions", summary="Экспорт всех действий пользователя", description="Возвращает полный список всех действий пользователя для экспорта в CSV.")
+async def export_user_actions(user_id: int):
+    try:
+        async with get_db_connection_obj() as db:
+            actions = await get_all_user_actions(db, user_id)
+            return {"actions": actions}
+    except asyncpg.PostgresError as e:
+        logger.error(f"Ошибка базы данных при экспорте действий пользователя {user_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ошибка базы данных (экспорт действий): {e}")

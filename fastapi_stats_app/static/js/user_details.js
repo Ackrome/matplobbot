@@ -228,6 +228,59 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Attach Event Listeners ---
     document.querySelector('#actions-table thead').addEventListener('click', handleSortClick);
 
+    // --- Download All CSV Logic ---
+    const downloadAllBtn = document.getElementById('download-all-csv-btn');
+    downloadAllBtn.addEventListener('click', () => {
+        const originalText = downloadAllBtn.textContent;
+        downloadAllBtn.textContent = 'Загрузка...';
+        downloadAllBtn.disabled = true;
+
+        fetch(`/api/users/${userId}/export_actions`)
+            .then(response => {
+                if (!response.ok) throw new Error('Не удалось загрузить данные для экспорта.');
+                return response.json();
+            })
+            .then(data => {
+                const headers = ['ID', 'ActionType', 'ActionDetails', 'Timestamp'];
+                const dataToExport = data.actions.map(a => ({
+                    id: a.id,
+                    action_type: a.action_type,
+                    action_details: a.action_details,
+                    timestamp: a.timestamp
+                }));
+                
+                // Reusing the downloadCSV function logic here
+                const csvRows = [
+                    headers.join(','),
+                    ...dataToExport.map(row => 
+                        headers.map(header => {
+                            let cell = row[header.toLowerCase()] === null || row[header.toLowerCase()] === undefined ? '' : String(row[header.toLowerCase()]);
+                            if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+                                cell = `"${cell.replace(/"/g, '""')}"`;
+                            }
+                            return cell;
+                        }).join(',')
+                    )
+                ];
+                const csvContent = "data:text/csv;charset=utf-8," + csvRows.join('\n');
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `user_${userId}_all_actions.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            })
+            .catch(error => {
+                console.error('Error exporting all actions:', error);
+                alert(error.message);
+            })
+            .finally(() => {
+                downloadAllBtn.textContent = originalText;
+                downloadAllBtn.disabled = false;
+            });
+    });
+
     // --- Back to Top Button Logic ---
     const backToTopButton = document.getElementById('back-to-top-btn');
 
@@ -244,10 +297,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     backToTopButton.addEventListener('click', function() {
-        // For Safari
-        document.body.scrollTop = 0;
-        // For Chrome, Firefox, IE and Opera
-        document.documentElement.scrollTop = 0;
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
     });
 
 

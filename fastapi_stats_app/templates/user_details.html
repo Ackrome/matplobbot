@@ -24,7 +24,10 @@
         <h2 id="actions-table-title">Действия пользователя</h2>
 
         <div style="margin-bottom: 15px;">
-            <input type="text" id="search-input" placeholder="Фильтр по типу или деталям действия..." style="width: 100%; padding: 10px; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <input type="text" id="search-input" placeholder="Фильтр по типу или деталям действия..." style="flex-grow: 1; padding: 10px; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc;">
+                <button id="download-all-csv-btn" class="download-btn">💾 Скачать все (CSV)</button>
+            </div>
         </div>
 
         <table id="actions-table">
