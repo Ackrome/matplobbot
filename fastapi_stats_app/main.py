@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 import logging
 import os
 from pathlib import Path # Добавляем импорт pathlib
@@ -37,11 +38,25 @@ APP_BASE_DIR = Path(__file__).resolve().parent
 # Настройка Jinja2 для шаблонов
 templates = Jinja2Templates(directory=str(APP_BASE_DIR / "templates"))
 
+# Создаем директорию для статики, если ее нет
+STATIC_DIR = APP_BASE_DIR / "static"
+STATIC_DIR.mkdir(exist_ok=True)
+(STATIC_DIR / "css").mkdir(exist_ok=True)
+(STATIC_DIR / "js").mkdir(exist_ok=True)
+
+# Монтируем статические файлы
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
 
 # Изменяем корневой эндпоинт для отображения HTML страницы
 @app.get("/", response_class=HTMLResponse, summary="Главная страница статистики", description="Отображает HTML страницу со статистикой бота.")
 async def read_root_html(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/users/{user_id}", response_class=HTMLResponse, summary="Страница профиля пользователя", description="Отображает страницу с детальной информацией о действиях пользователя.")
+async def read_user_details_html(request: Request, user_id: int):
+    # user_id передается в шаблон, но мы будем загружать данные через JS/API
+    return templates.TemplateResponse("user_details.html", {"request": request, "user_id": user_id})
 
 
 app.include_router(stats_router.router, prefix="/api", tags=["statistics"])

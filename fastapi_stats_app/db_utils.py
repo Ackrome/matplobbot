@@ -126,3 +126,59 @@ async def get_activity_over_time_data_from_db(db_conn, period='day'):
     async with db_conn.execute(query) as cursor:
         rows = await cursor.fetchall()
         return [{"period": row[0], "count": row[1]} for row in rows]
+
+async def get_user_profile_data_from_db(db_conn, user_id: int, page: int = 1, page_size: int = 50):
+    """Извлекает детали профиля пользователя и пагинированный список его действий."""
+    # Рассчитываем смещение для пагинации
+    offset = (page - 1) * page_size
+
+    # Запрос для деталей пользователя
+    user_query = """
+        SELECT
+            user_id,
+            full_name,
+            COALESCE(username, 'Нет username') AS username,
+            avatar_pic_url
+        FROM
+            users
+        WHERE
+            user_id = ?;
+    """
+    # Запрос для действий пользователя
+    actions_query = """
+        SELECT
+            id,
+            action_type,
+            action_details,
+            STRFTIME('%Y-%m-%d %H:%M:%S', timestamp) AS timestamp
+        FROM
+            user_actions
+        WHERE
+            user_id = ?
+        ORDER BY
+            timestamp DESC
+        LIMIT ? OFFSET ?;
+    """
+    async with db_conn.execute(user_query, (user_id,)) as cursor:
+        user_row = await cursor.fetchone()
+        if not user_row:
+            return None  # Пользователь не найден
+
+    user_details = dict(zip([c[0] for c in cursor.description], user_row))
+
+    # Получаем общее количество действий для пагинации
+    total_actions_query = "SELECT COUNT(id) FROM user_actions WHERE user_id = ?;"
+    async with db_conn.execute(total_actions_query, (user_id,)) as cursor:
+        total_actions_row = await cursor.fetchone()
+        total_actions = total_actions_row[0] if total_actions_row else 0
+
+    # Получаем пагинированный список действий
+    async with db_conn.execute(actions_query, (user_id, page_size, offset)) as cursor:
+        actions_rows = await cursor.fetchall()
+        actions = [dict(zip([c[0] for c in cursor.description], row)) for row in actions_rows]
+
+    return {
+        "user_details": user_details,
+        "actions": actions,
+        "total_actions": total_actions
+    }

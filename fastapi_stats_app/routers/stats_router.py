@@ -1,6 +1,7 @@
 # c:/Users/ivant/Desktop/proj/matplobbot/fastapi_stats_app/routers/stats_router.py
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 import aiosqlite
+import math
 import logging
 from ..db_utils import (
     get_db_connection_obj,
@@ -8,7 +9,8 @@ from ..db_utils import (
     get_popular_commands_data_from_db,
     get_popular_messages_data_from_db,
     get_action_types_distribution_from_db,
-    get_activity_over_time_data_from_db
+    get_activity_over_time_data_from_db,
+    get_user_profile_data_from_db
 )
 
 router = APIRouter()
@@ -74,3 +76,30 @@ async def get_activity_over_time():
     except aiosqlite.Error as e:
         logger.error(f"Ошибка базы данных при получении activity_over_time: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Ошибка при запросе к базе данных (activity_over_time).")
+
+@router.get("/users/{user_id}/profile", summary="Профиль пользователя и его действия", description="Возвращает детали профиля пользователя и полный список его действий.")
+async def get_user_profile(
+    user_id: int,
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    page_size: int = Query(50, ge=1, le=200, description="Количество записей на странице")
+):
+    try:
+        async with get_db_connection_obj() as db:
+            profile_data = await get_user_profile_data_from_db(db, user_id, page, page_size)
+            if profile_data is None:
+                raise HTTPException(status_code=404, detail="Пользователь не найден.")
+
+            total_actions = profile_data["total_actions"]
+            total_pages = math.ceil(total_actions / page_size)
+
+            return {
+                **profile_data,
+                "pagination": {
+                    "current_page": page,
+                    "total_pages": total_pages,
+                    "page_size": page_size
+                }
+            }
+    except aiosqlite.Error as e:
+        logger.error(f"Ошибка базы данных при получении профиля пользователя {user_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Ошибка при запросе к базе данных (профиль пользователя).")

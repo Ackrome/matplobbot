@@ -52,6 +52,9 @@ async def get_github_repo_contents(repo_path: str, path: str = "") -> list[dict]
                     # Store in cache on success
                     github_dir_cache[cache_key] = data
                     return data
+                elif response.status == 401:
+                    logger.critical(f"GitHub API request failed with 401 Unauthorized. The GITHUB_TOKEN is likely invalid, expired, or missing 'repo' scope.")
+                    return None
                 else:
                     error_text = await response.text()
                     logger.error(f"GitHub API contents fetch failed for path '{path}' with status {response.status}: {error_text}")
