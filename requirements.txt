@@ -11,7 +11,7 @@ Pillow>=9.0.0
 markdown
 cachetools
 ipython
-aiohttp>=3.8.0
+aiohttp
 setuptools
 httpx
 weasyprint
