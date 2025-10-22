@@ -18,19 +18,9 @@ from ..db_utils import (
 )
 from ..config import LOG_DIR, BOT_LOG_FILE_NAME,FASTAPI_LOG_FILE_NAME # Обновленные импорты
 
-LOG_FILE_FASTAPI = os.path.join(LOG_DIR, FASTAPI_LOG_FILE_NAME) # Используем константы из config
-
 router = APIRouter()
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(name)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s",
-    datefmt='%Y-%m-%d %H:%M:%S',
-    handlers=[
-        logging.FileHandler(LOG_FILE_FASTAPI, encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
 logger = logging.getLogger(__name__)
+# Конфигурация logging.basicConfig теперь находится в main.py и выполняется при старте приложения.
 logging.getLogger("aiogram.event").setLevel(logging.WARNING)
 
 # Класс для управления WebSocket соединениями

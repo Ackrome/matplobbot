@@ -1,23 +1,17 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
 import logging
 import os
 from pathlib import Path # Добавляем импорт pathlib
 
-from .routers import stats_router, ws_router
 from .config import LOG_DIR, FASTAPI_LOG_FILE_NAME # Импортируем константы для логгирования
 
 
 # Определяем пути для логгирования FastAPI приложения
 LOG_FILE_FASTAPI = os.path.join(LOG_DIR, FASTAPI_LOG_FILE_NAME) # Используем константы из config
 
-# Убедимся, что директория для логов существует
-os.makedirs(LOG_DIR, exist_ok=True) # Используем LOG_DIR из config
-
 # Настройка логгирования для FastAPI приложения
 # Используем тот же формат, что и в bot/logger.py
+# --- ВАЖНО: Эта конфигурация должна быть выполнена ДО импорта других модулей приложения ---
+os.makedirs(LOG_DIR, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(name)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s",
@@ -28,6 +22,13 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__) # Получаем логгер после базовой конфигурации
+
+# --- Теперь можно безопасно импортировать остальные части приложения ---
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+from .routers import stats_router, ws_router
 
 
 app = FastAPI(title="Bot Stats API", version="0.1.0")
