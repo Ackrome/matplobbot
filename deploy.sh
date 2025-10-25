@@ -9,12 +9,13 @@ API_TAG=${2:-latest}
 export BOT_IMAGE="ghcr.io/Ackrome/matplobbot-bot:${BOT_TAG}"
 export API_IMAGE="ghcr.io/Ackrome/matplobbot-api:${API_TAG}"
 
-echo "--- Pulling new images ---"
-docker-compose -f docker-compose.prod.yml pull
+echo "--- Pulling new images from ghcr.io ---"
+docker compose -f docker-compose.prod.yml pull
 
 echo "--- Restarting services with new images ---"
-# Use the exported variables in the compose file by specifying them in the command
-BOT_IMAGE=$BOT_IMAGE API_IMAGE=$API_IMAGE docker-compose -f docker-compose.prod.yml up -d --remove-orphans
+# Use the new command here as well
+BOT_TAG=${BOT_TAG} API_TAG=${API_TAG} docker compose -f 'docker-compose.prod.yml' up -d --remove-orphans
+
 
 echo "--- Cleaning up old images ---"
 docker image prune -f
