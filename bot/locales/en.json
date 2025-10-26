@@ -136,5 +136,16 @@
     "admin_clear_cache_success": "✅ All application cache has been successfully cleared.",
     "admin_clear_cache_finished": "Cache clearing complete. Choose the next command:",
     "admin_update_starting_callback": "Starting update...",
-    "onboarding_back_to_tour": "⬅️ Back to Tour"
+    "onboarding_back_to_tour": "⬅️ Back to Tour",
+    "schedule_welcome": "Welcome to the schedule section! What would you like to search for?",
+    "schedule_btn_group": "👥 Group",
+    "schedule_btn_teacher": "👩‍🏫 Teacher",
+    "schedule_btn_auditorium": "🚪 Auditorium",
+    "schedule_prompt_for_query_group": "Please enter the group name (e.g., PI21-7):",
+    "schedule_prompt_for_query_person": "Please enter the teacher's last name:",
+    "schedule_prompt_for_query_auditorium": "Please enter the auditorium number (e.g., 501):",
+    "schedule_no_results": "No results found for your query '{query}'.",
+    "schedule_results_found": "Found {count} results. Please choose one:",
+    "schedule_api_error": "An error occurred while contacting the university API. Please try again later.",
+    "schedule_no_lessons_today": "There are no lessons scheduled for this day."
 }

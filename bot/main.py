@@ -3,10 +3,12 @@ import logging
 import os
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher
+import aiohttp
 
 from .handlers import router
 from .logger import UserLoggingMiddleware # Импортируем middleware
 from .database import init_db, init_db_pool # Импортируем функции инициализации БД
+from .services.university_api import setup_ruz_api_client
 
 # Загрузка переменных окружения и настройка логгирования из app.logger
 load_dotenv()
@@ -22,11 +24,15 @@ async def main():
     # Инициализируем базу данных перед запуском бота
     await init_db()
 
-    bot = Bot(BOT_TOKEN)
-    dp = Dispatcher()
-    dp.update.middleware(UserLoggingMiddleware())
-    dp.include_router(router)
-    await dp.start_polling(bot)
+    with aiohttp.ClientSession() as session:
+        setup_ruz_api_client(session)        # Инициализируем RUZ API клиент
+        
+        bot = Bot(BOT_TOKEN)
+        dp = Dispatcher()
+        dp.update.middleware(UserLoggingMiddleware())
+        dp.include_router(router)
+        
+        await dp.start_polling(bot)
 
 
 

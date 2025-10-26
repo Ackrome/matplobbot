@@ -138,3 +138,36 @@ async def get_repo_management_keyboard(user_id: int, state: FSMContext | None = 
     else:
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "back_to_settings"), callback_data="back_to_settings"))
     return builder.as_markup()
+
+
+
+async def get_schedule_type_keyboard(lang: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text=translator.gettext(lang, "schedule_btn_group"),
+            callback_data="sch_type_group"
+        ),
+        InlineKeyboardButton(
+            text=translator.gettext(lang, "schedule_btn_teacher"),
+            callback_data="sch_type_person"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text=translator.gettext(lang, "schedule_btn_auditorium"),
+            callback_data="sch_type_auditorium"
+        )
+    )
+    return builder.as_markup()
+
+def build_search_results_keyboard(results: List[Dict[str, Any]], search_type: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for item in results[:20]: # Limit to 20 results to avoid hitting Telegram limits
+        builder.row(
+            InlineKeyboardButton(
+                text=item['label'],
+                callback_data=f"sch_result_:{search_type}:{item['id']}"
+            )
+        )
+    return builder.as_markup()
