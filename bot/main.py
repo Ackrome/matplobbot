@@ -24,7 +24,7 @@ async def main():
     # Инициализируем базу данных перед запуском бота
     await init_db()
 
-    async with aiohttp.ClientSession() as session:
+    with aiohttp.ClientSession() as session:
         setup_ruz_api_client(session)        # Инициализируем RUZ API клиент
         
         bot = Bot(BOT_TOKEN)

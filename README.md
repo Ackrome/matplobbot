@@ -9,7 +9,7 @@
     <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
     <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI">
     <img src="https://img.shields.io/badge/Aiogram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Aiogram">
-    <img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite">
+    <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL">
     <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black" alt="JavaScript">
     <img src="https://img.shields.io/badge/Pandoc-5A5A5A?style=for-the-badge&logo=pandoc&logoColor=white" alt="Pandoc">
     <img src="https://img.shields.io/badge/LaTeX-008080?style=for-the-badge&logo=latex&logoColor=white" alt="LaTeX">
@@ -31,7 +31,7 @@ This project is a powerful, dual-component system designed for advanced interact
 
 1.  **Matplobbot (Telegram Bot)**: A sophisticated asynchronous bot built on `aiogram 3`. It serves as an intelligent gateway to programming libraries and educational materials. Its core features include interactive library browsing, full-text search, and a powerful on-demand rendering engine for LaTeX equations and Mermaid diagrams. All user interactions are meticulously logged to a shared SQLite database.
 
-2.  **Stats Dashboard (FastAPI Web App)**: A real-time monitoring dashboard powered by `FastAPI`. It features a clean, responsive frontend built with vanilla JavaScript and `Chart.js`. The dashboard provides deep insights into bot usage statistics by querying the shared database and streams live log events directly from the bot's log file via WebSockets.
+2.  **Stats Dashboard (FastAPI Web App)**: A real-time monitoring dashboard powered by `FastAPI`. It features a clean, responsive frontend built with vanilla JavaScript and `Chart.js`. The dashboard provides deep insights into bot usage statistics by querying the shared **PostgreSQL** database and streams live log events directly from the bot's log file via WebSockets.
 
 The entire ecosystem is orchestrated by Docker Compose, utilizing shared volumes for the database and logs, which ensures data consistency and perfect integration between the two services.
 
@@ -100,7 +100,7 @@ The project is built on modern, asynchronous frameworks with a strong emphasis o
 | **Backend** | Python 3.11+ |
 | **Bot Framework** | **Aiogram 3** (utilizing `Router` for modular handlers) |
 | **Web Framework** | **FastAPI**, Uvicorn |
-| **Database** | **SQLite** (accessed asynchronously via `aiosqlite`) |
+| **Database** | **PostgreSQL** (accessed asynchronously via `asyncpg`) |
 | **Frontend** | HTML5, CSS3, Vanilla JavaScript, **Chart.js** |
 | **Containerization** | **Docker, Docker Compose** |
 | **Rendering Pipeline** | **Pandoc** with custom Lua & Python filters, **TeX Live**, dvipng, **Mermaid-CLI**, Puppeteer |
@@ -110,7 +110,7 @@ The project is built on modern, asynchronous frameworks with a strong emphasis o
 -   **Decoupled Services**: The bot and the web dashboard run in separate Docker containers but communicate through a shared database and log volume, creating a robust, microservice-like architecture.
 -   **Modular Handlers**: The bot's logic is cleanly organized into feature-specific modules (`admin`, `rendering`, `settings`, etc.), each with its own `aiogram.Router`.
 -   **Service Layer**: Complex business logic, such as rendering documents and interacting with the GitHub API, is abstracted into a dedicated `services` package.
--   **Asynchronous Everywhere**: From database calls (`aiosqlite`) to external API requests (`aiohttp`), the entire stack is asynchronous to ensure high performance and scalability.
+-   **Asynchronous Everywhere**: From database calls (`asyncpg`) to external API requests (`aiohttp`), the entire stack is asynchronous to ensure high performance and scalability.
 -   **Intelligent Caching**: In-memory `TTLCache` is used extensively to cache GitHub API responses, reducing rate-limiting and speeding up user-facing operations.
 
 ## ⚙️ Installation & Setup
@@ -134,6 +134,13 @@ ADMIN_USER_ID=123456789
 # GitHub Personal Access Token with 'repo' scope for reading repositories
 # Required for /lec_search, /lec_all, and uploading rendered LaTeX images
 GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# --- PostgreSQL Credentials ---
+POSTGRES_USER=user
+POSTGRES_PASSWORD=password
+POSTGRES_DB=matplobbot_db
+POSTGRES_HOST=postgres # The service name in docker-compose
+POSTGRES_PORT=5432
 ```
 
 ### 3. Running with Docker Compose
