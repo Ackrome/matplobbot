@@ -17,3 +17,5 @@ aiosqlite # Added for migration script
 httpx
 weasyprint
 redis
+certifi
+ssl

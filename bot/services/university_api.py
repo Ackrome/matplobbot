@@ -1,6 +1,8 @@
 import aiohttp
 from datetime import datetime
 from typing import List, Dict, Any
+import ssl
+import certifi
 
 class RuzAPIError(Exception):
     """Custom exception for RUZ API errors."""
@@ -15,8 +17,11 @@ class RuzAPIClient:
     async def _request(self, sub_url: str) -> Dict[str, Any]:
         """Performs an asynchronous request to the RUZ API."""
         full_url = self.HOST + sub_url
-        # The `ssl=False` replicates your `verify=False`
-        async with self.session.get(full_url, ssl=False) as response:
+        # Create an SSL context that uses the certifi bundle for verification.
+        # This is more reliable than the system's default trust store, especially in Docker.
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
+        
+        async with self.session.get(full_url, ssl=ssl_context) as response:
             if response.status == 200:
                 return await response.json()
             error_text = await response.text()
