@@ -5,11 +5,13 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, CallbackQuery
 from datetime import datetime, timedelta
+import logging
 
 from bot.services.university_api import ruz_api_client
 from bot.services.schedule_service import format_schedule
 from bot.keyboards import get_schedule_type_keyboard, build_search_results_keyboard
 from bot.i18n import translator
+
 
 router = Router()
 
@@ -61,6 +63,7 @@ async def handle_search_query(message: Message, state: FSMContext):
         )
 
     except Exception as e:
+        logging.error(f"Failed to query RUZ API. Error: {e}", exc_info=True)
         await status_msg.edit_text(translator.gettext(lang, "schedule_api_error"))
         # Here you would add logging or Sentry capture
     finally:
