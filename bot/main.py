@@ -24,7 +24,9 @@ async def main():
     # Инициализируем базу данных перед запуском бота
     await init_db()
 
-    async with aiohttp.ClientSession() as session:
+    # Устанавливаем общий таймаут для всех запросов в сессии
+    timeout = aiohttp.ClientTimeout(total=30)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
         ruz_api_client_instance = create_ruz_api_client(session) # Создаем экземпляр клиента
         
         bot = Bot(BOT_TOKEN)

@@ -71,6 +71,9 @@ async def handle_search_query(message: Message, state: FSMContext, ruz_api_clien
 
 @router.callback_query(F.data.startswith("sch_result_"))
 async def handle_result_selection(callback: CallbackQuery, ruz_api_client: RuzAPIClient):
+    # Acknowledge the callback immediately to prevent "query is too old" error
+    await callback.answer()
+
     _, entity_type, entity_id = callback.data.split(":")
     
     # For now, just fetch today's schedule. Can add date selection later.
@@ -96,5 +99,3 @@ async def handle_result_selection(callback: CallbackQuery, ruz_api_client: RuzAP
         logging.error(f"Failed to get schedule for {entity_type}:{entity_id}. Error: {e}", exc_info=True)
         lang = await translator.get_user_language(user_id)
         await callback.message.edit_text(translator.gettext(lang, "schedule_api_error"))
-    
-    await callback.answer()

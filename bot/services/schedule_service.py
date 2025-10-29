@@ -20,7 +20,7 @@ def format_schedule(schedule_data: List[Dict[str, Any]], lang: str) -> str:
     # Format each day's schedule
     formatted_days = []
     for date_str, lessons in sorted(days.items()):
-        date_obj = datetime.strptime(date_str, "%Y.%m.%d")
+        date_obj = datetime.strptime(date_str, "%Y-%m-%d")
         # Example format, we'll use i18n later
         day_header = f"🗓 *{date_obj.strftime('%A, %d %B %Y')}*"
         
