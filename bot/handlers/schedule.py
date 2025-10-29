@@ -41,19 +41,18 @@ async def handle_schedule_type(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(translator.gettext(lang, prompt_key))
     await callback.answer()
 
-@router.message(ScheduleStates.awaiting_search_query) # Add ruz_api_client as a dependency
-async def handle_search_query(message: Message, state: FSMContext):
+@router.message(ScheduleStates.awaiting_search_query)
+async def handle_search_query(message: Message, state: FSMContext, data: dict):
     user_id = message.from_user.id
     lang = await translator.get_user_language(user_id)
-    data = await state.get_data()
-    search_type = data['search_type']
+    fsm_data = await state.get_data()
+    search_type = fsm_data['search_type']
     
     status_msg = await message.answer(translator.gettext(lang, "search_in_progress", query=message.text))
     
     # Retrieve the ruz_api_client instance from the data dictionary
     ruz_api_client: RuzAPIClient = data['ruz_api_client']
     try:
-        # Now ruz_api_client is guaranteed to be an instance of RuzAPIClient
         results = await ruz_api_client.search(term=message.text, search_type=search_type)
         if not results:
             await status_msg.edit_text(translator.gettext(lang, "schedule_no_results", query=message.text))
@@ -71,14 +70,14 @@ async def handle_search_query(message: Message, state: FSMContext):
         # Here you would add logging or Sentry capture
     finally:
         await state.clear()
-@router.callback_query(F.data.startswith("sch_result_")) # Add ruz_api_client as a dependency
+
 @router.callback_query(F.data.startswith("sch_result_"))
-async def handle_result_selection(callback: CallbackQuery):
+async def handle_result_selection(callback: CallbackQuery, data: dict):
     _, entity_type, entity_id = callback.data.split(":")
     
     # For now, just fetch today's schedule. Can add date selection later.
     today = datetime.now().strftime("%Y.%m.%d")
-    
+    user_id = callback.from_user.id
     await callback.message.edit_text("Загружаю расписание...")
     
     # Retrieve the ruz_api_client instance from the data dictionary
@@ -87,17 +86,20 @@ async def handle_result_selection(callback: CallbackQuery):
     try:
         schedule_data = await ruz_api_client.get_schedule(entity_type, entity_id, start=today, finish=today)
         
-        user_id = callback.from_user.id
         lang = await translator.get_user_language(user_id)
         
         formatted_text = format_schedule(schedule_data, lang)
+        if not schedule_data:
+            formatted_text = translator.gettext(lang, "schedule_no_lessons_today")
+
         await callback.message.edit_text(
             formatted_text, 
             parse_mode="Markdown", 
             reply_markup=None # Add back button later
         )
     except Exception as e:
-        await callback.message.edit_text("Произошла ошибка при загрузке расписания.")
-        # Add logging
+        logging.error(f"Failed to get schedule for {entity_type}:{entity_id}. Error: {e}", exc_info=True)
+        lang = await translator.get_user_language(user_id)
+        await callback.message.edit_text(translator.gettext(lang, "schedule_api_error"))
     
     await callback.answer()

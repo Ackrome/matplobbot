@@ -8,7 +8,7 @@ import aiohttp
 from .handlers import router
 from .logger import UserLoggingMiddleware # Импортируем middleware
 from .database import init_db, init_db_pool # Импортируем функции инициализации БД
-from .services.university_api import setup_ruz_api_client
+from .services.university_api import create_ruz_api_client
 
 # Загрузка переменных окружения и настройка логгирования из app.logger
 load_dotenv()
