@@ -37,12 +37,9 @@ class RuzAPIClient:
         """Generic function to get a schedule."""
         return await self._request(f"/api/schedule/{entity_type}/{entity_id}?start={start}&finish={finish}&lng=1")
 
-# We will create a single instance of this client to be used across the application
-# This will be initialized in the bot's main entry point.
-# We will define `ruz_api_client = None` here for now.
-ruz_api_client = None
-
-def setup_ruz_api_client(session: aiohttp.ClientSession):
-    """Initializes the RuzAPIClient instance."""
-    global ruz_api_client
-    ruz_api_client = RuzAPIClient(session)
+def create_ruz_api_client(session: aiohttp.ClientSession) -> RuzAPIClient:
+    """
+    Creates and returns a RuzAPIClient instance.
+    This function is intended to be called once during application startup.
+    """
+    return RuzAPIClient(session)

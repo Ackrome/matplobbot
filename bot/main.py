@@ -25,14 +25,14 @@ async def main():
     await init_db()
 
     async with aiohttp.ClientSession() as session:
-        setup_ruz_api_client(session)        # Инициализируем RUZ API клиент
+        ruz_api_client_instance = create_ruz_api_client(session) # Создаем экземпляр клиента
         
         bot = Bot(BOT_TOKEN)
         dp = Dispatcher()
         dp.update.middleware(UserLoggingMiddleware())
         dp.include_router(router)
         
-        await dp.start_polling(bot)
+        await dp.start_polling(bot, ruz_api_client=ruz_api_client_instance)
 
 
 

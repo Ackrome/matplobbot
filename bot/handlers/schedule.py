@@ -7,7 +7,7 @@ from aiogram.types import Message, CallbackQuery
 from datetime import datetime, timedelta
 import logging
 
-from bot.services.university_api import ruz_api_client
+from bot.services.university_api import RuzAPIClient # Import the class for type hinting
 from bot.services.schedule_service import format_schedule
 from bot.keyboards import get_schedule_type_keyboard, build_search_results_keyboard
 from bot.i18n import translator
@@ -41,7 +41,7 @@ async def handle_schedule_type(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(translator.gettext(lang, prompt_key))
     await callback.answer()
 
-@router.message(ScheduleStates.awaiting_search_query)
+@router.message(ScheduleStates.awaiting_search_query) # Add ruz_api_client as a dependency
 async def handle_search_query(message: Message, state: FSMContext):
     user_id = message.from_user.id
     lang = await translator.get_user_language(user_id)
@@ -50,7 +50,10 @@ async def handle_search_query(message: Message, state: FSMContext):
     
     status_msg = await message.answer(translator.gettext(lang, "search_in_progress", query=message.text))
     
+    # Retrieve the ruz_api_client instance from the data dictionary
+    ruz_api_client: RuzAPIClient = data['ruz_api_client']
     try:
+        # Now ruz_api_client is guaranteed to be an instance of RuzAPIClient
         results = await ruz_api_client.search(term=message.text, search_type=search_type)
         if not results:
             await status_msg.edit_text(translator.gettext(lang, "schedule_no_results", query=message.text))
@@ -68,7 +71,7 @@ async def handle_search_query(message: Message, state: FSMContext):
         # Here you would add logging or Sentry capture
     finally:
         await state.clear()
-
+@router.callback_query(F.data.startswith("sch_result_")) # Add ruz_api_client as a dependency
 @router.callback_query(F.data.startswith("sch_result_"))
 async def handle_result_selection(callback: CallbackQuery):
     _, entity_type, entity_id = callback.data.split(":")
@@ -78,6 +81,9 @@ async def handle_result_selection(callback: CallbackQuery):
     
     await callback.message.edit_text("Загружаю расписание...")
     
+    # Retrieve the ruz_api_client instance from the data dictionary
+    ruz_api_client: RuzAPIClient = data['ruz_api_client']
+
     try:
         schedule_data = await ruz_api_client.get_schedule(entity_type, entity_id, start=today, finish=today)
         
