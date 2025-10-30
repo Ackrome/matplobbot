@@ -89,6 +89,18 @@ async def init_db():
                 UNIQUE(user_id, repo_path)
             )
             ''')
+            await connection.execute('''
+            CREATE TABLE IF NOT EXISTS user_schedule_subscriptions (
+                id SERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                entity_type TEXT NOT NULL, -- 'group', 'person', 'auditorium'
+                entity_id TEXT NOT NULL,
+                entity_name TEXT NOT NULL,
+                notification_time TIME NOT NULL, -- Time of day for notification
+                is_active BOOLEAN DEFAULT TRUE,
+                UNIQUE(user_id, entity_type, entity_id)
+            )
+            ''')
     logger.info("Database tables initialized.")
 
 async def log_user_action(user_id: int, username: str | None, full_name: str, avatar_pic_url: str | None, action_type: str, action_details: str | None):
@@ -219,3 +231,33 @@ async def set_onboarding_completed(user_id: int):
     async with pool.acquire() as connection:
         await connection.execute("UPDATE users SET onboarding_completed = TRUE WHERE user_id = $1", user_id)
         logger.info(f"Onboarding marked as completed for user {user_id}")
+
+# --- Schedule Subscriptions ---
+
+async def add_schedule_subscription(user_id: int, entity_type: str, entity_id: str, entity_name: str, notification_time: datetime.time) -> bool:
+    """Adds or updates a user's schedule subscription."""
+    async with pool.acquire() as connection:
+        try:
+            await connection.execute('''
+                INSERT INTO user_schedule_subscriptions (user_id, entity_type, entity_id, entity_name, notification_time)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (user_id, entity_type, entity_id) DO UPDATE SET
+                    entity_name = EXCLUDED.entity_name,
+                    notification_time = EXCLUDED.notification_time,
+                    is_active = TRUE;
+            ''', user_id, entity_type, entity_id, entity_name, notification_time)
+            logger.info(f"Added/Updated schedule subscription for user {user_id}: {entity_name} at {notification_time}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to add schedule subscription for user {user_id}: {e}", exc_info=True)
+            return False
+
+async def get_subscriptions_for_notification(notification_time: str) -> list:
+    """Gets all active subscriptions for a specific time of day (HH:MM)."""
+    async with pool.acquire() as connection:
+        rows = await connection.fetch("""
+            SELECT user_id, entity_type, entity_id, entity_name, notification_time
+            FROM user_schedule_subscriptions
+            WHERE is_active = TRUE AND TO_CHAR(notification_time, 'HH24:MI') = $1
+        """, notification_time)
+        return [dict(row) for row in rows]

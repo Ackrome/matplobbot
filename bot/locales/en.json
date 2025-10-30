@@ -147,5 +147,13 @@
     "schedule_no_results": "No results found for your query '{query}'.",
     "schedule_results_found": "Found {count} results. Please choose one:",
     "schedule_api_error": "An error occurred while contacting the university API. Please try again later.",
-    "schedule_no_lessons_today": "There are no lessons scheduled for this day."
+    "schedule_no_lessons_today": "There are no lessons scheduled for this day.",
+    "schedule_loading": "Loading schedule...",
+    "schedule_subscribe_button": "🔔 Subscribe to daily updates",
+    "schedule_prompt_for_time": "Great! Now, enter the time you want to receive the schedule notification for the next day.\n\nPlease use `HH:MM` format (e.g., `07:00` or `21:30`).",
+    "schedule_invalid_time_format": "❌ Invalid time format. Please use `HH:MM`, for example, `08:00`.",
+    "schedule_invalid_time_value": "❌ Invalid time value. Please enter a correct time, for example, `08:00`.",
+    "schedule_subscribe_success": "✅ You have successfully subscribed to the daily schedule for '{entity_name}' at {time_str}!",
+    "schedule_subscribe_error": "An error occurred while creating the subscription. Please try again.",
+    "schedule_subscribe_dberror": "An error occurred while saving the subscription to the database."
 }

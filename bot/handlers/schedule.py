@@ -4,20 +4,23 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, CallbackQuery
-from datetime import datetime, timedelta
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from datetime import datetime, timedelta, time
 import logging
+import re
 
 from bot.services.university_api import RuzAPIClient # Import the class for type hinting
 from bot.services.schedule_service import format_schedule
 from bot.keyboards import get_schedule_type_keyboard, build_search_results_keyboard
 from bot.i18n import translator
+from bot import database
 
 
 router = Router()
 
 class ScheduleStates(StatesGroup):
     awaiting_search_query = State()
-    choosing_date = State()
+    awaiting_subscription_time = State()
 
 @router.message(F.text == "/schedule")
 async def cmd_schedule(message: Message, state: FSMContext):
@@ -70,7 +73,7 @@ async def handle_search_query(message: Message, state: FSMContext, ruz_api_clien
         await state.clear()
 
 @router.callback_query(F.data.startswith("sch_result_"))
-async def handle_result_selection(callback: CallbackQuery, ruz_api_client: RuzAPIClient):
+async def handle_result_selection(callback: CallbackQuery, state: FSMContext, ruz_api_client: RuzAPIClient):
     # Acknowledge the callback immediately to prevent "query is too old" error
     await callback.answer()
 
@@ -79,23 +82,77 @@ async def handle_result_selection(callback: CallbackQuery, ruz_api_client: RuzAP
     # For now, just fetch today's schedule. Can add date selection later.
     today = datetime.now().strftime("%Y.%m.%d")
     user_id = callback.from_user.id
-    await callback.message.edit_text("Загружаю расписание...")
+    lang = await translator.get_user_language(user_id)
+    await callback.message.edit_text(translator.gettext(lang, "schedule_loading"))
 
     try:
         schedule_data = await ruz_api_client.get_schedule(entity_type, entity_id, start=today, finish=today)
-        
-        lang = await translator.get_user_language(user_id)
-        
-        formatted_text = format_schedule(schedule_data, lang)
-        if not schedule_data:
-            formatted_text = translator.gettext(lang, "schedule_no_lessons_today")
+        entity_name = schedule_data[0].get(entity_type, "Unknown") if schedule_data else "Unknown"
+
+        formatted_text = format_schedule(schedule_data, lang, entity_name)
+
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            InlineKeyboardBuilder.from_markup(
+                build_search_results_keyboard(
+                    [{'label': translator.gettext(lang, "schedule_subscribe_button"), 'id': f"{entity_type}:{entity_id}:{entity_name}", 'type': 'subscribe'}],
+                    'subscribe'
+                )
+            ).row_width
+        )
 
         await callback.message.edit_text(
             formatted_text, 
             parse_mode="Markdown", 
-            reply_markup=None # Add back button later
+            reply_markup=builder.as_markup()
         )
     except Exception as e:
         logging.error(f"Failed to get schedule for {entity_type}:{entity_id}. Error: {e}", exc_info=True)
         lang = await translator.get_user_language(user_id)
         await callback.message.edit_text(translator.gettext(lang, "schedule_api_error"))
+
+@router.callback_query(F.data.startswith("sch_result_:subscribe:"))
+async def handle_subscribe_button(callback: CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    lang = await translator.get_user_language(user_id)
+    
+    try:
+        _, _, data_part = callback.data.split(":", 2)
+        entity_type, entity_id, entity_name = data_part.split(":", 2)
+    except ValueError:
+        logging.error(f"Invalid subscribe callback data: {callback.data}")
+        await callback.answer(translator.gettext(lang, "schedule_subscribe_error"), show_alert=True)
+        return
+
+    await state.set_state(ScheduleStates.awaiting_subscription_time)
+    await state.update_data(
+        sub_entity_type=entity_type,
+        sub_entity_id=entity_id,
+        sub_entity_name=entity_name
+    )
+
+    await callback.message.edit_text(translator.gettext(lang, "schedule_prompt_for_time"))
+    await callback.answer()
+
+@router.message(ScheduleStates.awaiting_subscription_time)
+async def handle_subscription_time(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    lang = await translator.get_user_language(user_id)
+    time_str = message.text.strip()
+
+    if not re.match(r"^\d{2}:\d{2}$", time_str):
+        await message.reply(translator.gettext(lang, "schedule_invalid_time_format"))
+        return
+
+    try:
+        notification_time = time.fromisoformat(time_str)
+        sub_data = await state.get_data()
+        await database.add_schedule_subscription(user_id, sub_data['sub_entity_type'], sub_data['sub_entity_id'], sub_data['sub_entity_name'], notification_time)
+        await message.answer(translator.gettext(lang, "schedule_subscribe_success", entity_name=sub_data['sub_entity_name'], time_str=time_str))
+    except ValueError:
+        await message.reply(translator.gettext(lang, "schedule_invalid_time_value"))
+    except Exception as e:
+        logging.error(f"Error saving subscription for user {user_id}: {e}", exc_info=True)
+        await message.answer(translator.gettext(lang, "schedule_subscribe_dberror"))
+    finally:
+        await state.clear()

@@ -167,8 +167,8 @@ def build_search_results_keyboard(results: List[Dict[str, Any]], search_type: st
     for item in results[:20]: # Limit to 20 results to avoid hitting Telegram limits
         builder.row(
             InlineKeyboardButton(
-                text=item['label'],
-                callback_data=f"sch_result_:{search_type}:{item['id']}"
+                text=item['label'], 
+                callback_data=f"sch_result_:{item.get('type', search_type)}:{item['id']}"
             )
         )
     return builder.as_markup()
