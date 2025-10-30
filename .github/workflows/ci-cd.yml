@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
+      packages: write # This permission is still required at the job level
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -76,9 +76,9 @@ jobs:
 
       - name: Publish to GitHub Packages
         env:
-          # Use the classic PAT for authentication
+          # REVERT THIS PART - Use the standard, more secure GITHUB_TOKEN
           TWINE_USERNAME: ${{ github.actor }}
-          TWINE_PASSWORD: ${{ secrets.GH_PAT }}
+          TWINE_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: >
           twine upload --repository-url https://pypi.pkg.github.com/${{ env.IMAGE_OWNER }} 
           shared_lib/dist/*
