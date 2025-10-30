@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name="matplobbot-shared",  # Use a standard name format
 <<<<<<< HEAD
-    version="0.1.1", # Incremented for a bugfix
+    version="0.1.2", # Incremented for a bugfix
     packages=find_packages(where="."), # Now setup.py is inside shared_lib, so it finds packages relative to itself
 =======
     version="0.1.2", # Incremented for a bugfix
