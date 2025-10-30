@@ -13,5 +13,6 @@ setup(
         "aiohttp>=3.9.0", # Specify versions as needed
         "certifi>=2023.7.22"
     ],
+    
     python_requires='>=3.11',
 )
