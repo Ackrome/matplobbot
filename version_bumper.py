@@ -93,7 +93,7 @@ def main():
     if args.commit:
         print("\n--- Starting Git operations ---")
         tag_name = f"v{new_version}"
-        commit_message = f"chore(release): version {tag_name}"
+        commit_message = f"chore(release): version {tag_name} [skip ci]"
         
         # 1. Stage the files
         if check_tag_exists(tag_name):

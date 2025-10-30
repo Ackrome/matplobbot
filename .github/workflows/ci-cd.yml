@@ -1,10 +1,7 @@
 name: CI-CD Pipeline for Matplobbot
 
 on:
-  push:
-    branches: [ "main" ]
-    tags: [ 'v*.*.*' ] # Also trigger on version tags
-
+  push: { branches: [ "main" ] }
 env:
   REGISTRY: ghcr.io
   IMAGE_OWNER: ackrome # Use your GitHub username (lowercase)
@@ -13,8 +10,11 @@ jobs:
   auto-version-patch:
     name: Auto-Version Patch Release
     # This job runs ONLY on a push to main, NOT on a tag push.
-    # It also checks that the commit is not a release commit to prevent loops.
-    if: github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, 'chore(release)')
+    # It also checks that the commit is not a release commit to prevent loops from other sources.
+    if: "!contains(github.event.head_commit.message, 'chore(release)')"
+    outputs:
+      new_version: ${{ steps.bumper.outputs.new_version }}
+      commit_sha: ${{ steps.checkout.outputs.commit_sha }}
     runs-on: ubuntu-latest
     permissions:
       contents: write # Needs permission to push commits and tags
@@ -22,6 +22,7 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
         with:
+          ref: ${{ github.sha }}
           # We need to fetch all history and tags for the bumper script to work correctly
           fetch-depth: 0
           # Use a PAT to allow pushing back to the repo
@@ -38,12 +39,20 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Run Version Bumper for Patch
-        run: python version_bumper.py patch --commit
+        id: bumper
+        # We run the script without --commit to prevent it from pushing.
+        # We capture the output to pass it to other jobs.
+        run: |
+          python version_bumper.py patch
+          # The script modifies files, now we commit them
+          git add shared_lib/setup.py requirements.txt
+          # Use a standard commit message and [skip ci] to prevent loops
+          git commit -m "chore(release): auto-version patch [skip ci]"
+          git push
 
   publish-shared-lib:
     name: Build and Publish Shared Library
-    # This job now runs ONLY when a version tag is pushed.
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [auto-version-patch] # Runs after auto-version-patch
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -71,18 +80,13 @@ jobs:
           twine upload --repository-url https://pypi.pkg.github.com/Ackrome dist/*
 
   test-build-and-push:
-    needs: [publish-shared-lib] # This job should wait for the library to be published
+    needs: [publish-shared-lib] # This job waits for the library to be published
     # IMPORTANT: This tells GitHub to run this job on YOUR runner
     name: Test, Build and Push
     runs-on: self-hosted
-
     permissions:
       contents: read
       packages: write
-      
-    # This job also runs ONLY when a version tag is pushed.
-    if: startsWith(github.ref, 'refs/tags/v')
-
 
     steps:
       - name: Check out code
@@ -158,12 +162,9 @@ jobs:
 
   trigger-deployment:
     name: Trigger Jenkins Deployment
-    needs: [test-build-and-push]
+    needs: [test-build-and-push] # Runs after images are pushed
     # Also runs on your machine
     runs-on: self-hosted
-
-    # This job also runs ONLY when a version tag is pushed.
-    if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
       - name: Trigger Jenkins Job via cURL
