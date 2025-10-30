@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name="matplobbot-shared",  # Use a standard name format
     version="0.1.1", # Incremented for a bugfix
-    packages=find_packages(include=['shared_lib', 'shared_lib.*']),
+    packages=find_packages(where="."), # Now setup.py is inside shared_lib, so it finds packages relative to itself
     description="Shared library for the Matplobbot ecosystem (database, services, i18n).",
     author="Ackrome",
     author_email="ivansergeyevich@gmail.com",

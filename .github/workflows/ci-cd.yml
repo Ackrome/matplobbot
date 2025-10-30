@@ -67,18 +67,20 @@ jobs:
           python-version: '3.11'
 
       - name: Install build dependencies
+        working-directory: shared_lib # Run pip install from the shared_lib directory
         run: python -m pip install --upgrade pip build twine
 
       - name: Build package
+        working-directory: shared_lib # Run build from the shared_lib directory
         run: python -m build
 
       - name: Publish to GitHub Packages
+        working-directory: shared_lib # Run twine from the shared_lib directory
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: >
           twine upload --repository-url https://pypi.pkg.github.com/Ackrome dist/*
-
   test-build-and-push:
     needs: [publish-shared-lib] # This job waits for the library to be published
     # IMPORTANT: This tells GitHub to run this job on YOUR runner
