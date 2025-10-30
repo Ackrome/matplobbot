@@ -4,7 +4,7 @@ on:
   push: { branches: [ "main" ] }
 env:
   REGISTRY: ghcr.io
-  IMAGE_OWNER: ackrome # Use your GitHub username (lowercase)
+  IMAGE_OWNER: Ackrome # Use your GitHub username (lowercase)
 
 jobs:
   auto-version-patch:
