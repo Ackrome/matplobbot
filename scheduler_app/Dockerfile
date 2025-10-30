@@ -1,15 +1,17 @@
 # scheduler_app/Dockerfile
+
 FROM python:3.11-slim
 WORKDIR /app
 
-# The COPY and editable install steps are no longer needed
-# COPY shared_lib/ /app/shared_lib/
-# COPY setup.py /app/
-# RUN pip install --no-cache-dir -e .
-
 COPY requirements.txt .
 
-# The scheduler will now install matplobbot-shared directly from PyPI
+# 1. Create a virtual environment
+RUN python3 -m venv /opt/venv
+
+# 2. Activate the venv by adding it to the PATH
+ENV PATH="/opt/venv/bin:$PATH"
+
+# 3. Install dependencies into the venv
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the scheduler application code
