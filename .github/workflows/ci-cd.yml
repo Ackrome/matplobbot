@@ -22,7 +22,7 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.sha }}
+          ref: main # Checkout the main branch directly
           # We need to fetch all history and tags for the bumper script to work correctly
           fetch-depth: 0
           # Use a PAT to allow pushing back to the repo
@@ -48,7 +48,7 @@ jobs:
           git add shared_lib/setup.py requirements.txt
           # Use a standard commit message and [skip ci] to prevent loops
           git commit -m "chore(release): auto-version patch [skip ci]"
-          git push
+          git push origin HEAD:main # Explicitly push the current HEAD to the main branch
 
   publish-shared-lib:
     name: Build and Publish Shared Library
