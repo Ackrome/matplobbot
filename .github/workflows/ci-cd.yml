@@ -51,35 +51,34 @@ jobs:
           git push origin HEAD:main # Explicitly push the current HEAD to the main branch
 
   publish-shared-lib:
-    name: Build and Publish Shared Library
+    name: Build and Publish Shared Library to PyPI
     needs: [auto-version-patch]
     runs-on: ubuntu-latest
-    permissions:
-      # These permissions are for the default GITHUB_TOKEN, but we are overriding auth.
-      # It's good practice to keep them.
-      contents: read
-      packages: write 
+    # No special permissions are needed for PyPI
+    
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      
+
       - name: Install build dependencies
         run: python -m pip install --upgrade pip build twine
-      
+
       - name: Build package
         working-directory: shared_lib
         run: python -m build
 
-      - name: Publish to GitHub Packages
+      - name: Publish package to PyPI
         env:
-          # Use your GitHub username and the PAT for authentication
-          TWINE_USERNAME: ${{ github.actor }}
-          TWINE_PASSWORD: ${{ secrets.GH_PAT }}
-        run: >
-          twine upload --repository-url https://pypi.pkg.github.com/${{ env.IMAGE_OWNER }} --verbose
-          shared_lib/dist/*
+          # The username is always __token__ for API token authentication
+          TWINE_USERNAME: __token__
+          # The password is the API token itself
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload shared_lib/dist/*
 
   test-build-and-push:
     needs: [publish-shared-lib] # This job waits for the library to be published

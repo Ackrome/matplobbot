@@ -72,29 +72,12 @@ RUN rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY requirements.txt .
 
-# Declare the build-time argument
-ARG GITHUB_TOKEN
-
 # --- START: CORRECTED INSTALLATION BLOCK ---
 # This single RUN command handles setup, installation, and cleanup atomically.
 RUN set -eux; \
-    \
-    # 1. Conditionally configure pip to use the private GitHub Packages index
-    if [ -n "$GITHUB_TOKEN" ]; then \
-        echo "----> Configuring access to private GitHub repository..." ; \
-        pip config set global.extra-index-url "https://__token__:${GITHUB_TOKEN}@pypi.pkg.github.com/Ackrome/"; \
-    fi; \
-    \
-    # 2. Install all Python dependencies. This will now use the extra-index-url if it was set.
-    echo "----> Installing Python dependencies..." ; \
+    echo "----> Installing Python dependencies from PyPI..." ; \
     pip install --no-cache-dir -r requirements.txt; \
-    pip install --no-cache-dir markdown-it-py; \
-    \
-    # 3. Clean up the configuration so the token is not left in the image layer
-    if [ -n "$GITHUB_TOKEN" ]; then \
-        echo "----> Cleaning up repository configuration..." ; \
-        pip config unset global.extra-index-url; \
-    fi
+    pip install --no-cache-dir markdown-it-py
 
 COPY bot/puppeteer-config.json /app/bot/
 COPY bot/ /app/bot/
