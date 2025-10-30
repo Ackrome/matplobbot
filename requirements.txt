@@ -1,6 +1,7 @@
 # Aiogram для Telegram-бота
 Requests==2.32.3
 aiogram==3.18.0
+matplobbot-shared
 apscheduler==3.10.4
 matplobblib==0.3.21
 python-dotenv>=1.0.0

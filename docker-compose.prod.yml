@@ -17,6 +17,11 @@ services:
     env_file: ./.env
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   mpb-telegram-bot:
     image: ghcr.io/ackrome/matplobbot-bot:${BOT_TAG:-latest}
@@ -26,8 +31,21 @@ services:
       - bot_logs:/app/logs
       - matplobblib_lib:/usr/local/lib/python3.11/site-packages/matplobblib # Persist library updates
     depends_on:
-      - redis
-      - postgres
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+
+  mpb-scheduler:
+    image: ghcr.io/ackrome/matplobbot-scheduler:${SCHEDULER_TAG:-latest}
+    restart: unless-stopped
+    env_file: ./.env
+    volumes:
+      - bot_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   mpb-fastapi-stats:
     image: ghcr.io/ackrome/matplobbot-api:${API_TAG:-latest} 
@@ -38,8 +56,15 @@ services:
     volumes:
       - bot_logs:/app/logs
     depends_on:
-      - mpb-telegram-bot
-      - postgres
+      mpb-telegram-bot:
+        condition: service_started # API can start once the bot container starts
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9583/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   bot_logs:

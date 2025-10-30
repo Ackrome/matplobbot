@@ -3,13 +3,75 @@ name: CI-CD Pipeline for Matplobbot
 on:
   push:
     branches: [ "main" ]
+    tags: [ 'v*.*.*' ] # Also trigger on version tags
 
 env:
   REGISTRY: ghcr.io
   IMAGE_OWNER: ackrome # Use your GitHub username (lowercase)
 
 jobs:
+  auto-version-patch:
+    name: Auto-Version Patch Release
+    # This job runs ONLY on a push to main, NOT on a tag push.
+    # It also checks that the commit is not a release commit to prevent loops.
+    if: github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, 'chore(release)')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needs permission to push commits and tags
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          # We need to fetch all history and tags for the bumper script to work correctly
+          fetch-depth: 0
+          # Use a PAT to allow pushing back to the repo
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Configure Git User
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Run Version Bumper for Patch
+        run: python version_bumper.py patch --commit
+
+  publish-shared-lib:
+    name: Build and Publish Shared Library
+    # This job now runs ONLY when a version tag is pushed.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install build dependencies
+        run: python -m pip install --upgrade pip build twine
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to GitHub Packages
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          twine upload --repository-url https://pypi.pkg.github.com/Ackrome dist/*
+
   test-build-and-push:
+    needs: [publish-shared-lib] # This job should wait for the library to be published
     # IMPORTANT: This tells GitHub to run this job on YOUR runner
     name: Test, Build and Push
     runs-on: self-hosted
@@ -17,6 +79,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+      
+    # This job also runs ONLY when a version tag is pushed.
+    if: startsWith(github.ref, 'refs/tags/v')
+
 
     steps:
       - name: Check out code
@@ -52,6 +118,8 @@ jobs:
       - name: Build and push matplobbot-bot
         uses: docker/build-push-action@v4
         with:
+          build-args: |
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
           context: .
           file: ./Dockerfile.bot
           push: true
@@ -62,12 +130,26 @@ jobs:
       - name: Build and push matplobbot-api
         uses: docker/build-push-action@v4
         with:
+          build-args: |
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
           context: ./fastapi_stats_app
           file: ./fastapi_stats_app/Dockerfile
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-api:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-api:latest
+
+      - name: Build and push matplobbot-scheduler
+        uses: docker/build-push-action@v4
+        with:
+          build-args: |
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+          context: .
+          file: ./scheduler_app/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-scheduler:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-scheduler:latest
 
       - name: Clean up Docker resources
         if: always()
@@ -76,9 +158,12 @@ jobs:
 
   trigger-deployment:
     name: Trigger Jenkins Deployment
-    needs: test-build-and-push
+    needs: [test-build-and-push]
     # Also runs on your machine
     runs-on: self-hosted
+
+    # This job also runs ONLY when a version tag is pushed.
+    if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
       - name: Trigger Jenkins Job via cURL
@@ -87,4 +172,5 @@ jobs:
           curl -X POST "${{ secrets.JENKINS_URL }}/job/matplobbot-deploy/buildWithParameters" \
             --user "${{ secrets.JENKINS_USER }}:${{ secrets.JENKINS_TOKEN }}" \
             --data-urlencode "BOT_IMAGE_TAG=${{ github.sha }}" \
-            --data-urlencode "API_IMAGE_TAG=${{ github.sha }}"
+            --data-urlencode "API_IMAGE_TAG=${{ github.sha }}" \
+            --data-urlencode "SCHEDULER_IMAGE_TAG=${{ github.sha }}"

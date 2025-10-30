@@ -45,6 +45,19 @@ services:
       postgres:
         condition: service_healthy
 
+  mpb-scheduler:
+    build:
+      context: .
+      dockerfile: scheduler_app/Dockerfile
+    container_name: mpb-scheduler
+    restart: unless-stopped
+    env_file: ./.env
+    volumes:
+      - bot_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 
 
   mpb-fastapi-stats:

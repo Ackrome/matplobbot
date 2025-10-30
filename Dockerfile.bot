@@ -71,12 +71,14 @@ RUN rm -rf /var/lib/apt/lists/*
 # App setup
 WORKDIR /app
 COPY requirements.txt .
+
 RUN python3 -m venv /usr/local
 ENV PATH="/usr/local/bin:$PATH" \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     HOME=/home/appuser \
     MPLCONFIGDIR=/home/appuser/.config/matplotlib \
-    NUMBA_DISABLE_JITCACHE=1
+    NUMBA_DISABLE_JITCACHE=1 \
+    PIP_EXTRA_INDEX_URL="https://__token__:${GITHUB_TOKEN}@pypi.pkg.github.com/Ackrome/"
 
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir markdown-it-py

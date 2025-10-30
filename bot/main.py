@@ -7,10 +7,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import aiohttp
 
 from .handlers import router
-from .logger import UserLoggingMiddleware # Импортируем middleware
-from .database import init_db, init_db_pool # Импортируем функции инициализации БД
-from .services.scheduler_jobs import send_daily_schedules
-from .services.university_api import create_ruz_api_client
+from .logger import UserLoggingMiddleware
+from shared_lib.database import init_db, init_db_pool
+from .services.scheduler_jobs import send_daily_schedules # This is specific to the bot
+from shared_lib.services.university_api import create_ruz_api_client
 
 # Загрузка переменных окружения и настройка логгирования из app.logger
 load_dotenv()

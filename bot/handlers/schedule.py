@@ -92,14 +92,11 @@ async def handle_result_selection(callback: CallbackQuery, state: FSMContext, ru
         formatted_text = format_schedule(schedule_data, lang, entity_name)
 
         builder = InlineKeyboardBuilder()
-        builder.row(
-            InlineKeyboardBuilder.from_markup(
-                build_search_results_keyboard(
-                    [{'label': translator.gettext(lang, "schedule_subscribe_button"), 'id': f"{entity_type}:{entity_id}:{entity_name}", 'type': 'subscribe'}],
-                    'subscribe'
-                )
-            ).row_width
+        subscribe_button = build_search_results_keyboard(
+            [{'label': translator.gettext(lang, "schedule_subscribe_button"), 'id': f"{entity_type}:{entity_id}:{entity_name}", 'type': 'subscribe'}],
+            'subscribe'
         )
+        builder.row(*subscribe_button.inline_keyboard[0])
 
         await callback.message.edit_text(
             formatted_text, 

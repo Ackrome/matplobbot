@@ -5,6 +5,7 @@ pipeline {
     parameters {
         string(name: 'BOT_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag for the bot')
         string(name: 'API_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag for the API')
+        string(name: 'SCHEDULER_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag for the scheduler')
     }
 
     // This block securely binds your Jenkins credentials to environment variables for this job
@@ -42,7 +43,7 @@ pipeline {
                         // Stage 2: clear docker build cache
                         sh "ssh -o StrictHostKeyChecking=no root@app-vm.panthera-banjo.ts.net 'docker system prune --all --force'"
                         // Stage 3: Run the deployment script, which will now use the new .env file
-                        sh "ssh -o StrictHostKeyChecking=no root@app-vm.panthera-banjo.ts.net 'cd ~/matplobbot && ./deploy.sh ${params.BOT_IMAGE_TAG} ${params.API_IMAGE_TAG}'"
+                        sh "ssh -o StrictHostKeyChecking=no root@app-vm.panthera-banjo.ts.net 'cd ~/matplobbot && ./deploy.sh ${params.BOT_IMAGE_TAG} ${params.API_IMAGE_TAG} ${params.SCHEDULER_IMAGE_TAG}'"
                     }
                 }
             }

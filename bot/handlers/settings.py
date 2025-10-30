@@ -5,8 +5,8 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
 from aiogram.filters import  Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from ..database import get_user_settings, update_user_settings_db, get_user_repos
-from ..i18n import translator
+from shared_lib.database import get_user_settings, update_user_settings_db, get_user_repos
+from shared_lib.i18n import translator
 
 
 router = Router()

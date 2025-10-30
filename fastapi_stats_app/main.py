@@ -29,7 +29,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from .routers import stats_router, ws_router
-from .db_utils import init_db_pool, close_db_pool
+from shared_lib.database import init_db_pool, close_db_pool
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
