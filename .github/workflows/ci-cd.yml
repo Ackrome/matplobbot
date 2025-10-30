@@ -78,7 +78,7 @@ jobs:
           TWINE_USERNAME: ${{ github.actor }}
           TWINE_PASSWORD: ${{ secrets.GH_PAT }}
         run: >
-          twine upload --repository-url https://pypi.pkg.github.com/${{ env.IMAGE_OWNER }}
+          twine upload --repository-url https://pypi.pkg.github.com/${{ env.IMAGE_OWNER }} --verbose
           shared_lib/dist/*
 
   test-build-and-push:
