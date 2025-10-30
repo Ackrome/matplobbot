@@ -50,6 +50,15 @@ def run_git_command(command: list[str], message: str):
         print(f"   Stderr: {e.stderr.strip()}", file=sys.stderr)
         sys.exit(1)
 
+def check_tag_exists(tag_name: str) -> bool:
+    """Checks if a Git tag already exists."""
+    try:
+        subprocess.run(["git", "rev-parse", tag_name], check=True, capture_output=True)
+        return True
+    except subprocess.CalledProcessError:
+        # Tag does not exist
+        return False
+
 def main():
     parser = argparse.ArgumentParser(description="Automate version bumping for the matplobbot-shared library.")
     parser.add_argument("part", choices=['patch', 'minor', 'major'], help="The part of the version to increment (patch, minor, or major).")
@@ -87,6 +96,10 @@ def main():
         commit_message = f"chore(release): version {tag_name}"
         
         # 1. Stage the files
+        if check_tag_exists(tag_name):
+            print(f"❌ Tag {tag_name} already exists. Skipping tag creation.", file=sys.stderr)
+            sys.exit(0)
+            
         run_git_command(["git", "add", str(SETUP_PY_PATH), str(REQUIREMENTS_TXT_PATH)], "Staging files")
         # 2. Commit the changes
         run_git_command(["git", "commit", "-m", commit_message], "Committing version bump")
