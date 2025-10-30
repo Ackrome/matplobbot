@@ -25,6 +25,8 @@ pipeline {
             steps {
                 script {
                     sshagent(credentials: ['app-vm-ssh-key']) {
+                        // --- NEW STAGE 0: Update the repository on the remote server ---
+                        sh "ssh -o StrictHostKeyChecking=no root@app-vm.panthera-banjo.ts.net 'cd ~/matplobbot && git pull'"
                         // Stage 1: Securely write the .env file on the remote server
                         // We use a 'heredoc' (&lt;&lt;EOF) for a clean, multi-line write.
                         sh """
