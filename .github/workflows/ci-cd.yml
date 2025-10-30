@@ -55,33 +55,32 @@ jobs:
     needs: [auto-version-patch]
     runs-on: ubuntu-latest
     permissions:
+      # These permissions are for the default GITHUB_TOKEN, but we are overriding auth.
+      # It's good practice to keep them.
       contents: read
-      packages: write # This permission is still required at the job level
+      packages: write 
     steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-
+      
       - name: Install build dependencies
-        working-directory: shared_lib # Run pip install from the shared_lib directory
         run: python -m pip install --upgrade pip build twine
-
+      
       - name: Build package
         working-directory: shared_lib
         run: python -m build
 
       - name: Publish to GitHub Packages
         env:
-          # REVERT THIS PART - Use the standard, more secure GITHUB_TOKEN
+          # Use your GitHub username and the PAT for authentication
           TWINE_USERNAME: ${{ github.actor }}
-          TWINE_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          TWINE_PASSWORD: ${{ secrets.GH_PAT }}
         run: >
-          twine upload --repository-url https://pypi.pkg.github.com/${{ env.IMAGE_OWNER }} 
+          twine upload --repository-url https://pypi.pkg.github.com/${{ env.IMAGE_OWNER }}
           shared_lib/dist/*
+
   test-build-and-push:
     needs: [publish-shared-lib] # This job waits for the library to be published
     # IMPORTANT: This tells GitHub to run this job on YOUR runner
