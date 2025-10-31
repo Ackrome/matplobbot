@@ -140,8 +140,8 @@ jobs:
         with:
           build-args: |
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-          context: ./fastapi_stats_app
           file: ./fastapi_stats_app/Dockerfile
+          context: .
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-api:${{ github.sha }}
