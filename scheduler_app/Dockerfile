@@ -2,11 +2,10 @@
 FROM python:3.11-slim
 WORKDIR /app
 
-COPY requirements.txt .
-COPY setup.py .
-COPY shared_lib/ ./shared_lib/
+# Copy requirements.txt specific to this app from the build context root
+COPY scheduler_app/requirements.txt .
 
-RUN pip install --no-cache-dir -e ./shared_lib
+# Install dependencies, including matplobbot-shared from PyPI
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the contents of the scheduler_app directory into /app

@@ -1,0 +1,6 @@
+matplobbot-shared
+aiohttp
+apscheduler
+logging
+asyncio
+asyncpg

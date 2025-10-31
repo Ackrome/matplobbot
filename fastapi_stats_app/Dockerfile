@@ -3,15 +3,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# The build context is the repository root.
-# We copy only the files necessary for this service.
-COPY requirements.txt .
-COPY setup.py .
-COPY shared_lib/ ./shared_lib/
+# Copy requirements.txt specific to this app from the build context root
+COPY fastapi_stats_app/requirements.txt .
 
-# Install dependencies, including the shared_lib
+# Install dependencies, including matplobbot-shared from PyPI
 RUN apt-get update && apt-get install -y curl && \
-    pip install --no-cache-dir -e ./shared_lib && \
     pip install --no-cache-dir -r requirements.txt && \
     rm -rf /var/lib/apt/lists/*
 
