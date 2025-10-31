@@ -92,6 +92,9 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v3
+      
+      - name: Clean Docker Build Cache
+        run: docker buildx prune --all --force
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -160,6 +163,8 @@ jobs:
         if: always()
         run: |
           docker system prune --all --force
+
+
 
   trigger-deployment:
     name: Trigger Jenkins Deployment

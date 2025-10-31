@@ -1,20 +1,15 @@
 # scheduler_app/Dockerfile
-
 FROM python:3.11-slim
 WORKDIR /app
 
 COPY requirements.txt .
+COPY setup.py .
+COPY shared_lib/ ./shared_lib/
 
-# 1. Create a virtual environment
-RUN python3 -m venv /opt/venv
-
-# 2. Activate the venv by adding it to the PATH
-ENV PATH="/opt/venv/bin:$PATH"
-
-# 3. Install dependencies into the venv
+RUN pip install --no-cache-dir -e ./shared_lib
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the scheduler application code
-COPY scheduler_app/ /app/scheduler_app/
+# Copy the contents of the scheduler_app directory into /app
+COPY scheduler_app/ .
 
-CMD ["python3", "-m", "scheduler_app.main"]
+CMD ["python3", "-m", "main"]

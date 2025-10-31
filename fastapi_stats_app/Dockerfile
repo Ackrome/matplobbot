@@ -1,23 +1,25 @@
+# fastapi_stats_app/Dockerfile
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Копируем сначала файл зависимостей и устанавливаем их
-# Это позволяет использовать кэширование слоев Docker, если код приложения меняется, а зависимости нет
-
+# The build context is the repository root.
+# We copy only the files necessary for this service.
 COPY requirements.txt .
+COPY setup.py .
+COPY shared_lib/ ./shared_lib/
 
+# Install dependencies, including the shared_lib
 RUN apt-get update && apt-get install -y curl && \
+    pip install --no-cache-dir -e ./shared_lib && \
     pip install --no-cache-dir -r requirements.txt && \
     rm -rf /var/lib/apt/lists/*
 
-# Копируем остальной код приложения
-# Копируем код приложения в поддиректорию, которая будет нашим Python пакетом
-COPY fastapi_stats_app/ /app/fastapi_stats_app/
+# --- CORRECTED COPY STEP ---
+# Copy the application code itself.
+# This copies the *contents* of fastapi_stats_app into the current WORKDIR (/app)
+COPY fastapi_stats_app/ .
 
-# Устанавливаем WORKDIR в родительский каталог нашего пакета
-WORKDIR /app
-
-# Порт, на котором будет работать FastAPI приложение внутри контейнера
-EXPOSE 9583
-CMD ["uvicorn", "fastapi_stats_app.main:app", "--host", "0.0.0.0", "--port", "9583"]
+# Since the WORKDIR is /app, the entrypoint is simpler.
+# We don't need the --reload flag in production.
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "9583"]
