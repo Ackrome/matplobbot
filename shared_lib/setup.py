@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="matplobbot-shared",  # Use a standard name format
-    version="0.1.20", # Or your desired starting version
+    version="0.1.21", # Or your desired starting version
     packages=find_packages(where="."), # This is correct for setup.py being inside shared_lib/
     description="Shared library for the Matplobbot ecosystem (database, services, i18n).",
     author="Ackrome",
