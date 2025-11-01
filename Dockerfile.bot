@@ -40,7 +40,7 @@ RUN set -eux; \
       texlive-lang-all \
       latexmk \
       gosu \
-      dos2unix && \
+      dos2unix \
       # We can use a smaller language package if only Russian/English are needed
       texlive-lang-cyrillic \
       # Other utilities
