@@ -62,12 +62,23 @@ ENV DEBIAN_FRONTEND=noninteractive \
     MPLCONFIGDIR=/home/appuser/.config/matplotlib \
     NUMBA_DISABLE_JITCACHE=1
 
-# 1. Copy all system dependencies (tex, pandoc, puppeteer libs) from the builder stage
-COPY --from=builder-tex /etc/ssl/certs/ /etc/ssl/certs/
-COPY --from=builder-tex /usr/share/ /usr/share/
-COPY --from=builder-tex /usr/lib/ /usr/lib/
-COPY --from=builder-tex /var/lib/dpkg/ /var/lib/dpkg/
-COPY --from=builder-tex /var/lib/apt/ /var/lib/apt/
+# 1. Install only the RUNTIME dependencies for Puppeteer
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdbus-1-3 \
+      libdrm2 libgbm1 libgtk-3-0 libpango-1.0-0 libpangocairo-1.0-0 libx11-6 \
+      libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 libxext6 \
+      libxfixes3 libxi6 libxrandr2 libxrender1 libxss1 libxtst6 libasound2 \
+      libgdk-pixbuf-2.0-0 \
+      # Add procps for process management if needed
+      procps && \
+    rm -rf /var/lib/apt/lists/*
+
+# 2. Copy only the necessary binaries and libraries from the builder stage
+COPY --from=builder-tex /usr/bin/pandoc /usr/bin/
+COPY --from=builder-tex /usr/bin/xelatex /usr/bin/
+COPY --from=builder-tex /usr/bin/latexmk /usr/bin/
+COPY --from=builder-tex /usr/share/texlive /usr/share/texlive
+COPY --from=builder-tex /usr/share/fonts/truetype/dejavu /usr/share/fonts/truetype/dejavu
 
 # 2. Copy the mermaid-cli executable and its node_modules from the node builder
 COPY --from=builder-node /usr/local/bin/mmdc /usr/local/bin/
