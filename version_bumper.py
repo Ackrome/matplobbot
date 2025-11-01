@@ -6,7 +6,7 @@ import sys
 import subprocess
 # Define paths relative to the script location
 ROOT_DIR = Path(__file__).parent
-SETUP_PY_PATH = ROOT_DIR / "shared_lib" / "setup.py"
+SETUP_PY_PATH = ROOT_DIR / "setup.py"
 REQUIREMENTS_TXT_PATH = ROOT_DIR / "requirements.txt"
 
 def bump_version(current_version: str, part: str) -> str:
