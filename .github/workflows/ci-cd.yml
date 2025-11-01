@@ -77,7 +77,7 @@ jobs:
           TWINE_USERNAME: __token__
           # The password is the API token itself
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload shared_lib/dist/*
+        run: twine upload dist/*
 
   test-build-and-push:
     needs: [publish-shared-lib] # This job waits for the library to be published
