@@ -9,9 +9,9 @@ setup(
     author_email="ivansergeyevich@gmail.com",
     # Declare dependencies for this library
     install_requires=[
-        "asyncpg",
-        "aiohttp", # Specify versions as needed
-        "certifi"
+        "asyncpg>=0.30.0",
+        "aiohttp>=3.13.2", # Specify versions as needed
+        "certifi>=2025.10.5"
     ],
     # This tells setuptools that the package data (like .json files) should be included
     package_data={
