@@ -67,7 +67,7 @@ RUN rm -rf /var/lib/apt/lists/*
 
 
 
-WORKDIR /app
+WORKDIR /
 
 COPY requirements.txt .
 
@@ -95,7 +95,7 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     NUMBA_DISABLE_JITCACHE=1
 
 # Copy the rest of the application code
-COPY bot/puppeteer-config.json /app/bot/
-COPY bot/ /app/bot/
+COPY bot/puppeteer-config.json /bot/
+COPY bot/ /bot/
 
 CMD ["python3", "-m", "bot.main"]

@@ -2,7 +2,7 @@ import logging
 import os
 from pathlib import Path # Добавляем импорт pathlib
 from contextlib import asynccontextmanager
-from .config import LOG_DIR, FASTAPI_LOG_FILE_NAME # Импортируем константы для логгирования
+from fastapi_stats_app.config import LOG_DIR, FASTAPI_LOG_FILE_NAME # Импортируем константы для логгирования
 
 
 # Определяем пути для логгирования FastAPI приложения
@@ -28,7 +28,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from .routers import stats_router, ws_router
+from fastapi_stats_app.routers import stats_router, ws_router
 from shared_lib.database import init_db_pool, close_db_pool
 
 @asynccontextmanager
