@@ -7,9 +7,9 @@ from .config import BOT_TOKEN
 
 # We need to import these from the bot's services.
 # In a real-world scenario, this might be a shared library.
-from bot.services.university_api import RuzAPIClient
-from bot.services.schedule_service import format_schedule
-from bot.i18n import translator
+from shared_lib.services.university_api import RuzAPIClient
+from shared_lib.services.schedule_service import format_schedule
+from shared_lib.i18n import translator
 
 logger = logging.getLogger(__name__)
 

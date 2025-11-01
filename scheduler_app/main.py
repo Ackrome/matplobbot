@@ -13,7 +13,7 @@ from scheduler_app.database import init_db_pool, close_db_pool
 from scheduler_app.jobs import send_daily_schedules
 
 # We need to import this from the bot's services
-from bot.services.university_api import create_ruz_api_client
+from shared_lib.services.university_api import create_ruz_api_client
 
 # --- Logging Setup ---
 os.makedirs(LOG_DIR, exist_ok=True)

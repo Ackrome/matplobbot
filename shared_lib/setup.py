@@ -1,18 +1,22 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="matplobbot-shared",  # Use a standard name format
-    version="0.1.20", # Or your desired starting version
-    packages=find_packages(where="."), # This is correct for setup.py being inside shared_lib/
+    name="matplobbot-shared",  # The name you use to `pip install`
+    version="0.1.21",
+    packages=['shared_lib', 'shared_lib.services', 'shared_lib.locales'], # Explicitly list packages
     description="Shared library for the Matplobbot ecosystem (database, services, i18n).",
     author="Ackrome",
     author_email="ivansergeyevich@gmail.com",
     # Declare dependencies for this library
     install_requires=[
-        "asyncpg>=0.28.0",
-        "aiohttp>=3.9.0", # Specify versions as needed
-        "certifi>=2023.7.22"
+        "asyncpg",
+        "aiohttp", # Specify versions as needed
+        "certifi"
     ],
-    
+    # This tells setuptools that the package data (like .json files) should be included
+    package_data={
+        'shared_lib.locales': ['*.json'],
+    },
+    include_package_data=True,
     python_requires='>=3.11',
 )

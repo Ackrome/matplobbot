@@ -28,7 +28,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi_stats_app.routers import stats_router, ws_router
+from .routers import stats_router, ws_router
 from shared_lib.database import init_db_pool, close_db_pool
 
 @asynccontextmanager
