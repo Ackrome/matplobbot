@@ -69,7 +69,6 @@ jobs:
         run: python -m pip install --upgrade pip build twine
 
       - name: Build package
-        working-directory: shared_lib
         run: python -m build
 
       - name: Publish package to PyPI
