@@ -1,6 +1,5 @@
 matplobbot-shared
 aiohttp
 apscheduler
-logging
-asyncio
 asyncpg
+python-dotenv
