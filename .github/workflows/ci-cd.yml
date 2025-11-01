@@ -45,7 +45,7 @@ jobs:
         run: |
           python version_bumper.py patch
           # The script modifies files, now we commit them
-          git add shared_lib/setup.py requirements.txt
+          git add setup.py requirements.txt
           # Use a standard commit message and [skip ci] to prevent loops
           git commit -m "chore(release): auto-version patch [skip ci]"
           git push origin HEAD:main # Explicitly push the current HEAD to the main branch
