@@ -1,31 +1,44 @@
-# Dockerfile.bot - Multi-stage build
-
-# --- Stage 1: Node builder for Mermaid-CLI ---
-FROM node:20-slim AS builder-node
-
-RUN npm install -g @mermaid-js/mermaid-cli --no-fund --no-update-notifier
-
-# --- Stage 2: TeX and Python builder ---
-FROM python:3.11-slim AS builder-tex
+# Dockerfile.bot
+FROM node:20-slim
 
 # noninteractive to avoid tzdata/ui prompts
 ENV DEBIAN_FRONTEND=noninteractive \
     APT_OPTS="-y --no-install-recommends"
 
-# 1) Install base essentials, Python (already present), and all TeX/Pandoc dependencies
+
+# 1) small essentials + python
 RUN set -eux; \
     find /etc/apt -name "*.list" -exec sed -i 's|http://deb\.debian\.org|http://mirror.truenetwork.ru|g' {} + || true; \
     find /etc/apt -name "*.sources" -exec sed -i 's|URIs: http://deb\.debian\.org|URIs: http://mirror.truenetwork.ru|g' {} + || true; \
     apt-get update; \
     apt-get install $APT_OPTS \
-      # Puppeteer/Chromium dependencies for mermaid-cli
+      python3 python3-pip ca-certificates wget xdg-utils fonts-liberation fonts-dejavu-core \
+      fonts-dejavu python3.11-venv git \
+      git curl build-essential procps && \
+    rm -rf /var/lib/apt/lists/*
+
+# 2) Puppeteer/Chromium dependencies for mermaid-cli
+#    This layer is crucial for mermaid-cli to be able to launch a headless browser.
+RUN set -eux; \
+    find /etc/apt -name "*.list" -exec sed -i 's|http://deb\.debian\.org|http://mirror.truenetwork.ru|g' {} + || true; \
+    find /etc/apt -name "*.sources" -exec sed -i 's|URIs: http://deb\.debian\.org|URIs: http://mirror.truenetwork.ru|g' {} + || true; \
+    apt-get update; \
+    apt-get install $APT_OPTS \
       libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdbus-1-3 \
       libdrm2 libgbm1 libgtk-3-0 libpango-1.0-0 libpangocairo-1.0-0 libx11-6 \
       libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 libxext6 \
       libxfixes3 libxi6 libxrandr2 libxrender1 libxss1 libxtst6 libasound2 \
-      libgdk-pixbuf-2.0-0 \
-      # TeX packages
-      pandoc \
+      libgdk-pixbuf-2.0-0 && \
+    rm -rf /var/lib/apt/lists/*
+
+# 2) TeX packages (split so you can prune/change easily)
+#    Remove any packages you don't need to reduce image size.
+RUN set -eux; \
+    find /etc/apt -name "*.list" -exec sed -i 's|http://deb\.debian\.org|http://mirror.truenetwork.ru|g' {} + || true; \
+    find /etc/apt -name "*.sources" -exec sed -i 's|URIs: http://deb\.debian\.org|URIs: http://mirror.truenetwork.ru|g' {} + || true; \
+    apt-get update && \
+    apt-get install $APT_OPTS pandoc && \
+    apt-get install $APT_OPTS \
       texlive-latex-base \
       texlive-latex-recommended \
       texlive-latex-extra \
@@ -40,60 +53,48 @@ RUN set -eux; \
       texlive-lang-all \
       latexmk \
       gosu \
-      dos2unix \
-      # We can use a smaller language package if only Russian/English are needed
-      texlive-lang-cyrillic \
-      # Other utilities
-      procps && \
+      dos2unix && \
     rm -rf /var/lib/apt/lists/*
 
-# 2. Create a virtual environment that we can copy to the final stage
+# 3) Install mermaid-cli globally (npm already exists in node:20-slim)
+RUN set -eux; \
+    find /etc/apt -name "*.list" -exec sed -i 's|http://deb\.debian\.org|http://mirror.truenetwork.ru|g' {} + || true; \
+    find /etc/apt -name "*.sources" -exec sed -i 's|URIs: http://deb\.debian\.org|URIs: http://mirror.truenetwork.ru|g' {} + || true; \
+    npm install -g @mermaid-js/mermaid-cli --no-fund --no-update-notifier; \
+    mmdc --version || true
+
+RUN rm -rf /var/lib/apt/lists/*
+
+
+
+WORKDIR /
+
+COPY requirements.txt .
+
+# --- START: CORRECTED VENV INSTALLATION BLOCK ---
+
+# 1. Create a virtual environment in a standard location
 RUN python3 -m venv /opt/venv
 
-# --- Stage 3: Final Production Image ---
-FROM python:3.11-slim
+# 2. Add the venv's bin directory to the PATH.
+# This makes `pip` and `python` commands automatically use the venv's executables.
+ENV PATH="/opt/venv/bin:$PATH"
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    # Add the venv's bin directory to the PATH
-    PATH="/opt/venv/bin:$PATH" \
-    # Set environment variables for Puppeteer and Matplotlib
-    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+# 3. Now, install dependencies into the activated venv.
+# We don't need the complex shell logic anymore.
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir markdown-it-py
+
+# --- END: CORRECTED VENV INSTALLATION BLOCK ---
+
+# Set environment variables for Puppeteer and Matplotlib
+# Note: Since we are using a venv, we don't need to manage the PATH here anymore.
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     HOME=/home/appuser \
     MPLCONFIGDIR=/home/appuser/.config/matplotlib \
     NUMBA_DISABLE_JITCACHE=1
 
-# 1. Install only the RUNTIME dependencies for Puppeteer
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdbus-1-3 \
-      libdrm2 libgbm1 libgtk-3-0 libpango-1.0-0 libpangocairo-1.0-0 libx11-6 \
-      libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 libxext6 \
-      libxfixes3 libxi6 libxrandr2 libxrender1 libxss1 libxtst6 libasound2 \
-      libgdk-pixbuf-2.0-0 \
-      # Add procps for process management if needed
-      procps && \
-    rm -rf /var/lib/apt/lists/*
-
-# 2. Copy only the necessary binaries and libraries from the builder stage
-COPY --from=builder-tex /usr/bin/pandoc /usr/bin/
-COPY --from=builder-tex /usr/bin/xelatex /usr/bin/
-COPY --from=builder-tex /usr/bin/latexmk /usr/bin/
-COPY --from=builder-tex /usr/share/texlive /usr/share/texlive
-COPY --from=builder-tex /usr/share/fonts/truetype/dejavu /usr/share/fonts/truetype/dejavu
-
-# 2. Copy the mermaid-cli executable and its node_modules from the node builder
-COPY --from=builder-node /usr/local/bin/mmdc /usr/local/bin/
-COPY --from=builder-node /usr/local/lib/node_modules /usr/local/lib/node_modules
-
-# 3. Copy the Python virtual environment
-COPY --from=builder-tex /opt/venv /opt/venv
-
-# 4. Install Python dependencies
-WORKDIR /
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir markdown-it-py
-
-# 5. Copy the application code
+# Copy the rest of the application code
 COPY bot/puppeteer-config.json /bot/
 COPY bot/ /bot/
 

@@ -20,3 +20,4 @@ httpx
 weasyprint
 redis
 certifi
+beautifulsoup4
