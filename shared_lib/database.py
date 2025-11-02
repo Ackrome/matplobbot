@@ -283,3 +283,62 @@ async def get_user_profile_data_from_db(db_conn, user_id: int, page: int = 1, pa
     actions = [dict(r) for r in rows if r["action_id"] is not None]
     
     return {"user_details": user_details, "actions": actions, "total_actions": first_row["total_actions"]}
+
+
+async def get_users_for_action(db_conn, action_type: str, action_details: str, page: int = 1, page_size: int = 15, sort_by: str = 'full_name', sort_order: str = 'asc'):
+    """Извлекает пагинированный список уникальных пользователей, совершивших определенное действие."""
+    # Note: action_type for messages is 'text_message' in the DB
+    db_action_type = 'text_message' if action_type == 'message' else action_type
+    offset = (page - 1) * page_size
+
+    # --- Безопасная сортировка ---
+    allowed_sort_columns = ['user_id', 'full_name', 'username'] # These are u columns
+    if sort_by not in allowed_sort_columns:
+        sort_by = 'full_name' # Значение по умолчанию
+    sort_order = 'DESC' if sort_order.lower() == 'desc' else 'ASC' # Безопасное определение порядка
+    order_by_clause = f"ORDER BY u.{sort_by} {sort_order}"
+
+    # Query for total count of distinct users
+    count_query = """
+        SELECT COUNT(DISTINCT u.user_id)
+        FROM users u
+        JOIN user_actions ua ON u.user_id = ua.user_id
+        WHERE ua.action_type = $1 AND ua.action_details = $2;
+    """
+    total_users = await db_conn.fetchval(count_query, db_action_type, action_details)
+
+    # Query for the paginated list of users
+    users_query = f"""
+        SELECT DISTINCT
+            u.user_id,
+            u.full_name,
+            COALESCE(u.username, 'Нет username') AS username
+        FROM users u
+        JOIN user_actions ua ON u.user_id = ua.user_id
+        WHERE ua.action_type = $1 AND ua.action_details = $2
+        {order_by_clause}
+        LIMIT $3 OFFSET $4;
+    """
+    rows = await db_conn.fetch(users_query, db_action_type, action_details, page_size, offset)
+    users = [dict(row) for row in rows]
+
+    return {
+        "users": users,
+        "total_users": total_users
+    }
+    
+
+async def get_all_user_actions(db_conn, user_id: int):
+    """Извлекает ВСЕ действия для указанного пользователя без пагинации."""
+    query = """
+        SELECT
+            id,
+            action_type,
+            action_details,
+            TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI:SS') AS timestamp
+        FROM user_actions
+        WHERE user_id = $1
+        ORDER BY timestamp DESC;
+    """
+    rows = await db_conn.fetch(query, user_id)
+    return [dict(row) for row in rows]

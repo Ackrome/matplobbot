@@ -12,7 +12,7 @@ import re
 from bot.services.university_api import RuzAPIClient # Import the class for type hinting
 from bot.services.schedule_service import format_schedule
 from bot.keyboards import get_schedule_type_keyboard, build_search_results_keyboard
-from bot.i18n import translator
+from shared_lib.i18n import translator
 from bot import database
 
 

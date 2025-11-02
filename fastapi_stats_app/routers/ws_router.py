@@ -8,7 +8,7 @@ import asyncpg, datetime
 import json # Добавляем импорт json
 import os
 
-from ..db_utils import (
+from shared_lib.database import (
     get_db_connection_obj,
     get_leaderboard_data_from_db,
     get_popular_commands_data_from_db,
