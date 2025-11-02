@@ -1,5 +1,5 @@
 <div align="center" style="border: none; padding: 0; margin: 0;">
-  <img src="image/notes/thelogo.png" alt="Matplobbot Logo" width="400" style="border: none; outline: none;">
+  <img src="image/logo/thelogo.png" alt="Matplobbot Logo" width="400" style="border: none; outline: none;">
   <h1>Matplobbot & Stats Dashboard</h1>
   <strong>A comprehensive solution: An Aiogram 3 Telegram bot for advanced code interaction and a FastAPI dashboard for real-time analytics.</strong>
   <br>
