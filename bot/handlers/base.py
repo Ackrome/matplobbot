@@ -9,7 +9,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from .. import keyboards as kb, database
 from . import library, github, rendering, settings # Импортируем для колбэков помощи
-from ..i18n import translator
+from shared_lib.i18n import translator
 
 router = Router()
 

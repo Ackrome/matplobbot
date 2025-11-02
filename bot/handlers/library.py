@@ -16,7 +16,7 @@ from .. import keyboards as kb, database
 from ..redis_client import redis_client
 from ..services import library_display # <-- обновим импорт на Шаге 2
 from ..config import *
-from ..i18n import translator
+from shared_lib.i18n import translator
 
 router = Router()
 

@@ -15,7 +15,7 @@ from .. import database
 from .. import keyboards as kb
 from ..redis_client import redis_client
 from .. import github_service
-from ..i18n import translator
+from shared_lib.i18n import translator
 from ..config import *
 
 import importlib

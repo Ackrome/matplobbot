@@ -2,7 +2,7 @@ import logging
 from aiogram.types import Message
 import matplobblib
 from .. import keyboards as kb, database
-from ..i18n import translator
+from shared_lib.i18n import translator
 
 
 async def show_code_by_path(message: Message, user_id: int, code_path: str, header: str):

@@ -12,7 +12,7 @@ import logging
 
 from .. import database, keyboards as kb, github_service
 from . import document_renderer
-from ..i18n import translator
+from shared_lib.i18n import translator
 
 
 logger = logging.getLogger(__name__)

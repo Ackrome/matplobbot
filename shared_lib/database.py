@@ -262,28 +262,95 @@ async def get_activity_over_time_data_from_db(db_conn, period='day'):
     rows = await db_conn.fetch(query)
     return [{"period": row['period_start'], "count": row['actions_count']} for row in rows]
 
-async def get_user_profile_data_from_db(db_conn, user_id: int, page: int = 1, page_size: int = 50):
-    offset = (page - 1) * page_size
-    query = """
-        WITH UserActions AS (
-            SELECT id, action_type, action_details, TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI:SS') AS timestamp
-            FROM user_actions WHERE user_id = $1
-        )
-        SELECT u.user_id, u.full_name, COALESCE(u.username, 'N/A') AS username, u.avatar_pic_url,
-               (SELECT COUNT(*) FROM UserActions) as total_actions,
-               ua.id as action_id, ua.action_type, ua.action_details, ua.timestamp
-        FROM users u LEFT JOIN UserActions ua ON 1=1
-        WHERE u.user_id = $2 ORDER BY ua.timestamp DESC LIMIT $3 OFFSET $4;
-    """
-    rows = await db_conn.fetch(query, user_id, user_id, page_size, offset)
-    if not rows: return None
-    
-    first_row = dict(rows[0])
-    user_details = {k: first_row[k] for k in ["user_id", "full_name", "username", "avatar_pic_url"]}
-    actions = [dict(r) for r in rows if r["action_id"] is not None]
-    
-    return {"user_details": user_details, "actions": actions, "total_actions": first_row["total_actions"]}
 
+async def get_user_profile_data_from_db(
+    db_conn,
+    user_id: int,
+    page: int = 1,
+    page_size: int = 50,
+    sort_by: str = 'timestamp',
+    sort_order: str = 'desc'
+):
+    """Извлекает детали профиля пользователя и пагинированный список его действий."""
+    # --- Безопасная сортировка ---
+    allowed_sort_columns = ['id', 'action_type', 'action_details', 'timestamp'] # These are ua columns
+    if sort_by not in allowed_sort_columns:
+        sort_by = 'timestamp' # Значение по умолчанию
+    sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC' # Безопасное определение порядка
+
+    # --- Единый запрос для получения всех данных ---
+    # Используем CTE и оконные функции для эффективности.
+    # 1. Выбираем все действия пользователя.
+    # 2. С помощью оконной функции COUNT(*) OVER () получаем общее количество действий без дополнительного запроса.
+    # 3. Присоединяем информацию о пользователе.
+    # 4. Применяем пагинацию и сортировку.
+    query = f"""
+        WITH UserActions AS (
+            SELECT
+                id,
+                action_type,
+                action_details,
+                TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI:SS') AS timestamp
+            FROM user_actions
+            WHERE user_id = $1
+        )
+        SELECT
+            u.user_id,
+            u.full_name,
+            COALESCE(u.username, 'Нет username') AS username,
+            u.avatar_pic_url,
+            (SELECT COUNT(*) FROM UserActions) as total_actions,
+            ua.id as action_id,
+            ua.action_type,
+            ua.action_details,
+            ua.timestamp
+        FROM users u
+        LEFT JOIN UserActions ua ON 1=1
+        WHERE u.user_id = $2
+        ORDER BY ua.{sort_by} {sort_order}
+        LIMIT $3 OFFSET $4;
+    """
+    offset = (page - 1) * page_size
+    rows = await db_conn.fetch(query, user_id, user_id, page_size, offset)
+    if not rows:
+        # If user exists but has no actions, we might get no rows. Check user existence separately.
+        user_exists = await db_conn.fetchrow("SELECT 1 FROM users WHERE user_id = $1", user_id)
+        if not user_exists:
+            return None # User not found
+        # User exists but has no actions, return empty actions list
+        user_details_row = await db_conn.fetchrow("SELECT user_id, full_name, COALESCE(username, 'Нет username') AS username, avatar_pic_url FROM users WHERE user_id = $1", user_id)
+        return {
+            "user_details": dict(user_details_row),
+            "actions": [],
+            "total_actions": 0
+        }
+
+    first_row = dict(rows[0])
+    user_details = {
+        "user_id": first_row["user_id"],
+        "full_name": first_row["full_name"],
+        "username": first_row["username"],
+        "avatar_pic_url": first_row["avatar_pic_url"]
+    }
+    total_actions = first_row["total_actions"]
+
+    # Собираем действия, если они есть (может быть пользователь без действий)
+    actions = []
+    for row in rows:
+        row_dict = dict(row)
+        if row_dict["action_id"] is not None: # action_id не NULL
+            actions.append({
+                "id": row_dict["action_id"],
+                "action_type": row_dict["action_type"],
+                "action_details": row_dict["action_details"],
+                "timestamp": row_dict["timestamp"]
+            })
+
+    return {
+        "user_details": user_details,
+        "actions": actions,
+        "total_actions": total_actions
+    }
 
 async def get_users_for_action(db_conn, action_type: str, action_details: str, page: int = 1, page_size: int = 15, sort_by: str = 'full_name', sort_order: str = 'asc'):
     """Извлекает пагинированный список уникальных пользователей, совершивших определенное действие."""
@@ -326,7 +393,6 @@ async def get_users_for_action(db_conn, action_type: str, action_details: str, p
         "users": users,
         "total_users": total_users
     }
-    
 
 async def get_all_user_actions(db_conn, user_id: int):
     """Извлекает ВСЕ действия для указанного пользователя без пагинации."""

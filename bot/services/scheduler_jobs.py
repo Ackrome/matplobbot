@@ -5,7 +5,7 @@ from aiogram import Bot
 from ..database import get_subscriptions_for_notification
 from .university_api import RuzAPIClient
 from .schedule_service import format_schedule
-from ..i18n import translator
+from shared_lib.i18n import translator
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,7 @@ from aiogram.fsm.state import StatesGroup, State
 
 from .. import keyboards as kb, database
 from ..services import document_renderer
-from ..i18n import translator
+from shared_lib.i18n import translator
 
 router = Router()
 
