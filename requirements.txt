@@ -21,3 +21,4 @@ weasyprint
 redis
 certifi
 beautifulsoup4
+markdown-it-py

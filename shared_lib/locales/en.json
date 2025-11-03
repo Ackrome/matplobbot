@@ -155,5 +155,16 @@
     "schedule_invalid_time_value": "❌ Invalid time value. Please enter a correct time, for example, `08:00`.",
     "schedule_subscribe_success": "✅ You have successfully subscribed to the daily schedule for '{entity_name}' at {time_str}!",
     "schedule_subscribe_error": "An error occurred while creating the subscription. Please try again.",
-    "schedule_subscribe_dberror": "An error occurred while saving the subscription to the database."
+    "schedule_subscribe_dberror": "An error occurred while saving the subscription to the database.",
+    "settings_manage_subscriptions_btn": "Manage Schedule Subscriptions",
+    "subscriptions_header": "Your Schedule Subscriptions:",
+    "subscriptions_empty": "You have no active schedule subscriptions.",
+    "subscription_removed": "Subscription for '{entity_name}' has been removed.",
+    "subscription_info_outdated": "Error: Subscription info is outdated. Please go back to settings and try again.",
+    "subscription_confirm_delete": "Are you sure you want to delete the subscription for '{entity_name}'?",
+    "btn_confirm_delete": "✅ Yes, delete",
+    "btn_cancel_delete": "❌ No, cancel",
+    "help_btn_myschedule": "📅 /myschedule - My schedules for today",
+    "myschedule_no_subscriptions": "You have no active subscriptions. You can add them via the /schedule command.",
+    "myschedule_loading": "⏳ Fetching your schedules for today..."
 }

@@ -14,7 +14,7 @@ import logging
 
 from .. import keyboards as kb, database
 from ..redis_client import redis_client
-from ..services import library_display # <-- обновим импорт на Шаге 2
+from ..services import library_display
 from ..config import *
 from shared_lib.i18n import translator
 

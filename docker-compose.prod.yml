@@ -2,12 +2,13 @@
 
 # This file is for production. It uses pre-built images from GHCR.
 services:
-  redis:
-    image: redis:7-alpine
-    # container_name: mpb-redis
+  redis: # Added redis service for production consistency
+    image: redis:7-alpine 
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    # The port is exposed to the host, but other services will connect via the internal Docker network.
+    # If you don't need to access Redis from outside the Docker host, you can remove the 'ports' section.
+    # ports:
+    #   - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -20,6 +21,9 @@ services:
     image: postgres:15-alpine
     restart: unless-stopped
     env_file: ./.env
+    # No need to expose ports to the host if only other containers need to access it.
+    # ports:
+    #   - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -31,10 +35,10 @@ services:
   mpb-telegram-bot:
     image: ghcr.io/ackrome/matplobbot-bot:${BOT_TAG:-latest}
     restart: unless-stopped
+    stop_grace_period: 30s
     env_file: ./.env
     volumes:
-      - bot_logs:/app/logs
-      - matplobblib_lib:/usr/local/lib/python3.11/site-packages/matplobblib # Persist library updates
+      - bot_logs:/app/logs # Logs are persisted in a named volume
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,6 +49,7 @@ services:
   mpb-scheduler:
     image: ghcr.io/ackrome/matplobbot-scheduler:${SCHEDULER_TAG:-latest}
     restart: unless-stopped
+    stop_grace_period: 30s
     env_file: ./.env
     volumes:
       - bot_logs:/app/logs
@@ -55,11 +60,12 @@ services:
   mpb-fastapi-stats:
     image: ghcr.io/ackrome/matplobbot-api:${API_TAG:-latest} 
     restart: unless-stopped
+    stop_grace_period: 30s
     env_file: ./.env
     ports:
       - "9583:9583"
     volumes:
-      - bot_logs:/app/logs
+      - bot_logs:/app/logs # All services write to the same log volume
     depends_on:
       mpb-telegram-bot:
         condition: service_started # API can start once the bot container starts
@@ -73,6 +79,5 @@ services:
 
 volumes:
   bot_logs:
-  matplobblib_lib:
   redis_data:
   postgres_data:

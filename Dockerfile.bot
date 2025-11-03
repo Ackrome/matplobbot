@@ -1,15 +1,25 @@
 # Dockerfile.bot
+
 FROM node:20-slim
+
+
+# ARG MIRROR_SITE=http://cdn-fastly.deb.debian.org
+ARG MIRROR_SITE=http://mirror.truenetwork.ru
 
 # noninteractive to avoid tzdata/ui prompts
 ENV DEBIAN_FRONTEND=noninteractive \
     APT_OPTS="-y --no-install-recommends"
 
+# --- BEST PRACTICES START ---
+# Add a layer to configure apt to automatically retry failed downloads.
+# This makes the build much more resilient to temporary network issues.
+RUN echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/99retries
+# --- BEST PRACTICES END ---
 
 # 1) small essentials + python
 RUN set -eux; \
-    find /etc/apt -name "*.list" -exec sed -i 's|http://deb\.debian\.org|http://mirror.truenetwork.ru|g' {} + || true; \
-    find /etc/apt -name "*.sources" -exec sed -i 's|URIs: http://deb\.debian\.org|URIs: http://mirror.truenetwork.ru|g' {} + || true; \
+    find /etc/apt -name "*.list" -exec sed -i "s|http://deb\.debian\.org|${MIRROR_SITE}|g" {} + || true; \
+    find /etc/apt -name "*.sources" -exec sed -i "s|URIs: http://deb\.debian\.org|URIs: ${MIRROR_SITE}|g" {} + || true; \
     apt-get update; \
     apt-get install $APT_OPTS \
       python3 python3-pip ca-certificates wget xdg-utils fonts-liberation fonts-dejavu-core \
@@ -18,10 +28,9 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 # 2) Puppeteer/Chromium dependencies for mermaid-cli
-#    This layer is crucial for mermaid-cli to be able to launch a headless browser.
 RUN set -eux; \
-    find /etc/apt -name "*.list" -exec sed -i 's|http://deb\.debian\.org|http://mirror.truenetwork.ru|g' {} + || true; \
-    find /etc/apt -name "*.sources" -exec sed -i 's|URIs: http://deb\.debian\.org|URIs: http://mirror.truenetwork.ru|g' {} + || true; \
+    find /etc/apt -name "*.list" -exec sed -i "s|http://deb\.debian\.org|${MIRROR_SITE}|g" {} + || true; \
+    find /etc/apt -name "*.sources" -exec sed -i "s|URIs: http://deb\.debian\.org|URIs: ${MIRROR_SITE}|g" {} + || true; \
     apt-get update; \
     apt-get install $APT_OPTS \
       libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdbus-1-3 \
@@ -31,11 +40,10 @@ RUN set -eux; \
       libgdk-pixbuf-2.0-0 && \
     rm -rf /var/lib/apt/lists/*
 
-# 2) TeX packages (split so you can prune/change easily)
-#    Remove any packages you don't need to reduce image size.
+# 3) TeX packages (split so you can prune/change easily)
 RUN set -eux; \
-    find /etc/apt -name "*.list" -exec sed -i 's|http://deb\.debian\.org|http://mirror.truenetwork.ru|g' {} + || true; \
-    find /etc/apt -name "*.sources" -exec sed -i 's|URIs: http://deb\.debian\.org|URIs: http://mirror.truenetwork.ru|g' {} + || true; \
+    find /etc/apt -name "*.list" -exec sed -i "s|http://deb\.debian\.org|${MIRROR_SITE}|g" {} + || true; \
+    find /etc/apt -name "*.sources" -exec sed -i "s|URIs: http://deb\.debian\.org|URIs: ${MIRROR_SITE}|g" {} + || true; \
     apt-get update && \
     apt-get install $APT_OPTS pandoc && \
     apt-get install $APT_OPTS \
@@ -56,39 +64,31 @@ RUN set -eux; \
       dos2unix && \
     rm -rf /var/lib/apt/lists/*
 
-# 3) Install mermaid-cli globally (npm already exists in node:20-slim)
+# 4) Install mermaid-cli globally (npm already exists in node:20-slim)
 RUN set -eux; \
-    find /etc/apt -name "*.list" -exec sed -i 's|http://deb\.debian\.org|http://mirror.truenetwork.ru|g' {} + || true; \
-    find /etc/apt -name "*.sources" -exec sed -i 's|URIs: http://deb\.debian\.org|URIs: http://mirror.truenetwork.ru|g' {} + || true; \
     npm install -g @mermaid-js/mermaid-cli --no-fund --no-update-notifier; \
     mmdc --version || true
 
+# Clean up apt lists one last time
 RUN rm -rf /var/lib/apt/lists/*
-
-
 
 WORKDIR /
 
+# --- START: CORRECTED VENV INSTALLATION BLOCK ---
+# Copy shared library source code FIRST
+COPY shared_lib/ /shared_lib/
+COPY setup.py /
+
 COPY requirements.txt .
 
-# --- START: CORRECTED VENV INSTALLATION BLOCK ---
-
-# 1. Create a virtual environment in a standard location
 RUN python3 -m venv /opt/venv
-
-# 2. Add the venv's bin directory to the PATH.
-# This makes `pip` and `python` commands automatically use the venv's executables.
 ENV PATH="/opt/venv/bin:$PATH"
-
-# 3. Now, install dependencies into the activated venv.
-# We don't need the complex shell logic anymore.
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir markdown-it-py
-
+# Install the local shared_lib package, then the rest of the requirements
+RUN pip install --no-cache-dir / && \
+    pip install --no-cache-dir -r requirements.txt
 # --- END: CORRECTED VENV INSTALLATION BLOCK ---
 
 # Set environment variables for Puppeteer and Matplotlib
-# Note: Since we are using a venv, we don't need to manage the PATH here anymore.
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     HOME=/home/appuser \
     MPLCONFIGDIR=/home/appuser/.config/matplotlib \

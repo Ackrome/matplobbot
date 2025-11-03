@@ -3,13 +3,20 @@ FROM python:3.11-slim
 
 WORKDIR /
 
+# --- START: CORRECTED INSTALLATION BLOCK ---
+# Copy shared library source code FIRST, as it's a dependency
+COPY shared_lib/ /shared_lib/
+COPY setup.py /
+
 # Copy requirements.txt specific to this app from the build context root
 COPY fastapi_stats_app/requirements.txt .
 
 # Install dependencies, including matplobbot-shared from PyPI
 RUN apt-get update && apt-get install -y curl && \
+    pip install --no-cache-dir / && \
     pip install --no-cache-dir -r requirements.txt && \
     rm -rf /var/lib/apt/lists/*
+# --- END: CORRECTED INSTALLATION BLOCK ---
 
 # --- CORRECTED COPY STEP ---
 # Copy the application code itself.

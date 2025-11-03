@@ -13,7 +13,7 @@ from shared_lib.i18n import translator
 logger = logging.getLogger(__name__)
 
 # Define base commands that are always available
-BASE_COMMANDS = ['/matp_all', '/matp_search', '/lec_search', '/lec_all', '/favorites', '/settings', '/help', '/latex', '/mermaid']
+BASE_COMMANDS = ['/schedule', '/myschedule', '/matp_all', '/matp_search', '/lec_search', '/lec_all', '/favorites', '/settings', '/help', '/latex', '/mermaid']
 ADMIN_COMMANDS = ['/update', '/clear_cache']
 
 # Cache for long code paths to use in callback_data
@@ -85,6 +85,8 @@ async def get_help_inline_keyboard(user_id: int) -> InlineKeyboardMarkup:
     inline_keyboard_rows = [
         [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_matp_all"), callback_data="help_cmd_matp_all")],
         [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_matp_search"), callback_data="help_cmd_matp_search")],
+        [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_schedule"), callback_data="help_cmd_schedule")],
+        [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_myschedule"), callback_data="help_cmd_myschedule")],
         [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_lec_search"), callback_data="help_cmd_lec_search")],
         [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_lec_all"), callback_data="help_cmd_lec_all")],
         [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_favorites"), callback_data="help_cmd_favorites")],
@@ -164,6 +166,16 @@ async def get_schedule_type_keyboard(lang: str) -> InlineKeyboardMarkup:
 
 def build_search_results_keyboard(results: List[Dict[str, Any]], search_type: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
+    # Special handling for the subscribe button which has a different data structure
+    # We hash the long data to avoid hitting the 64-byte callback_data limit.
+    if search_type == 'subscribe':
+        item = results[0]
+        data_to_hash = item['id'] # e.g., "person:uuid:Name"
+        data_hash = hashlib.sha1(data_to_hash.encode()).hexdigest()[:16]
+        code_path_cache[data_hash] = data_to_hash # Store the full data in the cache
+        builder.row(InlineKeyboardButton(text=item['label'], callback_data=f"sch_subscribe_hash:{data_hash}"))
+        return builder.as_markup()
+
     for item in results[:20]: # Limit to 20 results to avoid hitting Telegram limits
         builder.row(
             InlineKeyboardButton(

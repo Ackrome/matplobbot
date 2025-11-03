@@ -7,13 +7,10 @@ import os
 logger = logging.getLogger(__name__)
 
 # --- PostgreSQL Database Configuration ---
-POSTGRES_USER = os.getenv("POSTGRES_USER", "user")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "password")
-POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
-POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
-POSTGRES_DB = os.getenv("POSTGRES_DB", "matplobbot_db")
-
-DATABASE_URL = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+# The DATABASE_URL should be a complete connection string.
+# Example for Docker: postgresql://user:password@postgres:5432/matplobbot_db
+# Example for local:  postgresql://user:password@localhost:5432/matplobbot_db
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Global connection pool
 pool = None
@@ -22,6 +19,9 @@ async def init_db_pool():
     global pool
     if pool is None:
         try:
+            if not DATABASE_URL:
+                logger.critical("DATABASE_URL environment variable is not set. Cannot initialize database pool.")
+                raise ValueError("DATABASE_URL is not set.")
             pool = await asyncpg.create_pool(DATABASE_URL, min_size=5, max_size=20)
             logger.info("Shared DB Pool: Database connection pool created successfully.")
         except Exception as e:
@@ -80,6 +80,7 @@ async def init_db():
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
                 code_path TEXT NOT NULL,
+                added_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, code_path)
             )
             ''')
@@ -95,6 +96,7 @@ async def init_db():
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
                 repo_path TEXT NOT NULL,
+                added_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, repo_path)
             )
             ''')
@@ -213,6 +215,42 @@ async def add_schedule_subscription(user_id: int, entity_type: str, entity_id: s
         except Exception as e:
             logger.error(f"Failed to add schedule subscription for user {user_id}: {e}", exc_info=True)
             return False
+ 
+async def get_user_subscriptions(user_id: int, page: int = 0, page_size: int = 5) -> tuple[list, int]:
+    """
+    Gets a paginated list of active schedule subscriptions for a specific user.
+    Returns a tuple: (list of subscriptions, total count).
+    """
+    if not pool:
+        raise ConnectionError("Database pool is not initialized.")
+    async with pool.acquire() as connection:
+        # Query to get the paginated list
+        offset = page * page_size
+        rows = await connection.fetch("""
+            SELECT id, entity_type, entity_id, entity_name, TO_CHAR(notification_time, 'HH24:MI') as notification_time
+            FROM user_schedule_subscriptions
+            WHERE user_id = $1 AND is_active = TRUE
+            ORDER BY entity_name, notification_time
+            LIMIT $2 OFFSET $3
+        """, user_id, page_size, offset)
+        
+        # Query to get the total count for pagination
+        total_count = await connection.fetchval("SELECT COUNT(*) FROM user_schedule_subscriptions WHERE user_id = $1 AND is_active = TRUE", user_id)
+
+        return [dict(row) for row in rows], total_count or 0
+
+async def remove_schedule_subscription(subscription_id: int, user_id: int) -> str | None:
+    """
+    Removes a specific schedule subscription for a user, ensuring ownership.
+    Returns the entity_name of the deleted subscription on success, otherwise None.
+    """
+    if not pool:
+        raise ConnectionError("Database pool is not initialized.")
+    async with pool.acquire() as connection:
+        deleted_name = await connection.fetchval(
+            "DELETE FROM user_schedule_subscriptions WHERE id = $1 AND user_id = $2 RETURNING entity_name",
+            subscription_id, user_id)
+        return deleted_name
 
 async def get_subscriptions_for_notification(notification_time: str) -> list:
     async with pool.acquire() as connection:
@@ -225,10 +263,19 @@ async def get_subscriptions_for_notification(notification_time: str) -> list:
 
 # --- FastAPI Specific Queries ---
 async def get_leaderboard_data_from_db(db_conn):
+    # The timestamp is stored in UTC (TIMESTAMPTZ). We convert it to Moscow time for display.
     query = """
-        SELECT u.user_id, u.full_name, COALESCE(u.username, 'N/A') AS username, u.avatar_pic_url, COUNT(ua.id)::int AS actions_count
-        FROM users u JOIN user_actions ua ON u.user_id = ua.user_id
-        GROUP BY u.user_id ORDER BY actions_count DESC LIMIT 100;
+        SELECT
+            u.user_id,
+            u.full_name,
+            COALESCE(u.username, 'N/A') AS username,
+            u.avatar_pic_url,
+            COUNT(ua.id)::int AS actions_count,
+            TO_CHAR(MAX(ua.timestamp AT TIME ZONE 'Europe/Moscow'), 'YYYY-MM-DD HH24:MI:SS') AS last_action_time
+        FROM users u
+        JOIN user_actions ua ON u.user_id = ua.user_id
+        GROUP BY u.user_id, u.full_name, u.username, u.avatar_pic_url
+        ORDER BY actions_count DESC LIMIT 100;
     """
     rows = await db_conn.fetch(query)
     return [dict(row) for row in rows]
@@ -258,7 +305,11 @@ async def get_action_types_distribution_from_db(db_conn):
 
 async def get_activity_over_time_data_from_db(db_conn, period='day'):
     date_format = {'day': 'YYYY-MM-DD', 'week': 'IYYY-IW', 'month': 'YYYY-MM'}.get(period, 'YYYY-MM-DD')
-    query = f"SELECT TO_CHAR(timestamp, '{date_format}') as period_start, COUNT(id) as actions_count FROM user_actions GROUP BY period_start ORDER BY period_start ASC;"
+    # Convert timestamp to Moscow time before grouping
+    query = f"""
+        SELECT TO_CHAR(timestamp AT TIME ZONE 'Europe/Moscow', '{date_format}') as period_start, COUNT(id) as actions_count 
+        FROM user_actions GROUP BY period_start ORDER BY period_start ASC;
+    """
     rows = await db_conn.fetch(query)
     return [{"period": row['period_start'], "count": row['actions_count']} for row in rows]
 
@@ -290,7 +341,7 @@ async def get_user_profile_data_from_db(
                 id,
                 action_type,
                 action_details,
-                TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI:SS') AS timestamp
+                TO_CHAR(timestamp AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD HH24:MI:SS') AS timestamp
             FROM user_actions
             WHERE user_id = $1
         )
@@ -401,7 +452,7 @@ async def get_all_user_actions(db_conn, user_id: int):
             id,
             action_type,
             action_details,
-            TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI:SS') AS timestamp
+            TO_CHAR(timestamp AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD HH24:MI:SS') AS timestamp
         FROM user_actions
         WHERE user_id = $1
         ORDER BY timestamp DESC;

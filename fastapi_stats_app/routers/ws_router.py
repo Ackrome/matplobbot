@@ -9,7 +9,7 @@ import json # Добавляем импорт json
 import os
 
 from shared_lib.database import (
-    get_db_connection_obj,
+    get_db_connection_obj, # This function is in shared_lib/database.py
     get_leaderboard_data_from_db,
     get_popular_commands_data_from_db,
     get_popular_messages_data_from_db,
@@ -48,16 +48,24 @@ class ConnectionManager:
         if websocket.client_state == WebSocketState.CONNECTED:
             try:
                 await websocket.send_json(data)
+            except (WebSocketDisconnect, RuntimeError) as e:
+                # These errors are expected if the client disconnects during a send operation.
+                # Log them at a lower level to reduce noise.
+                logger.debug(f"Could not send JSON to {websocket.client} (disconnected): {e}")
             except Exception as e:
-                logger.error(f"Error sending personal JSON to {websocket.client} in manager '{self.name}': {e}")
+                logger.error(f"Unexpected error sending personal JSON to {websocket.client} in manager '{self.name}': {e}")
                 # Consider auto-disconnecting on send error after multiple retries or specific errors
 
     async def send_personal_text(self, message: str, websocket: WebSocket):
         if websocket.client_state == WebSocketState.CONNECTED:
             try:
                 await websocket.send_text(message)
+            except (WebSocketDisconnect, RuntimeError) as e:
+                # Gracefully handle cases where the client disconnects while we're trying to send.
+                # This is the exact cause of the "Cannot call 'send' once a close message has been sent" error.
+                logger.debug(f"Could not send text to {websocket.client} (disconnected): {e}")
             except Exception as e:
-                logger.error(f"Error sending personal text to {websocket.client} in manager '{self.name}': {e}")
+                logger.error(f"Unexpected error sending personal text to {websocket.client} in manager '{self.name}': {e}")
 
     async def _broadcast(self, send_callable_name: str, payload):
         async with self._lock:

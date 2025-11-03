@@ -9,8 +9,8 @@ import aiohttp
 load_dotenv()
 
 from scheduler_app.config import LOG_DIR, SCHEDULER_LOG_FILE, BOT_TOKEN
-from scheduler_app.database import init_db_pool, close_db_pool
 from scheduler_app.jobs import send_daily_schedules
+from shared_lib.database import init_db_pool, close_db_pool
 
 # We need to import this from the bot's services
 from shared_lib.services.university_api import create_ruz_api_client

@@ -3,13 +3,11 @@ import logging
 import os
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import aiohttp
 
 from .handlers import router
 from .logger import UserLoggingMiddleware
 from shared_lib.database import init_db, init_db_pool
-from .services.scheduler_jobs import send_daily_schedules # This is specific to the bot
 from shared_lib.services.university_api import create_ruz_api_client
 
 # Загрузка переменных окружения и настройка логгирования из app.logger
@@ -31,17 +29,6 @@ async def main():
     async with aiohttp.ClientSession(timeout=timeout) as session:
         bot = Bot(BOT_TOKEN)
         ruz_api_client_instance = create_ruz_api_client(session) # Создаем экземпляр клиента
-        
-        # --- Scheduler Setup ---
-        scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
-        scheduler.add_job(
-            send_daily_schedules,
-            trigger='cron',
-            minute='*', # Runs every minute to check for notifications
-            kwargs={'bot': bot, 'ruz_api_client': ruz_api_client_instance}
-        )
-        scheduler.start()
-        # -----------------------
 
         dp = Dispatcher()
         dp.update.middleware(UserLoggingMiddleware())

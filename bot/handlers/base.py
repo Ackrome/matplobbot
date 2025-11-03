@@ -1,14 +1,18 @@
 # bot/handlers/base.py
 import logging
 from aiogram import F, Router
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove, InlineKeyboardButton
 from aiogram.filters import CommandStart, Command, StateFilter, Filter
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from .. import keyboards as kb, database
-from . import library, github, rendering, settings # Импортируем для колбэков помощи
+from .. import keyboards as kb
+from .. import database
+from . import library
+from . import github, schedule
+from . import rendering
+from . import settings
 from shared_lib.i18n import translator
 
 router = Router()
@@ -155,6 +159,20 @@ async def cq_help_cmd_matp_search(callback: CallbackQuery, state: FSMContext):
     # Повторяем логику команды /matp_search
     await state.set_state(library.Search.query)
     await callback.message.answer("Введите ключевые слова для поиска по примерам кода:", reply_markup=ReplyKeyboardRemove())
+
+@router.callback_query(F.data == "help_cmd_schedule")
+async def cq_help_cmd_schedule(callback: CallbackQuery, state: FSMContext):
+    """Handler for '/schedule' button from help menu."""
+    await callback.answer()
+    # Replicate the /schedule command logic
+    await schedule.cmd_schedule(callback.message, state)
+
+@router.callback_query(F.data == "help_cmd_myschedule")
+async def cq_help_cmd_myschedule(callback: CallbackQuery, state: FSMContext):
+    """Handler for '/myschedule' button from help menu."""
+    await callback.answer()
+    # Replicate the /myschedule command logic
+    await schedule.cmd_my_schedule(callback.message, state)
 
 @router.callback_query(F.data == "help_cmd_lec_search")
 async def cq_help_cmd_lec_search(callback: CallbackQuery, state: FSMContext):

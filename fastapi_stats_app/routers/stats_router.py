@@ -4,7 +4,7 @@ import asyncpg
 import math
 import logging
 from shared_lib.database import (
-    get_db_connection_obj,
+    get_db_connection_obj, # This function is in shared_lib/database.py
     get_leaderboard_data_from_db,
     get_popular_commands_data_from_db,
     get_popular_messages_data_from_db,
