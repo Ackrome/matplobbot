@@ -23,8 +23,8 @@ def format_schedule(schedule_data: List[Dict[str, Any]], lang: str, entity_name:
     """Formats a list of lessons into a readable daily schedule."""
     if not schedule_data:
         # Different message for single day vs week
-        no_lessons_key = "schedule_no_lessons_week" if is_week_view else "schedule_no_lessons_day"
-        return f"🗓 *Расписание для \"{entity_name}\"*\n\n{translator.gettext(lang, no_lessons_key)}"
+        no_lessons_key = "schedule_no_lessons_week" if is_week_view else "schedule_no_lessons_day" # This was Russian text
+        return translator.gettext(lang, "schedule_header_for", entity_name=entity_name) + f"\n\n{translator.gettext(lang, no_lessons_key)}"
 
     # Group lessons by date
     days = defaultdict(list)
@@ -41,24 +41,24 @@ def format_schedule(schedule_data: List[Dict[str, Any]], lang: str, entity_name:
         formatted_lessons = []
         for lesson in sorted(lessons, key=lambda x: x['beginLesson']):
             lesson_details = [
-                f"`{lesson['beginLesson']} - {lesson['endLesson']}`",
+                f"`{lesson['beginLesson']} - {lesson['endLesson']} | {lesson['auditorium']}`",
                 f"{lesson['discipline']} | {names_shorter[lesson['kindOfWork']]}"
             ]
 
             if entity_type == 'group':
-                lesson_details.append(f"*{lesson['auditorium']}* | {lesson['lecturer_title'].replace('_',' ')}")
+                lesson_details.append(f"{lesson['lecturer_title'].replace('_',' ')}\n{lesson.get('lecturerEmail', 'Почта не указана')}")
             elif entity_type == 'person': # Lecturer
-                lesson_details.append(f"*{lesson['auditorium']}* | {lesson.get('group', 'Группа не указана')}")
+                lesson_details.append(f" {lesson.get('group', 'Группа не указана')}")
             elif entity_type == 'auditorium':
-                lesson_details.append(f"{lesson.get('group', 'Группа не указана')} | {lesson['lecturer_title'].replace('_',' ')}")
+                lesson_details.append(f"{lesson.get('group', 'Группа не указана')} | {lesson['lecturer_title'].replace('_',' ')}\n{lesson.get('lecturerEmail', 'Почта не указана')}")
             else: # Fallback to a generic format
-                lesson_details.append(f"*{lesson['auditorium']}* | {lesson['lecturer_title'].replace('_',' ')}")
+                lesson_details.append(f"{lesson['lecturer_title'].replace('_',' ')}")
 
             formatted_lessons.append("\n".join(lesson_details))
         
         formatted_days.append(f"{day_header}\n" + "\n\n".join(formatted_lessons))
 
-    main_header = f"🗓 *Расписание для \"{entity_name}\"*"
+    main_header = translator.gettext(lang, "schedule_header_for", entity_name=entity_name)
     return f"{main_header}\n\n" + "\n\n---\n\n".join(formatted_days)
 
 def generate_ical_from_schedule(schedule_data: List[Dict[str, Any]], entity_name: str) -> str:

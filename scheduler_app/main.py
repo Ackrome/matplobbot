@@ -9,8 +9,8 @@ import aiohttp
 load_dotenv()
 
 from scheduler_app.config import LOG_DIR, SCHEDULER_LOG_FILE, BOT_TOKEN
-from scheduler_app.jobs import send_daily_schedules
-from shared_lib.database import init_db_pool, close_db_pool
+from scheduler_app.jobs import send_daily_schedules, check_for_schedule_updates
+from shared_lib.database import init_db_pool, close_db_pool, init_db
 
 # We need to import this from the bot's services
 from shared_lib.services.university_api import create_ruz_api_client
@@ -36,8 +36,12 @@ async def main():
         return
 
     await init_db_pool()
+    # Ensure the database schema is created before starting the scheduler
+    await init_db()
+    logger.info("Database schema initialized by scheduler.")
 
-    timeout = aiohttp.ClientTimeout(total=30)
+    # Increase timeout for the scheduler, as pre-fetching all entities can be very slow.
+    timeout = aiohttp.ClientTimeout(total=120)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         ruz_api_client_instance = create_ruz_api_client(session)
 
@@ -48,7 +52,15 @@ async def main():
             minute='*',  # Runs every minute
             kwargs={'http_session': session, 'ruz_api_client': ruz_api_client_instance}
         )
+        # Add the new change detection job to run every 2 hours
+        scheduler.add_job(
+            check_for_schedule_updates,
+            trigger='interval',
+            hours=2,
+            kwargs={'http_session': session, 'ruz_api_client': ruz_api_client_instance}
+        )
         scheduler.start()
+        
         logger.info("Scheduler started. Waiting for jobs...")
         
         # Keep the service running indefinitely

@@ -3,3 +3,4 @@ aiohttp
 apscheduler
 asyncpg
 python-dotenv
+ics

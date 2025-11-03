@@ -11,7 +11,8 @@ setup(
     install_requires=[
         "asyncpg",
         "aiohttp", # Specify versions as needed
-        "certifi"
+        "certifi",
+        "redis"
     ],
     # This tells setuptools that the package data (like .json files) should be included
     package_data={

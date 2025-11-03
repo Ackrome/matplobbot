@@ -13,11 +13,11 @@ class RedisClient:
         self.pool = redis.ConnectionPool(host=host, port=port, db=0, decode_responses=True)
         self.client = redis.Redis(connection_pool=self.pool)
 
-    async def set_user_cache(self, user_id: int, key: str, data: dict):
+    async def set_user_cache(self, user_id: int, key: str, data: dict, ttl: int = CACHE_TTL):
         """Сохраняет данные в кэш для конкретного пользователя."""
         try:
             redis_key = f"user_cache:{user_id}:{key}"
-            await self.client.set(redis_key, json.dumps(data), ex=CACHE_TTL)
+            await self.client.set(redis_key, json.dumps(data), ex=ttl)
         except Exception as e:
             logger.error(f"Ошибка при записи в Redis для user_id={user_id}, key={key}: {e}")
 

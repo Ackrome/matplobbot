@@ -108,6 +108,7 @@ async def init_db():
                 entity_id TEXT NOT NULL,
                 entity_name TEXT NOT NULL,
                 notification_time TIME NOT NULL,
+                last_schedule_hash TEXT,
                 is_active BOOLEAN DEFAULT TRUE,
                 UNIQUE(user_id, entity_type, entity_id)
             )
@@ -254,12 +255,31 @@ async def remove_schedule_subscription(subscription_id: int, user_id: int) -> st
 
 async def get_subscriptions_for_notification(notification_time: str) -> list:
     async with pool.acquire() as connection:
+        # Modified to select the subscription ID and the last hash
         rows = await connection.fetch("""
-            SELECT user_id, entity_type, entity_id, entity_name
+            SELECT id, user_id, entity_type, entity_id, entity_name, last_schedule_hash
             FROM user_schedule_subscriptions
             WHERE is_active = TRUE AND TO_CHAR(notification_time, 'HH24:MI') = $1
         """, notification_time)
         return [dict(row) for row in rows]
+
+async def get_all_active_subscriptions() -> list:
+    """Fetches all active schedule subscriptions from the database."""
+    if not pool:
+        raise ConnectionError("Database pool is not initialized.")
+    async with pool.acquire() as connection:
+        rows = await connection.fetch("""
+            SELECT id, user_id, entity_type, entity_id, entity_name, last_schedule_hash
+            FROM user_schedule_subscriptions WHERE is_active = TRUE
+        """)
+        return [dict(row) for row in rows]
+
+async def update_subscription_hash(subscription_id: int, new_hash: str):
+    """Updates the schedule hash for a specific subscription."""
+    if not pool:
+        raise ConnectionError("Database pool is not initialized.")
+    async with pool.acquire() as connection:
+        await connection.execute("UPDATE user_schedule_subscriptions SET last_schedule_hash = $1 WHERE id = $2", new_hash, subscription_id)
 
 # --- FastAPI Specific Queries ---
 async def get_leaderboard_data_from_db(db_conn):

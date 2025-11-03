@@ -97,8 +97,8 @@ def main():
         
         # 1. Stage the files
         if check_tag_exists(tag_name):
-            print(f"❌ Tag {tag_name} already exists. Skipping tag creation.", file=sys.stderr)
-            sys.exit(0)
+            print(f"❌ Error: Tag {tag_name} already exists. Aborting.", file=sys.stderr)
+            sys.exit(1)
             
         run_git_command(["git", "add", str(SETUP_PY_PATH), str(REQUIREMENTS_TXT_PATH)], "Staging files")
         # 2. Commit the changes
