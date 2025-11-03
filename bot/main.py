@@ -4,8 +4,7 @@ import os
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher
 import aiohttp
-
-from .handlers import router
+from .handlers import setup_handlers
 from .logger import UserLoggingMiddleware
 from shared_lib.database import init_db, init_db_pool
 from shared_lib.services.university_api import create_ruz_api_client
@@ -32,9 +31,9 @@ async def main():
 
         dp = Dispatcher()
         dp.update.middleware(UserLoggingMiddleware())
-        dp.include_router(router)
         
-        await dp.start_polling(bot, ruz_api_client=ruz_api_client_instance)
+        setup_handlers(dp, ruz_api_client=ruz_api_client_instance)
+        await dp.start_polling(bot)
 
 
 

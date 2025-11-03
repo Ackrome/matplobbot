@@ -1,16 +1,20 @@
 from aiogram import Router
 
-from . import base, library, github, rendering, admin, schedule
+from . import base, library, github, rendering, admin
 from .settings import settings_router
+from .schedule import ScheduleManager
 
 # Создаем главный роутер для всего модуля handlers
 router = Router()
 
-# Включаем в него все остальные роутеры
-router.include_router(base.router)
-router.include_router(library.router)
-router.include_router(github.router)
-router.include_router(rendering.router)
-router.include_router(settings_router)
-router.include_router(admin.router)
-router.include_router(schedule.router)
+def setup_handlers(dp: Router, ruz_api_client):
+    """Function to setup all handlers"""
+    schedule_manager = ScheduleManager(ruz_api_client)
+
+    dp.include_router(base.router)
+    dp.include_router(library.router)
+    dp.include_router(github.router)
+    dp.include_router(rendering.router)
+    dp.include_router(settings_router)
+    dp.include_router(admin.router)
+    dp.include_router(schedule_manager.router)

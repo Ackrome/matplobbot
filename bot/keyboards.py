@@ -1,6 +1,7 @@
 import logging
 from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from datetime import datetime, timedelta
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from cachetools import LRUCache
 import hashlib
@@ -183,4 +184,76 @@ def build_search_results_keyboard(results: List[Dict[str, Any]], search_type: st
                 callback_data=f"sch_result_:{item.get('type', search_type)}:{item['id']}"
             )
         )
+    return builder.as_markup()
+
+def build_calendar_keyboard(year: int, month: int, entity_type: str, entity_id: str, lang: str, selected_date: date | None = None) -> InlineKeyboardMarkup:
+    """Builds an inline calendar keyboard for a given month and year."""
+    import calendar
+    builder = InlineKeyboardBuilder()
+
+    # Month and year navigation
+    month_names = translator.gettext(lang, "calendar_months").split(',')
+    month_name = month_names[month - 1]
+    builder.row(
+        InlineKeyboardButton(text="«", callback_data=f"cal_nav:prev_year:{year}:{month}:{entity_type}:{entity_id}"),
+        InlineKeyboardButton(text="<", callback_data=f"cal_nav:prev_month:{year}:{month}:{entity_type}:{entity_id}"),
+        InlineKeyboardButton(text=f"{month_name} {year}", callback_data="noop"),
+        InlineKeyboardButton(text=">", callback_data=f"cal_nav:next_month:{year}:{month}:{entity_type}:{entity_id}"),
+        InlineKeyboardButton(text="»", callback_data=f"cal_nav:next_year:{year}:{month}:{entity_type}:{entity_id}")
+    )
+
+    # Days of the week header
+    day_names = translator.gettext(lang, "calendar_days_short").split(',')
+    builder.row(*[InlineKeyboardButton(text=day, callback_data="noop") for day in day_names])
+
+    # Calendar days
+    month_calendar = calendar.monthcalendar(year, month)
+    today = datetime.now().date()
+
+    for week in month_calendar:
+        week_buttons = []
+        for day in week:
+            if day == 0:
+                week_buttons.append(InlineKeyboardButton(text=" ", callback_data="noop"))
+            else:
+                current_date = datetime(year, month, day).date()
+                date_str = current_date.strftime("%Y-%m-%d")
+                label = str(day)
+                
+                # Highlight the selected date, with priority over today's date
+                if selected_date and current_date == selected_date:
+                    label = f"*{label}*"
+                elif current_date == today:
+                    label = f"[{label}]"
+                
+                callback_data = f"sch_date_:{entity_type}:{entity_id}:{date_str}"
+                week_buttons.append(InlineKeyboardButton(text=label, callback_data=callback_data))
+        builder.row(*week_buttons)
+
+    # --- Add weekly view buttons ---
+    first_day_of_month = datetime(year, month, 1).date()
+    # Find the Monday of the first week
+    start_of_first_week = first_day_of_month - timedelta(days=first_day_of_month.weekday())
+    
+    current_week_start = start_of_first_week
+    while current_week_start.month <= month:
+        week_end = current_week_start + timedelta(days=6)
+        label = translator.gettext(lang, "schedule_view_week", start=current_week_start.strftime('%d.%m'), end=week_end.strftime('%d.%m'))
+        callback_data = f"sch_week_:{entity_type}:{entity_id}:{current_week_start.strftime('%Y-%m-%d')}"
+        builder.row(InlineKeyboardButton(text=label, callback_data=callback_data))
+        current_week_start += timedelta(weeks=1)
+        if current_week_start.year > year: break # Stop if we roll into the next year
+
+    # Add a "Today" button to quickly jump back to the current month
+    today_btn_text = translator.gettext(lang, "schedule_date_today")
+    builder.row(InlineKeyboardButton(
+        text=today_btn_text,
+        callback_data=f"cal_nav:today:0:0:{entity_type}:{entity_id}" # Year/month are placeholders
+    ))
+
+    # Add a "Back to Search Results" button
+    back_btn_text = translator.gettext(lang, "schedule_back_to_results")
+    builder.row(InlineKeyboardButton(text=back_btn_text, callback_data="sch_back_to_results"))
+
+
     return builder.as_markup()
