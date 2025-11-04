@@ -1,6 +1,6 @@
 from aiogram import  F, Router
 from aiogram.types import Message, CallbackQuery
-from aiogram.filters import  Command
+from aiogram.filters import  Command, Filter
 import asyncio
 import sys, os, logging
 import matplobblib
@@ -16,16 +16,35 @@ from ..config import *
 
 import importlib
 
+class AdminFilter(Filter):
+    """A filter to check if the user is the administrator."""
+    async def __call__(self, event: Message | CallbackQuery) -> bool:
+        user_id = event.from_user.id
+        if user_id == ADMIN_USER_ID:
+            return True
+        
+        # If not an admin, send a permission denied message and stop processing.
+        lang = await translator.get_user_language(user_id)
+        text = translator.gettext(lang, "admin_no_permission")
+        
+        if isinstance(event, Message):
+            await event.reply(text, reply_markup=await kb.get_main_reply_keyboard(user_id))
+        elif isinstance(event, CallbackQuery):
+            await event.answer(text, show_alert=True)
+            
+        return False
+
 class AdminManager:
     def __init__(self):
         self.router = Router()
+        # Apply the AdminFilter to all handlers in this router
+        self.router.message.filter(AdminFilter())
+        self.router.callback_query.filter(AdminFilter())
         self._register_handlers()
 
     def _register_handlers(self):
         self.router.message(Command('update'))(self.update_command)
         self.router.message(Command('clear_cache'))(self.clear_cache_command)
-        self.router.callback_query(F.data == "help_cmd_update")(self.cq_help_cmd_update)
-        self.router.callback_query(F.data == "help_cmd_clear_cache")(self.cq_help_cmd_clear_cache)
 
     async def _update_library_async(self, library_name: str, lang: str):
         try:
@@ -52,10 +71,6 @@ class AdminManager:
     async def update_command(self, message: Message):
         user_id = message.from_user.id
         lang = await translator.get_user_language(user_id)
-        if user_id != ADMIN_USER_ID:
-            await message.reply(translator.gettext(lang, "admin_no_permission"), reply_markup=await kb.get_main_reply_keyboard(user_id))
-            return
-
         status_msg = await message.answer(translator.gettext(lang, "admin_update_start", library_name='matplobblib'))
         success, status_message_text = await self._update_library_async('matplobblib', lang)
         
@@ -70,10 +85,6 @@ class AdminManager:
     async def clear_cache_command(self, message: Message):
         user_id = message.from_user.id
         lang = await translator.get_user_language(user_id)
-        if user_id != ADMIN_USER_ID:
-            await message.reply(translator.gettext(lang, "admin_no_permission"), reply_markup=await kb.get_main_reply_keyboard(user_id))
-            return
-
         status_msg = await message.answer(translator.gettext(lang, "admin_clear_cache_start"))
 
         await redis_client.clear_all_user_cache()
@@ -84,21 +95,3 @@ class AdminManager:
 
         await status_msg.edit_text(translator.gettext(lang, "admin_clear_cache_success"))
         await message.answer(translator.gettext(lang, "admin_clear_cache_finished"), reply_markup=await kb.get_main_reply_keyboard(user_id))
-
-    async def cq_help_cmd_update(self, callback: CallbackQuery):
-        user_id = callback.from_user.id
-        lang = await translator.get_user_language(user_id)
-        if user_id != ADMIN_USER_ID:
-            await callback.answer(translator.gettext(lang, "admin_no_permission"), show_alert=True)
-            return
-        await callback.answer(translator.gettext(lang, "admin_update_starting_callback"))
-        await self.update_command(callback.message)
-
-    async def cq_help_cmd_clear_cache(self, callback: CallbackQuery):
-        user_id = callback.from_user.id
-        lang = await translator.get_user_language(user_id)
-        if user_id != ADMIN_USER_ID:
-            await callback.answer(translator.gettext(lang, "admin_no_permission"), show_alert=True)
-            return
-        await callback.answer(translator.gettext(lang, "admin_clear_cache_start"))
-        await self.clear_cache_command(callback.message)

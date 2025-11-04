@@ -1,6 +1,7 @@
 # bot/handlers/base.py
 import logging
 from aiogram import F, Router
+import inspect
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove, InlineKeyboardButton
 from aiogram.filters import CommandStart, Command, StateFilter, Filter
@@ -55,17 +56,7 @@ class BaseManager:
         self.router.message(StateFilter('*'), Command("cancel"))(self.cancel_handler)
         self.router.message(StateFilter('*'), F.text.casefold() == "отмена")(self.cancel_handler)
         # Help Menu Callbacks
-        self.router.callback_query(F.data == "help_cmd_matp_all")(self.cq_help_cmd_matp_all)
-        self.router.callback_query(F.data == "help_cmd_matp_search")(self.cq_help_cmd_matp_search)
-        self.router.callback_query(F.data == "help_cmd_schedule")(self.cq_help_cmd_schedule)
-        self.router.callback_query(F.data == "help_cmd_myschedule")(self.cq_help_cmd_myschedule)
-        self.router.callback_query(F.data == "help_cmd_lec_search")(self.cq_help_cmd_lec_search)
-        self.router.callback_query(F.data == "help_cmd_lec_all")(self.cq_help_cmd_lec_all)
-        self.router.callback_query(F.data == "help_cmd_favorites")(self.cq_help_cmd_favorites)
-        self.router.callback_query(F.data == "help_cmd_latex")(self.cq_help_cmd_latex)
-        self.router.callback_query(F.data == "help_cmd_mermaid")(self.cq_help_cmd_mermaid)
-        self.router.callback_query(F.data == "help_cmd_settings")(self.cq_help_cmd_settings)
-        self.router.callback_query(F.data == "help_cmd_help")(self.cq_help_cmd_help)
+        self.router.callback_query(F.data.startswith("help_cmd_"))(self.cq_help_command_router)
 
     async def command_start_onboarding(self, message: Message, state: FSMContext):
         user_id, lang = message.from_user.id, await translator.get_user_language(message.from_user.id)
@@ -134,53 +125,42 @@ class BaseManager:
 
     # --- Help Menu Callbacks ---
 
-    async def cq_help_cmd_matp_all(self, callback: CallbackQuery):
+    async def cq_help_command_router(self, callback: CallbackQuery, state: FSMContext):
+        """A single handler to route all help menu callbacks to their respective command handlers."""
         await callback.answer()
-        await self.library_manager.matp_all_command_inline(callback.message)
+        command_suffix = callback.data.replace("help_cmd_", "")
 
-    async def cq_help_cmd_matp_search(self, callback: CallbackQuery, state: FSMContext):
-        await callback.answer()
-        await self.library_manager.search_command(callback.message, state)
+        # Map command suffixes to their handler methods
+        handler_map = {
+            "matp_all": self.library_manager.matp_all_command_inline,
+            "matp_search": self.library_manager.search_command,
+            "schedule": self.schedule_manager.cmd_schedule,
+            "myschedule": self.schedule_manager.cmd_my_schedule,
+            "lec_search": self.github_manager.lec_search_command,
+            "lec_all": self.github_manager.lec_all_command,
+            "favorites": self.library_manager.favorites_command,
+            "latex": self.rendering_manager.latex_command,
+            "mermaid": self.rendering_manager.mermaid_command,
+            "settings": self.settings_manager.command_settings,
+            "update": self.admin_manager.update_command,
+            "clear_cache": self.admin_manager.clear_cache_command,
+            "help": self.command_help,
+        }
 
-    async def cq_help_cmd_schedule(self, callback: CallbackQuery, state: FSMContext):
-        await callback.answer()
-        await self.schedule_manager.cmd_schedule(callback.message, state)
+        handler_func = handler_map.get(command_suffix)
 
-    async def cq_help_cmd_myschedule(self, callback: CallbackQuery, state: FSMContext):
-        await callback.answer()
-        await self.schedule_manager.cmd_my_schedule(callback.message, state)
+        if not handler_func:
+            logging.warning(f"No handler found for help command: {command_suffix}")
+            return
 
-    async def cq_help_cmd_lec_search(self, callback: CallbackQuery, state: FSMContext):
-        await callback.answer()
-        await self.github_manager.lec_search_command(callback.message, state)
+        # For certain commands, we need to pass the user object from the callback, not the message
+        message = callback.message
+        if command_suffix in ["myschedule", "update", "clear_cache"]:
+            message.from_user = callback.from_user
 
-    async def cq_help_cmd_lec_all(self, callback: CallbackQuery, state: FSMContext):
-        await callback.answer()
-        await self.github_manager.lec_all_command(callback.message, state)
-
-    async def cq_help_cmd_favorites(self, callback: CallbackQuery):
-        await callback.answer()
-        await self.library_manager.favorites_command(callback.message)
-
-    async def cq_help_cmd_latex(self, callback: CallbackQuery, state: FSMContext):
-        await callback.answer()
-        await self.rendering_manager.latex_command(callback.message, state)
-
-    async def cq_help_cmd_mermaid(self, callback: CallbackQuery, state: FSMContext):
-        await callback.answer()
-        await self.rendering_manager.mermaid_command(callback.message, state)
-
-    async def cq_help_cmd_settings(self, callback: CallbackQuery):
-        await callback.answer()
-        await self.settings_manager.command_settings(callback.message)
-
-    async def cq_help_cmd_help(self, callback: CallbackQuery):
-        user_id, lang = callback.from_user.id, await translator.get_user_language(callback.from_user.id)
-        try:
-            await callback.message.edit_text(translator.gettext(lang, "help_menu_header"), reply_markup=await kb.get_help_inline_keyboard(user_id))
-            await callback.answer()
-        except TelegramBadRequest as e:
-            if "message is not modified" in e.message:
-                await callback.answer(translator.gettext(lang, "help_already_in_menu"))
-            else:
-                raise
+        # Inspect the handler to see if it needs the 'state' argument
+        handler_signature = inspect.signature(handler_func)
+        if 'state' in handler_signature.parameters:
+            await handler_func(message, state)
+        else:
+            await handler_func(message)
