@@ -72,6 +72,8 @@ if __name__ == "__main__":
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         logger.info("Scheduler service stopped.")
+        if scheduler.running:
+            scheduler.shutdown()
     finally:
         # This part is tricky to get right with async pools,
         # but for a clean shutdown, it's good practice.

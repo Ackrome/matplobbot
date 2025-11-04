@@ -58,7 +58,7 @@ async def send_daily_schedules(http_session: aiohttp.ClientSession, ruz_api_clie
     start_date = now_in_moscow + timedelta(days=1)
     # The RUZ API is more reliable when fetching a range. We'll fetch the next 7 days.
     # The format_schedule function will correctly pick the first available day from the response.
-    end_date = start_date + timedelta(days=7)
+    end_date = start_date + timedelta(days=0)
     start_date_str = start_date.strftime("%Y.%m.%d")
     end_date_str = end_date.strftime("%Y.%m.%d")
     current_time_str = now_in_moscow.strftime("%H:%M")
@@ -86,7 +86,7 @@ async def send_daily_schedules(http_session: aiohttp.ClientSession, ruz_api_clie
                 # We assume the user's language is stored and accessible.
                 # For simplicity, we'll use the bot's i18n module directly.
                 lang = await translator.get_user_language(sub['user_id'])
-                formatted_text = format_schedule(schedule_data, lang, sub['entity_name'], sub['entity_type'], start_date=start_date.date(), is_week_view=True)
+                formatted_text = format_schedule(schedule_data, lang, sub['entity_name'], sub['entity_type'], start_date=start_date.date(), is_week_view=False)
 
                 if has_changed:
                     logger.info(f"Schedule for subscription ID {sub['id']} ({sub['entity_name']}) has changed. Notifying user {sub['user_id']}.")

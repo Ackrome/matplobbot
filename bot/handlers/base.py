@@ -3,8 +3,8 @@ import logging
 from aiogram import F, Router
 import inspect
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove, InlineKeyboardButton
-from aiogram.filters import CommandStart, Command, StateFilter, Filter
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove, InlineKeyboardButton, BotCommand, Bot
+from aiogram.filters import CommandStart, Command, StateFilter, Filter, ChatTypeFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -22,6 +22,25 @@ from shared_lib.i18n import translator
 class Onboarding(Filter):
     async def __call__(self, message: Message) -> bool:
         return not await database.is_onboarding_completed(message.from_user.id)
+
+class MentionedFilter(Filter):
+    """
+    Catches messages in groups where the bot is mentioned.
+    e.g. "@your_bot_name hello!"
+    """
+    async def __call__(self, message: Message, bot: Bot) -> bool:
+        # The filter should only work in group chats
+        if message.chat.type not in ("group", "supergroup"):
+            return False
+
+        # Check if the message has entities and any of them is a 'mention'
+        if not message.entities:
+            return False
+
+        me = await bot.get_me()
+        bot_username = me.username
+
+        return any(entity.type == "mention" and message.text[entity.offset:entity.offset + entity.length] == f"@{bot_username}" for entity in message.entities)
 
 class BaseManager:
     def __init__(
@@ -51,12 +70,23 @@ class BaseManager:
         self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:step4"))(self.onboarding_step5)
         self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:step5"))(self.onboarding_finish)
         # Base Commands
-        self.router.message(CommandStart())(self.command_start_regular)
-        self.router.message(Command('help'))(self.command_help)
+        # Private chat handlers
+        self.router.message(CommandStart(), ChatTypeFilter(chat_type="private"))(self.command_start_regular)
+        self.router.message(Command('help'), ChatTypeFilter(chat_type="private"))(self.command_help_private)
+
+        # Group chat handlers
+        self.router.message(CommandStart(), ChatTypeFilter(chat_type=["group", "supergroup"]))(self.command_start_group)
+        self.router.message(Command('help'), ChatTypeFilter(chat_type=["group", "supergroup"]))(self.command_start_group) # Alias /help to /start in groups
+
+        # Mention handler for groups
+        self.router.message(MentionedFilter())(self.handle_mention_in_group)
+
+        # Generic handlers
         self.router.message(StateFilter('*'), Command("cancel"))(self.cancel_handler)
         self.router.message(StateFilter('*'), F.text.casefold() == "отмена")(self.cancel_handler)
         # Help Menu Callbacks
         self.router.callback_query(F.data.startswith("help_cmd_"))(self.cq_help_command_router)
+
 
     async def command_start_onboarding(self, message: Message, state: FSMContext):
         user_id, lang = message.from_user.id, await translator.get_user_language(message.from_user.id)
@@ -109,9 +139,25 @@ class BaseManager:
         lang = await translator.get_user_language(message.from_user.id)
         await message.answer(translator.gettext(lang, "start_welcome", full_name=message.from_user.full_name), reply_markup=await kb.get_main_reply_keyboard(message.from_user.id))
 
-    async def command_help(self, message: Message):
+    async def command_help_private(self, message: Message):
         lang = await translator.get_user_language(message.from_user.id)
         await message.answer(translator.gettext(lang, "help_menu_header"), reply_markup=await kb.get_help_inline_keyboard(message.from_user.id))
+
+    async def command_start_group(self, message: Message):
+        """Handler for /start or /help in a group chat."""
+        lang = await translator.get_user_language(message.from_user.id)
+        bot_info = await message.bot.get_me()
+        bot_username = bot_info.username
+        
+        # Create a button that links to a private chat with the bot
+        keyboard = InlineKeyboardBuilder()
+        keyboard.add(InlineKeyboardButton(text=translator.gettext(lang, "group_chat_start_button"), url=f"https://t.me/{bot_username}?start=start"))
+        await message.reply(translator.gettext(lang, "group_chat_start_text"), reply_markup=keyboard.as_markup())
+
+    async def handle_mention_in_group(self, message: Message):
+        """Handles direct mentions of the bot in a group chat."""
+        # Reuse the same logic as /start in a group
+        await self.command_start_group(message)
 
     async def cancel_handler(self, message: Message, state: FSMContext):
         user_id, lang = message.from_user.id, await translator.get_user_language(message.from_user.id)
@@ -143,8 +189,8 @@ class BaseManager:
             "mermaid": self.rendering_manager.mermaid_command,
             "settings": self.settings_manager.command_settings,
             "update": self.admin_manager.update_command,
-            "clear_cache": self.admin_manager.clear_cache_command,
-            "help": self.command_help,
+            "clear_cache": self.admin_manager.clear_cache_command, # This will be filtered by AdminFilter
+            "help": self.command_help_private,
         }
 
         handler_func = handler_map.get(command_suffix)

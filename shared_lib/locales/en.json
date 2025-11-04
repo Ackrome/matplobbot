@@ -187,5 +187,10 @@
     "help_btn_myschedule": "📅 /myschedule - My schedules for today",
     "myschedule_no_subscriptions": "You have no active subscriptions. You can add them via the /schedule command.",
     "myschedule_loading": "⏳ Fetching your schedules for today...",
-    "schedule_change_notification": "❗️ Attention! The schedule for '{entity_name}' has been updated."
+    "schedule_change_notification": "❗️ Attention! The schedule for '{entity_name}' has been updated.",
+    "group_chat_start_text": "Hello! I'm Matplobbot. To access all my features, please start a conversation with me in a private message.",
+    "group_chat_start_button": "🤖 Start a Chat",
+    "command_desc_start": "🚀 Start/Restart the bot",
+    "command_desc_cancel": "❌ Cancel the current action",
+    "help_btn_schedule": "📅 /schedule - Search for a schedule"
 }
