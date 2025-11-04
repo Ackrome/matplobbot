@@ -192,5 +192,13 @@
     "group_chat_start_button": "🤖 Начать диалог",
     "command_desc_start": "🚀 Запуск/перезапуск бота",
     "command_desc_cancel": "❌ Отменить текущее действие",
-    "help_btn_schedule": "📅 /schedule - Поиск расписания"
+    "help_btn_schedule": "📅 /schedule - Поиск расписания",
+    "schedule_change_added": "✅ Добавлены занятия",
+    "schedule_change_removed": "❌ Отменены занятия",
+    "schedule_change_modified": "🔄 Изменены занятия",
+    "lecturer_prefix": "Преподаватель",
+    "field_beginLesson": "Начало",
+    "field_endLesson": "Конец",
+    "field_auditorium": "Аудитория",
+    "field_lecturer_title": "Преподаватель"
 }

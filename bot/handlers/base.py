@@ -3,8 +3,9 @@ import logging
 from aiogram import F, Router
 import inspect
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove, InlineKeyboardButton, BotCommand, Bot
+from aiogram import Bot
 from aiogram.filters import CommandStart, Command, StateFilter, Filter, ChatTypeFilter
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove, InlineKeyboardButton, BotCommand
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 

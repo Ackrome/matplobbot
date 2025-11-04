@@ -192,5 +192,13 @@
     "group_chat_start_button": "🤖 Start a Chat",
     "command_desc_start": "🚀 Start/Restart the bot",
     "command_desc_cancel": "❌ Cancel the current action",
-    "help_btn_schedule": "📅 /schedule - Search for a schedule"
+    "help_btn_schedule": "📅 /schedule - Search for a schedule",
+    "schedule_change_added": "✅ Added Lessons",
+    "schedule_change_removed": "❌ Canceled Lessons",
+    "schedule_change_modified": "🔄 Modified Lessons",
+    "lecturer_prefix": "Lecturer",
+    "field_beginLesson": "Start",
+    "field_endLesson": "End",
+    "field_auditorium": "Auditorium",
+    "field_lecturer_title": "Lecturer"
 }
