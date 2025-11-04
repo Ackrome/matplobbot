@@ -113,6 +113,11 @@ async def init_db():
                 UNIQUE(user_id, entity_type, entity_id)
             )
             ''')
+            # Add the last_schedule_hash column if it doesn't exist, for backward compatibility
+            await connection.execute('''
+            ALTER TABLE user_schedule_subscriptions
+            ADD COLUMN IF NOT EXISTS last_schedule_hash TEXT;
+            ''')
     logger.info("Database tables initialized.")
 
 async def log_user_action(user_id: int, username: str | None, full_name: str, avatar_pic_url: str | None, action_type: str, action_details: str | None):
