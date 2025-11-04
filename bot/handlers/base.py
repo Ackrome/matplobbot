@@ -4,7 +4,7 @@ from aiogram import F, Router
 import inspect
 from aiogram.exceptions import TelegramBadRequest
 from aiogram import Bot
-from aiogram.filters import CommandStart, Command, StateFilter, Filter, ChatTypeFilter
+from aiogram.filters import CommandStart, Command, StateFilter, Filter
 from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove, InlineKeyboardButton, BotCommand
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -72,12 +72,12 @@ class BaseManager:
         self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:step5"))(self.onboarding_finish)
         # Base Commands
         # Private chat handlers
-        self.router.message(CommandStart(), ChatTypeFilter(chat_type="private"))(self.command_start_regular)
-        self.router.message(Command('help'), ChatTypeFilter(chat_type="private"))(self.command_help_private)
+        self.router.message(CommandStart(), F.chat.type == "private")(self.command_start_regular)
+        self.router.message(Command('help'), F.chat.type == "private")(self.command_help_private)
 
         # Group chat handlers
-        self.router.message(CommandStart(), ChatTypeFilter(chat_type=["group", "supergroup"]))(self.command_start_group)
-        self.router.message(Command('help'), ChatTypeFilter(chat_type=["group", "supergroup"]))(self.command_start_group) # Alias /help to /start in groups
+        self.router.message(CommandStart(), F.chat.type.in_({"group", "supergroup"}))(self.command_start_group)
+        self.router.message(Command('help'), F.chat.type.in_({"group", "supergroup"}))(self.command_start_group) # Alias /help to /start in groups
 
         # Mention handler for groups
         self.router.message(MentionedFilter())(self.handle_mention_in_group)
