@@ -10,6 +10,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from datetime import datetime, timedelta, time, date
 import logging
 import re
+import hashlib
 
 from shared_lib.services.university_api import RuzAPIClient # Import the class for type hinting
 from shared_lib.services.schedule_service import format_schedule, generate_ical_from_schedule
