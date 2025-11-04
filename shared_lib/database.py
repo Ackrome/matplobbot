@@ -108,16 +108,12 @@ async def init_db():
                 entity_id TEXT NOT NULL,
                 entity_name TEXT NOT NULL,
                 notification_time TIME NOT NULL,
-                last_schedule_hash TEXT,
                 is_active BOOLEAN DEFAULT TRUE,
+                last_schedule_hash TEXT, -- Added here for consistency
                 UNIQUE(user_id, entity_type, entity_id)
             )
             ''')
             # Add the last_schedule_hash column if it doesn't exist, for backward compatibility
-            await connection.execute('''
-            ALTER TABLE user_schedule_subscriptions
-            ADD COLUMN IF NOT EXISTS last_schedule_hash TEXT;
-            ''')
     logger.info("Database tables initialized.")
 
 async def log_user_action(user_id: int, username: str | None, full_name: str, avatar_pic_url: str | None, action_type: str, action_details: str | None):

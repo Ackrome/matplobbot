@@ -5,6 +5,7 @@ from datetime import datetime, date, time
 from collections import defaultdict
 from ics import Calendar, Event
 from zoneinfo import ZoneInfo
+from aiogram.utils.markdown import escape_md
 
 from shared_lib.i18n import translator
 
@@ -40,19 +41,26 @@ def format_schedule(schedule_data: List[Dict[str, Any]], lang: str, entity_name:
         
         formatted_lessons = []
         for lesson in sorted(lessons, key=lambda x: x['beginLesson']):
+            # Escape all dynamic parts to prevent markdown parsing errors
+            discipline = escape_md(lesson['discipline'])
+            kind_of_work = escape_md(names_shorter[lesson['kindOfWork']])
+            lecturer = escape_md(lesson['lecturer_title'].replace('_',' '))
+            lecturer_email = escape_md(lesson.get('lecturerEmail', 'Почта не указана'))
+            group = escape_md(lesson.get('group', 'Группа не указана'))
+
             lesson_details = [
                 f"`{lesson['beginLesson']} - {lesson['endLesson']} | {lesson['auditorium']}`",
-                f"{lesson['discipline']} | {names_shorter[lesson['kindOfWork']]}"
+                f"{discipline} | {kind_of_work}"
             ]
 
             if entity_type == 'group':
-                lesson_details.append(f"{lesson['lecturer_title'].replace('_',' ')}\n{lesson.get('lecturerEmail', 'Почта не указана')}")
+                lesson_details.append(f"{lecturer}\n{lecturer_email}")
             elif entity_type == 'person': # Lecturer
-                lesson_details.append(f" {lesson.get('group', 'Группа не указана')}")
+                lesson_details.append(f" {group}")
             elif entity_type == 'auditorium':
-                lesson_details.append(f"{lesson.get('group', 'Группа не указана')} | {lesson['lecturer_title'].replace('_',' ')}\n{lesson.get('lecturerEmail', 'Почта не указана')}")
+                lesson_details.append(f"{group} | {lecturer}\n{lecturer_email}")
             else: # Fallback to a generic format
-                lesson_details.append(f"{lesson['lecturer_title'].replace('_',' ')}")
+                lesson_details.append(f"{lecturer}")
 
             formatted_lessons.append("\n".join(lesson_details))
         
