@@ -118,7 +118,7 @@ class ScheduleManager:
             entity_name = schedule_data[0].get(entity_type, "Unknown") if schedule_data else "Unknown"
             formatted_text = format_schedule(schedule_data, lang, entity_name, entity_type, start_date=today.date())
 
-            await callback.message.edit_text(formatted_text, parse_mode="Markdown")
+            await callback.message.edit_text(formatted_text, parse_mode="HTML")
             await self._send_actions_menu(callback.message, lang, entity_type, entity_id, entity_name, view_type='daily_initial')
         except Exception as e:
             logging.error(f"Failed to get today's schedule for {entity_type}:{entity_id}. Error: {e}", exc_info=True)
@@ -263,7 +263,7 @@ class ScheduleManager:
             entity_name = schedule_data[0].get(entity_type, "Unknown") if schedule_data else "Unknown"
             formatted_text = format_schedule(schedule_data, lang, entity_name, entity_type, start_date=selected_date.date())
             
-            await callback.message.edit_text(formatted_text, parse_mode="Markdown")
+            await callback.message.edit_text(formatted_text, parse_mode="HTML")
             date_info = {
                 'year': selected_date.year,
                 'month': selected_date.month,
@@ -295,7 +295,7 @@ class ScheduleManager:
             entity_name = schedule_data[0].get(entity_type, "Unknown") if schedule_data else "Unknown"
             formatted_text = format_schedule(schedule_data, lang, entity_name, entity_type, start_date=start_date, is_week_view=True)
             
-            await callback.message.edit_text(formatted_text, parse_mode="Markdown")
+            await callback.message.edit_text(formatted_text, parse_mode="HTML")
             date_info = {
                 'year': start_date.year,
                 'month': start_date.month,
@@ -393,7 +393,7 @@ class ScheduleManager:
         try:
             schedule_data = await self.api_client.get_schedule(sub['entity_type'], sub['entity_id'], start=today_str, finish=today_str)
             formatted_text = format_schedule(schedule_data, lang, sub['entity_name'], sub['entity_type'], start_date=today_dt.date())
-            await message.answer(formatted_text, parse_mode="Markdown")
+            await message.answer(formatted_text, parse_mode="HTML")
         except TelegramForbiddenError:
             logging.warning(f"Bot is blocked by user {user_id}. Cannot send schedule.")
             raise  # Re-raise to stop sending to this user

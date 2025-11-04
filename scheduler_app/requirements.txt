@@ -1,5 +1,6 @@
 matplobbot-shared
 aiohttp
+aiogram>=3.0.0
 apscheduler
 asyncpg
 python-dotenv

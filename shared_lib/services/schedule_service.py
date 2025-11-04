@@ -5,7 +5,7 @@ from datetime import datetime, date, time
 from collections import defaultdict
 from ics import Calendar, Event
 from zoneinfo import ZoneInfo
-from aiogram.utils.markdown import escape_md
+from aiogram.utils.markdown import hcode
 
 from shared_lib.i18n import translator
 
@@ -37,30 +37,23 @@ def format_schedule(schedule_data: List[Dict[str, Any]], lang: str, entity_name:
     for date_str, lessons in sorted(days.items()):
         date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
         
-        day_header = f"*{date_obj.strftime('%A, %d.%m.%Y')}*"
+        day_header = f"<b>{date_obj.strftime('%A, %d.%m.%Y')}</b>"
         
         formatted_lessons = []
         for lesson in sorted(lessons, key=lambda x: x['beginLesson']):
-            # Escape all dynamic parts to prevent markdown parsing errors
-            discipline = escape_md(lesson['discipline'])
-            kind_of_work = escape_md(names_shorter[lesson['kindOfWork']])
-            lecturer = escape_md(lesson['lecturer_title'].replace('_',' '))
-            lecturer_email = escape_md(lesson.get('lecturerEmail', 'Почта не указана'))
-            group = escape_md(lesson.get('group', 'Группа не указана'))
-
             lesson_details = [
-                f"`{lesson['beginLesson']} - {lesson['endLesson']} | {lesson['auditorium']}`",
-                f"{discipline} | {kind_of_work}"
+                hcode(f"{lesson['beginLesson']} - {lesson['endLesson']} | {lesson['auditorium']}"),
+                f"{lesson['discipline']} | {names_shorter[lesson['kindOfWork']]}"
             ]
 
             if entity_type == 'group':
-                lesson_details.append(f"{lecturer}\n{lecturer_email}")
+                lesson_details.append(f"{lesson['lecturer_title'].replace('_',' ')}\n{lesson.get('lecturerEmail', 'Почта не указана')}")
             elif entity_type == 'person': # Lecturer
-                lesson_details.append(f" {group}")
+                lesson_details.append(f" {lesson.get('group', 'Группа не указана')}")
             elif entity_type == 'auditorium':
-                lesson_details.append(f"{group} | {lecturer}\n{lecturer_email}")
+                lesson_details.append(f"{lesson.get('group', 'Группа не указана')} | {lesson['lecturer_title'].replace('_',' ')}\n{lesson.get('lecturerEmail', 'Почта не указана')}")
             else: # Fallback to a generic format
-                lesson_details.append(f"{lecturer}")
+                lesson_details.append(f"{lesson['lecturer_title'].replace('_',' ')}")
 
             formatted_lessons.append("\n".join(lesson_details))
         

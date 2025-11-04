@@ -25,7 +25,7 @@ async def send_telegram_message(session: aiohttp.ClientSession, user_id: int, te
 
     if len(text) <= TELEGRAM_MESSAGE_LIMIT:
         # Message is short enough, send as is
-        payload = {'chat_id': user_id, 'text': text, 'parse_mode': 'Markdown'}
+        payload = {'chat_id': user_id, 'text': text, 'parse_mode': 'HTML'}
         async with session.post(url, json=payload) as response:
             if response.status != 200:
                 logger.error(f"Failed to send message to user {user_id}. Status: {response.status}, Response: {await response.text()}")
@@ -36,7 +36,7 @@ async def send_telegram_message(session: aiohttp.ClientSession, user_id: int, te
         logger.info(f"Message for user {user_id} is too long ({len(text)} chars). Splitting into chunks.")
         for i in range(0, len(text), TELEGRAM_MESSAGE_LIMIT):
             chunk = text[i:i + TELEGRAM_MESSAGE_LIMIT]
-            payload = {'chat_id': user_id, 'text': chunk, 'parse_mode': 'Markdown'}
+            payload = {'chat_id': user_id, 'text': chunk, 'parse_mode': 'HTML'}
             async with session.post(url, json=payload) as response:
                 if response.status != 200:
                     logger.error(f"Failed to send chunk to user {user_id}. Status: {response.status}, Response: {await response.text()}")
