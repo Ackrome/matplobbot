@@ -95,6 +95,11 @@ class ScheduleManager:
     async def handle_search_query(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
         lang = await translator.get_user_language(user_id)
+        # Add a guard clause to handle non-text messages (like group upgrades)
+        if not message.text:
+            await message.reply(translator.gettext(lang, "schedule_invalid_time_format")) # A generic error is fine
+            return
+
         data = await state.get_data()
         search_type = data['search_type']
         query = message.text.lower()
