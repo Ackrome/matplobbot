@@ -25,6 +25,7 @@ class SettingsManager:
         self.router = Router()
         self.schedule_manager = schedule_manager
         self._register_handlers()
+        self.AVAILABLE_LANGUAGES = AVAILABLE_LANGUAGES
 
     def _register_handlers(self):
         # Main settings entry points for private and group chats
