@@ -83,8 +83,11 @@ def format_schedule(schedule_data: List[Dict[str, Any]], lang: str, entity_name:
     # Iterate through sorted dates to build the full schedule string
     for date_str, lessons in sorted(days.items()):
         date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
-        
-        day_header = f"<b>{date_obj.strftime('%A, %d.%m.%Y')}</b>"
+
+        # --- LOCALIZATION FIX ---
+        day_of_week = translator.gettext(lang, f"day_{date_obj.weekday()}") # e.g., day_0 for Monday
+        month_name = translator.gettext(lang, f"month_{date_obj.month-1}_gen") # Genitive case for dates
+        day_header = f"<b>{day_of_week}, {date_obj.day} {month_name} {date_obj.year}</b>"
         
         formatted_lessons = []
         for lesson in sorted(lessons, key=lambda x: x['beginLesson']):
@@ -94,11 +97,17 @@ def format_schedule(schedule_data: List[Dict[str, Any]], lang: str, entity_name:
             ]
 
             if entity_type == 'group':
-                lesson_details.append(f"{lesson['lecturer_title'].replace('_',' ')}\n{lesson.get('lecturerEmail', 'Почта не указана')}")
+                lecturer_info = [lesson['lecturer_title'].replace('_',' ')]
+                if lesson.get('lecturerEmail'):
+                    lecturer_info.append(lesson['lecturerEmail'])
+                lesson_details.append("\n".join(lecturer_info))
             elif entity_type == 'person': # Lecturer
                 lesson_details.append(f" {lesson.get('group', 'Группа не указана')}")
             elif entity_type == 'auditorium':
-                lesson_details.append(f"{lesson.get('group', 'Группа не указана')} | {lesson['lecturer_title'].replace('_',' ')}\n{lesson.get('lecturerEmail', 'Почта не указана')}")
+                lecturer_info = [f"{lesson.get('group', 'Группа не указана')} | {lesson['lecturer_title'].replace('_',' ')}"]
+                if lesson.get('lecturerEmail'):
+                    lecturer_info.append(lesson['lecturerEmail'])
+                lesson_details.append("\n".join(lecturer_info))
             else: # Fallback to a generic format
                 lesson_details.append(f"{lesson['lecturer_title'].replace('_',' ')}")
 

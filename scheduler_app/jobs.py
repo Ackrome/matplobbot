@@ -11,8 +11,8 @@ from .config import BOT_TOKEN
 # In a real-world scenario, this might be a shared library.
 from shared_lib.services.university_api import RuzAPIClient, RuzAPIError
 from shared_lib.services.schedule_service import format_schedule, diff_schedules
-from shared_lib.i18n import translator
-from shared_lib.database import get_subscriptions_for_notification, update_subscription_hash, get_all_active_subscriptions
+from shared_lib.i18n import translator, Translator
+from shared_lib.database import get_subscriptions_for_notification, update_subscription_hash, get_all_active_subscriptions, delete_old_inactive_subscriptions
 from shared_lib.redis_client import redis_client
 
 logger = logging.getLogger(__name__)
@@ -20,13 +20,15 @@ logger = logging.getLogger(__name__)
 TELEGRAM_MESSAGE_LIMIT = 4096
 
 
-async def send_telegram_message(session: aiohttp.ClientSession, chat_id: int, text: str):
+async def send_telegram_message(session: aiohttp.ClientSession, chat_id: int, text: str, message_thread_id: int | None = None):
     """Sends a message using a direct Telegram API call."""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
     if len(text) <= TELEGRAM_MESSAGE_LIMIT:
         # Message is short enough, send as is
         payload = {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML'}
+        if message_thread_id:
+            payload['message_thread_id'] = message_thread_id
         async with session.post(url, json=payload) as response:
             if response.status != 200:
                 logger.error(f"Failed to send message to chat {chat_id}. Status: {response.status}, Response: {await response.text()}")
@@ -38,6 +40,8 @@ async def send_telegram_message(session: aiohttp.ClientSession, chat_id: int, te
         for i in range(0, len(text), TELEGRAM_MESSAGE_LIMIT):
             chunk = text[i:i + TELEGRAM_MESSAGE_LIMIT]
             payload = {'chat_id': chat_id, 'text': chunk, 'parse_mode': 'HTML'}
+            if message_thread_id:
+                payload['message_thread_id'] = message_thread_id
             async with session.post(url, json=payload) as response:
                 if response.status != 200:
                     logger.error(f"Failed to send chunk to chat {chat_id}. Status: {response.status}, Response: {await response.text()}")
@@ -74,6 +78,7 @@ async def send_daily_schedules(http_session: aiohttp.ClientSession, ruz_api_clie
 
         for sub in subscriptions:
             try:
+                logger.info(f"Processing subscription ID: {sub['id']} for chat {sub['chat_id']} and entity '{sub['entity_name']}'.")
                 schedule_data = await ruz_api_client.get_schedule(
                     sub['entity_type'], sub['entity_id'], start=start_date_str, finish=end_date_str
                 )
@@ -83,30 +88,37 @@ async def send_daily_schedules(http_session: aiohttp.ClientSession, ruz_api_clie
                 redis_schedule_key = f"schedule_data:{sub['id']}"
                 old_schedule_data_raw = await redis_client.get_user_cache(sub['user_id'], f"schedule_data:{sub['id']}") # Using user_id as part of key for namespacing
                 old_schedule_data = json.loads(old_schedule_data_raw) if old_schedule_data_raw else None
+                old_hash_for_log = sub.get('last_schedule_hash')
+                logger.debug(f"Sub ID {sub['id']}: New hash={new_hash[:8]}, Old hash={old_hash_for_log[:8] if old_hash_for_log else 'None'}. Old data in Redis: {'Yes' if old_schedule_data else 'No'}.")
                 
-                lang = await translator.get_user_language(sub['user_id'])
-                recipient_chat_id = sub.get('chat_id') or sub['user_id']
+                lang = await translator.get_language(sub['user_id'], sub['chat_id'])
+                recipient_chat_id = sub['chat_id']
+                thread_id = sub.get('message_thread_id')
 
                 # Send a diff if possible, otherwise send the full schedule
                 if old_schedule_data is not None and new_hash != sub.get('last_schedule_hash'):
                     logger.info(f"Schedule for subscription ID {sub['id']} ({sub['entity_name']}) has changed. Notifying chat {recipient_chat_id}.")
+                    logger.debug(f"Sub ID {sub['id']}: Generating diff and sending change notification.")
                     diff_text = diff_schedules(old_schedule_data, schedule_data, lang)
                     if diff_text:
                         header = translator.gettext(lang, "schedule_change_notification", entity_name=sub['entity_name'])
-                        await send_telegram_message(http_session, recipient_chat_id, f"{header}\n\n{diff_text}")
+                        await send_telegram_message(http_session, recipient_chat_id, f"{header}\n\n{diff_text}", thread_id)
                     else: # Hash changed but diff is empty (e.g. whitespace change), send full schedule
+                        logger.debug(f"Sub ID {sub['id']}: Diff was empty, falling back to sending full schedule.")
                         formatted_text = format_schedule(schedule_data, lang, sub['entity_name'], sub['entity_type'], start_date=start_date.date(), is_week_view=False)
-                        await send_telegram_message(http_session, recipient_chat_id, formatted_text)
+                        await send_telegram_message(http_session, recipient_chat_id, formatted_text, thread_id)
                 else: # No old data or no change, send the full schedule
+                    logger.debug(f"Sub ID {sub['id']}: No changes detected or no old data. Sending full schedule.")
                     formatted_text = format_schedule(schedule_data, lang, sub['entity_name'], sub['entity_type'], start_date=start_date.date(), is_week_view=False)
-                    await send_telegram_message(http_session, recipient_chat_id, formatted_text)
+                    await send_telegram_message(http_session, recipient_chat_id, formatted_text, thread_id)
                 
                 # Update the hash in the database for the next check
                 await update_subscription_hash(sub['id'], new_hash)
+                logger.debug(f"Sub ID {sub['id']}: Successfully updated hash in DB.")
                 # Store the new schedule data in Redis for the next diff
                 await redis_client.set_user_cache(sub['user_id'], f"schedule_data:{sub['id']}", json.dumps(schedule_data), ttl=None) # No TTL
             except Exception as e:
-                logger.error(f"Failed to process and send schedule to user {sub['user_id']} for entity '{sub['entity_name']}': {e}", exc_info=True)
+                logger.error(f"Failed to process and send schedule to chat {sub.get('chat_id')} for entity '{sub['entity_name']}': {e}", exc_info=True)
     
     except Exception as e:
         logger.error(f"Critical error in send_daily_schedules job: {e}", exc_info=True)
@@ -142,17 +154,18 @@ async def check_for_schedule_updates(http_session: aiohttp.ClientSession, ruz_ap
 
                 # Notify only if there was a previous hash and it's different.
                 if old_hash and new_hash != old_hash:
-                    recipient_chat_id = sub.get('chat_id') or sub['user_id']
+                    recipient_chat_id = sub['chat_id']
+                    thread_id = sub.get('message_thread_id')
                     redis_schedule_key = f"schedule_data:{sub['id']}"
                     old_schedule_data_raw = await redis_client.get_user_cache(sub['user_id'], redis_schedule_key)
                     old_schedule_data = json.loads(old_schedule_data_raw) if old_schedule_data_raw else None
 
                     logger.info(f"Change detected for subscription ID {sub['id']} ({sub['entity_name']}). Notifying chat {recipient_chat_id}.")
-                    lang = await translator.get_user_language(sub['user_id'])
+                    lang = await translator.get_language(sub['user_id'], sub['chat_id'])
                     diff_text = diff_schedules(old_schedule_data, schedule_data, lang) if old_schedule_data else None
                     if diff_text:
                         header = translator.gettext(lang, "schedule_change_notification", entity_name=sub['entity_name'])
-                        await send_telegram_message(http_session, recipient_chat_id, f"{header}\n\n{diff_text}")
+                        await send_telegram_message(http_session, recipient_chat_id, f"{header}\n\n{diff_text}", thread_id)
 
                 await update_subscription_hash(sub['id'], new_hash)
                 await redis_client.set_user_cache(sub['user_id'], f"schedule_data:{sub['id']}", json.dumps(schedule_data), ttl=None)
@@ -162,3 +175,16 @@ async def check_for_schedule_updates(http_session: aiohttp.ClientSession, ruz_ap
                 logger.error(f"Change detection: Failed to process subscription ID {sub['id']} for user {sub['user_id']}: {e}", exc_info=True)
     except Exception as e:
         logger.error(f"Critical error in check_for_schedule_updates job: {e}", exc_info=True)
+
+
+async def prune_inactive_subscriptions():
+    """
+    Periodically cleans up subscriptions that have been disabled for a long time (e.g., 30 days).
+    """
+    logger.info("Starting job to prune old, inactive subscriptions...")
+    try:
+        deleted_count = await delete_old_inactive_subscriptions(days_inactive=30)
+        if deleted_count > 0:
+            logger.info(f"Successfully pruned {deleted_count} old, inactive subscriptions from the database.")
+    except Exception as e:
+        logger.error(f"Critical error in prune_inactive_subscriptions job: {e}", exc_info=True)

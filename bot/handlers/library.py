@@ -42,7 +42,7 @@ class LibraryManager:
         self.router.callback_query(F.data == "noop")(self.cq_noop)
 
     async def _display_matp_all_navigation(self, message: Message, path: str = "", page: int = 0, is_edit: bool = False):
-        lang = await translator.get_user_language(message.from_user.id)
+        lang = await translator.get_language(message.from_user.id, message.chat.id)
         path_parts = path.split('.') if path else []
         level = len(path_parts)
         builder = InlineKeyboardBuilder()
@@ -118,7 +118,7 @@ class LibraryManager:
         parts = callback.data.split(":")
         path_hash, page = parts[1], int(parts[2])
         path = "" if path_hash == 'root' else kb.code_path_cache.get(path_hash)
-        lang = await translator.get_user_language(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         if path is None:
             await callback.answer(translator.gettext(lang, "matp_all_show_error"), show_alert=True)
             return
@@ -127,7 +127,7 @@ class LibraryManager:
 
     async def cq_matp_all_show_code(self, callback: CallbackQuery):
         path_hash = callback.data.split(":", 1)[1]
-        lang = await translator.get_user_language(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         code_path = kb.code_path_cache.get(path_hash)
         if not code_path:
             await callback.answer(translator.gettext(lang, "matp_all_show_error"), show_alert=True)
@@ -143,7 +143,7 @@ class LibraryManager:
         results = search_data['results']
         builder = InlineKeyboardBuilder()
         start, end = page * SEARCH_RESULTS_PER_PAGE, (page + 1) * SEARCH_RESULTS_PER_PAGE
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id)
 
         for i, result in enumerate(results[start:end]):
             global_index = start + i
@@ -181,13 +181,13 @@ class LibraryManager:
         return found_items
 
     async def search_command(self, message: Message, state: FSMContext):
-        lang = await translator.get_user_language(message.from_user.id)
+        lang = await translator.get_language(message.from_user.id, message.chat.id)
         await state.set_state(Search.query)
         await message.answer(translator.gettext(lang, "search_prompt_library"), reply_markup=ReplyKeyboardRemove())
 
     async def process_search_query(self, message: Message, state: FSMContext):
         await state.clear()
-        user_id, lang, query = message.from_user.id, await translator.get_user_language(message.from_user.id), message.text
+        user_id, lang, query = message.from_user.id, await translator.get_language(message.from_user.id, message.chat.id), message.text
         status_msg = await message.answer(translator.gettext(lang, "search_in_progress", query=query))
         results = await self._perform_full_text_search(query)
 
@@ -202,7 +202,7 @@ class LibraryManager:
         await status_msg.edit_text(translator.gettext(lang, "search_results_found", count=len(results), query=query, page=1, total_pages=total_pages), reply_markup=keyboard)
 
     async def cq_search_pagination(self, callback: CallbackQuery):
-        user_id, lang = callback.from_user.id, await translator.get_user_language(callback.from_user.id)
+        user_id, lang = callback.from_user.id, await translator.get_language(callback.from_user.id, callback.message.chat.id)
         search_data = await redis_client.get_user_cache(user_id, 'lib_search')
         if not search_data:
             await callback.answer(translator.gettext(lang, "search_results_outdated"), show_alert=True)
@@ -217,7 +217,7 @@ class LibraryManager:
         await callback.answer()
 
     async def _show_favorites_menu(self, message: Message, user_id: int, is_edit: bool = False):
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, message.chat.id)
         favs = await database.get_favorites(user_id)
         if not favs:
             text = translator.gettext(lang, "favorites_empty")
@@ -244,7 +244,7 @@ class LibraryManager:
 
     async def cq_add_favorite(self, callback: CallbackQuery):
         path_hash = callback.data.split(":", 1)[1]
-        lang = await translator.get_user_language(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         code_path = kb.code_path_cache.get(path_hash)
         if not code_path:
             await callback.answer(translator.gettext(lang, "matp_all_show_error"), show_alert=True)
@@ -253,7 +253,7 @@ class LibraryManager:
         await callback.answer(translator.gettext(lang, "favorites_added_success" if success else "favorites_already_exists"), show_alert=False)
 
     async def cq_delete_favorite(self, callback: CallbackQuery):
-        user_id, lang = callback.from_user.id, await translator.get_user_language(callback.from_user.id)
+        user_id, lang = callback.from_user.id, await translator.get_language(callback.from_user.id, callback.message.chat.id)
         path_hash = callback.data.split(":", 1)[1]
         code_path = kb.code_path_cache.get(path_hash)
         if not code_path:
@@ -268,7 +268,7 @@ class LibraryManager:
         await callback.answer()
 
     async def cq_show_search_result_by_index(self, callback: CallbackQuery):
-        user_id, lang = callback.from_user.id, await translator.get_user_language(callback.from_user.id)
+        user_id, lang = callback.from_user.id, await translator.get_language(callback.from_user.id, callback.message.chat.id)
         search_data = await redis_client.get_user_cache(user_id, 'lib_search')
         if not search_data:
             await callback.answer(translator.gettext(lang, "search_results_outdated"), show_alert=True)
@@ -285,7 +285,7 @@ class LibraryManager:
 
     async def cq_show_favorite(self, callback: CallbackQuery):
         path_hash = callback.data.split(":", 1)[1]
-        lang = await translator.get_user_language(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         code_path = kb.code_path_cache.get(path_hash)
         if not code_path:
             await callback.answer(translator.gettext(lang, "favorites_info_outdated"), show_alert=True)

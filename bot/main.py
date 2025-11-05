@@ -1,9 +1,32 @@
 import asyncio
 import logging
 import os
+import aiohttp
+import requests
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
-import aiohttp
+
+
+# --- MONKEY PATCH FOR matplobblib ---
+# The matplobblib library uses the synchronous `requests` library on import,
+# which can block our async app and cause network errors like IncompleteRead.
+# We replace `requests.get` with an async-compatible version using `aiohttp`.
+def async_get_patch(url, **kwargs):
+    async def _get():
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, **kwargs) as response:
+                response.raise_for_status()
+                # Create a mock response object that mimics `requests.Response`
+                mock_response = requests.Response()
+                mock_response.status_code = response.status
+                mock_response._content = await response.read()
+                mock_response.encoding = response.charset
+                return mock_response
+    return asyncio.run(_get())
+
+requests.get = async_get_patch
+# --- END MONKEY PATCH ---
+
 from .handlers import setup_handlers
 from .middleware import GroupMentionCommandMiddleware
 from .config import ADMIN_USER_ID

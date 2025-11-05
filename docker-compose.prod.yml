@@ -50,12 +50,19 @@ services:
     image: ghcr.io/ackrome/matplobbot-scheduler:${SCHEDULER_TAG:-latest}
     restart: unless-stopped
     stop_grace_period: 30s
+    ports:
+      - "9584:9584"
     env_file: ./.env
     volumes:
       - bot_logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9584/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   mpb-fastapi-stats:
     image: ghcr.io/ackrome/matplobbot-api:${API_TAG:-latest} 

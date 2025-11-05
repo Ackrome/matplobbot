@@ -62,7 +62,7 @@ class GitHubManager:
 
     async def lec_all_command(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, message.chat.id)
         repos = await database.get_user_repos(user_id)
 
         if not repos:
@@ -83,7 +83,7 @@ class GitHubManager:
 
     async def cq_lec_browse_repo_selected(self, callback: CallbackQuery):
         user_id = callback.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, callback.message.chat.id)
         repo_hash = callback.data.split(":", 1)[1]
         repo_path = kb.code_path_cache.get(repo_hash)
         if not repo_path:
@@ -96,7 +96,7 @@ class GitHubManager:
     async def cq_lec_all_navigate(self, callback: CallbackQuery):
         path_hash = callback.data.split(":", 1)[1]
         path = kb.code_path_cache.get(path_hash)
-        lang = await translator.get_user_language(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
 
         if path is None:
             await callback.answer(translator.gettext(lang, "matp_all_show_error"), show_alert=True)
@@ -112,7 +112,7 @@ class GitHubManager:
     async def cq_lec_all_show_file(self, callback: CallbackQuery):
         path_hash = callback.data.split(":", 1)[1]
         file_path = kb.code_path_cache.get(path_hash)
-        lang = await translator.get_user_language(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         if not file_path:
             await callback.answer(translator.gettext(lang, "github_file_info_outdated"), show_alert=True)
             return
@@ -148,7 +148,7 @@ class GitHubManager:
         total_pages = (len(results) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
         if total_pages > 1:
             pagination_buttons = []
-            lang = await translator.get_user_language(user_id)
+            lang = await translator.get_language(user_id)
             if page > 0:
                 pagination_buttons.append(InlineKeyboardButton(text=translator.gettext(lang, "pagination_back"), callback_data=f"md_search_page:{page - 1}"))
             pagination_buttons.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop"))
@@ -186,7 +186,7 @@ class GitHubManager:
 
     async def lec_search_command(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, message.chat.id)
         repos = await database.get_user_repos(user_id)
 
         if not repos:
@@ -209,7 +209,7 @@ class GitHubManager:
         await message.answer(translator.gettext(lang, "github_choose_repo_search"), reply_markup=builder.as_markup())
 
     async def cq_lec_search_repo_selected(self, callback: CallbackQuery, state: FSMContext):
-        lang = await translator.get_user_language(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         repo_hash = callback.data.split(":", 1)[1]
         repo_path = kb.code_path_cache.get(repo_hash)
         if not repo_path:
@@ -222,7 +222,7 @@ class GitHubManager:
         await callback.answer()
 
     async def _handle_md_search_success(self, status_msg: Message, user_id: int, query: str, repo_to_search: str, results: list):
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id)
         await redis_client.set_user_cache(user_id, 'md_search', {'query': query, 'results': results, 'repo_path': repo_to_search})
         keyboard = await self._get_md_search_results_keyboard(user_id, page=0)
         total_pages = (len(results) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
@@ -235,7 +235,7 @@ class GitHubManager:
         user_data = await state.get_data()
         repo_to_search = user_data.get('repo_to_search')
         user_id = message.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, message.chat.id)
         await state.clear()
         query = message.text
         status_msg = await message.answer(translator.gettext(lang, "github_search_in_progress", query=query, repo_path=repo_to_search), parse_mode='markdown')
@@ -254,7 +254,7 @@ class GitHubManager:
 
     async def cq_md_search_pagination(self, callback: CallbackQuery):
         user_id = callback.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, callback.message.chat.id)
         search_data = await redis_client.get_user_cache(user_id, 'md_search')
         if not search_data:
             await callback.answer(translator.gettext(lang, "search_results_outdated"), show_alert=True)
@@ -279,7 +279,7 @@ class GitHubManager:
 
     async def cq_show_md_result(self, callback: CallbackQuery):
         path_hash = callback.data.split(":", 1)[1]
-        lang = await translator.get_user_language(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         relative_path = kb.code_path_cache.get(path_hash)
         search_data = await redis_client.get_user_cache(callback.from_user.id, 'md_search')
 
@@ -298,7 +298,7 @@ class GitHubManager:
 
     async def _show_repo_management_menu(self, message: Message, user_id: int, state: FSMContext, is_edit: bool = False):
         """Helper to display the repo management menu."""
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, message.chat.id)
         keyboard = await kb.get_repo_management_keyboard(user_id, state)
         text = translator.gettext(lang, "repo_management_header")
         if is_edit:
@@ -311,14 +311,14 @@ class GitHubManager:
         await callback.answer()
 
     async def cq_add_new_repo_prompt(self, callback: CallbackQuery, state: FSMContext):
-        lang = await translator.get_user_language(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         await state.set_state(RepoManagement.add_repo)
         await callback.message.edit_text(translator.gettext(lang, "repo_add_new_prompt"), reply_markup=None)
         await callback.answer()
 
     async def process_add_repo(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, message.chat.id)
         repo_path = message.text.strip()
 
         if re.match(r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$", repo_path):
@@ -332,7 +332,7 @@ class GitHubManager:
 
     async def cq_delete_repo(self, callback: CallbackQuery, state: FSMContext):
         user_id = callback.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, callback.message.chat.id)
         repo_hash = callback.data.split(":", 1)[1]
         repo_path = kb.code_path_cache.get(repo_hash)
         if not repo_path:
@@ -346,7 +346,7 @@ class GitHubManager:
     async def cq_edit_repo_prompt(self, callback: CallbackQuery, state: FSMContext):
         repo_hash = callback.data.split(":", 1)[1]
         repo_path = kb.code_path_cache.get(repo_hash)
-        lang = await translator.get_user_language(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         if not repo_path:
             await callback.answer(translator.gettext(lang, "github_info_outdated"), show_alert=True)
             return
@@ -358,7 +358,7 @@ class GitHubManager:
 
     async def process_edit_repo(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, message.chat.id)
         new_repo_path = message.text.strip()
         user_data = await state.get_data()
         old_repo_path = user_data.get('old_repo_path')

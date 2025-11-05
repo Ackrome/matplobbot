@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 async def send_as_plain_text(message: Message, user_id: int, file_path: str, content: str):
     """Helper to send content as plain text, handling long messages."""
-    lang = await translator.get_user_language(user_id)
+    lang = await translator.get_language(user_id, message.chat.id)
     header = translator.gettext(lang, "github_file_header_plain", file_path=file_path) + "\n\n"
     
     await message.answer(header, parse_mode='markdown')
@@ -34,7 +34,7 @@ async def send_as_plain_text(message: Message, user_id: int, file_path: str, con
 
 async def send_as_document_from_url(message: Message, user_id: int, file_url: str, file_path: str):
     """Downloads a file from a URL by chunks and sends it as a document."""
-    lang = await translator.get_user_language(user_id)
+    lang = await translator.get_language(user_id, message.chat.id)
     file_name = os.path.basename(file_path)
     status_msg = await message.answer(translator.gettext(lang, "github_downloading_file", file_name=file_name), parse_mode='markdown')
     
@@ -125,7 +125,7 @@ async def _resolve_wikilinks(content: str, repo_path: str, all_repo_files: list[
 async def display_github_file(message: Message, user_id: int, repo_path: str, file_path: str, status_msg_to_delete: Message | None = None):
     """
     Fetches a file from GitHub and displays it, using Telegra.ph for Markdown files."""
-    lang = await translator.get_user_language(user_id)
+    lang = await translator.get_language(user_id, message.chat.id)
     # The initial "Processing..." message is now sent from the handler.
     raw_url = f"https://raw.githubusercontent.com/{repo_path}/{github_service.MD_SEARCH_BRANCH}/{file_path}"
 
@@ -243,7 +243,7 @@ async def display_github_file(message: Message, user_id: int, repo_path: str, fi
 async def display_lec_all_path(message: Message, repo_path: str, path: str, is_edit: bool = False, user_id: int | None = None):
     """Helper to fetch and display contents of a path in the lec_all repo."""
     effective_user_id = user_id or message.from_user.id
-    lang = await translator.get_user_language(effective_user_id)
+    lang = await translator.get_language(effective_user_id, message.chat.id)
     status_msg = None
     if is_edit:
         # The callback is already answered, so we just edit the text.

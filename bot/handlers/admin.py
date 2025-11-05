@@ -16,6 +16,10 @@ from ..config import *
 
 import importlib
 
+class AdminPermissionError(Exception):
+    """Custom exception for admin permission failures."""
+    pass
+
 class AdminFilter(Filter):
     """A filter to check if the user is the administrator."""
     async def __call__(self, event: Message | CallbackQuery) -> bool:
@@ -23,16 +27,30 @@ class AdminFilter(Filter):
         if user_id == ADMIN_USER_ID:
             return True
         
-        # If not an admin, send a permission denied message and stop processing.
-        lang = await translator.get_user_language(user_id)
-        text = translator.gettext(lang, "admin_no_permission")
-        
-        if isinstance(event, Message):
-            await event.reply(text, reply_markup=await kb.get_main_reply_keyboard(user_id))
-        elif isinstance(event, CallbackQuery):
-            await event.answer(text, show_alert=True)
-            
-        return False
+        # If not an admin, raise an exception. This will be caught by an error handler
+        # or the default dispatcher error handler, which is cleaner than sending a message here.
+        # This also reliably stops further processing.
+        raise AdminPermissionError("User is not an admin.")
+
+class AdminOrCreatorFilter(Filter):
+    """
+    A filter to check if the user is an administrator or the creator of a group/supergroup chat.
+    This is used for chat-specific administrative actions.
+    """
+    async def __call__(self, event: Message | CallbackQuery) -> bool:
+        chat = event.chat if isinstance(event, Message) else event.message.chat
+        user_id = event.from_user.id
+
+        # This filter is only for group/supergroup chats
+        if chat.type not in ("group", "supergroup"):
+            return False
+
+        # Get chat member information
+        member = await chat.get_member(user_id)
+
+        # The user is authorized if they are the creator or an administrator
+        return member.status in ("creator", "administrator")
+
 
 class AdminManager:
     def __init__(self):
@@ -84,7 +102,7 @@ class AdminManager:
 
     async def clear_cache_command(self, message: Message):
         user_id = message.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id)
         status_msg = await message.answer(translator.gettext(lang, "admin_clear_cache_start"))
 
         await redis_client.clear_all_user_cache()

@@ -8,7 +8,7 @@ from shared_lib.i18n import translator
 async def show_code_by_path(message: Message, user_id: int, code_path: str, header: str):
     """Helper function to send code to the user based on its path."""
     try:
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, message.chat.id)
         submodule, topic, code_name = code_path.split('.')
         
         module = matplobblib._importlib.import_module(f'matplobblib.{submodule}')
@@ -34,4 +34,4 @@ async def show_code_by_path(message: Message, user_id: int, code_path: str, head
 
     except (ValueError, KeyError, AttributeError, ImportError) as e:
         logging.error(f"Ошибка при показе кода (path: {code_path}): {e}")
-        await message.answer(translator.gettext(await translator.get_user_language(user_id), "show_code_error"))
+        await message.answer(translator.gettext(await translator.get_language(user_id, message.chat.id), "show_code_error"))

@@ -32,7 +32,7 @@ class RenderingManager:
             await message.reply("Эта команда работает только в личных сообщениях.")
             return
 
-        lang = await translator.get_user_language(message.from_user.id)
+        lang = await translator.get_language(message.from_user.id)
         await state.set_state(LatexRender.formula)
         await message.answer(
             translator.gettext(lang, "latex_prompt"),
@@ -42,7 +42,7 @@ class RenderingManager:
     async def process_latex_formula(self, message: Message, state: FSMContext):
         await state.clear()
         user_id = message.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id)
         formula = message.text
         
         status_msg = await message.answer(translator.gettext(lang, "latex_rendering"))
@@ -73,7 +73,7 @@ class RenderingManager:
 
     async def mermaid_command(self, message: Message, state: FSMContext):
         """Handles the /mermaid command for rendering diagrams."""
-        lang = await translator.get_user_language(message.from_user.id)
+        lang = await translator.get_language(message.from_user.id)
         await state.set_state(MermaidRender.code)
         await message.answer(
             translator.gettext(lang, "mermaid_prompt"),
@@ -84,7 +84,7 @@ class RenderingManager:
         """Renders the received Mermaid code into a PNG image."""
         await state.clear()
         user_id = message.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id)
         mermaid_code = message.text
         
         status_msg = await message.answer(translator.gettext(lang, "mermaid_rendering"))

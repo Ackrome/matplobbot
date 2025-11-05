@@ -3,14 +3,14 @@ import logging
 import os
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-import aiohttp
+import aiohttp, aiohttp.web
 
 # Load environment variables from .env file
 load_dotenv()
 
 from scheduler_app.config import LOG_DIR, SCHEDULER_LOG_FILE, BOT_TOKEN
-from scheduler_app.jobs import send_daily_schedules, check_for_schedule_updates
-from shared_lib.database import init_db_pool, close_db_pool, init_db
+from scheduler_app.jobs import send_daily_schedules, check_for_schedule_updates, prune_inactive_subscriptions
+from shared_lib.database import init_db_pool, close_db_pool, init_db, get_db_connection_obj
 
 # We need to import this from the bot's services
 from shared_lib.services.university_api import create_ruz_api_client
@@ -59,13 +59,45 @@ async def main():
             hours=2,
             kwargs={'http_session': session, 'ruz_api_client': ruz_api_client_instance}
         )
+        # Add the new pruning job to run once a day (e.g., at 3 AM Moscow time)
+        scheduler.add_job(
+            prune_inactive_subscriptions,
+            trigger='cron',
+            hour=3, minute=0
+        )
+
+        # --- Health Check Server Setup ---
+        async def health_check(request):
+            try:
+                db_ok = False
+                async with get_db_connection_obj() as db:
+                    await db.fetchval("SELECT 1")
+                db_ok = True
+
+                if scheduler.running and db_ok:
+                    return aiohttp.web.json_response({"status": "ok", "scheduler": "running", "database": "connected"})
+                else:
+                    details = {"status": "unhealthy", "scheduler": "running" if scheduler.running else "stopped", "database": "connected" if db_ok else "disconnected"}
+                    return aiohttp.web.json_response(details, status=503)
+            except Exception as e:
+                logger.error(f"Health check failed with an exception: {e}", exc_info=True)
+                return aiohttp.web.json_response({"status": "error", "reason": str(e)}, status=500)
+
+        health_app = aiohttp.web.Application()
+        health_app.router.add_get("/health", health_check)
+        runner = aiohttp.web.AppRunner(health_app)
+        await runner.setup()
+        site = aiohttp.web.TCPSite(runner, '0.0.0.0', 9584)
+        await site.start()
+        logger.info("Health check endpoint started at http://0.0.0.0:9584/health")
+
         scheduler.start()
-        
         logger.info("Scheduler started. Waiting for jobs...")
         
         # Keep the service running indefinitely
         while True:
             await asyncio.sleep(3600)
+
 
 if __name__ == "__main__":
     try:

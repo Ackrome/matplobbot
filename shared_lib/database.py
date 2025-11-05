@@ -104,16 +104,25 @@ async def init_db():
             CREATE TABLE IF NOT EXISTS user_schedule_subscriptions (
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                chat_id BIGINT NOT NULL,
                 entity_type TEXT NOT NULL,
                 entity_id TEXT NOT NULL,
                 entity_name TEXT NOT NULL,
                 notification_time TIME NOT NULL,
                 is_active BOOLEAN DEFAULT TRUE,
-                last_schedule_hash TEXT, -- Added here for consistency
-                UNIQUE(user_id, entity_type, entity_id)
+                last_schedule_hash TEXT,
+                deactivated_at TIMESTAMPTZ DEFAULT NULL,
+                message_thread_id BIGINT DEFAULT NULL,
+                UNIQUE(chat_id, entity_type, entity_id, notification_time)
             )
             ''')
-            # Add the last_schedule_hash column if it doesn't exist, for backward compatibility
+            await connection.execute('''
+            CREATE TABLE IF NOT EXISTS chat_settings (
+                chat_id BIGINT PRIMARY KEY,
+                settings JSONB DEFAULT '{}'::jsonb
+            )
+            ''')
+
     logger.info("Database tables initialized.")
 
 async def log_user_action(user_id: int, username: str | None, full_name: str, avatar_pic_url: str | None, action_type: str, action_details: str | None):
@@ -142,9 +151,28 @@ async def get_user_settings(user_id: int) -> dict:
     merged_settings.update(db_settings)
     return merged_settings
 
+async def get_chat_settings(chat_id: int) -> dict:
+    """Fetches settings for a specific chat, creating a default record if none exists."""
+    async with pool.acquire() as connection:
+        # Upsert to ensure a row exists for the chat.
+        await connection.execute("""
+            INSERT INTO chat_settings (chat_id) VALUES ($1)
+            ON CONFLICT (chat_id) DO NOTHING;
+        """, chat_id)
+        settings_json = await connection.fetchval("SELECT settings FROM chat_settings WHERE chat_id = $1", chat_id)
+        db_settings = json.loads(settings_json) if settings_json else {}
+    # Merge with defaults to ensure all keys are present.
+    merged_settings = DEFAULT_SETTINGS.copy()
+    merged_settings.update(db_settings)
+    return merged_settings
+
 async def update_user_settings_db(user_id: int, settings: dict):
     async with pool.acquire() as connection:
         await connection.execute("UPDATE users SET settings = $1 WHERE user_id = $2", json.dumps(settings), user_id)
+
+async def update_chat_settings_db(chat_id: int, settings: dict):
+    async with pool.acquire() as connection:
+        await connection.execute("UPDATE chat_settings SET settings = $1 WHERE chat_id = $2", json.dumps(settings), chat_id)
 
 # --- Favorites ---
 async def add_favorite(user_id: int, code_path: str):
@@ -202,17 +230,19 @@ async def set_onboarding_completed(user_id: int):
         await connection.execute("UPDATE users SET onboarding_completed = TRUE WHERE user_id = $1", user_id)
 
 # --- Schedule Subscriptions ---
-async def add_schedule_subscription(user_id: int, entity_type: str, entity_id: str, entity_name: str, notification_time: datetime.time) -> bool:
+async def add_schedule_subscription(user_id: int, chat_id: int, message_thread_id: int | None, entity_type: str, entity_id: str, entity_name: str, notification_time: datetime.time) -> bool:
     async with pool.acquire() as connection:
         try:
             await connection.execute('''
-                INSERT INTO user_schedule_subscriptions (user_id, entity_type, entity_id, entity_name, notification_time)
-                VALUES ($1, $2, $3, $4, $5)
-                ON CONFLICT (user_id, entity_type, entity_id) DO UPDATE SET
+                INSERT INTO user_schedule_subscriptions (user_id, chat_id, message_thread_id, entity_type, entity_id, entity_name, notification_time)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                ON CONFLICT (chat_id, entity_type, entity_id, notification_time) DO UPDATE SET
                     entity_name = EXCLUDED.entity_name,
-                    notification_time = EXCLUDED.notification_time,
-                    is_active = TRUE;
-            ''', user_id, entity_type, entity_id, entity_name, notification_time)
+                    -- When the same time is re-added, ensure it's active
+                    is_active = TRUE,
+                    -- Also update the user who initiated it, in case it changes
+                    user_id = EXCLUDED.user_id;
+            ''', user_id, chat_id, message_thread_id, entity_type, entity_id, entity_name, notification_time)
             return True
         except Exception as e:
             logger.error(f"Failed to add schedule subscription for user {user_id}: {e}", exc_info=True)
@@ -229,36 +259,132 @@ async def get_user_subscriptions(user_id: int, page: int = 0, page_size: int = 5
         # Query to get the paginated list
         offset = page * page_size
         rows = await connection.fetch("""
-            SELECT id, entity_type, entity_id, entity_name, TO_CHAR(notification_time, 'HH24:MI') as notification_time
+            SELECT id, user_id, chat_id, entity_type, entity_id, entity_name, TO_CHAR(notification_time, 'HH24:MI') as notification_time, is_active
             FROM user_schedule_subscriptions
-            WHERE user_id = $1 AND is_active = TRUE
+            WHERE user_id = $1
             ORDER BY entity_name, notification_time
             LIMIT $2 OFFSET $3
         """, user_id, page_size, offset)
         
         # Query to get the total count for pagination
-        total_count = await connection.fetchval("SELECT COUNT(*) FROM user_schedule_subscriptions WHERE user_id = $1 AND is_active = TRUE", user_id)
+        total_count = await connection.fetchval("SELECT COUNT(*) FROM user_schedule_subscriptions WHERE user_id = $1", user_id)
 
         return [dict(row) for row in rows], total_count or 0
 
-async def remove_schedule_subscription(subscription_id: int, user_id: int) -> str | None:
+async def get_chat_subscriptions(chat_id: int, page: int = 0, page_size: int = 5) -> tuple[list, int]:
     """
-    Removes a specific schedule subscription for a user, ensuring ownership.
+    Gets a paginated list of active schedule subscriptions for a specific chat.
+    Returns a tuple: (list of subscriptions, total count).
+    """
+    if not pool:
+        raise ConnectionError("Database pool is not initialized.")
+    async with pool.acquire() as connection:
+        offset = page * page_size
+        rows = await connection.fetch("""
+            SELECT id, user_id, chat_id, entity_type, entity_id, entity_name, TO_CHAR(notification_time, 'HH24:MI') as notification_time, is_active
+            FROM user_schedule_subscriptions
+            WHERE chat_id = $1
+            ORDER BY entity_name, notification_time
+            LIMIT $2 OFFSET $3
+        """, chat_id, page_size, offset)
+        
+        total_count = await connection.fetchval("SELECT COUNT(*) FROM user_schedule_subscriptions WHERE chat_id = $1", chat_id)
+
+        return [dict(row) for row in rows], total_count or 0
+
+async def toggle_subscription_status(subscription_id: int, user_id: int, is_chat_admin: bool = False) -> tuple[bool, str] | None:
+    """
+    Toggles the is_active status of a subscription, checking for ownership or admin rights.
+    Returns a tuple of (new_status, entity_name) on success, otherwise None.
+    """
+    if not pool:
+        raise ConnectionError("Database pool is not initialized.")
+    async with pool.acquire() as connection:
+        # First, verify the user has permission if they are not a chat admin
+        if not is_chat_admin:
+            owner_id = await connection.fetchval("SELECT user_id FROM user_schedule_subscriptions WHERE id = $1", subscription_id)
+            if owner_id != user_id:
+                logger.warning(f"User {user_id} attempted to toggle subscription {subscription_id} without permission.")
+                return None
+
+        # If permission is granted, toggle the status and return the new state
+        result = await connection.fetchrow(
+            """
+            UPDATE user_schedule_subscriptions
+            SET is_active = NOT is_active,
+                deactivated_at = CASE WHEN is_active THEN NOW() ELSE NULL END
+            WHERE id = $1
+            RETURNING is_active, entity_name
+            """,
+            subscription_id
+        )
+        return (result['is_active'], result['entity_name']) if result else None
+
+async def remove_schedule_subscription(subscription_id: int, user_id: int, is_chat_admin: bool = False) -> str | None:
+    """
+    Removes a specific schedule subscription, checking for ownership or admin rights.
+    - If is_chat_admin is False, it only deletes if user_id matches the creator.
+    - If is_chat_admin is True, it deletes regardless of the creator.
     Returns the entity_name of the deleted subscription on success, otherwise None.
     """
     if not pool:
         raise ConnectionError("Database pool is not initialized.")
     async with pool.acquire() as connection:
-        deleted_name = await connection.fetchval(
-            "DELETE FROM user_schedule_subscriptions WHERE id = $1 AND user_id = $2 RETURNING entity_name",
-            subscription_id, user_id)
+        if is_chat_admin:
+            # Admin can delete any subscription in their chat.
+            deleted_name = await connection.fetchval(
+                "DELETE FROM user_schedule_subscriptions WHERE id = $1 RETURNING entity_name",
+                subscription_id)
+        else:
+            # Regular user can only delete their own subscriptions.
+            deleted_name = await connection.fetchval(
+                "DELETE FROM user_schedule_subscriptions WHERE id = $1 AND user_id = $2 RETURNING entity_name",
+                subscription_id, user_id)
         return deleted_name
+
+async def update_subscription_notification_time(subscription_id: int, new_time: datetime.time, user_id: int, is_chat_admin: bool = False) -> str | None:
+    """
+    Updates the notification time for a specific subscription, checking for ownership or admin rights.
+    Returns the entity_name of the updated subscription on success, otherwise None.
+    """
+    if not pool:
+        raise ConnectionError("Database pool is not initialized.")
+    async with pool.acquire() as connection:
+        if is_chat_admin:
+            # Admin can update any subscription in their chat.
+            updated_name = await connection.fetchval(
+                "UPDATE user_schedule_subscriptions SET notification_time = $1 WHERE id = $2 RETURNING entity_name",
+                new_time, subscription_id
+            )
+        else:
+            # Regular user can only update their own subscriptions.
+            updated_name = await connection.fetchval(
+                "UPDATE user_schedule_subscriptions SET notification_time = $1 WHERE id = $2 AND user_id = $3 RETURNING entity_name",
+                new_time, subscription_id, user_id
+            )
+        return updated_name
+
+
+async def delete_old_inactive_subscriptions(days_inactive: int = 30):
+    """
+    Deletes subscriptions that have been inactive for more than a specified number of days.
+    Returns the number of deleted subscriptions.
+    """
+    if not pool:
+        raise ConnectionError("Database pool is not initialized.")
+    async with pool.acquire() as connection:
+        result = await connection.execute(
+            "DELETE FROM user_schedule_subscriptions WHERE is_active = FALSE AND deactivated_at < NOW() - INTERVAL '$1 days'",
+            str(days_inactive)
+        )
+        return int(result.split(' ')[-1]) # Returns "DELETE N", we want N
 
 async def get_subscriptions_for_notification(notification_time: str) -> list:
     async with pool.acquire() as connection:
         # Modified to select the subscription ID and the last hash
+        # Also select chat_id to know where to send the message
         rows = await connection.fetch("""
-            SELECT id, user_id, entity_type, entity_id, entity_name, last_schedule_hash
+            SELECT id, user_id, chat_id, message_thread_id, entity_type, entity_id, entity_name, last_schedule_hash
             FROM user_schedule_subscriptions
             WHERE is_active = TRUE AND TO_CHAR(notification_time, 'HH24:MI') = $1
         """, notification_time)
@@ -270,7 +396,7 @@ async def get_all_active_subscriptions() -> list:
         raise ConnectionError("Database pool is not initialized.")
     async with pool.acquire() as connection:
         rows = await connection.fetch("""
-            SELECT id, user_id, entity_type, entity_id, entity_name, last_schedule_hash
+            SELECT id, user_id, chat_id, message_thread_id, entity_type, entity_id, entity_name, last_schedule_hash
             FROM user_schedule_subscriptions WHERE is_active = TRUE
         """)
         return [dict(row) for row in rows]

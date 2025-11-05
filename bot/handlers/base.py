@@ -16,7 +16,8 @@ from .library import LibraryManager, Search as LibrarySearch
 from .github import GitHubManager, MarkdownSearch as GitHubMarkdownSearch
 from .schedule import ScheduleManager
 from .rendering import RenderingManager, LatexRender, MermaidRender
-from .admin import AdminManager
+from .admin import AdminManager, AdminPermissionError
+from aiogram import types
 from .settings import SettingsManager # Keep this for type hinting
 from shared_lib.i18n import translator
 
@@ -74,6 +75,7 @@ class BaseManager:
         # Private chat handlers
         self.router.message(CommandStart(), F.chat.type == "private")(self.command_start_regular)
         self.router.message(Command('help'), F.chat.type == "private")(self.command_help_private)
+        self.router.message(F.text == "🌐 Language / Язык", F.chat.type == "private")(self.command_cycle_language_reply)
 
         # Group chat handlers
         self.router.message(CommandStart(), F.chat.type.in_({"group", "supergroup"}))(self.command_start_group)
@@ -87,23 +89,41 @@ class BaseManager:
         self.router.message(StateFilter('*'), F.text.casefold() == "отмена")(self.cancel_handler)
         # Help Menu Callbacks
         self.router.callback_query(F.data.startswith("help_cmd_"))(self.cq_help_command_router)
+        
+        # Error handler for admin permissions
+        self.router.error(F.exception.is_(AdminPermissionError))(self.handle_admin_permission_error)
 
 
     async def command_start_onboarding(self, message: Message, state: FSMContext):
-        user_id, lang = message.from_user.id, await translator.get_user_language(message.from_user.id)
+        user = message.from_user
+        user_id = user.id
+
+        # --- Automatic Language Detection for New Users ---
+        # This logic runs only once when a new user starts the bot.
+        settings = await database.get_user_settings(user_id)
+        # The default language is 'en'. If the user's client language is different and supported, we switch to it.
+        if settings.get('language') == 'en': # Only override the default
+            client_lang_code = user.language_code.split('-')[0] if user.language_code else 'en' # e.g., 'ru-RU' -> 'ru'
+            if client_lang_code in self.settings_manager.AVAILABLE_LANGUAGES:
+                settings['language'] = client_lang_code
+                await database.update_user_settings_db(user_id, settings)
+                logging.info(f"Automatically set language to '{client_lang_code}' for new user {user_id}.")
+        
+        # Proceed with onboarding using the detected (or default) language
+        lang = await translator.get_language(user_id, message.chat.id)
         await state.set_state("onboarding:step1")
         builder = InlineKeyboardBuilder().row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="onboarding_next"))
         await message.answer(translator.gettext(lang, "start_onboarding_1"), reply_markup=builder.as_markup())
 
     async def onboarding_step2(self, callback: CallbackQuery, state: FSMContext):
-        lang = await translator.get_user_language(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         await state.set_state("onboarding:step2")
         builder = InlineKeyboardBuilder().row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_add_repo"), callback_data="manage_repos"))
         await callback.message.edit_text(translator.gettext(lang, "start_onboarding_2"), reply_markup=builder.as_markup())
         await callback.answer()
 
     async def onboarding_step3(self, callback: CallbackQuery, state: FSMContext):
-        lang = await translator.get_user_language(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         await state.set_state("onboarding:step3")
         builder = InlineKeyboardBuilder()
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_browse_library"), callback_data="help_cmd_matp_all"))
@@ -112,7 +132,7 @@ class BaseManager:
         await callback.answer()
 
     async def onboarding_step4(self, callback: CallbackQuery, state: FSMContext):
-        lang = await translator.get_user_language(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         await state.set_state("onboarding:step4")
         builder = InlineKeyboardBuilder()
         builder.add(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_try_latex"), callback_data="help_cmd_latex"))
@@ -121,15 +141,14 @@ class BaseManager:
         await callback.answer()
 
     async def onboarding_step5(self, callback: CallbackQuery, state: FSMContext):
-        lang = await translator.get_user_language(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         await state.set_state("onboarding:step5")
         builder = InlineKeyboardBuilder().row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_finish"), callback_data="onboarding_next"))
         await callback.message.edit_text(translator.gettext(lang, "start_onboarding_5"), reply_markup=builder.as_markup())
         await callback.answer()
 
     async def onboarding_finish(self, callback: CallbackQuery, state: FSMContext):
-        user_id = callback.from_user.id
-        lang = await translator.get_user_language(user_id)
+        user_id, lang = callback.from_user.id, await translator.get_language(callback.from_user.id, callback.message.chat.id)
         await state.clear()
         await database.set_onboarding_completed(user_id)
         await callback.message.delete() # Clean up the onboarding message
@@ -137,16 +156,23 @@ class BaseManager:
         await callback.answer()
 
     async def command_start_regular(self, message: Message):
-        lang = await translator.get_user_language(message.from_user.id)
+        lang = await translator.get_language(message.from_user.id, message.chat.id)
         await message.answer(translator.gettext(lang, "start_welcome", full_name=message.from_user.full_name), reply_markup=await kb.get_main_reply_keyboard(message.from_user.id))
 
+    async def command_cycle_language_reply(self, message: Message):
+        """Handles the language switch from the main reply keyboard."""
+        user_id = message.from_user.id
+        new_lang = await self.settings_manager._cycle_language(user_id)
+        lang_name = self.settings_manager.AVAILABLE_LANGUAGES[new_lang]
+        await message.answer(translator.gettext(new_lang, "settings_language_updated", lang_name=lang_name), reply_markup=await kb.get_main_reply_keyboard(user_id))
+
     async def command_help_private(self, message: Message):
-        lang = await translator.get_user_language(message.from_user.id)
+        lang = await translator.get_language(message.from_user.id, message.chat.id)
         await message.answer(translator.gettext(lang, "help_menu_header"), reply_markup=await kb.get_help_inline_keyboard(message.from_user.id))
 
     async def command_start_group(self, message: Message):
         """Handler for /start or /help in a group chat."""
-        lang = await translator.get_user_language(message.from_user.id)
+        lang = await translator.get_language(message.from_user.id, message.chat.id)
         bot_info = await message.bot.get_me()
         bot_username = bot_info.username
         
@@ -161,7 +187,7 @@ class BaseManager:
         await self.command_start_group(message)
 
     async def cancel_handler(self, message: Message, state: FSMContext):
-        user_id, lang = message.from_user.id, await translator.get_user_language(message.from_user.id)
+        user_id, lang = message.from_user.id, await translator.get_language(message.from_user.id, message.chat.id)
         current_state = await state.get_state()
         if current_state is None:
             await message.answer(translator.gettext(lang, "cancel_no_active_command"), reply_markup=await kb.get_main_reply_keyboard(user_id))
@@ -188,9 +214,7 @@ class BaseManager:
             "favorites": self.library_manager.favorites_command,
             "latex": self.rendering_manager.latex_command,
             "mermaid": self.rendering_manager.mermaid_command,
-            "settings": self.settings_manager.command_settings,
-            "update": self.admin_manager.update_command,
-            "clear_cache": self.admin_manager.clear_cache_command, # This will be filtered by AdminFilter
+            "settings": self.settings_manager.command_settings_private,
             "help": self.command_help_private,
         }
 
@@ -211,3 +235,15 @@ class BaseManager:
             await handler_func(message, state)
         else:
             await handler_func(message)
+
+    async def handle_admin_permission_error(self, event: types.ErrorEvent):
+        """Handles the custom AdminPermissionError gracefully."""
+        update = event.update
+        user_id = update.callback_query.from_user.id if update.callback_query else update.message.from_user.id
+        lang = await translator.get_language(user_id)
+        text = translator.gettext(lang, "admin_no_permission")
+
+        if update.message:
+            await update.message.reply(text)
+        elif update.callback_query:
+            await update.callback_query.answer(text, show_alert=True)

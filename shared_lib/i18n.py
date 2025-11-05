@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 import logging
 
-from .database import get_user_settings
+from .database import get_user_settings, get_chat_settings
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +25,19 @@ class Translator:
             except (json.JSONDecodeError, IOError) as e:
                 logger.error(f"Failed to load language file {lang_file}: {e}")
 
-    async def get_user_language(self, user_id: int) -> str:
-        """Fetches the user's language from settings, falling back to default."""
-        settings = await get_user_settings(user_id)
-        return settings.get('language', self.default_lang)
+    async def get_language(self, user_id: int, chat_id: int | None = None) -> str:
+        """
+        Fetches the appropriate language.
+        - If chat_id is provided and it's a group chat, it uses the group's setting.
+        - Otherwise, it falls back to the user's personal setting.
+        """
+        # If it's a group chat (negative chat_id), check for a group-specific setting.
+        if chat_id and chat_id < 0:
+            chat_settings = await get_chat_settings(chat_id)
+            return chat_settings.get('language', self.default_lang)
+        
+        user_settings = await get_user_settings(user_id)
+        return user_settings.get('language', self.default_lang)
 
     def gettext(self, lang: str, key: str, **kwargs) -> str:
         """

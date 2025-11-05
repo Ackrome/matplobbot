@@ -50,7 +50,7 @@ class ScheduleManager:
 
     async def cmd_schedule(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, message.chat.id)
         await message.answer(
             translator.gettext(lang, "schedule_welcome"),
             reply_markup=await get_schedule_type_keyboard(lang)
@@ -62,7 +62,7 @@ class ScheduleManager:
         await state.update_data(search_type=search_type)
         
         user_id = callback.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, callback.message.chat.id)
         
         prompt_key = f"schedule_prompt_for_query_{search_type}"
         await callback.message.edit_text(translator.gettext(lang, prompt_key))
@@ -71,7 +71,7 @@ class ScheduleManager:
     async def _perform_search_and_reply(self, message: Message, status_msg: Message, query: str, search_type: str):
         """Helper function to run the search in the background and send results."""
         user_id = message.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, message.chat.id)
         
         try:
             results = await self.api_client.search(term=query, search_type=search_type)
@@ -94,7 +94,7 @@ class ScheduleManager:
 
     async def handle_search_query(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, message.chat.id)
         # Add a guard clause to handle non-text messages (like group upgrades)
         if not message.text:
             await message.reply(translator.gettext(lang, "schedule_invalid_time_format")) # A generic error is fine
@@ -113,7 +113,7 @@ class ScheduleManager:
         await callback.answer()
         _, entity_type, entity_id = callback.data.split(":")
         user_id = callback.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, callback.message.chat.id)
         await callback.message.edit_text(translator.gettext(lang, "schedule_loading"))
 
         try:
@@ -132,7 +132,7 @@ class ScheduleManager:
     async def handle_open_calendar(self, callback: CallbackQuery):
         await callback.answer()
         _, entity_type, entity_id = callback.data.split(":")
-        lang = await translator.get_user_language(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         now = datetime.now()
 
         # --- FIX for BUTTON_DATA_INVALID ---
@@ -168,11 +168,11 @@ class ScheduleManager:
                 now = datetime.now()
                 # Check if we are already on the current month
                 if now.year == int(year_str) and now.month == int(month_str):
-                    await callback.answer(translator.gettext(await translator.get_user_language(callback.from_user.id), "calendar_already_on_today"), show_alert=False)
+                    await callback.answer(translator.gettext(await translator.get_language(callback.from_user.id, callback.message.chat.id), "calendar_already_on_today"), show_alert=False)
                     return
                 year, month = now.year, now.month
 
-            lang = await translator.get_user_language(callback.from_user.id)
+            lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
             try:
                 await callback.message.edit_reply_markup(reply_markup=build_calendar_keyboard(year, month, entity_type, entity_id, lang))
             except TelegramBadRequest as e:
@@ -187,7 +187,7 @@ class ScheduleManager:
     async def handle_back_to_results(self, callback: CallbackQuery):
         await callback.answer()
         user_id = callback.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, callback.message.chat.id)
         cached_data = await redis_client.get_user_cache(user_id, 'schedule_search')
         if not cached_data:
             await callback.message.edit_text(translator.gettext(lang, "search_results_outdated"))
@@ -207,7 +207,7 @@ class ScheduleManager:
                 pass # Keep the hash for building the next calendar view
 
             selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
-            lang = await translator.get_user_language(callback.from_user.id)
+            lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
             calendar_keyboard = build_calendar_keyboard(year, month, entity_type, entity_id, lang, selected_date=selected_date)
             await callback.message.edit_text(translator.gettext(lang, "schedule_select_date"), reply_markup=calendar_keyboard)
         except (ValueError, IndexError) as e:
@@ -253,7 +253,7 @@ class ScheduleManager:
         await callback.answer()
         _, entity_type, entity_id, date_str = callback.data.split(":")
         user_id = callback.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, callback.message.chat.id)
         await callback.message.edit_text(translator.gettext(lang, "schedule_loading"))
         try:
             # --- FIX for BUTTON_DATA_INVALID ---
@@ -283,7 +283,7 @@ class ScheduleManager:
         await callback.answer()
         _, entity_type, entity_id, start_date_str = callback.data.split(":")
         user_id = callback.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, callback.message.chat.id)
         await callback.message.edit_text(translator.gettext(lang, "schedule_loading"))
         try:
             start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
@@ -342,7 +342,7 @@ class ScheduleManager:
         await callback.answer()
         _, entity_type, entity_id, start_date_str = callback.data.split(":")
         user_id = callback.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, callback.message.chat.id)
         await callback.message.edit_text(translator.gettext(lang, "schedule_exporting_ical"))
         try:
             file_bytes, filename, start_date, end_date = await self._prepare_ical_file(user_id, entity_type, entity_id, start_date_str)
@@ -357,7 +357,7 @@ class ScheduleManager:
 
     async def handle_subscribe_button(self, callback: CallbackQuery, state: FSMContext):
         user_id = callback.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, callback.message.chat.id)
         try:
             data_hash = callback.data.split(":", 1)[1]
             data_part = code_path_cache.get(data_hash)
@@ -373,15 +373,17 @@ class ScheduleManager:
 
     async def handle_subscription_time(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
-        lang = await translator.get_user_language(user_id)
+        lang = await translator.get_language(user_id, message.chat.id)
         time_str = message.text.strip()
         if not re.match(r"^\d{2}:\d{2}$", time_str):
             await message.reply(translator.gettext(lang, "schedule_invalid_time_format"))
             return
         try:
             notification_time = time.fromisoformat(time_str)
+            chat_id = message.chat.id
+            thread_id = message.message_thread_id if message.is_topic_message else None
             sub_data = await state.get_data()
-            await database.add_schedule_subscription(user_id, sub_data['sub_entity_type'], sub_data['sub_entity_id'], sub_data['sub_entity_name'], notification_time)
+            await database.add_schedule_subscription(user_id, chat_id, thread_id, sub_data['sub_entity_type'], sub_data['sub_entity_id'], sub_data['sub_entity_name'], notification_time)
             await message.answer(translator.gettext(lang, "schedule_subscribe_success", entity_name=sub_data['sub_entity_name'], time_str=time_str))
         except ValueError:
             await message.reply(translator.gettext(lang, "schedule_invalid_time_value"))
@@ -396,6 +398,7 @@ class ScheduleManager:
         user_id = message.from_user.id
         today_str = today_dt.strftime("%Y.%m.%d")
         try:
+            # The API call is already correct for a single day.
             schedule_data = await self.api_client.get_schedule(sub['entity_type'], sub['entity_id'], start=today_str, finish=today_str)
             formatted_text = format_schedule(schedule_data, lang, sub['entity_name'], sub['entity_type'], start_date=today_dt.date())
             await message.answer(formatted_text, parse_mode="HTML")
@@ -407,19 +410,39 @@ class ScheduleManager:
 
     async def cmd_my_schedule(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
-        lang = await translator.get_user_language(user_id)
-        subscriptions, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
-        if not subscriptions:
+        lang = await translator.get_language(user_id, message.chat.id)
+        
+        # Fetch only active subscriptions
+        all_subscriptions, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
+        active_subscriptions = [sub for sub in all_subscriptions if sub['is_active']]
+
+        if not active_subscriptions:
             await message.answer(translator.gettext(lang, "myschedule_no_subscriptions"))
             return
+
         status_msg = await message.answer(translator.gettext(lang, "myschedule_loading"))
         today_dt = datetime.now()
 
-        for sub in subscriptions:
+        # --- NEW: De-duplication logic ---
+        # Use a set to track entities we've already processed for this command
+        processed_entities = set()
+        sent_at_least_one = False
+
+        await status_msg.delete()
+
+        for sub in active_subscriptions:
+            entity_key = (sub['entity_type'], sub['entity_id'])
+            if entity_key in processed_entities:
+                continue # Skip if we've already sent the schedule for this entity
+
             try:
                 await self._send_single_schedule_update(message, lang, sub, today_dt)
+                processed_entities.add(entity_key)
+                sent_at_least_one = True
                 await asyncio.sleep(0.2)  # Small delay to avoid hitting rate limits
             except TelegramForbiddenError:
                 break  # Stop trying to send messages to this user
 
-        await status_msg.delete()
+        if not sent_at_least_one:
+            # This message is sent only if all subscriptions resulted in no lessons for today.
+            await message.answer(translator.gettext(lang, "schedule_no_lessons_today"))

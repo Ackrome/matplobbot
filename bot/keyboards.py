@@ -14,7 +14,7 @@ from shared_lib.i18n import translator
 logger = logging.getLogger(__name__)
 
 # Define base commands that are always available
-BASE_COMMANDS = ['/schedule', '/myschedule', '/matp_all', '/matp_search', '/lec_search', '/lec_all', '/favorites', '/settings', '/help', '/latex', '/mermaid']
+BASE_COMMANDS = ['/schedule', '/myschedule', '/matp_all', '/matp_search', '/lec_search', '/lec_all', '/favorites', '/settings', '/help', '/latex', '/mermaid', '🌐 Language / Язык']
 ADMIN_COMMANDS = ['/update', '/clear_cache']
 
 # Cache for long code paths to use in callback_data
@@ -66,7 +66,7 @@ def _get_user_commands(user_id: int) -> list[str]:
 async def get_main_reply_keyboard(user_id: int) -> ReplyKeyboardMarkup:
     current_commands = _get_user_commands(user_id)
     keyboard_buttons = [[KeyboardButton(text=cmd)] for cmd in current_commands]
-    lang = await translator.get_user_language(user_id)
+    lang = await translator.get_language(user_id)
     return ReplyKeyboardMarkup(
         keyboard=keyboard_buttons,
         resize_keyboard=True,
@@ -81,7 +81,7 @@ async def get_main_reply_keyboard(user_id: int) -> ReplyKeyboardMarkup:
 
 # Function to get the help InlineKeyboardMarkup
 async def get_help_inline_keyboard(user_id: int) -> InlineKeyboardMarkup:
-    lang = await translator.get_user_language(user_id)
+    lang = await translator.get_language(user_id)
 
     inline_keyboard_rows = [
         [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_matp_all"), callback_data="help_cmd_matp_all")],
@@ -121,7 +121,7 @@ def get_code_action_keyboard(code_path: str) -> InlineKeyboardMarkup:
 
 async def get_repo_management_keyboard(user_id: int, state: FSMContext | None = None) -> InlineKeyboardMarkup:
     """Creates an inline keyboard for managing user repositories."""
-    lang = await translator.get_user_language(user_id)
+    lang = await translator.get_language(user_id)
     repos = await database.get_user_repos(user_id)
     builder = InlineKeyboardBuilder()
     current_state_str = await state.get_state() if state else None

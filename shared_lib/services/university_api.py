@@ -14,7 +14,7 @@ class RuzAPIClient:
         self.HOST = "https://ruz.fa.ru"
         self.session = session
 
-    async def _request(self, sub_url: str) -> Dict[str, Any]:
+    async def _request(self, sub_url: str) -> Dict[str, Any] | List[Dict[str, Any]]:
         """Performs an asynchronous request to the RUZ API."""
         full_url = self.HOST + sub_url
         # Create an SSL context that uses the certifi bundle for verification.
@@ -23,7 +23,10 @@ class RuzAPIClient:
         
         async with self.session.get(full_url, ssl=ssl_context) as response:
             if response.status == 200:
-                return await response.json()
+                json_response = await response.json()
+                # The search API can return an empty object {} instead of an empty list [].
+                # We normalize this to always return a list for list-based endpoints.
+                return json_response if isinstance(json_response, list) else []
             error_text = await response.text()
             raise RuzAPIError(
                 f"RUZ API Error: Status {response.status} for URL {full_url}. Response: {error_text}"
