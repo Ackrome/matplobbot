@@ -1,7 +1,7 @@
 from typing import Callable, Dict, Any, Awaitable
 
-from aiogram import BaseMiddleware
-from aiogram.types import Message, Update, Bot
+from aiogram import BaseMiddleware, Bot
+from aiogram.types import Message, Update
 
 
 class GroupMentionCommandMiddleware(BaseMiddleware):
