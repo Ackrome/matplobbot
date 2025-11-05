@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="matplobbot-shared",
-    version="0.1.46", # Let's use the version from your requirements.txt
+    version="0.1.47", # Let's use the version from your requirements.txt
     packages=find_packages(include=['shared_lib', 'shared_lib.*']),
     description="Shared library for the Matplobbot ecosystem (database, services, i18n).",
     author="Ackrome",
