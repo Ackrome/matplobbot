@@ -29,7 +29,7 @@ requests.get = async_get_patch
 
 from .handlers import setup_handlers
 from .middleware import GroupMentionCommandMiddleware
-from .config import ADMIN_USER_ID
+from .config import ADMIN_USER_IDS
 from shared_lib.i18n import translator
 from .logger import UserLoggingMiddleware
 from shared_lib.database import init_db, init_db_pool

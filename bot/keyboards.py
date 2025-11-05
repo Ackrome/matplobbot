@@ -6,7 +6,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from cachetools import LRUCache
 import hashlib
 import matplobblib
-import os # Import os to access environment variables like ADMIN_USER_ID
+import os # Import os to access environment variables like ADMIN_USER_IDS
 from typing import List, Dict, Any
 from . import database # Import database to check for user repos
 from shared_lib.i18n import translator
