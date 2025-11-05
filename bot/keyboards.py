@@ -57,8 +57,7 @@ logger.info("Завершение генерации данных для кла�
 def _get_user_commands(user_id: int) -> list[str]:
     """Helper to get commands for a user."""
     commands = list(BASE_COMMANDS)
-    admin_id_str = os.getenv('ADMIN_USER_ID')
-    if admin_id_str and user_id == int(admin_id_str):
+    if user_id in ADMIN_USER_IDS:
         commands.extend(ADMIN_COMMANDS)
     return commands
 
@@ -95,8 +94,7 @@ async def get_help_inline_keyboard(user_id: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_latex"), callback_data="help_cmd_latex")],
         [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_mermaid"), callback_data="help_cmd_mermaid")]
     ]
-    admin_id = os.getenv('ADMIN_USER_ID')
-    if admin_id and user_id == int(admin_id):
+    if user_id in ADMIN_USER_IDS:
         inline_keyboard_rows.append([InlineKeyboardButton(text=translator.gettext(lang, "help_btn_update"), callback_data="help_cmd_update")])
         inline_keyboard_rows.append([InlineKeyboardButton(text=translator.gettext(lang, "help_btn_clear_cache"), callback_data="help_cmd_clear_cache")])
     

@@ -24,7 +24,7 @@ class AdminFilter(Filter):
     """A filter to check if the user is the administrator."""
     async def __call__(self, event: Message | CallbackQuery) -> bool:
         user_id = event.from_user.id
-        if user_id == ADMIN_USER_ID:
+        if user_id in ADMIN_USER_IDS:
             return True
         
         # If not an admin, raise an exception. This will be caught by an error handler

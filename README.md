@@ -128,8 +128,8 @@ Create a `.env` file in the project's root directory. Fill it out using the temp
 # Get this from @BotFather on Telegram
 BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
 
-# Your personal Telegram User ID for admin command access
-ADMIN_USER_ID=123456789
+# Comma-separated list of Telegram User IDs for admin command access
+ADMIN_USER_IDS=123456789,987654321
 
 # GitHub Personal Access Token with 'repo' scope for reading repositories
 # Required for /lec_search, /lec_all, and uploading rendered LaTeX images
