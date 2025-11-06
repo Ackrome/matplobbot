@@ -71,13 +71,9 @@ The bot now integrates with the university's schedule API, offering a rich set o
 
 <div style="display: flex; justify-content: center; align-items: center; gap: 30px; flex-wrap: wrap; padding: 20px;">
   <img src="image\notes\schedule_en_1.png" alt="Interactive Calendar" width="400">
-  <svg width="40" height="40" viewBox="0 0 24 24" style="margin: 0 10px;">
-    <path fill="#bfbfbfff" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z">
-  </svg>
+  <span style="font-size: 32px; font-weight: bold; color: #333; margin: 0 15px;">→</span>
   <img src="image\notes\schedule_en_2.png" alt="Interactive Calendar" width="400">
-  <svg width="40" height="40" viewBox="0 0 24 24" style="margin: 0 10px;">
-    <path fill="#bfbfbfff" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
-  </svg>
+  <span style="font-size: 32px; font-weight: bold; color: #333; margin: 0 15px;">→</span>
   <img src="image\notes\schedule_en_3.png" alt="Interactive Calendar" width="400">
 </div>
 
