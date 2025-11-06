@@ -69,18 +69,28 @@ The bot now integrates with the university's schedule API, offering a rich set o
 
 ##### Schedule pipe view:
 
-<div style="display: flex; justify-content: center; align-items: center; gap: 30px; flex-wrap: wrap; padding: 20px;">
-  <img src="image\notes\schedule_en_1.png" alt="Interactive Calendar" width="400">
-  <span style="font-size: 32px; font-weight: bold; color: #333; margin: 0 15px;">→</span>
-  <img src="image\notes\schedule_en_2.png" alt="Interactive Calendar" width="400">
-  <span style="font-size: 32px; font-weight: bold; color: #333; margin: 0 15px;">→</span>
-  <img src="image\notes\schedule_en_3.png" alt="Interactive Calendar" width="400">
-</div>
-
-##### Calendar view:
-
-<div align="center">
-  <img src="image\notes\calendar_screenshot.png" alt="Interactive Calendar" width="400">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 25px; margin: 20px auto; max-width: 420px;">
+  <img src="image\notes\schedule_en_1.png" alt="Interactive Calendar" width="400" style="border: 2px solid #3498db; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+  
+  <div style="position: relative; width: 40px; height: 40px;">
+    <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 2px; height: 40px; background: #3498db;"></div>
+    <div style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%) translateY(50%) rotate(45deg); width: 12px; height: 12px; border-right: 2px solid #3498db; border-bottom: 2px solid #3498db;"></div>
+  </div>
+  
+  <img src="image\notes\schedule_en_2.png" alt="Interactive Calendar" width="400" style="border: 2px solid #3498db; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+  
+  <div style="position: relative; width: 40px; height: 40px;">
+    <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 2px; height: 40px; background: #3498db;"></div>
+    <div style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%) translateY(50%) rotate(45deg); width: 12px; height: 12px; border-right: 2px solid #3498db; border-bottom: 2px solid #3498db;"></div>
+  </div>
+  
+  <img src="image\notes\schedule_en_3.png" alt="Interactive Calendar" width="400" style="border: 2px solid #3498db; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+    <div style="position: relative; width: 40px; height: 40px;">
+    <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 2px; height: 40px; background: #3498db;"></div>
+    <div style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%) translateY(50%) rotate(45deg); width: 12px; height: 12px; border-right: 2px solid #3498db; border-bottom: 2px solid #3498db;"></div>
+  </div>
+  
+  <img src="image\notes\calendar_screenshot.png" alt="Interactive Calendar" width="400" style="border: 2px solid #3498db; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
 </div>
 
 #### ⚙️ Personalization & User Management
