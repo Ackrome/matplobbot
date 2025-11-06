@@ -97,9 +97,9 @@ The bot now integrates with the university's schedule API, offering a rich set o
   <!-- Third Image -->
   <img src="image\notes\calendar_screenshot.png" alt="Step 3: Calendar View" width="420" style="border: 2px solid #24292e; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin: 8px 0;">
 
-<!-- </div>
+</div>
 
-<div style="display: flex; flex-direction: column; align-items: center; gap: 25px; margin: 20px auto; max-width: 420px;">
+<!-- <div style="display: flex; flex-direction: column; align-items: center; gap: 25px; margin: 20px auto; max-width: 420px;">
   <img src="image\notes\schedule_en_1.png" alt="Interactive Calendar" width="400" style="border: 2px solid #3498db; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
   
   <div style="position: relative; width: 40px; height: 40px;">
