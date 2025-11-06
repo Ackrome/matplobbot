@@ -11,10 +11,9 @@ COPY setup.py /
 # Copy requirements.txt specific to this app from the build context root
 COPY fastapi_stats_app/requirements.txt .
 
-# Install dependencies, including matplobbot-shared from PyPI
+# Install curl, then the local shared_lib, then the app-specific requirements.
 RUN apt-get update && apt-get install -y curl && \
     pip install --no-cache-dir / && \
-    # pip install --no-cache-dir /shared_lib/ && \
     pip install --no-cache-dir -r requirements.txt && \
     rm -rf /var/lib/apt/lists/*
 # --- END: CORRECTED INSTALLATION BLOCK ---

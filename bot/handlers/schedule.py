@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, CallbackQuery, BufferedInputFile
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton
 from datetime import datetime, timedelta, time, date
 import logging
 import re
@@ -382,8 +382,23 @@ class ScheduleManager:
             notification_time = time.fromisoformat(time_str)
             chat_id = message.chat.id
             thread_id = message.message_thread_id if message.is_topic_message else None
-            sub_data = await state.get_data()
-            await database.add_schedule_subscription(user_id, chat_id, thread_id, sub_data['sub_entity_type'], sub_data['sub_entity_id'], sub_data['sub_entity_name'], notification_time)
+            sub_data = await state.get_data() # {sub_entity_type, sub_entity_id, sub_entity_name}
+
+            # --- FIX: Prevent "First Run" Notification Spam ---
+            # 1. Add the subscription to the DB to get its ID
+            sub_id = await database.add_schedule_subscription(
+                user_id, chat_id, thread_id, sub_data['sub_entity_type'],
+                sub_data['sub_entity_id'], sub_data['sub_entity_name'], notification_time
+            )
+            # 2. Immediately fetch schedule, hash it, and store it.
+            # This "primes" the subscription so the first check doesn't see a change.
+            start_date = datetime.now()
+            end_date = start_date + timedelta(weeks=3)
+            schedule_data = await self.api_client.get_schedule(sub_data['sub_entity_type'], sub_data['sub_entity_id'], start=start_date.strftime("%Y.%m.%d"), finish=end_date.strftime("%Y.%m.%d"))
+            new_hash = hashlib.sha256(json.dumps(schedule_data, sort_keys=True).encode()).hexdigest()
+            await database.update_subscription_hash(sub_id, new_hash)
+            await redis_client.set_user_cache(user_id, f"schedule_data:{sub_id}", json.dumps(schedule_data), ttl=None)
+
             await message.answer(translator.gettext(lang, "schedule_subscribe_success", entity_name=sub_data['sub_entity_name'], time_str=time_str))
         except ValueError:
             await message.reply(translator.gettext(lang, "schedule_invalid_time_value"))

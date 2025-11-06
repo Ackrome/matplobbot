@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import aiohttp
 import json
 import asyncio
-import hashlib
+import hashlib, random
 from zoneinfo import ZoneInfo
 from .config import BOT_TOKEN
 
@@ -11,8 +11,8 @@ from .config import BOT_TOKEN
 # In a real-world scenario, this might be a shared library.
 from shared_lib.services.university_api import RuzAPIClient, RuzAPIError
 from shared_lib.services.schedule_service import format_schedule, diff_schedules
-from shared_lib.i18n import translator, Translator
-from shared_lib.database import get_subscriptions_for_notification, update_subscription_hash, get_all_active_subscriptions, delete_old_inactive_subscriptions
+from shared_lib.i18n import translator
+from shared_lib.database import get_subscriptions_for_notification, update_subscription_hash, delete_old_inactive_subscriptions, get_unique_active_subscription_entities, get_subscriptions_for_entity
 from shared_lib.redis_client import redis_client
 
 logger = logging.getLogger(__name__)
@@ -60,10 +60,8 @@ async def send_daily_schedules(http_session: aiohttp.ClientSession, ruz_api_clie
     moscow_tz = ZoneInfo("Europe/Moscow")
     now_in_moscow = datetime.now(moscow_tz)
     # The schedule should be for the next day
-    start_date = now_in_moscow + timedelta(days=1)
-    # The RUZ API is more reliable when fetching a range. We'll fetch the next 7 days.
-    # The format_schedule function will correctly pick the first available day from the response.
-    end_date = start_date + timedelta(days=0)
+    target_date = now_in_moscow.date() + timedelta(days=1)
+    start_date, end_date = target_date, target_date # Fetch for a single day
     start_date_str = start_date.strftime("%Y.%m.%d")
     end_date_str = end_date.strftime("%Y.%m.%d")
     current_time_str = now_in_moscow.strftime("%H:%M")
@@ -84,10 +82,10 @@ async def send_daily_schedules(http_session: aiohttp.ClientSession, ruz_api_clie
                 )
 
                 # --- Change Detection & Diff Logic ---
-                new_hash = hashlib.sha256(json.dumps(schedule_data, sort_keys=True).encode()).hexdigest()
-                redis_schedule_key = f"schedule_data:{sub['id']}"
-                old_schedule_data_raw = await redis_client.get_user_cache(sub['user_id'], f"schedule_data:{sub['id']}") # Using user_id as part of key for namespacing
-                old_schedule_data = json.loads(old_schedule_data_raw) if old_schedule_data_raw else None
+                # This job does not perform change detection; it simply sends the schedule for the next day.
+                # The check_for_schedule_updates job is responsible for diffs.
+                # We will just format and send.
+
                 old_hash_for_log = sub.get('last_schedule_hash')
                 logger.debug(f"Sub ID {sub['id']}: New hash={new_hash[:8]}, Old hash={old_hash_for_log[:8] if old_hash_for_log else 'None'}. Old data in Redis: {'Yes' if old_schedule_data else 'No'}.")
                 
@@ -95,28 +93,11 @@ async def send_daily_schedules(http_session: aiohttp.ClientSession, ruz_api_clie
                 recipient_chat_id = sub['chat_id']
                 thread_id = sub.get('message_thread_id')
 
-                # Send a diff if possible, otherwise send the full schedule
-                if old_schedule_data is not None and new_hash != sub.get('last_schedule_hash'):
-                    logger.info(f"Schedule for subscription ID {sub['id']} ({sub['entity_name']}) has changed. Notifying chat {recipient_chat_id}.")
-                    logger.debug(f"Sub ID {sub['id']}: Generating diff and sending change notification.")
-                    diff_text = diff_schedules(old_schedule_data, schedule_data, lang)
-                    if diff_text:
-                        header = translator.gettext(lang, "schedule_change_notification", entity_name=sub['entity_name'])
-                        await send_telegram_message(http_session, recipient_chat_id, f"{header}\n\n{diff_text}", thread_id)
-                    else: # Hash changed but diff is empty (e.g. whitespace change), send full schedule
-                        logger.debug(f"Sub ID {sub['id']}: Diff was empty, falling back to sending full schedule.")
-                        formatted_text = format_schedule(schedule_data, lang, sub['entity_name'], sub['entity_type'], start_date=start_date.date(), is_week_view=False)
-                        await send_telegram_message(http_session, recipient_chat_id, formatted_text, thread_id)
-                else: # No old data or no change, send the full schedule
-                    logger.debug(f"Sub ID {sub['id']}: No changes detected or no old data. Sending full schedule.")
-                    formatted_text = format_schedule(schedule_data, lang, sub['entity_name'], sub['entity_type'], start_date=start_date.date(), is_week_view=False)
-                    await send_telegram_message(http_session, recipient_chat_id, formatted_text, thread_id)
-                
-                # Update the hash in the database for the next check
-                await update_subscription_hash(sub['id'], new_hash)
-                logger.debug(f"Sub ID {sub['id']}: Successfully updated hash in DB.")
-                # Store the new schedule data in Redis for the next diff
-                await redis_client.set_user_cache(sub['user_id'], f"schedule_data:{sub['id']}", json.dumps(schedule_data), ttl=None) # No TTL
+                # Always send the full schedule for the upcoming day.
+                logger.debug(f"Sub ID {sub['id']}: Sending full schedule for {target_date.strftime('%Y-%m-%d')}.")
+                formatted_text = format_schedule(schedule_data, lang, sub['entity_name'], sub['entity_type'], start_date=target_date, is_week_view=False)
+                await send_telegram_message(http_session, recipient_chat_id, formatted_text, thread_id)
+
             except Exception as e:
                 logger.error(f"Failed to process and send schedule to chat {sub.get('chat_id')} for entity '{sub['entity_name']}': {e}", exc_info=True)
     
@@ -137,42 +118,58 @@ async def check_for_schedule_updates(http_session: aiohttp.ClientSession, ruz_ap
     end_date_str = end_date.strftime("%Y.%m.%d")
 
     try:
-        all_subscriptions = await get_all_active_subscriptions()
-        if not all_subscriptions:
-            logger.info("Change detection job: No active subscriptions found.")
+        # 1. Fetch unique entities to avoid redundant API calls
+        unique_entities = await get_unique_active_subscription_entities()
+        if not unique_entities:
+            logger.info("Change detection job: No unique active entities found.")
             return
 
-        logger.info(f"Change detection job: Checking {len(all_subscriptions)} subscriptions.")
+        logger.info(f"Change detection job: Checking {len(unique_entities)} unique entities.")
 
-        for sub in all_subscriptions:
+        # 2. Loop through unique entities, not all subscriptions
+        for entity in unique_entities:
             try:
-                schedule_data = await ruz_api_client.get_schedule(
-                    sub['entity_type'], sub['entity_id'], start=start_date_str, finish=end_date_str
+                # Fetch schedule data ONCE per unique entity
+                new_schedule_data = await ruz_api_client.get_schedule(
+                    entity['entity_type'], entity['entity_id'], start=start_date_str, finish=end_date_str
                 )
-                new_hash = hashlib.sha256(json.dumps(schedule_data, sort_keys=True).encode()).hexdigest() # Use the same hashing
-                old_hash = sub.get('last_schedule_hash')
+                new_hash = hashlib.sha256(json.dumps(new_schedule_data, sort_keys=True).encode()).hexdigest()
 
-                # Notify only if there was a previous hash and it's different.
-                if old_hash and new_hash != old_hash:
-                    recipient_chat_id = sub['chat_id']
-                    thread_id = sub.get('message_thread_id')
-                    redis_schedule_key = f"schedule_data:{sub['id']}"
-                    old_schedule_data_raw = await redis_client.get_user_cache(sub['user_id'], redis_schedule_key)
+                # Get all subscriptions for this specific entity
+                subscriptions_for_entity = await get_subscriptions_for_entity(entity['entity_type'], entity['entity_id'])
+
+                # Use the first subscription's hash as a reference. They should all be the same for the same entity.
+                # If not, this logic will self-correct on the next run.
+                reference_hash = subscriptions_for_entity[0].get('last_schedule_hash') if subscriptions_for_entity else None
+
+                if reference_hash and new_hash != reference_hash:
+                    logger.info(f"Change detected for entity '{entity['entity_name']}'. Notifying {len(subscriptions_for_entity)} subscribers.")
+                    # Fetch old data from Redis using the first subscription as a reference
+                    ref_sub = subscriptions_for_entity[0]
+                    redis_key = f"schedule_data:{ref_sub['id']}"
+                    old_schedule_data_raw = await redis_client.get_user_cache(ref_sub['user_id'], redis_key)
                     old_schedule_data = json.loads(old_schedule_data_raw) if old_schedule_data_raw else None
 
-                    logger.info(f"Change detected for subscription ID {sub['id']} ({sub['entity_name']}). Notifying chat {recipient_chat_id}.")
-                    lang = await translator.get_language(sub['user_id'], sub['chat_id'])
-                    diff_text = diff_schedules(old_schedule_data, schedule_data, lang) if old_schedule_data else None
-                    if diff_text:
-                        header = translator.gettext(lang, "schedule_change_notification", entity_name=sub['entity_name'])
-                        await send_telegram_message(http_session, recipient_chat_id, f"{header}\n\n{diff_text}", thread_id)
+                    # Notify all subscribers for this entity
+                    for sub in subscriptions_for_entity:
+                        lang = await translator.get_language(sub['user_id'], sub['chat_id'])
+                        diff_text = diff_schedules(old_schedule_data, new_schedule_data, lang) if old_schedule_data else None
+                        if diff_text:
+                            header = translator.gettext(lang, "schedule_change_notification", entity_name=sub['entity_name'])
+                            await send_telegram_message(http_session, sub['chat_id'], f"{header}\n\n{diff_text}", sub.get('message_thread_id'))
 
-                await update_subscription_hash(sub['id'], new_hash)
-                await redis_client.set_user_cache(sub['user_id'], f"schedule_data:{sub['id']}", json.dumps(schedule_data), ttl=None)
+                # 3. Update state for ALL subscriptions of this entity
+                for sub in subscriptions_for_entity:
+                    await update_subscription_hash(sub['id'], new_hash)
+                    await redis_client.set_user_cache(sub['user_id'], f"schedule_data:{sub['id']}", json.dumps(new_schedule_data), ttl=None)
+
+                # 4. Stagger requests to avoid thundering herd
+                await asyncio.sleep(1 + random.uniform(0.5, 1.5))
+
             except RuzAPIError as e: # Be more specific with API errors
-                logger.warning(f"Change detection: RUZ API error for subscription ID {sub['id']}: {e}")
+                logger.warning(f"Change detection: RUZ API error for entity '{entity.get('entity_name')}': {e}")
             except Exception as e: # Catch other errors
-                logger.error(f"Change detection: Failed to process subscription ID {sub['id']} for user {sub['user_id']}: {e}", exc_info=True)
+                logger.error(f"Change detection: Failed to process entity '{entity.get('entity_name')}': {e}", exc_info=True)
     except Exception as e:
         logger.error(f"Critical error in check_for_schedule_updates job: {e}", exc_info=True)
 

@@ -1,7 +1,7 @@
 # bot/services/schedule_service.py
 
 from typing import List, Dict, Any
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from collections import defaultdict
 from ics import Calendar, Event
 from zoneinfo import ZoneInfo
@@ -18,53 +18,103 @@ to_add = {
     }
 names_shorter.update(to_add)
 
-def _format_lesson_for_diff(lesson: Dict[str, Any], lang: str) -> str:
-    """Formats a single lesson for display in a diff message."""
-    date_obj = datetime.strptime(lesson['date'], "%Y-%m-%d").date()
-    day_header = f"<b>{date_obj.strftime('%A, %d.%m.%Y')}</b>"
+def _format_lesson_details(lesson: Dict[str, Any], lang: str) -> str:
+    """Formats the details of a single lesson into a multi-line string, without the date header."""
     details = [
         hcode(f"{lesson['beginLesson']} - {lesson['endLesson']} | {lesson['auditorium']}"),
         f"{lesson['discipline']} ({names_shorter[lesson['kindOfWork']]})",
         f"<i>{translator.gettext(lang, 'lecturer_prefix')}: {lesson.get('lecturer_title', 'N/A').replace('_', ' ')}</i>"
     ]
-    return f"{day_header}\n" + "\n".join(details)
+    return "\n".join(details)
 
 def diff_schedules(old_data: List[Dict[str, Any]], new_data: List[Dict[str, Any]], lang: str) -> str | None:
     """Compares two schedule datasets and returns a human-readable diff."""
+    if not old_data and not new_data:
+        return None
+
+    # --- FIX: Sliding Window Problem ---
+    # Determine the overlapping date range to avoid flagging new days at the end of the window as "changes".
+    old_dates = {datetime.strptime(d['date'], "%Y-%m-%d").date() for d in old_data}
+    new_dates = {datetime.strptime(d['date'], "%Y-%m-%d").date() for d in new_data}
+    
+    # We only care about changes up to the last day that was present in the *old* data.
+    # Any day in the new data beyond this is part of the sliding window and should be ignored.
+    max_relevant_date = max(old_dates) if old_dates else (date.today() - timedelta(days=1))
+
+    # Filter new_data to only include lessons within the relevant timeframe.
+    relevant_new_data = [lesson for lesson in new_data if datetime.strptime(lesson['date'], "%Y-%m-%d").date() <= max_relevant_date]
+    
     old_lessons = {lesson['lessonOid']: lesson for lesson in old_data}
-    new_lessons = {lesson['lessonOid']: lesson for lesson in new_data}
+    new_lessons = {lesson['lessonOid']: lesson for lesson in relevant_new_data}
 
     added = [lesson for oid, lesson in new_lessons.items() if oid not in old_lessons]
     removed = [lesson for oid, lesson in old_lessons.items() if oid not in new_lessons]
     modified = []
 
     # Fields to check for modifications
-    fields_to_check = ['beginLesson', 'endLesson', 'auditorium', 'lecturer_title']
+    fields_to_check = ['beginLesson', 'endLesson', 'auditorium', 'lecturer_title', 'date']
 
     for oid, old_lesson in old_lessons.items():
         if oid in new_lessons:
             new_lesson = new_lessons[oid]
             changes = {}
             for field in fields_to_check:
-                if old_lesson.get(field) != new_lesson.get(field):
-                    changes[field] = (old_lesson.get(field), new_lesson.get(field))
+                old_val = old_lesson.get(field)
+                new_val = new_lesson.get(field)
+                if old_val != new_val:
+                    changes[field] = (old_val, new_val)
             if changes:
-                modified.append({'new': new_lesson, 'changes': changes})
+                modified.append({'old': old_lesson, 'new': new_lesson, 'changes': changes})
 
     if not added and not removed and not modified:
         return None
 
-    diff_parts = []
-    if added: diff_parts.append(f"<b>{translator.gettext(lang, 'schedule_change_added')}:</b>\n" + "\n\n".join([_format_lesson_for_diff(l, lang) for l in added]))
-    if removed: diff_parts.append(f"<b>{translator.gettext(lang, 'schedule_change_removed')}:</b>\n" + "\n\n".join([_format_lesson_for_diff(l, lang) for l in removed]))
-    if modified:
-        modified_texts = []
-        for mod in modified:
-            change_descs = [f"<i>{translator.gettext(lang, f'field_{f}')}: {hcode(v[0])} → {hcode(v[1])}</i>" for f, v in mod['changes'].items()]
-            modified_texts.append(f"{_format_lesson_for_diff(mod['new'], lang)}\n" + "\n".join(change_descs))
-        diff_parts.append(f"<b>{translator.gettext(lang, 'schedule_change_modified')}:</b>\n" + "\n\n".join(modified_texts))
+    # --- NEW: Group changes by date ---
+    changes_by_date = defaultdict(lambda: {'added': [], 'removed': [], 'modified': []})
+    for lesson in added: changes_by_date[lesson['date']]['added'].append(lesson)
+    for lesson in removed: changes_by_date[lesson['date']]['removed'].append(lesson)
+    for mod in modified: changes_by_date[mod['new']['date']]['modified'].append(mod)
 
-    return "\n\n---\n\n".join(diff_parts)
+    # --- NEW: Build the formatted output string ---
+    day_diffs = []
+    for date_str, changes in sorted(changes_by_date.items()):
+        date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+        day_of_week = translator.gettext(lang, f"day_{date_obj.weekday()}")
+        month_name = translator.gettext(lang, f"month_{date_obj.month-1}_gen")
+        day_header = f"<b>{day_of_week}, {date_obj.day} {month_name} {date_obj.year}</b>"
+        
+        day_parts = [day_header]
+
+        if changes['added']:
+            for lesson in changes['added']:
+                day_parts.append(f"\n✅ {translator.gettext(lang, 'schedule_change_added')}:\n{_format_lesson_details(lesson, lang)}")
+
+        if changes['removed']:
+            for lesson in changes['removed']:
+                day_parts.append(f"\n❌ {translator.gettext(lang, 'schedule_change_removed')}:\n{_format_lesson_details(lesson, lang)}")
+
+        if changes['modified']:
+            for mod in changes['modified']:
+                change_descs = []
+                for field, (old_val, new_val) in mod['changes'].items():
+                    # For date changes, format them nicely
+                    if field == 'date':
+                        old_date_obj = datetime.strptime(old_val, "%Y-%m-%d").date()
+                        new_date_obj = datetime.strptime(new_val, "%Y-%m-%d").date()
+                        old_val_str = old_date_obj.strftime('%d.%m.%Y')
+                        new_val_str = new_date_obj.strftime('%d.%m.%Y')
+                        change_descs.append(f"<i>{translator.gettext(lang, f'field_{field}')}: {hcode(old_val_str)} → {hcode(new_val_str)}</i>")
+                    else:
+                        change_descs.append(f"<i>{translator.gettext(lang, f'field_{field}')}: {hcode(old_val)} → {hcode(new_val)}</i>")
+                
+                modified_text = (f"\n🔄 {translator.gettext(lang, 'schedule_change_modified')}:\n"
+                                 f"{_format_lesson_details(mod['new'], lang)}\n"
+                                 f"{' '.join(change_descs)}")
+                day_parts.append(modified_text)
+        
+        day_diffs.append("\n".join(day_parts))
+
+    return "\n\n---\n\n".join(day_diffs) if day_diffs else None
     
 
 def format_schedule(schedule_data: List[Dict[str, Any]], lang: str, entity_name: str, entity_type: str, start_date: date, is_week_view: bool = False) -> str:

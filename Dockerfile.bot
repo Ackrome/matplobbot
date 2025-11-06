@@ -84,8 +84,9 @@ COPY requirements.txt .
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 # Install the local shared_lib package, then the rest of the requirements
-RUN pip install --no-cache-dir / && \
-    pip install --no-cache-dir -r requirements.txt
+# Install the local shared_lib package. This will also install its own dependencies (like asyncpg, aiohttp).
+RUN pip install --no-cache-dir /
+RUN pip install --no-cache-dir -r requirements.txt
 # --- END: CORRECTED VENV INSTALLATION BLOCK ---
 
 # Set environment variables for Puppeteer and Matplotlib

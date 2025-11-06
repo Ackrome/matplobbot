@@ -141,7 +141,7 @@
     "schedule_btn_group": "👥 Group",
     "schedule_btn_teacher": "👩‍🏫 Teacher",
     "schedule_btn_auditorium": "🚪 Auditorium",
-    "schedule_prompt_for_query_group": "Please enter the group name (e.g., ПМ23-1):",
+    "schedule_prompt_for_query_group": "Please enter the group name (e.g., `ПМ23-1`):",
     "schedule_search_started": "I've started your search. I'll send the results as a new message when they're ready.",
     "schedule_prompt_for_query_person": "Please enter the teacher's last name:",
     "schedule_prompt_for_query_auditorium": "Please enter the auditorium number (e.g., 501):",

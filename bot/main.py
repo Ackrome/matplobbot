@@ -7,25 +7,7 @@ from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
 
 
-# --- MONKEY PATCH FOR matplobblib ---
-# The matplobblib library uses the synchronous `requests` library on import,
-# which can block our async app and cause network errors like IncompleteRead.
-# We replace `requests.get` with an async-compatible version using `aiohttp`.
-def async_get_patch(url, **kwargs):
-    async def _get():
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, **kwargs) as response:
-                response.raise_for_status()
-                # Create a mock response object that mimics `requests.Response`
-                mock_response = requests.Response()
-                mock_response.status_code = response.status
-                mock_response._content = await response.read()
-                mock_response.encoding = response.charset
-                return mock_response
-    return asyncio.run(_get())
-
-requests.get = async_get_patch
-# --- END MONKEY PATCH ---
+\
 from .handlers import setup_handlers
 from .middleware import GroupMentionCommandMiddleware
 from shared_lib.i18n import translator
@@ -36,6 +18,7 @@ from shared_lib.services.university_api import create_ruz_api_client
 
 # Загрузка переменных окружения и настройка логгирования из app.logger
 load_dotenv()
+
 from . import logger # Импорт для инициализации настроек логгирования
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')

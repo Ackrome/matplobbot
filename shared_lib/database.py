@@ -230,23 +230,24 @@ async def set_onboarding_completed(user_id: int):
         await connection.execute("UPDATE users SET onboarding_completed = TRUE WHERE user_id = $1", user_id)
 
 # --- Schedule Subscriptions ---
-async def add_schedule_subscription(user_id: int, chat_id: int, message_thread_id: int | None, entity_type: str, entity_id: str, entity_name: str, notification_time: datetime.time) -> bool:
+async def add_schedule_subscription(user_id: int, chat_id: int, message_thread_id: int | None, entity_type: str, entity_id: str, entity_name: str, notification_time: datetime.time) -> int | None:
+    """Adds or updates a subscription and returns its ID."""
     async with pool.acquire() as connection:
         try:
-            await connection.execute('''
+            # Use RETURNING id to get the ID of the inserted or updated row.
+            subscription_id = await connection.fetchval('''
                 INSERT INTO user_schedule_subscriptions (user_id, chat_id, message_thread_id, entity_type, entity_id, entity_name, notification_time)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 ON CONFLICT (chat_id, entity_type, entity_id, notification_time) DO UPDATE SET
                     entity_name = EXCLUDED.entity_name,
-                    -- When the same time is re-added, ensure it's active
                     is_active = TRUE,
-                    -- Also update the user who initiated it, in case it changes
-                    user_id = EXCLUDED.user_id;
+                    user_id = EXCLUDED.user_id
+                RETURNING id;
             ''', user_id, chat_id, message_thread_id, entity_type, entity_id, entity_name, notification_time)
-            return True
+            return subscription_id
         except Exception as e:
             logger.error(f"Failed to add schedule subscription for user {user_id}: {e}", exc_info=True)
-            return False
+            return None
  
 async def get_user_subscriptions(user_id: int, page: int = 0, page_size: int = 5) -> tuple[list, int]:
     """
@@ -399,6 +400,28 @@ async def get_all_active_subscriptions() -> list:
             SELECT id, user_id, chat_id, message_thread_id, entity_type, entity_id, entity_name, last_schedule_hash
             FROM user_schedule_subscriptions WHERE is_active = TRUE
         """)
+        return [dict(row) for row in rows]
+
+async def get_unique_active_subscription_entities() -> list:
+    """Fetches all unique active subscription entities from the database."""
+    if not pool:
+        raise ConnectionError("Database pool is not initialized.")
+    async with pool.acquire() as connection:
+        rows = await connection.fetch("""
+            SELECT DISTINCT entity_type, entity_id, entity_name
+            FROM user_schedule_subscriptions WHERE is_active = TRUE
+        """)
+        return [dict(row) for row in rows]
+
+async def get_subscriptions_for_entity(entity_type: str, entity_id: str) -> list:
+    """Fetches all active subscriptions for a specific entity."""
+    if not pool:
+        raise ConnectionError("Database pool is not initialized.")
+    async with pool.acquire() as connection:
+        rows = await connection.fetch("""
+            SELECT id, user_id, chat_id, message_thread_id, entity_name, last_schedule_hash FROM user_schedule_subscriptions
+            WHERE is_active = TRUE AND entity_type = $1 AND entity_id = $2
+        """, entity_type, entity_id)
         return [dict(row) for row in rows]
 
 async def update_subscription_hash(subscription_id: int, new_hash: str):
