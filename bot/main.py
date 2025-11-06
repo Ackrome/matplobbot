@@ -27,6 +27,7 @@ def async_get_patch(url, **kwargs):
 requests.get = async_get_patch
 # --- END MONKEY PATCH ---
 
+
 from .handlers import setup_handlers
 from .middleware import GroupMentionCommandMiddleware
 from .config import ADMIN_USER_IDS
