@@ -29,11 +29,11 @@
 
 This project is a powerful, dual-component system designed for advanced interaction with programming content and real-time monitoring, all containerized with Docker for seamless deployment.
 
-1.  **Matplobbot (Telegram Bot)**: A sophisticated asynchronous bot built on `aiogram 3`. It serves as an intelligent gateway to programming libraries and educational materials. Its core features include interactive library browsing, full-text search, and a powerful on-demand rendering engine for LaTeX equations and Mermaid diagrams. All user interactions are meticulously logged to a shared SQLite database.
+1.  **Matplobbot (Telegram Bot)**: The primary user-facing service. A sophisticated asynchronous bot built on `aiogram 3` that serves as an intelligent gateway to programming libraries and educational materials. It handles all user commands, interactions, and on-demand rendering. All user interactions are logged to a shared PostgreSQL database.
+2.  **Scheduler Service**: A new, standalone asynchronous service responsible for all background and time-based tasks. Its primary role is to provide proactive daily schedule notifications to users, complete with intelligent change-detection to prevent spam.
+3.  **Stats Dashboard (FastAPI Web App)**: A real-time monitoring dashboard powered by `FastAPI`. It features a clean, responsive frontend built with vanilla JavaScript and `Chart.js`. The dashboard provides deep insights into bot usage statistics by querying the shared PostgreSQL database and streams live log events directly from the bot's log file via WebSockets.
 
-2.  **Stats Dashboard (FastAPI Web App)**: A real-time monitoring dashboard powered by `FastAPI`. It features a clean, responsive frontend built with vanilla JavaScript and `Chart.js`. The dashboard provides deep insights into bot usage statistics by querying the shared **PostgreSQL** database and streams live log events directly from the bot's log file via WebSockets.
-
-The entire ecosystem is orchestrated by Docker Compose, utilizing shared volumes for the database and logs, which ensures data consistency and perfect integration between the two services.
+The entire ecosystem is orchestrated by Docker Compose, utilizing shared volumes for the database and logs, which ensures data consistency and perfect integration between the three services.
 
 ## ✨ Key Features
 
@@ -59,6 +59,34 @@ The bot features a sophisticated pipeline for displaying `.md` files from GitHub
 | 📄 **HTML File** | Generates a fully self-contained `.html` file, bundling all necessary CSS and JS. Mermaid diagrams are interactive. |
 | ⚫ **MD File** | Sends the original, raw `.md` file without any processing. |
 
+#### 📅 University Schedule Integration
+The bot now integrates with the university's schedule API, offering a rich set of features for students and teachers.
+-   **Multi-Entity Search**: Users can search for schedules by group, teacher, or auditorium.
+-   **Interactive Calendar**: A full inline calendar keyboard allows users to easily select a specific date or navigate by month and year.
+-   **Daily & Weekly Views**: Users can view the schedule for a single day or an entire week.
+-   **Proactive Notifications**: Users can subscribe to a schedule (e.g., their group) and receive a push notification every day at a chosen time with the schedule for the next day.
+-   **Intelligent Change Detection**: The scheduler backend constantly monitors for changes. If a lesson is added, cancelled, or modified, subscribed users receive an immediate notification with a human-readable "diff" of what changed.
+
+##### Schedule pipe view:
+
+<div style="display: flex; justify-content: center; align-items: center; gap: 30px; flex-wrap: wrap; padding: 20px;">
+  <img src="image\notes\schedule_en_1.png" alt="Interactive Calendar" width="400">
+  <svg width="40" height="40" viewBox="0 0 24 24" style="margin: 0 10px;">
+    <path fill="#bfbfbfff" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z">
+  </svg>
+  <img src="image\notes\schedule_en_2.png" alt="Interactive Calendar" width="400">
+  <svg width="40" height="40" viewBox="0 0 24 24" style="margin: 0 10px;">
+    <path fill="#bfbfbfff" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
+  </svg>
+  <img src="image\notes\schedule_en_3.png" alt="Interactive Calendar" width="400">
+</div>
+
+##### Calendar view:
+
+<div align="center">
+  <img src="image\notes\calendar_screenshot.png" alt="Interactive Calendar" width="400">
+</div>
+
 #### ⚙️ Personalization & User Management
 -   **Favorites (`/favorites`)**: Bookmark useful code examples from your searches for quick access later.
 -   **Settings (`/settings`)**: A comprehensive inline menu allows users to:
@@ -76,7 +104,7 @@ The bot features a sophisticated pipeline for displaying `.md` files from GitHub
 The dashboard provides a live, data-rich view of the bot's health and user engagement.
 
 <div align="center">
-  <img src="https://github.com/Ackrome/matplobbot/blob/main/image/notes/Dashboard.png" alt="Dashboard Screenshot" width="800">
+  <img src="image/notes/Dashboard.png" alt="Dashboard Screenshot" width="800">
 </div>
 
 -   **Real-time Updates**: All statistical charts and counters update instantly via **WebSocket** connections, providing a true live monitoring experience.
@@ -88,6 +116,9 @@ The dashboard provides a live, data-rich view of the bot's health and user engag
     -   A line chart illustrating user activity over time.
 -   **Live Log Streaming**: A live feed of the `bot.log` file is streamed directly to the web UI, enabling real-time operational monitoring.
 -   **Modern UI**: A clean, responsive interface with automatic **light and dark theme** support.
+-   **Detailed User Profile Pages**: The dashboard is no longer just an aggregate view. Clicking on a user in the leaderboard navigates to a dedicated profile page showing their complete, paginated, sortable, and filterable action history.
+-   **CSV Export**: A user's entire action history can be exported to a CSV file directly from their profile page.
+-   **API for Deeper Analytics**: New API endpoints have been added to allow for deeper analysis, such as finding all users who have performed a specific action.
 
 ## 🛠️ Architecture & Tech Stack
 
@@ -107,11 +138,11 @@ The project is built on modern, asynchronous frameworks with a strong emphasis o
 | **Key Libraries** | `aiohttp`, `cachetools`, `python-dotenv` |
 
 ### Architectural Highlights
--   **Decoupled Services**: The bot and the web dashboard run in separate Docker containers but communicate through a shared database and log volume, creating a robust, microservice-like architecture.
--   **Modular Handlers**: The bot's logic is cleanly organized into feature-specific modules (`admin`, `rendering`, `settings`, etc.), each with its own `aiogram.Router`.
--   **Service Layer**: Complex business logic, such as rendering documents and interacting with the GitHub API, is abstracted into a dedicated `services` package.
+-   **Shared Core Library**: All common code (database, services, i18n, Redis client) is encapsulated in a `matplobbot-shared` library. This library is versioned and published to PyPI automatically, serving as a single source of truth for all services in the ecosystem.
+-   **Decoupled Services**: The project runs as three distinct services (Bot, API, Scheduler) in separate Docker containers. They communicate only through the shared PostgreSQL database and Redis cache, creating a robust, microservice-like architecture.
+-   **Manager Pattern & Dependency Injection**: The bot's logic is cleanly organized into feature-specific "Manager" classes (`ScheduleManager`, `GitHubManager`, etc.). Dependencies (like the `RuzAPIClient`) are injected at startup, promoting modular and testable code.
 -   **Asynchronous Everywhere**: From database calls (`asyncpg`) to external API requests (`aiohttp`), the entire stack is asynchronous to ensure high performance and scalability.
--   **Intelligent Caching**: In-memory `TTLCache` is used extensively to cache GitHub API responses, reducing rate-limiting and speeding up user-facing operations.
+-   **Persistent Caching with Redis**: User-specific data and schedule information are now cached in Redis, providing persistence across bot restarts and significantly improving performance.
 
 ## ⚙️ Installation & Setup
 
@@ -181,6 +212,9 @@ This is the recommended method for running the project.
 | `/start` | Initializes the bot and displays the main command keyboard. | Send to begin or reset your session. |
 | `/help` | Shows an interactive inline menu with descriptions of all available commands. | Send to get a quick overview of the bot's features. |
 | `/cancel` | Aborts any ongoing operation or conversation state. | Use if you get stuck waiting for input or want to return to the main menu. |
+| **University Schedule** | | |
+| `/schedule` | Starts an interactive search for a schedule (by group, teacher, etc.). | Send the command to begin the search process. |
+| `/myschedule` | Instantly displays today's schedule for your default (subscribed) group or teacher. | A one-click command for daily use. |
 | **Content Browsing & Search** | | |
 | `/matp_all` | Interactively browse the `matplobblib` library by modules and topics. | Send the command and navigate the library structure using inline buttons. |
 | `/matp_search` | Performs a full-text search for code examples within `matplobblib`. | Send the command, then type your search query (e.g., "line plot"). |
@@ -247,56 +281,52 @@ The project is built around a modern, secure, and fully automated CI/CD pipeline
 *   **Containerization**: Docker & Docker Compose
 *   **Secure Networking**: Tailscale
 
+
 #### The Workflow
 
-The entire process is event-driven, starting with a simple `git push` and ending with the new version of the application running live, with no manual intervention required.
+The entire process is event-driven and fully automated. It now includes automatic version bumping and publishing of the shared library before the application services are deployed.
 
 ```mermaid
 graph TD
     subgraph "GitHub (Public Cloud)"
-        A[Developer pushes to main branch] --> B{GitHub Actions Trigger};
+        A[Developer pushes to main] --> B{GitHub Actions: Auto-Version};
+        B --> |Commit back to main| C{GitHub Actions: Publish};
+        C --> |Pushes package| D[PyPI Repository];
+        C --> E{Build & Push Images};
+        E --> F[GitHub Container Registry];
     end
 
     subgraph "Your Proxmox Network (Private & Secure)"
         direction LR
-        C(Self-Hosted GitHub Runner VM)
-        D(Jenkins VM)
-        E(Application VM)
+        G(Self-Hosted Runner)
+        H(Jenkins VM)
+        I(Application VM)
 
-        C -- "Executes Job Locally" --> F{Test, Build & Push};
-        F -- "Pushes images" --> G[GitHub Container Registry];
-        F -- "Triggers Deploy via Tailscale IP" --> D;
-        D -- "Executes Deploy via SSH" --> E;
+        E -- "Triggers Deploy via Tailscale" --> H;
+        H -- "Executes Deploy via SSH" --> I;
     end
-    
-    B -- "Assigns Job" --> C;
-    G -- "Images are pulled by App VM" --> E;
 
-    subgraph "Deployment Steps on Application VM"
+    B -- "Assigns Job" --> G;
+
+    subgraph "Deployment on Application VM"
         direction TB
-        E --> H{1. Jenkins creates .env file from secrets};
-        H --> I{2. Pull new Docker images};
-        I --> J{3. docker-compose up -d};
-        J --> K[🚀 New version is live!];
+        I --> J{1. Git Pull};
+        J --> K{2. Jenkins creates .env};
+        K --> L{3. Pull new images};
+        L --> M{4. docker-compose up -d};
+        M --> N[🚀 New version is live!];
     end
 ```
 
 #### Step-by-Step Breakdown:
 
-1.  **Commit & Push**: A developer pushes new code to the `main` branch on the GitHub repository.
-2.  **Job Assignment**: GitHub Actions detects the push and assigns a new workflow job to the registered **self-hosted runner**.
-3.  **CI on Self-Hosted Runner**: The runner, running on a dedicated VM within your private network, picks up the job. It performs the **Continuous Integration** steps locally:
-    *   Checks out the source code.
-    *   Sets up the Docker Buildx environment.
-    *   Builds the `matplobbot-bot` and `matplobbot-api` Docker images.
-    *   Pushes the newly tagged images to the GitHub Container Registry (GHCR).
-4.  **Secure Trigger for CD**: Upon successful completion of the CI stage, a subsequent step in the same workflow on the self-hosted runner sends a secure webhook (`cURL` request) to the Jenkins server. This communication is safe because the runner and Jenkins are on the same private Tailscale network.
-5.  **Deployment Orchestration**: Jenkins receives the webhook and triggers the `matplobbot-deploy` pipeline. This **Continuous Deployment** pipeline performs the final steps:
-    *   It securely loads the application's production secrets (like `BOT_TOKEN`) from its encrypted credentials store.
-    *   It connects to the dedicated **Application VM** via SSH.
-    *   It dynamically writes the secrets into a `.env` file on the Application VM.
-    *   It executes the `deploy.sh` script on the Application VM.
-6.  **Final Rollout**: The `deploy.sh` script orchestrates the final rollout by:
-    *   Pulling the new Docker images from GHCR.
-    *   Running `docker-compose up -d` to gracefully restart the services with the updated images and configuration.
-    *   Running `docker compose up -d` to gracefully restart the services with the updated images and configuration.
+1.  **Commit & Push**: A developer pushes new code to the `main` branch.
+2.  **Auto-Versioning**: A GitHub Actions job automatically runs `version_bumper.py`, increments the patch version, and pushes a version commit (e.g., `chore(release): version v0.5.1`) back to the `main` branch.
+3.  **Publish Library**: Triggered by the new version commit, a second job builds the `matplobbot-shared` library and publishes the new version to **PyPI**.
+4.  **Build & Push Images**: A third job waits for the library to be published. It then builds new Docker images for the `bot`, `api`, and `scheduler` services, installing the newly published library from PyPI. The images are tagged and pushed to GitHub Container Registry (GHCR).
+5.  **Secure Trigger for CD**: Upon successful image push, the workflow triggers a job on the **self-hosted runner**, which securely sends a webhook to the Jenkins server over the private Tailscale network.
+6.  **Deployment Orchestration**: The Jenkins pipeline takes over, connecting to the **Application VM** via SSH to:
+    *   Pull the latest changes from the Git repository (to get the updated `docker-compose.prod.yml`).
+    *   Securely create the `.env` file from Jenkins credentials.
+    *   Execute the `deploy.sh` script.
+7.  **Final Rollout**: The `deploy.sh` script pulls the new Docker images from GHCR and gracefully restarts all services using `docker compose up -d`.
