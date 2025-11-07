@@ -14,14 +14,15 @@ router = Router()
 def setup_handlers(dp: Router, ruz_api_client):
     """Function to setup all handlers"""
     # Instantiate all specialized managers first
-    schedule_manager = ScheduleManager(ruz_api_client)
     github_manager = GitHubManager()
     library_manager = LibraryManager()
     admin_manager = AdminManager()
     rendering_manager = RenderingManager()
-    settings_manager = SettingsManager(schedule_manager) # Inject dependency
-    # Instantiate the base manager, injecting other managers as dependencies
-    base_manager = BaseManager(library_manager, github_manager, schedule_manager, rendering_manager, admin_manager, settings_manager) # No change needed here
+    schedule_manager = ScheduleManager(ruz_api_client) # schedule_manager doesn't depend on base/settings
+
+    settings_manager = SettingsManager(schedule_manager) # Instantiate SettingsManager first, passing schedule_manager
+    base_manager = BaseManager(library_manager, github_manager, schedule_manager, rendering_manager, admin_manager, settings_manager)
+    settings_manager.set_base_manager(base_manager) # Inject base_manager into settings_manager
 
     # Include all routers. The order can matter for overlapping filters, so base/onboarding goes first.
     dp.include_router(base_manager.router)

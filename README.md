@@ -273,43 +273,38 @@ This is the recommended method for running the project.
 
 ### On-boarding users
 ```mermaid
-graph TD
-    subgraph "User's First Interaction"
-        A[User sends /start] --> B{Is onboarding_completed == false?};
+graph TD;
+    subgraph "Start"
+        A[User sends /start] --> B{Is onboarding_completed?};
     end
 
-    B -- Yes --> C[Onboarding Starts: Show Welcome Message & 'Next' button];
-    B -- No --> Z[Show Regular Welcome Message];
+    B -- No --> C[Show Welcome & 'Next' button];
+    B -- Yes --> Z[Show Regular Welcome];
 
     C --> D{User clicks 'Next'};
-    D --> E[Show GitHub Feature & 'Add Repository' button];
+    D --> E[Show GitHub Feature];
 
-    subgraph "Feature Interaction 1: GitHub"
-        E --> F{User clicks 'Add Repository'};
+    subgraph "GitHub Step"
+        E --> F["'Add Repository' button (manage_repos)"];
+        E --> H["'Next' button (onboarding_next)"];
         F --> G[User interacts with Repo Management];
-        G --> H{User clicks 'Back to Tour'};
+        G --> H;
     end
 
-    E --> H;
+    H --> I{User clicks 'Next'};
+    I --> J[Show Library Feature & 'Next' button];
+    J --> K{User clicks 'Next'};
+    K --> L[Show Rendering Feature & 'Next' button];
+    L --> M{User clicks 'Next'};
+    M --> N[Show Schedule Feature & 'Next' button];
+    N --> O{User clicks 'Next'};
+    O --> P[Show Final Message & 'Finish' button];
+    P --> Q{User clicks 'Finish'};
+    Q --> R[Set onboarding_completed = true];
+    R --> S[Show Main Menu Keyboard];
 
-    H --> I[Show Library Feature & 'Next' button];
-    I --> J[Show Rendering Feature & 'Try LaTeX' button];
-
-    subgraph "Feature Interaction 2: Rendering"
-        J --> K{User can try LaTeX};
-    end
-
-    J --> L{User clicks 'Next'};
-    I --> L;
-
-    L --> M[Show Final Message & 'Finish Tour' button]
-
-    M --> N{User clicks 'Finish Tour'};
-    N --> O[Set onboarding_completed = true];
-    O --> P[Show Main Menu Keyboard];
-
-    style Z fill:#f9f,stroke:#333,stroke-width:2px
-    style P fill:#ccf,stroke:#333,stroke-width:2px
+    style Z fill:#f9f,stroke:#333,stroke-width:2px;
+    style S fill:#ccf,stroke:#333,stroke-width:2px;
 ```
 
 ### 🚀 CI/CD Pipeline

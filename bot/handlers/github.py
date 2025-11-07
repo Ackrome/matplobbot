@@ -51,7 +51,7 @@ class GitHubManager:
         self.router.callback_query(F.data.startswith("md_search_page:"))(self.cq_md_search_pagination)
         self.router.callback_query(F.data.startswith("show_md_hash:"))(self.cq_show_md_result)
         # Repo Management
-        self.router.callback_query(F.data == "manage_repos", StateFilter(None, "onboarding:step2"))(self.cq_manage_repos)
+        self.router.callback_query(F.data == "manage_repos")(self.cq_manage_repos)
         self.router.callback_query(F.data == "repo_add_new")(self.cq_add_new_repo_prompt)
         self.router.message(RepoManagement.add_repo)(self.process_add_repo)
         self.router.callback_query(F.data.startswith("repo_del_hash:"))(self.cq_delete_repo)
@@ -299,16 +299,21 @@ class GitHubManager:
     async def _show_repo_management_menu(self, message: Message, user_id: int, state: FSMContext, is_edit: bool = False):
         """Helper to display the repo management menu."""
         lang = await translator.get_language(user_id, message.chat.id)
-        keyboard = await kb.get_repo_management_keyboard(user_id, state)
+        keyboard = await kb.get_repo_management_keyboard(user_id, state, message.chat.id)
         text = translator.gettext(lang, "repo_management_header")
         if is_edit:
-            await message.edit_text(text, reply_markup=keyboard)
+            try:
+                await message.edit_text(text, reply_markup=keyboard)
+            except TelegramBadRequest as e:
+                logger.warning(f"Failed to edit message in _show_repo_management_menu: {e}")
+                # Fallback to sending a new message if editing fails
+                await message.answer(text, reply_markup=keyboard)
         else:
             await message.answer(text, reply_markup=keyboard)
 
     async def cq_manage_repos(self, callback: CallbackQuery, state: FSMContext):
+        await callback.answer() # Acknowledge the callback immediately
         await self._show_repo_management_menu(callback.message, callback.from_user.id, state, is_edit=True)
-        await callback.answer()
 
     async def cq_add_new_repo_prompt(self, callback: CallbackQuery, state: FSMContext):
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)

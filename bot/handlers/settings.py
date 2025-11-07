@@ -6,11 +6,21 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton, Message, CallbackQuery
 from types import SimpleNamespace
 import re, datetime
-
-from shared_lib.database import get_user_settings, get_user_repos, update_user_settings_db, get_user_subscriptions, remove_schedule_subscription, get_chat_subscriptions, toggle_subscription_status, update_subscription_notification_time, get_chat_settings, update_chat_settings_db
+import asyncpg # Import asyncpg to catch specific DB errors
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .base import BaseManager # Only for type checking
+    from .schedule import ScheduleManager
+from aiogram import Bot # Import Bot for mock_callback
+from shared_lib.database import get_user_settings, get_user_repos, update_user_settings_db, get_user_subscriptions, remove_schedule_subscription, get_chat_subscriptions, toggle_subscription_status, update_subscription_notification_time, get_chat_settings, update_chat_settings_db, SubscriptionConflictError, delete_all_user_data
 from shared_lib.i18n import translator
-from .schedule import ScheduleManager
 from .admin import AdminOrCreatorFilter
+
+import logging
+logger = logging.getLogger(__name__)
+
+from aiogram import types
+
 
 
 AVAILABLE_LANGUAGES = {"en": "English", "ru": "Русский"}
@@ -21,11 +31,15 @@ class SettingsStates(StatesGroup):
     awaiting_new_sub_time = State()
 
 class SettingsManager:
-    def __init__(self, schedule_manager: ScheduleManager):
+    def __init__(self, schedule_manager: 'ScheduleManager'):
         self.router = Router()
         self.schedule_manager = schedule_manager
+        self.base_manager: 'BaseManager' | None = None # Will be set later
         self._register_handlers()
         self.AVAILABLE_LANGUAGES = AVAILABLE_LANGUAGES
+
+    def set_base_manager(self, base_manager: 'BaseManager'):
+        self.base_manager = base_manager
 
     def _register_handlers(self):
         # Main settings entry points for private and group chats
@@ -65,6 +79,56 @@ class SettingsManager:
 
         # Handler for when user provides the new time
         self.router.message(SettingsStates.awaiting_new_sub_time)(self.process_new_subscription_time)
+
+        # Handler for restarting the onboarding tour
+        self.router.callback_query(F.data == "restart_onboarding")(self.cq_restart_onboarding_prompt)
+        self.router.callback_query(F.data == "restart_onboarding_confirm")(self.cq_confirm_restart_onboarding)
+
+        # Handlers for deleting all user data
+        self.router.callback_query(F.data == "delete_my_data")(self.cq_delete_my_data_prompt)
+        self.router.callback_query(F.data == "delete_my_data_confirm")(self.cq_confirm_delete_my_data)
+
+    async def cq_restart_onboarding_prompt(self, callback: CallbackQuery):
+        """Asks the user to confirm restarting the onboarding tour."""
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            InlineKeyboardButton(text=translator.gettext(lang, "btn_confirm_restart"), callback_data="restart_onboarding_confirm"),
+            InlineKeyboardButton(text=translator.gettext(lang, "btn_cancel"), callback_data="back_to_settings")
+        )
+        await callback.message.edit_text(
+            translator.gettext(lang, "settings_restart_onboarding_confirm"),
+            reply_markup=builder.as_markup()
+        )
+        await callback.answer()
+
+    async def cq_confirm_restart_onboarding(self, callback: CallbackQuery, state: FSMContext):
+        """Handles the actual restart of the onboarding process."""
+        await state.clear() # Clear any previous state
+        await self.base_manager.onboarding_welcome(callback, state)
+
+    async def cq_delete_my_data_prompt(self, callback: CallbackQuery):
+        """Asks the user for final confirmation before deleting all their data."""
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            InlineKeyboardButton(text=translator.gettext(lang, "btn_confirm_delete_all_data"), callback_data="delete_my_data_confirm"),
+            InlineKeyboardButton(text=translator.gettext(lang, "btn_cancel"), callback_data="back_to_settings")
+        )
+        await callback.message.edit_text(translator.gettext(lang, "settings_delete_my_data_confirm"), reply_markup=builder.as_markup())
+        await callback.answer()
+
+    async def cq_confirm_delete_my_data(self, callback: CallbackQuery):
+        """Handles the actual deletion of all user data."""
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id, callback.message.chat.id)
+        success = await delete_all_user_data(user_id)
+        if success:
+            await callback.message.edit_text(translator.gettext(lang, "delete_my_data_success"))
+        else:
+            await callback.message.edit_text(translator.gettext(lang, "delete_my_data_error"))
+        await callback.answer()
+
 
     async def get_settings_keyboard(self, user_id: int) -> InlineKeyboardBuilder:
         """Creates the main inline keyboard for user settings."""
@@ -115,6 +179,12 @@ class SettingsManager:
 
         # Schedule Subscriptions
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "settings_manage_subscriptions_btn"), callback_data="manage_personal_subscriptions"))
+
+        # Restart Onboarding Tour
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "settings_restart_onboarding_btn"), callback_data="restart_onboarding"))
+
+        # Delete all user data
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "settings_delete_my_data_btn"), callback_data="delete_my_data"))
 
         return builder
 
@@ -269,14 +339,16 @@ class SettingsManager:
             target_label = "👤 Private" if is_private else "👥 Group"
             
             # Create a more descriptive button text
-            button_text = f"{status_emoji} {sub['entity_name']} ({sub['notification_time']}) -> {target_label}"
+            button_text = f"{status_emoji} {sub['entity_name']}"
             
             toggle_button_text = translator.gettext(lang, "btn_disable") if sub['is_active'] else translator.gettext(lang, "btn_enable")
             builder.row(
                 InlineKeyboardButton(text=button_text, callback_data="noop"),
                 InlineKeyboardButton(text=toggle_button_text, callback_data=f"psub_toggle:{sub['id']}:{page}"),
-                InlineKeyboardButton(text="⏰", callback_data=f"psub_time:{sub['id']}:{page}"),
-                InlineKeyboardButton(text=translator.gettext(lang, "btn_delete"), callback_data=f"psub_del:{sub['id']}:{page}")
+                InlineKeyboardButton(text=f"⏰ {sub['notification_time']}", callback_data=f"psub_time:{sub['id']}:{page}"),
+                InlineKeyboardButton(text=translator.gettext(lang, "btn_delete"), callback_data=f"psub_del:{sub['id']}:{page}"),
+                InlineKeyboardButton(text=target_label, callback_data="noop"),
+
             )
         total_pages = (total_count + SUBSCRIPTIONS_PER_PAGE - 1) // SUBSCRIPTIONS_PER_PAGE
         if total_pages > 1:
@@ -299,7 +371,7 @@ class SettingsManager:
             builder.row(
                 InlineKeyboardButton(text=button_text, callback_data="noop"),
                 InlineKeyboardButton(text=toggle_button_text, callback_data=f"csub_toggle:{sub['id']}:{page}"),
-                InlineKeyboardButton(text="⏰", callback_data=f"csub_time:{sub['id']}:{page}"),
+                InlineKeyboardButton(text=f"⏰ {sub['notification_time']}", callback_data=f"csub_time:{sub['id']}:{page}"),
                 InlineKeyboardButton(text=translator.gettext(lang, "btn_delete"), callback_data=f"csub_del:{sub['id']}:{page}")
             )
         total_pages = (total_count + SUBSCRIPTIONS_PER_PAGE - 1) // SUBSCRIPTIONS_PER_PAGE
@@ -373,8 +445,8 @@ class SettingsManager:
         user_id, lang = callback.from_user.id, await translator.get_language(callback.from_user.id)
         try:
             _, subscription_id_str, page_str = callback.data.split(":")
-            await state.set_state(SettingsStates.awaiting_new_sub_time)
-            await state.update_data(sub_id=int(subscription_id_str), page=int(page_str), is_chat_admin=False)
+            await state.set_state(SettingsStates.awaiting_new_sub_time) # Set state first
+            await state.update_data(sub_id=int(subscription_id_str), page=int(page_str), is_chat_admin=False, original_chat_id=callback.message.chat.id, original_message_id=callback.message.message_id)
             await callback.message.edit_text(translator.gettext(lang, "subscription_change_time_prompt"))
             await callback.answer()
         except (ValueError, IndexError):
@@ -391,7 +463,7 @@ class SettingsManager:
         except (ValueError, IndexError):
             await callback.answer(translator.gettext(lang, "subscription_info_outdated"), show_alert=True)
 
-    async def process_new_subscription_time(self, message: Message, state: FSMContext):
+    async def process_new_subscription_time(self, message: Message, state: FSMContext, bot: Bot):
         user_id, lang = message.from_user.id, await translator.get_language(message.from_user.id, message.chat.id)
         time_str = message.text.strip()
 
@@ -403,24 +475,39 @@ class SettingsManager:
             new_time = datetime.datetime.strptime(time_str, "%H:%M").time()
             state_data = await state.get_data()
             sub_id, page, is_chat_admin = state_data['sub_id'], state_data['page'], state_data['is_chat_admin']
+            original_chat_id = state_data['original_chat_id']
+            original_message_id = state_data['original_message_id']
             
             updated_entity_name = await update_subscription_notification_time(sub_id, new_time, user_id, is_chat_admin)
             
             if updated_entity_name:
                 await message.answer(translator.gettext(lang, "subscription_time_updated", entity_name=updated_entity_name, time_str=time_str))
+                
+                # Delete the user's message to keep the chat clean
+                try:
+                    await message.delete()
+                except TelegramBadRequest as e:
+                    logger.warning(f"Could not delete user's time message: {e}")
+
                 # Create a mock object that mimics a CallbackQuery to refresh the menu.
                 # This is necessary because the target handlers expect a CallbackQuery object, not a Message.
                 mock_callback = SimpleNamespace(
-                    message=message,  # The handler will access callback.message
+                    message=types.Message(chat=types.Chat(id=original_chat_id, type='private'), message_id=original_message_id, date=datetime.datetime.now()), # Reference the bot's message
                     from_user=message.from_user,
+                    bot=bot, # Pass the bot instance
                     data=f"psub_page:{page}" if not is_chat_admin else f"csub_page:{page}"
                 )
                 if is_chat_admin: await self.cq_manage_chat_subscriptions(mock_callback, state)
-                else: await self.cq_manage_personal_subscriptions(mock_callback, state)
+                else: await self.cq_manage_personal_subscriptions(mock_callback, state) # This will refresh the menu
             else:
-                await message.answer(translator.gettext(lang, "subscription_info_outdated"))
+                await message.answer(translator.gettext(lang, "subscription_update_failed_general")) # Use answer instead of reply
+        except SubscriptionConflictError:
+            await message.answer(translator.gettext(lang, "subscription_time_conflict_error")) # Use answer instead of reply
         except ValueError:
-            await message.reply(translator.gettext(lang, "schedule_invalid_time_value"))
+            await message.answer(translator.gettext(lang, "schedule_invalid_time_value")) # Use answer instead of reply
+        except Exception as e: # Catch any other unexpected errors during DB operation
+            logging.error(f"Unexpected error updating subscription time for sub {sub_id}: {e}", exc_info=True)
+            await message.answer(translator.gettext(lang, "subscription_update_failed_general")) # Use answer instead of reply
         finally:
             await state.clear()
 

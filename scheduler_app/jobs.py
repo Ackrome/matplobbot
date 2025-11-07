@@ -86,9 +86,6 @@ async def send_daily_schedules(http_session: aiohttp.ClientSession, ruz_api_clie
                 # The check_for_schedule_updates job is responsible for diffs.
                 # We will just format and send.
 
-                old_hash_for_log = sub.get('last_schedule_hash')
-                logger.debug(f"Sub ID {sub['id']}: New hash={new_hash[:8]}, Old hash={old_hash_for_log[:8] if old_hash_for_log else 'None'}. Old data in Redis: {'Yes' if old_schedule_data else 'No'}.")
-                
                 lang = await translator.get_language(sub['user_id'], sub['chat_id'])
                 recipient_chat_id = sub['chat_id']
                 thread_id = sub.get('message_thread_id')

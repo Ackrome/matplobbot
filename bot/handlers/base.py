@@ -18,7 +18,10 @@ from .schedule import ScheduleManager
 from .rendering import RenderingManager, LatexRender, MermaidRender
 from .admin import AdminManager, AdminPermissionError
 from aiogram import types
-from .settings import SettingsManager # Keep this for type hinting
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .settings import SettingsManager # Only for type checking
+
 from shared_lib.i18n import translator
 
 class Onboarding(Filter):
@@ -52,7 +55,7 @@ class BaseManager:
         schedule_manager: ScheduleManager,
         rendering_manager: RenderingManager,
         admin_manager: AdminManager,
-        settings_manager: SettingsManager # This is correct
+        settings_manager: 'SettingsManager' # Use forward reference for runtime
     ):
         self.router = Router()
         self.library_manager = library_manager
@@ -65,12 +68,14 @@ class BaseManager:
 
     def _register_handlers(self):
         # Onboarding
-        self.router.message(CommandStart(), Onboarding())(self.command_start_onboarding)
-        self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:step1"))(self.onboarding_step2)
-        self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:step2"))(self.onboarding_step3)
-        self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:step3"))(self.onboarding_step4)
-        self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:step4"))(self.onboarding_step5)
-        self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:step5"))(self.onboarding_finish)
+        self.router.message(CommandStart(), Onboarding())(self.onboarding_welcome)
+        self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:welcome"))(self.onboarding_github)
+        self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:github"))(self.onboarding_library)
+        self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:library"))(self.onboarding_rendering)
+        self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:rendering"))(self.onboarding_schedule)
+        self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:schedule"))(self.onboarding_final)
+        self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:final"))(self.onboarding_finish)
+        self.router.callback_query(F.data == "onboarding_skip", StateFilter("onboarding:welcome"))(self.onboarding_skip)
         # Base Commands
         # Private chat handlers
         self.router.message(CommandStart(), F.chat.type == "private")(self.command_start_regular)
@@ -94,8 +99,14 @@ class BaseManager:
         self.router.error(F.exception.is_(AdminPermissionError))(self.handle_admin_permission_error)
 
 
-    async def command_start_onboarding(self, message: Message, state: FSMContext):
-        user = message.from_user
+    async def onboarding_welcome(self, event: Message | CallbackQuery, state: FSMContext):
+        """Handles the very first step of the onboarding tour."""
+        if isinstance(event, CallbackQuery):
+            user = event.from_user
+            message = event.message
+        else: # It's a Message
+            user = event.from_user
+            message = event
         user_id = user.id
 
         # --- Automatic Language Detection for New Users ---
@@ -111,38 +122,57 @@ class BaseManager:
         
         # Proceed with onboarding using the detected (or default) language
         lang = await translator.get_language(user_id, message.chat.id)
-        await state.set_state("onboarding:step1")
-        builder = InlineKeyboardBuilder().row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="onboarding_next"))
-        await message.answer(translator.gettext(lang, "start_onboarding_1"), reply_markup=builder.as_markup())
+        await state.set_state("onboarding:welcome") # Ensure state is set for the first step
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="onboarding_next"))
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_skip"), callback_data="onboarding_skip"))
+        
+        # Edit the message if it's a callback, otherwise send a new one.
+        if isinstance(event, CallbackQuery):
+            await message.edit_text(translator.gettext(lang, "start_onboarding_1"), reply_markup=builder.as_markup())
+        else:
+            await message.answer(translator.gettext(lang, "start_onboarding_1"), reply_markup=builder.as_markup())
 
-    async def onboarding_step2(self, callback: CallbackQuery, state: FSMContext):
+    async def onboarding_github(self, callback: CallbackQuery, state: FSMContext):
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
-        await state.set_state("onboarding:step2")
-        builder = InlineKeyboardBuilder().row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_add_repo"), callback_data="manage_repos"))
+        await state.set_state("onboarding:github")
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_add_repo"), callback_data="manage_repos"))
+        # Add a "Next" button to allow skipping this step
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="onboarding_next"))
         await callback.message.edit_text(translator.gettext(lang, "start_onboarding_2"), reply_markup=builder.as_markup())
         await callback.answer()
 
-    async def onboarding_step3(self, callback: CallbackQuery, state: FSMContext):
+    async def onboarding_library(self, callback: CallbackQuery, state: FSMContext):
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
-        await state.set_state("onboarding:step3")
+        await state.set_state("onboarding:library")
         builder = InlineKeyboardBuilder()
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_browse_library"), callback_data="help_cmd_matp_all"))
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="onboarding_next"))
         await callback.message.edit_text(translator.gettext(lang, "start_onboarding_3"), reply_markup=builder.as_markup())
         await callback.answer()
 
-    async def onboarding_step4(self, callback: CallbackQuery, state: FSMContext):
+    async def onboarding_rendering(self, callback: CallbackQuery, state: FSMContext):
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
-        await state.set_state("onboarding:step4")
+        await state.set_state("onboarding:rendering")
         builder = InlineKeyboardBuilder()
         builder.add(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_try_latex"), callback_data="help_cmd_latex"))
         builder.add(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="onboarding_next"))
         await callback.message.edit_text(translator.gettext(lang, "start_onboarding_4"), reply_markup=builder.as_markup())
         await callback.answer()
 
-    async def onboarding_step5(self, callback: CallbackQuery, state: FSMContext):
+    async def onboarding_schedule(self, callback: CallbackQuery, state: FSMContext):
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
-        await state.set_state("onboarding:step5")
+        await state.set_state("onboarding:schedule")
+        builder = InlineKeyboardBuilder()
+        builder.add(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_try_schedule"), callback_data="help_cmd_schedule"))
+        builder.add(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="onboarding_next"))
+        await callback.message.edit_text(translator.gettext(lang, "start_onboarding_schedule"), reply_markup=builder.as_markup())
+        await callback.answer()
+
+    async def onboarding_final(self, callback: CallbackQuery, state: FSMContext):
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
+        await state.set_state("onboarding:final")
         builder = InlineKeyboardBuilder().row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_finish"), callback_data="onboarding_next"))
         await callback.message.edit_text(translator.gettext(lang, "start_onboarding_5"), reply_markup=builder.as_markup())
         await callback.answer()
@@ -153,6 +183,15 @@ class BaseManager:
         await database.set_onboarding_completed(user_id)
         await callback.message.delete() # Clean up the onboarding message
         await callback.message.answer(translator.gettext(lang, "choose_next_command"), reply_markup=await kb.get_main_reply_keyboard(user_id))
+        await callback.answer()
+
+    async def onboarding_skip(self, callback: CallbackQuery, state: FSMContext):
+        user_id, lang = callback.from_user.id, await translator.get_language(callback.from_user.id, callback.message.chat.id)
+        await state.clear()
+        await database.set_onboarding_completed(user_id)
+        await callback.message.delete() # Clean up the onboarding message
+        await callback.message.answer(translator.gettext(lang, "start_welcome", full_name=callback.from_user.full_name), reply_markup=await kb.get_main_reply_keyboard(user_id))
+        await callback.answer(translator.gettext(lang, "onboarding_skipped"))
         await callback.answer()
 
     async def command_start_regular(self, message: Message):

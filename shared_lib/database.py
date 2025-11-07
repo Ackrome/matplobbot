@@ -28,6 +28,10 @@ async def init_db_pool():
             logger.error(f"Failed to create database connection pool: {e}", exc_info=True)
             raise
 
+class SubscriptionConflictError(Exception):
+    """Raised when updating a subscription would violate a unique constraint."""
+    pass
+
 async def close_db_pool():
     global pool
     if pool:
@@ -173,6 +177,19 @@ async def update_user_settings_db(user_id: int, settings: dict):
 async def update_chat_settings_db(chat_id: int, settings: dict):
     async with pool.acquire() as connection:
         await connection.execute("UPDATE chat_settings SET settings = $1 WHERE chat_id = $2", json.dumps(settings), chat_id)
+
+async def delete_all_user_data(user_id: int) -> bool:
+    """
+    Deletes a user and all their associated data from the database.
+    This leverages ON DELETE CASCADE constraints on foreign keys.
+    Returns True on success, False otherwise.
+    """
+    if not pool:
+        raise ConnectionError("Database pool is not initialized.")
+    async with pool.acquire() as connection:
+        # Deleting the user from the 'users' table will cascade to all other tables.
+        result = await connection.execute("DELETE FROM users WHERE user_id = $1", user_id)
+        return result.endswith('1') # "DELETE 1" indicates one row was deleted.
 
 # --- Favorites ---
 async def add_favorite(user_id: int, code_path: str):

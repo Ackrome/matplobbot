@@ -50,6 +50,9 @@ for submodule_name in matplobblib.submodules:
     except NameError as e: # <-- Ловим конкретно эту ошибку
         logger.error(f"КРИТИЧЕСКАЯ ОШИБКА в библиотеке matplobblib, подмодуль '{submodule_name}' не будет загружен: {e}")
         continue
+    except KeyError as e:
+        logger.error(f"КРИТИЧЕСКАЯ ОШИБКА в библиотеке matplobblib, подмодуль '{submodule_name}' не будет загружен: {e}")
+        continue
     except Exception as e:
         logger.error(f"Ошибка генерации данных для подмодуля {submodule_name}: {e}", exc_info=True)
 
@@ -118,9 +121,9 @@ def get_code_action_keyboard(code_path: str) -> InlineKeyboardMarkup:
     )
     return builder.as_markup()
 
-async def get_repo_management_keyboard(user_id: int, state: FSMContext | None = None) -> InlineKeyboardMarkup:
+async def get_repo_management_keyboard(user_id: int, state: FSMContext | None = None, chat_id: int | None = None) -> InlineKeyboardMarkup:
     """Creates an inline keyboard for managing user repositories."""
-    lang = await translator.get_language(user_id)
+    lang = await translator.get_language(user_id, chat_id)
     repos = await database.get_user_repos(user_id)
     builder = InlineKeyboardBuilder()
     current_state_str = await state.get_state() if state else None
@@ -136,7 +139,7 @@ async def get_repo_management_keyboard(user_id: int, state: FSMContext | None = 
     builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_add_repo"), callback_data="repo_add_new"))
     
     # Conditionally add the correct "back" button
-    if current_state_str == "onboarding:step2":
+    if current_state_str == "onboarding:github":
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_back_to_tour"), callback_data="onboarding_next"))
     else:
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "back_to_settings"), callback_data="back_to_settings"))
