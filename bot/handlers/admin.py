@@ -55,14 +55,12 @@ class AdminOrCreatorFilter(Filter):
 class AdminManager:
     def __init__(self):
         self.router = Router()
-        # Apply the AdminFilter to all handlers in this router
-        self.router.message.filter(AdminFilter())
-        self.router.callback_query.filter(AdminFilter())
         self._register_handlers()
 
     def _register_handlers(self):
-        self.router.message(Command('update'))(self.update_command)
-        self.router.message(Command('clear_cache'))(self.clear_cache_command)
+        # Apply the AdminFilter directly to the command handlers
+        self.router.message(Command('update'), AdminFilter())(self.update_command)
+        self.router.message(Command('clear_cache'), AdminFilter())(self.clear_cache_command)
 
     async def _update_library_async(self, library_name: str, lang: str):
         try:

@@ -9,6 +9,7 @@ import matplobblib
 import os # Import os to access environment variables like ADMIN_USER_IDS
 from typing import List, Dict, Any
 from . import database # Import database to check for user repos
+from .config import ADMIN_USER_IDS
 from shared_lib.i18n import translator
 
 logger = logging.getLogger(__name__)

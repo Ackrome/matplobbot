@@ -21,9 +21,14 @@
     <img src="https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=github-actions&logoColor=white" alt="GithubActions">
     <img src="https://img.shields.io/badge/redis-%23DD0031.svg?&style=for-the-badge&logo=redis&logoColor=white" alt="Redis">
   </p>
+  <h2>Reach it on telegram</h2>
+  <p align="center">
+  <a href="https://t.me/matplobbot"><img src="https://img.shields.io/badge/STABLE_TELEGRAM_BOT-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="telegram"></a>
+  <a href="https://t.me/test_matplobbot"><img src="https://img.shields.io/badge/DEVELOPEMENT_Telegram_BOT-ff8800?style=for-the-badge&logo=telegram&logoColor=white" alt="telegram"></a>
+  </p>
 </div>
 
----
+
 
 ## 🚀 Project Overview
 
