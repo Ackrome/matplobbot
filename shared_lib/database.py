@@ -139,6 +139,15 @@ async def init_db():
                 approved_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             )
             ''')
+            await connection.execute('''
+            CREATE TABLE IF NOT EXISTS user_disabled_short_names (
+                user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                short_name_id INT NOT NULL REFERENCES discipline_short_names(id) ON DELETE CASCADE,
+                PRIMARY KEY (user_id, short_name_id)
+            )
+            ''')
+
+
 
     logger.info("Database tables initialized.")
 
@@ -480,13 +489,45 @@ async def get_all_short_names() -> dict[str, str]:
         rows = await connection.fetch("SELECT full_name, short_name FROM discipline_short_names")
         return {row['full_name']: row['short_name'] for row in rows}
 
-async def get_all_short_names_with_ids() -> list[dict]:
-    """Fetches all approved short names with their IDs, ordered by full name."""
+async def get_disabled_short_names_for_user(user_id: int) -> set[int]:
+    """Fetches the set of short_name_ids disabled by a specific user."""
     if not pool:
         raise ConnectionError("Database pool is not initialized.")
     async with pool.acquire() as connection:
-        rows = await connection.fetch("SELECT id, full_name, short_name FROM discipline_short_names ORDER BY full_name")
-        return [dict(row) for row in rows]
+        rows = await connection.fetch("SELECT short_name_id FROM user_disabled_short_names WHERE user_id = $1", user_id)
+        return {row['short_name_id'] for row in rows}
+
+async def toggle_short_name_for_user(user_id: int, short_name_id: int) -> bool:
+    """Toggles the disabled status of a short name for a user. Returns True if it's now disabled, False if enabled."""
+    if not pool:
+        raise ConnectionError("Database pool is not initialized.")
+    async with pool.acquire() as connection:
+        # Check if it exists
+        exists = await connection.fetchval("SELECT 1 FROM user_disabled_short_names WHERE user_id = $1 AND short_name_id = $2", user_id, short_name_id)
+        if exists:
+            await connection.execute("DELETE FROM user_disabled_short_names WHERE user_id = $1 AND short_name_id = $2", user_id, short_name_id)
+            return False # It is now enabled
+        else:
+            await connection.execute("INSERT INTO user_disabled_short_names (user_id, short_name_id) VALUES ($1, $2)", user_id, short_name_id)
+            return True # It is now disabled
+
+async def get_all_short_names_with_ids(page: int = 0, page_size: int = 5) -> tuple[list[dict], int]:
+    """
+    Fetches a paginated list of all approved short names with their IDs.
+    Returns a tuple: (list of short names, total count).
+    """
+    if not pool:
+        raise ConnectionError("Database pool is not initialized.")
+    async with pool.acquire() as connection:
+        offset = page * page_size
+        rows = await connection.fetch("""
+            SELECT id, full_name, short_name FROM discipline_short_names 
+            ORDER BY full_name LIMIT $1 OFFSET $2
+        """, page_size, offset)
+        
+        total_count = await connection.fetchval("SELECT COUNT(*) FROM discipline_short_names")
+        
+        return [dict(row) for row in rows], total_count or 0
 
 async def delete_short_name_by_id(short_name_id: int) -> bool:
     """Deletes a short name mapping by its ID."""

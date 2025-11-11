@@ -264,5 +264,8 @@
     "settings_manage_short_names_btn": "Manage Short Names",
     "short_names_management_header": "Approved Short Names:",
     "short_names_list_empty": "No short names have been approved yet.",
-    "short_name_deleted_success": "Short name mapping has been deleted."
+    "short_name_deleted_success": "Short name mapping has been deleted.",
+    "schedule_previous_searches": "Your previous searches:",
+    "schedule_clear_history_btn": "🗑️ Clear History",
+    "schedule_history_cleared": "✅ Search history cleared."
 }

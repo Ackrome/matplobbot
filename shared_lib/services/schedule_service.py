@@ -10,7 +10,7 @@ from aiogram.utils.markdown import hcode
 from cachetools import TTLCache
 
 from shared_lib.i18n import translator
-from shared_lib.database import get_user_settings, get_all_short_names
+from shared_lib.database import get_user_settings, get_all_short_names, get_disabled_short_names_for_user, get_all_short_names_with_ids
 
 # Cache for short names to avoid frequent DB calls
 short_name_cache = TTLCache(maxsize=1, ttl=300) # Cache for 5 minutes
@@ -142,9 +142,15 @@ async def format_schedule(schedule_data: List[Dict[str, Any]], lang: str, entity
     user_settings = await get_user_settings(user_id)
     use_short_names = user_settings.get('use_short_names', True)
     short_names_map = {}
+    
     if use_short_names:
-        short_names_map = await get_all_short_names()
-    # --- END OPTIMIZATION ---
+        all_short_names_with_ids = await get_all_short_names_with_ids(page_size=1000) # Fetch all
+        disabled_ids = await get_disabled_short_names_for_user(user_id)
+        
+        # Build the map, excluding disabled names
+        for item in all_short_names_with_ids[0]:
+            if item['id'] not in disabled_ids:
+                short_names_map[item['full_name']] = item['short_name']
 
     # Group lessons by date
     days = defaultdict(list)

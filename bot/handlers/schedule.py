@@ -47,13 +47,23 @@ class ScheduleManager:
         self.router.callback_query(F.data.startswith("sch_subscribe_hash:"))(self.handle_subscribe_button)
         self.router.message(ScheduleStates.awaiting_subscription_time)(self.handle_subscription_time)
         self.router.message(Command("myschedule"))(self.cmd_my_schedule)
+        self.router.callback_query(F.data.startswith("sch_history:"))(self.handle_history_selection)
+        self.router.callback_query(F.data == "sch_clear_history")(self.handle_clear_history)
 
     async def cmd_schedule(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
         lang = await translator.get_language(user_id, message.chat.id)
+
+        # --- NEW: Fetch and display search history ---
+        history_key = f"schedule_history:{user_id}"
+        history_items_raw = await redis_client.client.lrange(history_key, 0, -1)
+        history_items = [json.loads(item) for item in history_items_raw]
+
+        keyboard = await get_schedule_type_keyboard(lang, history_items)
+
         await message.answer(
             translator.gettext(lang, "schedule_welcome"),
-            reply_markup=await get_schedule_type_keyboard(lang)
+            reply_markup=keyboard
         )
 
     async def handle_schedule_type(self, callback: CallbackQuery, state: FSMContext):
@@ -119,8 +129,31 @@ class ScheduleManager:
         try:
             today = datetime.now()
             api_date_str = today.strftime("%Y.%m.%d")
+
+            # --- FIX: Get entity name from cached search results ---
+            cached_search = await redis_client.get_user_cache(user_id, 'schedule_search')
+            entity_name = "Unknown"
+            if cached_search and cached_search.get('results'):
+                # Find the selected entity in the cached results to get its name
+                selected_entity = next((item for item in cached_search['results'] if str(item['id']) == entity_id), None)
+                if selected_entity:
+                    entity_name = selected_entity['label']
+
             schedule_data = await self.api_client.get_schedule(entity_type, entity_id, start=api_date_str, finish=api_date_str)
-            entity_name = schedule_data[0].get(entity_type, "Unknown") if schedule_data else "Unknown" # This line is fine
+
+            # --- NEW: Store successful search in history ---
+            if entity_name != "Unknown":
+                history_key = f"schedule_history:{user_id}"
+                history_item = json.dumps({
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "entity_name": entity_name
+                })
+                # Remove any existing identical items to avoid duplicates and move it to the top
+                await redis_client.client.lrem(history_key, 0, history_item)
+                await redis_client.client.lpush(history_key, history_item)
+                await redis_client.client.ltrim(history_key, 0, 4) # Keep last 5
+
             formatted_text = await format_schedule(schedule_data, lang, entity_name, entity_type, user_id, start_date=today.date())
 
             await callback.message.edit_text(formatted_text, parse_mode="HTML")
@@ -128,6 +161,29 @@ class ScheduleManager:
         except Exception as e:
             logging.error(f"Failed to get today's schedule for {entity_type}:{entity_id}. Error: {e}", exc_info=True)
             await callback.message.edit_text(translator.gettext(lang, "schedule_api_error"))
+
+    async def handle_history_selection(self, callback: CallbackQuery, state: FSMContext):
+        """Handles clicks on the new history buttons."""
+        # The data format is sch_history:{entity_type}:{entity_id}.
+        # We reuse the existing result selection handler. Since the callback object is immutable,
+        # we create a copy with the modified 'data' attribute to match the expected format.
+        new_data = callback.data.replace("sch_history:", "sch_result_:")
+        modified_callback = callback.model_copy(update={'data': new_data})
+        await self.handle_result_selection(modified_callback, state)
+
+    async def handle_clear_history(self, callback: CallbackQuery, state: FSMContext):
+        """Handles the 'Clear History' button click."""
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id, callback.message.chat.id)
+        history_key = f"schedule_history:{user_id}"
+        await redis_client.client.delete(history_key)
+
+        # Refresh the menu to show the history is gone
+        keyboard = await get_schedule_type_keyboard(lang, history_items=[])
+        await callback.message.edit_reply_markup(reply_markup=keyboard)
+
+        # Notify the user
+        await callback.answer(translator.gettext(lang, "schedule_history_cleared"))
 
     async def handle_open_calendar(self, callback: CallbackQuery):
         await callback.answer()
@@ -264,9 +320,24 @@ class ScheduleManager:
 
             selected_date = datetime.strptime(date_str, "%Y-%m-%d")
             api_date_str = selected_date.strftime("%Y.%m.%d")
+
+            # --- FIX: Get entity name from cached search results ---
+            cached_search = await redis_client.get_user_cache(user_id, 'schedule_search')
+            entity_name = "Unknown"
+            if cached_search and cached_search.get('results'):
+                selected_entity = next((item for item in cached_search['results'] if str(item['id']) == original_entity_id), None)
+                if selected_entity:
+                    entity_name = selected_entity['label']
+
             schedule_data = await self.api_client.get_schedule(entity_type, original_entity_id, start=api_date_str, finish=api_date_str)
-            entity_name = schedule_data[0].get(entity_type, "Unknown") if schedule_data else "Unknown"
-            formatted_text = format_schedule(schedule_data, lang, entity_name, entity_type, start_date=selected_date.date())
+            # --- FIX: Use keyword arguments for clarity and correctness ---
+            formatted_text = await format_schedule(
+                schedule_data=schedule_data,
+                lang=lang,
+                entity_name=entity_name,
+                entity_type=entity_type,
+                user_id=user_id,
+                start_date=selected_date.date())
             
             await callback.message.edit_text(formatted_text, parse_mode="HTML")
             date_info = {
@@ -296,9 +367,24 @@ class ScheduleManager:
             end_date = start_date + timedelta(days=6)
             api_start_str, api_end_str = start_date.strftime("%Y.%m.%d"), end_date.strftime("%Y.%m.%d")
 
+            # --- FIX: Get entity name from cached search results ---
+            cached_search = await redis_client.get_user_cache(user_id, 'schedule_search')
+            entity_name = "Unknown"
+            if cached_search and cached_search.get('results'):
+                selected_entity = next((item for item in cached_search['results'] if str(item['id']) == original_entity_id), None)
+                if selected_entity:
+                    entity_name = selected_entity['label']
+
             schedule_data = await self.api_client.get_schedule(entity_type, original_entity_id, start=api_start_str, finish=api_end_str)
-            entity_name = schedule_data[0].get(entity_type, "Unknown") if schedule_data else "Unknown"
-            formatted_text = format_schedule(schedule_data, lang, entity_name, entity_type, start_date=start_date, is_week_view=True)
+            # --- FIX: Use keyword arguments for clarity and correctness ---
+            formatted_text = await format_schedule(
+                schedule_data=schedule_data,
+                lang=lang,
+                entity_name=entity_name,
+                entity_type=entity_type,
+                user_id=callback.from_user.id,
+                start_date=start_date,
+                is_week_view=True)
             
             await callback.message.edit_text(formatted_text, parse_mode="HTML")
             date_info = {
@@ -324,13 +410,13 @@ class ScheduleManager:
 
         schedule_data = await self.api_client.get_schedule(entity_type, original_entity_id, start=api_start_str, finish=api_end_str)
         
-        if schedule_data:
-            entity_name = schedule_data[0].get(entity_type)
-        else:
-            # If no schedule, get name from search cache as a fallback
-            cached_search = await redis_client.get_user_cache(user_id, 'schedule_search')
-            # Find the specific entity name from the cached search results
-            entity_name = next((item['label'] for item in cached_search.get('results', []) if str(item['id']) == original_entity_id), 'Unknown') if cached_search else 'Unknown'
+        # --- FIX: Always get entity name from cached search results for reliability ---
+        cached_search = await redis_client.get_user_cache(user_id, 'schedule_search')
+        entity_name = "Unknown" # Default value
+        if cached_search and cached_search.get('results'):
+            selected_entity = next((item for item in cached_search['results'] if str(item['id']) == original_entity_id), None)
+            if selected_entity:
+                entity_name = selected_entity['label']
         
         ical_string = generate_ical_from_schedule(schedule_data, entity_name)
         file_bytes = ical_string.encode('utf-8')

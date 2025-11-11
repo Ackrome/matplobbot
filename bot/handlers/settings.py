@@ -12,8 +12,8 @@ if TYPE_CHECKING:
     from .base import BaseManager # Only for type checking
     from .schedule import ScheduleManager
     from .admin import AdminManager
-from aiogram import Bot
-from shared_lib.database import get_user_settings, get_user_repos, update_user_settings_db, get_user_subscriptions, remove_schedule_subscription, get_chat_subscriptions, toggle_subscription_status, update_subscription_notification_time, get_chat_settings, update_chat_settings_db, SubscriptionConflictError, delete_all_user_data, get_all_short_names_with_ids, delete_short_name_by_id
+from aiogram import Bot, F
+from shared_lib.database import get_user_settings, get_user_repos, update_user_settings_db, get_user_subscriptions, remove_schedule_subscription, get_chat_subscriptions, toggle_subscription_status, update_subscription_notification_time, get_chat_settings, update_chat_settings_db, SubscriptionConflictError, delete_all_user_data, get_all_short_names_with_ids, delete_short_name_by_id, get_disabled_short_names_for_user, toggle_short_name_for_user
 from shared_lib.i18n import translator
 from .admin import AdminOrCreatorFilter
 from ..config import ADMIN_USER_IDS
@@ -101,7 +101,10 @@ class SettingsManager:
 
         # --- NEW: Short Name Management Handlers ---
         self.router.callback_query(F.data == "manage_short_names")(self.cq_manage_short_names)
+        self.router.callback_query(F.data.startswith("sname_page:"))(self.cq_manage_short_names)
         self.router.callback_query(F.data.startswith("sname_del:"))(self.cq_delete_short_name)
+        self.router.callback_query(F.data.startswith("sname_del_confirm:"))(self.cq_confirm_delete_short_name)
+        self.router.callback_query(F.data.startswith("sname_toggle:"))(self.cq_toggle_user_short_name)
 
 
     async def cq_restart_onboarding_prompt(self, callback: CallbackQuery):
@@ -145,28 +148,22 @@ class SettingsManager:
             await callback.message.edit_text(translator.gettext(lang, "delete_my_data_error"))
         await callback.answer()
 
+    # --- NEW: Modular Keyboard Building Functions ---
 
-    async def get_settings_keyboard(self, user_id: int) -> InlineKeyboardBuilder:
-        """Creates the main inline keyboard for user settings."""
-        settings = await get_user_settings(user_id)
-        lang = settings.get('language', 'en')
-        builder = InlineKeyboardBuilder()
-
-        # --- NEW: Short Names Toggle ---
+    async def _build_display_settings(self, builder: InlineKeyboardBuilder, settings: dict, lang: str):
+        """Builds buttons related to how information is displayed."""
+        # Short Names Toggle
         short_names_status_key = "settings_docstring_on" if settings.get('use_short_names', True) else "settings_docstring_off"
         builder.row(InlineKeyboardButton(
             text=translator.gettext(lang, "settings_use_short_names", status=translator.gettext(lang, short_names_status_key)),
             callback_data="settings_toggle_short_names"
         ))
-        # --- END NEW ---
-
         # Docstring toggle
         docstring_status_key = "settings_docstring_on" if settings['show_docstring'] else "settings_docstring_off"
         builder.row(InlineKeyboardButton(
             text=translator.gettext(lang, "settings_show_docstring", status=translator.gettext(lang, docstring_status_key)),
             callback_data="settings_toggle_docstring"
         ))
-
         # Markdown display mode
         md_mode = settings.get('md_display_mode', 'md_file')
         md_mode_map = {
@@ -180,7 +177,8 @@ class SettingsManager:
             callback_data="settings_cycle_md_mode"
         ))
 
-        # LaTeX settings
+    async def _build_latex_settings(self, builder: InlineKeyboardBuilder, settings: dict, lang: str):
+        """Builds buttons for LaTeX rendering options."""
         builder.row(
             InlineKeyboardButton(text="➖", callback_data="latex_padding_decr"),
             InlineKeyboardButton(text=translator.gettext(lang, "settings_latex_padding", padding=settings['latex_padding']), callback_data="noop"),
@@ -192,46 +190,44 @@ class SettingsManager:
             InlineKeyboardButton(text="➕", callback_data="latex_dpi_incr")
         )
 
-        # GitHub Repositories
+    async def _build_data_management_settings(self, builder: InlineKeyboardBuilder, user_id: int, lang: str):
+        """Builds buttons for managing user-specific data."""
         user_repos = await get_user_repos(user_id)
         repo_button_key = "settings_manage_repos_btn" if user_repos else "settings_add_repos_btn"
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, repo_button_key), callback_data="manage_repos"))
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "settings_manage_subscriptions_btn"), callback_data="manage_personal_subscriptions"))
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "settings_manage_short_names_btn"), callback_data="manage_short_names"))
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "settings_delete_my_data_btn"), callback_data="delete_my_data"))
 
-        # Language Setting
+    async def _build_admin_settings(self, builder: InlineKeyboardBuilder, settings: dict, lang: str):
+        """Builds admin-only settings buttons."""
+        summary_time = settings.get('admin_daily_summary_time', '09:00')
+        builder.row(InlineKeyboardButton(
+            text=translator.gettext(lang, "admin_settings_summary_time_btn", time=summary_time),
+            callback_data="admin_settings_summary_time"
+        ))
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "admin_get_summary_now_btn"), callback_data="admin_get_summary_now"))
+        summary_days = settings.get('admin_summary_days', [0, 1, 2, 3, 4])
+        day_names = translator.gettext(lang, "calendar_days_short").split(',')
+        day_buttons = [InlineKeyboardButton(text=f"{'✅' if i in summary_days else '❌'} {day_name}", callback_data=f"admin_toggle_summary_day:{i}") for i, day_name in enumerate(day_names)]
+        builder.row(*day_buttons)
+
+    async def get_settings_keyboard(self, user_id: int) -> InlineKeyboardBuilder:
+        """Creates the main inline keyboard for user settings."""
+        settings = await get_user_settings(user_id)
+        lang = settings.get('language', 'en')
+        builder = InlineKeyboardBuilder()
+
+        await self._build_display_settings(builder, settings, lang)
+        await self._build_latex_settings(builder, settings, lang)
+        await self._build_data_management_settings(builder, user_id, lang)
+
         current_lang_name = AVAILABLE_LANGUAGES.get(lang, "Unknown")
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "settings_language_btn", lang_name=current_lang_name), callback_data="settings_cycle_language"))
-
-        # Schedule Subscriptions
-        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "settings_manage_subscriptions_btn"), callback_data="manage_personal_subscriptions"))
-
-        # Restart Onboarding Tour
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "settings_restart_onboarding_btn"), callback_data="restart_onboarding"))
 
-        # --- Admin-only settings ---
         if user_id in ADMIN_USER_IDS:
-            summary_time = settings.get('admin_daily_summary_time', '09:00')
-            builder.row(InlineKeyboardButton(
-                text=translator.gettext(lang, "admin_settings_summary_time_btn", time=summary_time),
-                callback_data="admin_settings_summary_time"
-            ))
-            # --- NEW: Get Summary Now button ---
-            builder.row(InlineKeyboardButton(
-                text=translator.gettext(lang, "admin_get_summary_now_btn"),
-                callback_data="admin_get_summary_now"
-            ))
-            # --- NEW: Weekday selector for admin summary ---
-            summary_days = settings.get('admin_summary_days', [0,1,2,3,4])
-            day_names = translator.gettext(lang, "calendar_days_short").split(',')
-            day_buttons = []
-            for i, day_name in enumerate(day_names):
-                status_emoji = "✅" if i in summary_days else "❌"
-                day_buttons.append(InlineKeyboardButton(text=f"{status_emoji} {day_name}", callback_data=f"admin_toggle_summary_day:{i}"))
-            builder.row(*day_buttons)
-            # --- END NEW ---
-
-
-        # Delete all user data
-        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "settings_delete_my_data_btn"), callback_data="delete_my_data"))
+            await self._build_admin_settings(builder, settings, lang)
 
         return builder
 
@@ -695,33 +691,77 @@ class SettingsManager:
 
     # --- Short Name Management ---
 
-    async def _get_short_names_keyboard(self, user_id: int) -> InlineKeyboardBuilder:
+    async def _get_short_names_keyboard(self, user_id: int, page: int = 0) -> tuple[InlineKeyboardBuilder, bool]:
         """Builds the keyboard for managing approved short names."""
         lang = await translator.get_language(user_id)
-        short_names = await get_all_short_names_with_ids()
+        page_size = 5 # Let's show 5 per page
+        short_names, total_count = await get_all_short_names_with_ids(page=page, page_size=page_size)
         builder = InlineKeyboardBuilder()
+        is_admin = user_id in ADMIN_USER_IDS
+
+        # For default users, we need to know which names they have disabled
+        disabled_ids = set()
+        if not is_admin:
+            disabled_ids = await get_disabled_short_names_for_user(user_id)
 
         for item in short_names:
-            # Using f-string for clarity, but could also use .format()
-            button_text = f"'{item['short_name']}' ⟵ '{item['full_name']}'"
-            builder.row(
-                InlineKeyboardButton(text=button_text, callback_data="noop"),
-                InlineKeyboardButton(text=translator.gettext(lang, "btn_delete"), callback_data=f"sname_del:{item['id']}")
-            )
+            if is_admin:
+                button_text = f"'{item['short_name']}' ⟵ '{item['full_name']}'"
+                builder.row(
+                    InlineKeyboardButton(text=button_text, callback_data="noop"),
+                    InlineKeyboardButton(text=translator.gettext(lang, "btn_delete"), callback_data=f"sname_del:{item['id']}:{page}")
+                )
+            else: # Default user view
+                is_disabled = item['id'] in disabled_ids
+                status_emoji = "❌" if is_disabled else "✅"
+                button_text = f"{status_emoji} '{item['short_name']}' ⟵ '{item['full_name']}'"
+                builder.row(
+                    InlineKeyboardButton(text=button_text, callback_data=f"sname_toggle:{item['id']}:{page}")
+                )
         
-        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "back_to_settings"), callback_data="back_to_settings"))
-        return builder, len(short_names) > 0
+        total_pages = (total_count + page_size - 1) // page_size
+        if total_pages > 1:
+            pagination_buttons = []
+            if page > 0: pagination_buttons.append(InlineKeyboardButton(text=translator.gettext(lang, "pagination_back"), callback_data=f"sname_page:{page - 1}"))
+            pagination_buttons.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop"))
+            if (page + 1) < total_pages: pagination_buttons.append(InlineKeyboardButton(text=translator.gettext(lang, "pagination_forward"), callback_data=f"sname_page:{page + 1}"))
+            builder.row(*pagination_buttons)
 
-    async def cq_manage_short_names(self, callback: CallbackQuery):
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "back_to_settings"), callback_data="back_to_settings"))
+        return builder, total_count > 0
+
+    async def cq_manage_short_names(self, callback: CallbackQuery, state: FSMContext):
         lang = await translator.get_language(callback.from_user.id)
-        keyboard, has_items = await self._get_short_names_keyboard(callback.from_user.id)
+        page = int(callback.data.split(":")[1]) if callback.data.startswith("sname_page:") else 0
+        keyboard, has_items = await self._get_short_names_keyboard(callback.from_user.id, page=page)
         header_text = translator.gettext(lang, "short_names_management_header") if has_items else translator.gettext(lang, "short_names_list_empty")
         await callback.message.edit_text(header_text, reply_markup=keyboard.as_markup())
         await callback.answer()
 
-    async def cq_delete_short_name(self, callback: CallbackQuery):
-        short_name_id = int(callback.data.split(":")[1])
+    async def cq_delete_short_name(self, callback: CallbackQuery, state: FSMContext):
+        lang = await translator.get_language(callback.from_user.id)
+        _, short_name_id_str, page_str = callback.data.split(":")
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            InlineKeyboardButton(text=translator.gettext(lang, "btn_confirm_delete"), callback_data=f"sname_del_confirm:{short_name_id_str}:{page_str}"),
+            InlineKeyboardButton(text=translator.gettext(lang, "btn_cancel"), callback_data=f"sname_page:{page_str}")
+        )
+        await callback.message.edit_text(translator.gettext(lang, "subscription_confirm_delete", entity_name="this short name"), reply_markup=builder.as_markup())
+        await callback.answer()
+
+    async def cq_confirm_delete_short_name(self, callback: CallbackQuery, state: FSMContext):
+        _, short_name_id_str, page_str = callback.data.split(":")
+        short_name_id = int(short_name_id_str)
         await delete_short_name_by_id(short_name_id)
         await callback.answer(translator.gettext(await translator.get_language(callback.from_user.id), "short_name_deleted_success"))
         # Refresh the menu
-        await self.cq_manage_short_names(callback)
+        callback.data = f"sname_page:{page_str}" # Mock the callback data to refresh the correct page
+        await self.cq_manage_short_names(callback, state)
+
+    async def cq_toggle_user_short_name(self, callback: CallbackQuery, state: FSMContext):
+        """Handles enabling/disabling a short name for a default user."""
+        user_id = callback.from_user.id
+        _, short_name_id_str, page_str = callback.data.split(":")
+        await toggle_short_name_for_user(user_id, int(short_name_id_str))
+        await callback.answer()
+        await self.cq_manage_short_names(callback, state) # Refresh the menu

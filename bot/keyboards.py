@@ -148,7 +148,7 @@ async def get_repo_management_keyboard(user_id: int, state: FSMContext | None = 
 
 
 
-async def get_schedule_type_keyboard(lang: str) -> InlineKeyboardMarkup:
+async def get_schedule_type_keyboard(lang: str, history_items: list = None) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(
@@ -166,6 +166,21 @@ async def get_schedule_type_keyboard(lang: str) -> InlineKeyboardMarkup:
             callback_data="sch_type_auditorium"
         )
     )
+
+    # --- NEW: Add history buttons if they exist ---
+    if history_items:
+        builder.row(InlineKeyboardButton(text="---", callback_data="noop")) # Separator
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "schedule_previous_searches"), callback_data="noop"))
+        for item in history_items:
+            builder.row(InlineKeyboardButton(
+                text=f"🔎 {item['entity_name']}",
+                callback_data=f"sch_history:{item['entity_type']}:{item['entity_id']}"
+            ))
+        builder.row(InlineKeyboardButton(
+            text=translator.gettext(lang, "schedule_clear_history_btn"),
+            callback_data="sch_clear_history"
+        ))
+
     return builder.as_markup()
 
 def build_search_results_keyboard(results: List[Dict[str, Any]], search_type: str) -> InlineKeyboardMarkup:
