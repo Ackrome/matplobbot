@@ -120,8 +120,8 @@ class ScheduleManager:
             today = datetime.now()
             api_date_str = today.strftime("%Y.%m.%d")
             schedule_data = await self.api_client.get_schedule(entity_type, entity_id, start=api_date_str, finish=api_date_str)
-            entity_name = schedule_data[0].get(entity_type, "Unknown") if schedule_data else "Unknown"
-            formatted_text = format_schedule(schedule_data, lang, entity_name, entity_type, start_date=today.date())
+            entity_name = schedule_data[0].get(entity_type, "Unknown") if schedule_data else "Unknown" # This line is fine
+            formatted_text = await format_schedule(schedule_data, lang, entity_name, entity_type, user_id, start_date=today.date())
 
             await callback.message.edit_text(formatted_text, parse_mode="HTML")
             await self._send_actions_menu(callback.message, lang, entity_type, entity_id, entity_name, view_type='daily_initial')
@@ -415,7 +415,7 @@ class ScheduleManager:
         try:
             # The API call is already correct for a single day.
             schedule_data = await self.api_client.get_schedule(sub['entity_type'], sub['entity_id'], start=today_str, finish=today_str)
-            formatted_text = format_schedule(schedule_data, lang, sub['entity_name'], sub['entity_type'], start_date=today_dt.date())
+            formatted_text = await format_schedule(schedule_data, lang, sub['entity_name'], sub['entity_type'], user_id, start_date=today_dt.date())
             await message.answer(formatted_text, parse_mode="HTML")
         except TelegramForbiddenError:
             logging.warning(f"Bot is blocked by user {user_id}. Cannot send schedule.")

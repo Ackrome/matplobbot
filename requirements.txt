@@ -23,3 +23,4 @@ certifi
 beautifulsoup4
 ics
 markdown-it-py
+cachetools

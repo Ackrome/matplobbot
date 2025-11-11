@@ -26,6 +26,7 @@
                 <button class="tab-button active" onclick="openTab(event, 'popularActionsTab')">Популярные действия</button>
                 <button class="tab-button" onclick="openTab(event, 'typesTab')">Типы действий</button>
                 <button class="tab-button" onclick="openTab(event, 'activityTimeTab')">Активность по времени</button>
+                <button class="tab-button" onclick="openTab(event, 'newUsersTab')">Новые пользователи</button>
                 <button class="tab-button" onclick="openTab(event, 'logTab')">Лог Бота</button>
             </div>
 
@@ -73,6 +74,15 @@
                 </div>
             </div>
 
+            <div id="newUsersTab" class="tab-content">
+                <div class="chart-wrapper">
+                    <h2>Новые пользователи по дням
+                        <button class="download-btn" data-chart="newUsers" data-format="csv" style="display: none;">💾 CSV</button>
+                        <button class="download-btn" data-chart="newUsers" data-format="png" style="display: none;">🖼️ PNG</button></h2>
+                    <canvas id="newUsersChart"></canvas>
+                    <p id="new-users-status" style="text-align:center;"></p>
+                </div>
+            </div>
             <div id="logTab" class="tab-content">
                 <h2>Лог Бота (в реальном времени)</h2>
                 <pre id="bot-log-content">Подключение к логу...</pre>

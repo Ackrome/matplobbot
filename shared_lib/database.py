@@ -51,6 +51,9 @@ DEFAULT_SETTINGS = {
     'md_display_mode': 'md_file',
     'latex_dpi': 300,
     'language': 'en',
+    'use_short_names': True,
+    'admin_daily_summary_time': '09:00', # Default time for admin summary
+    'admin_summary_days': [0, 1, 2, 3, 4], # NEW: Mon-Fri by default
 }
 
 async def init_db():
@@ -117,6 +120,7 @@ async def init_db():
                 last_schedule_hash TEXT,
                 deactivated_at TIMESTAMPTZ DEFAULT NULL,
                 message_thread_id BIGINT DEFAULT NULL,
+                added_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(chat_id, entity_type, entity_id, notification_time)
             )
             ''')
@@ -124,6 +128,15 @@ async def init_db():
             CREATE TABLE IF NOT EXISTS chat_settings (
                 chat_id BIGINT PRIMARY KEY,
                 settings JSONB DEFAULT '{}'::jsonb
+            )
+            ''')
+            await connection.execute('''
+            CREATE TABLE IF NOT EXISTS discipline_short_names (
+                id SERIAL PRIMARY KEY,
+                full_name TEXT NOT NULL UNIQUE,
+                short_name TEXT NOT NULL,
+                approved_by BIGINT REFERENCES users(user_id) ON DELETE SET NULL,
+                approved_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             )
             ''')
 
@@ -448,6 +461,41 @@ async def update_subscription_hash(subscription_id: int, new_hash: str):
     async with pool.acquire() as connection:
         await connection.execute("UPDATE user_schedule_subscriptions SET last_schedule_hash = $1 WHERE id = $2", new_hash, subscription_id)
 
+# --- Discipline Short Names ---
+async def add_short_name(full_name: str, short_name: str, admin_id: int):
+    """Adds or updates a short name mapping for a discipline."""
+    async with pool.acquire() as connection:
+        await connection.execute("""
+            INSERT INTO discipline_short_names (full_name, short_name, approved_by)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (full_name) DO UPDATE SET
+                short_name = EXCLUDED.short_name,
+                approved_by = EXCLUDED.approved_by,
+                approved_at = CURRENT_TIMESTAMP;
+        """, full_name, short_name, admin_id)
+
+async def get_all_short_names() -> dict[str, str]:
+    """Fetches all approved short name mappings."""
+    async with pool.acquire() as connection:
+        rows = await connection.fetch("SELECT full_name, short_name FROM discipline_short_names")
+        return {row['full_name']: row['short_name'] for row in rows}
+
+async def get_all_short_names_with_ids() -> list[dict]:
+    """Fetches all approved short names with their IDs, ordered by full name."""
+    if not pool:
+        raise ConnectionError("Database pool is not initialized.")
+    async with pool.acquire() as connection:
+        rows = await connection.fetch("SELECT id, full_name, short_name FROM discipline_short_names ORDER BY full_name")
+        return [dict(row) for row in rows]
+
+async def delete_short_name_by_id(short_name_id: int) -> bool:
+    """Deletes a short name mapping by its ID."""
+    if not pool:
+        raise ConnectionError("Database pool is not initialized.")
+    async with pool.acquire() as connection:
+        result = await connection.execute("DELETE FROM discipline_short_names WHERE id = $1", short_name_id)
+        return result.endswith('1') # "DELETE 1" indicates one row was deleted.
+
 # --- FastAPI Specific Queries ---
 async def get_leaderboard_data_from_db(db_conn):
     # The timestamp is stored in UTC (TIMESTAMPTZ). We convert it to Moscow time for display.
@@ -500,6 +548,54 @@ async def get_activity_over_time_data_from_db(db_conn, period='day'):
     rows = await db_conn.fetch(query)
     return [{"period": row['period_start'], "count": row['actions_count']} for row in rows]
 
+async def get_admin_daily_summary(db_conn) -> dict:
+    """Fetches a summary of today's stats for the admin report."""
+    moscow_tz = 'Europe/Moscow'
+    
+    # New users today
+    new_users_query = f"""
+        WITH FirstActions AS (
+            SELECT user_id, MIN(timestamp AT TIME ZONE '{moscow_tz}') as first_action_time
+            FROM user_actions GROUP BY user_id
+        )
+        SELECT COUNT(user_id) FROM FirstActions WHERE DATE(first_action_time) = CURRENT_DATE;
+    """
+    
+    # Total actions today
+    total_actions_query = f"SELECT COUNT(id) FROM user_actions WHERE DATE(timestamp AT TIME ZONE '{moscow_tz}') = CURRENT_DATE;"
+    
+    # New suggestions today
+    new_suggestions_query = f"SELECT COUNT(id) FROM user_actions WHERE action_type = 'suggestion' AND action_details = 'offershorter' AND DATE(timestamp AT TIME ZONE '{moscow_tz}') = CURRENT_DATE;"
+
+    # New subscriptions today
+    new_subs_query = f"SELECT COUNT(id) FROM user_schedule_subscriptions WHERE DATE(added_at AT TIME ZONE '{moscow_tz}') = CURRENT_DATE;"
+
+    new_users_count = await db_conn.fetchval(new_users_query)
+    total_actions_count = await db_conn.fetchval(total_actions_query)
+    new_suggestions_count = await db_conn.fetchval(new_suggestions_query)
+    new_subs_count = await db_conn.fetchval(new_subs_query)
+
+    return {"new_users": new_users_count, "total_actions": total_actions_count, "new_subscriptions": new_subs_count, "new_suggestions": new_suggestions_count}
+
+async def get_new_users_per_day_from_db(db_conn):
+    """Calculates the number of new users per day based on their first action."""
+    query = """
+        WITH FirstActions AS (
+            SELECT
+                user_id,
+                MIN(timestamp) as first_action_time
+            FROM user_actions
+            GROUP BY user_id
+        )
+        SELECT
+            TO_CHAR(first_action_time AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD') as registration_date,
+            COUNT(user_id)::int as new_users_count
+        FROM FirstActions
+        GROUP BY registration_date
+        ORDER BY registration_date ASC;
+    """
+    rows = await db_conn.fetch(query)
+    return [{"date": row['registration_date'], "count": row['new_users_count']} for row in rows]
 
 async def get_user_profile_data_from_db(
     db_conn,
@@ -509,21 +605,36 @@ async def get_user_profile_data_from_db(
     sort_by: str = 'timestamp',
     sort_order: str = 'desc'
 ):
-    """Извлекает детали профиля пользователя и пагинированный список его действий."""
+    """Извлекает детали профиля пользователя и пагинированный список его действий. Оптимизированная версия."""
     # --- Безопасная сортировка ---
-    allowed_sort_columns = ['id', 'action_type', 'action_details', 'timestamp'] # These are ua columns
+    allowed_sort_columns = ['id', 'action_type', 'action_details', 'timestamp']
     if sort_by not in allowed_sort_columns:
-        sort_by = 'timestamp' # Значение по умолчанию
-    sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC' # Безопасное определение порядка
+        sort_by = 'timestamp'
+    sort_order = 'ASC' if sort_order.lower() == 'asc' else 'DESC'
 
-    # --- Единый запрос для получения всех данных ---
-    # Используем CTE и оконные функции для эффективности.
-    # 1. Выбираем все действия пользователя.
-    # 2. С помощью оконной функции COUNT(*) OVER () получаем общее количество действий без дополнительного запроса.
-    # 3. Присоединяем информацию о пользователе.
-    # 4. Применяем пагинацию и сортировку.
-    query = f"""
-        WITH UserActions AS (
+    # --- Шаг 1: Получаем детали пользователя и общее количество действий ---
+    user_query = """
+        SELECT
+            user_id,
+            full_name,
+            COALESCE(username, 'Нет username') AS username,
+            avatar_pic_url,
+            (SELECT COUNT(*) FROM user_actions WHERE user_id = $1) as total_actions
+        FROM users u
+        WHERE user_id = $1;
+    """
+    user_details_row = await db_conn.fetchrow(user_query, user_id)
+
+    if not user_details_row:
+        return None # Пользователь не найден
+
+    user_details = dict(user_details_row)
+    total_actions = user_details["total_actions"]
+
+    # --- Шаг 2: Получаем пагинированный список действий ---
+    actions = []
+    if total_actions > 0:
+        actions_query = f"""
             SELECT
                 id,
                 action_type,
@@ -531,58 +642,14 @@ async def get_user_profile_data_from_db(
                 TO_CHAR(timestamp AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD HH24:MI:SS') AS timestamp
             FROM user_actions
             WHERE user_id = $1
-        )
-        SELECT
-            u.user_id,
-            u.full_name,
-            COALESCE(u.username, 'Нет username') AS username,
-            u.avatar_pic_url,
-            (SELECT COUNT(*) FROM UserActions) as total_actions,
-            ua.id as action_id,
-            ua.action_type,
-            ua.action_details,
-            ua.timestamp
-        FROM users u
-        LEFT JOIN UserActions ua ON 1=1
-        WHERE u.user_id = $2
-        ORDER BY ua.{sort_by} {sort_order}
-        LIMIT $3 OFFSET $4;
-    """
+            ORDER BY {sort_by} {sort_order}
+            LIMIT $2 OFFSET $3;
+        """
+        offset = (page - 1) * page_size
+        action_rows = await db_conn.fetch(actions_query, user_id, page_size, offset)
+        actions = [dict(row) for row in action_rows]
+
     offset = (page - 1) * page_size
-    rows = await db_conn.fetch(query, user_id, user_id, page_size, offset)
-    if not rows:
-        # If user exists but has no actions, we might get no rows. Check user existence separately.
-        user_exists = await db_conn.fetchrow("SELECT 1 FROM users WHERE user_id = $1", user_id)
-        if not user_exists:
-            return None # User not found
-        # User exists but has no actions, return empty actions list
-        user_details_row = await db_conn.fetchrow("SELECT user_id, full_name, COALESCE(username, 'Нет username') AS username, avatar_pic_url FROM users WHERE user_id = $1", user_id)
-        return {
-            "user_details": dict(user_details_row),
-            "actions": [],
-            "total_actions": 0
-        }
-
-    first_row = dict(rows[0])
-    user_details = {
-        "user_id": first_row["user_id"],
-        "full_name": first_row["full_name"],
-        "username": first_row["username"],
-        "avatar_pic_url": first_row["avatar_pic_url"]
-    }
-    total_actions = first_row["total_actions"]
-
-    # Собираем действия, если они есть (может быть пользователь без действий)
-    actions = []
-    for row in rows:
-        row_dict = dict(row)
-        if row_dict["action_id"] is not None: # action_id не NULL
-            actions.append({
-                "id": row_dict["action_id"],
-                "action_type": row_dict["action_type"],
-                "action_details": row_dict["action_details"],
-                "timestamp": row_dict["timestamp"]
-            })
 
     return {
         "user_details": user_details,
@@ -596,31 +663,31 @@ async def get_users_for_action(db_conn, action_type: str, action_details: str, p
     db_action_type = 'text_message' if action_type == 'message' else action_type
     offset = (page - 1) * page_size
 
-    # --- Безопасная сортировка ---
-    allowed_sort_columns = ['user_id', 'full_name', 'username'] # These are u columns
+    # --- Safe sorting ---
+    allowed_sort_columns = ['user_id', 'full_name', 'username']
     if sort_by not in allowed_sort_columns:
-        sort_by = 'full_name' # Значение по умолчанию
-    sort_order = 'DESC' if sort_order.lower() == 'desc' else 'ASC' # Безопасное определение порядка
+        sort_by = 'full_name'
+    sort_order = 'DESC' if sort_order.lower() == 'desc' else 'ASC'
     order_by_clause = f"ORDER BY u.{sort_by} {sort_order}"
 
-    # Query for total count of distinct users
+    # --- OPTIMIZED: Use a single query with a window function for the total count ---
     count_query = """
-        SELECT COUNT(DISTINCT u.user_id)
-        FROM users u
-        JOIN user_actions ua ON u.user_id = ua.user_id
-        WHERE ua.action_type = $1 AND ua.action_details = $2;
+        SELECT COUNT(*) FROM (
+            SELECT 1 FROM user_actions WHERE action_type = $1 AND action_details = $2 GROUP BY user_id
+        ) as distinct_users;
     """
     total_users = await db_conn.fetchval(count_query, db_action_type, action_details)
 
-    # Query for the paginated list of users
+    # --- OPTIMIZED: Use GROUP BY instead of DISTINCT for potentially better performance ---
     users_query = f"""
-        SELECT DISTINCT
+        SELECT
             u.user_id,
             u.full_name,
             COALESCE(u.username, 'Нет username') AS username
         FROM users u
         JOIN user_actions ua ON u.user_id = ua.user_id
         WHERE ua.action_type = $1 AND ua.action_details = $2
+        GROUP BY u.user_id, u.full_name, u.username
         {order_by_clause}
         LIMIT $3 OFFSET $4;
     """

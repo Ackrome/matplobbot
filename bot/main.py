@@ -40,6 +40,7 @@ async def set_bot_commands(bot: Bot):
         types.BotCommand(command="settings", description=translator.gettext("ru", "help_btn_settings").split(' - ')[1]),
         types.BotCommand(command="latex", description=translator.gettext("ru", "help_btn_latex").split(' - ')[1]),
         types.BotCommand(command="mermaid", description=translator.gettext("ru", "help_btn_mermaid").split(' - ')[1]),
+        types.BotCommand(command="offershorter", description=translator.gettext("ru", "help_btn_offershorter").split(' - ')[1]),
         types.BotCommand(command="cancel", description=translator.gettext("ru", "command_desc_cancel")),
     ]
     
@@ -56,6 +57,7 @@ async def set_bot_commands(bot: Bot):
         types.BotCommand(command="settings", description=translator.gettext("en", "help_btn_settings").split(' - ')[1]),
         types.BotCommand(command="latex", description=translator.gettext("en", "help_btn_latex").split(' - ')[1]),
         types.BotCommand(command="mermaid", description=translator.gettext("en", "help_btn_mermaid").split(' - ')[1]),
+        types.BotCommand(command="offershorter", description=translator.gettext("en", "help_btn_offershorter").split(' - ')[1]),
         types.BotCommand(command="cancel", description=translator.gettext("en", "command_desc_cancel")),
     ]
 
@@ -91,7 +93,7 @@ async def main():
         dp.update.outer_middleware(GroupMentionCommandMiddleware()) # Register the new middleware
         dp.update.middleware(UserLoggingMiddleware())
         
-        setup_handlers(dp, ruz_api_client=ruz_api_client_instance)
+        setup_handlers(dp, bot=bot, ruz_api_client=ruz_api_client_instance)
         
         # Set the bot commands on startup
         await set_bot_commands(bot)

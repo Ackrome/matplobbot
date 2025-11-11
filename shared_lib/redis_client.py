@@ -33,6 +33,27 @@ class RedisClient:
             logger.error(f"Ошибка при чтении из Redis для user_id={user_id}, key={key}: {e}")
             return None
 
+    async def set_cache(self, key: str, data: dict, ttl: int = CACHE_TTL):
+        """Сохраняет данные в кэш по общему ключу."""
+        try:
+            # Используем префикс 'cache:' для общих данных
+            redis_key = f"cache:{key}"
+            await self.client.set(redis_key, json.dumps(data), ex=ttl)
+        except Exception as e:
+            logger.error(f"Ошибка при записи в Redis для ключа={key}: {e}")
+
+    async def get_cache(self, key: str) -> dict | None:
+        """Получает данные из кэша по общему ключу."""
+        try:
+            redis_key = f"cache:{key}"
+            data = await self.client.get(redis_key)
+            if data:
+                return json.loads(data)
+            return None
+        except Exception as e:
+            logger.error(f"Ошибка при чтении из Redis для ключа={key}: {e}")
+            return None
+
     async def clear_all_user_cache(self):
         """Очищает весь пользовательский кэш (ключи, начинающиеся с 'user_cache:')."""
         try:

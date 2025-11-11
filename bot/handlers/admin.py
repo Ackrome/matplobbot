@@ -1,13 +1,16 @@
-from aiogram import  F, Router
+from aiogram import  F, Router, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import  Command, Filter
-import asyncio
+from aiogram.types import InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+import asyncio, json, hashlib
 import sys, os, logging
 import matplobblib
 import pkg_resources
 # from main import logging
 
-from .. import database
+from shared_lib import database
 from .. import keyboards as kb
 from shared_lib.redis_client import redis_client
 from .. import github_service
@@ -61,6 +64,7 @@ class AdminManager:
         # Apply the AdminFilter directly to the command handlers
         self.router.message(Command('update'), AdminFilter())(self.update_command)
         self.router.message(Command('clear_cache'), AdminFilter())(self.clear_cache_command)
+        self.router.message(Command('send_admin_summary'), AdminFilter())(self.send_admin_summary_command)
 
     async def _update_library_async(self, library_name: str, lang: str):
         try:
@@ -111,3 +115,68 @@ class AdminManager:
 
         await status_msg.edit_text(translator.gettext(lang, "admin_clear_cache_success"))
         await message.answer(translator.gettext(lang, "admin_clear_cache_finished"), reply_markup=await kb.get_main_reply_keyboard(user_id))
+
+    async def send_admin_summary_command(self, message: Message, bot: Bot, target_chat_id: int | None = None):
+        """
+        This command can be called by a user or the scheduler.
+        It fetches daily stats and pending suggestions, then sends them to the target chat.
+        """
+        # If a target_chat_id is provided (e.g., by the scheduler), use it.
+        # Otherwise, use the ID of the user who sent the command.
+        admin_id = target_chat_id or message.from_user.id
+        
+        lang = await translator.get_language(admin_id)
+        
+        summary_parts = []
+
+        # 1. Fetch Daily Stats
+        try:
+            async with database.get_db_connection_obj() as db:
+                summary_data = await database.get_admin_daily_summary(db)
+            summary_parts.append(translator.gettext(lang, "admin_daily_summary_text", **summary_data))
+        except Exception as e:
+            logging.error(f"Failed to get admin daily summary stats: {e}", exc_info=True)
+            summary_parts.append("❌ Не удалось загрузить статистику.")
+
+        # 2. Fetch Pending Shorter Name Offers
+        try:
+            pending_offers_raw = await redis_client.client.lrange('pending_shorter_offers', 0, -1)
+            if pending_offers_raw:                
+                summary_parts.append("\n\n" + translator.gettext(lang, "admin_summary_pending_offers_header"))
+                
+                for offer_raw in pending_offers_raw:
+                    offer = json.loads(offer_raw)
+                    notification_text = translator.gettext(
+                        lang, "shorter_name_admin_notification",
+                        user_id=offer['user_id'], user_name=offer['user_name'],
+                        full_name=offer['full_name'], short_name=offer['short_name']
+                    )
+                    
+                    data_to_hash = f"{offer['user_id']}:{offer['full_name']}:{offer['short_name']}"
+                    data_hash = hashlib.sha1(data_to_hash.encode()).hexdigest()[:24]
+                    
+                    builder = InlineKeyboardBuilder()
+                    builder.row(
+                        InlineKeyboardButton(text="✅ Одобрить", callback_data=f"shorter_name_admin:approve:{data_hash}"),
+                        InlineKeyboardButton(text="❌ Отклонить", callback_data=f"shorter_name_admin:decline:{data_hash}")
+                    )
+                    # Send the message and store its ID for potential future edits
+                    sent_message = await bot.send_message(admin_id, notification_text, reply_markup=builder.as_markup(), parse_mode='Markdown')
+
+                    # --- REFACTOR: Use Redis instead of in-memory cache ---
+                    # Store the suggestion context in Redis with a TTL (e.g., 7 days)
+                    # This makes the approval/decline buttons stateful across restarts.
+                    redis_key = f"suggestion_cache:{data_hash}"
+                    payload_to_cache = {
+                        'data': data_to_hash,
+                        'user_name': offer['user_name'], # Store the user_name
+                        'messages': [{'chat_id': admin_id, 'message_id': sent_message.message_id}]
+                    }
+                    # We use set_cache which handles JSON serialization. TTL is in seconds.
+                    await redis_client.set_cache(redis_key, payload_to_cache, ttl=604800) # 7 days
+
+        except Exception as e:
+            logging.error(f"Failed to process pending shorter name offers: {e}", exc_info=True)
+
+        # Send the main summary text
+        await message.answer("\n".join(summary_parts), parse_mode="Markdown")

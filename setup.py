@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="matplobbot-shared",
-    version="0.1.54", # Let's use the version from your requirements.txt
+    version="0.1.55", # Let's use the version from your requirements.txt
     packages=find_packages(include=['shared_lib', 'shared_lib.*']),
     description="Shared library for the Matplobbot ecosystem (database, services, i18n).",
     author="Ackrome",
@@ -12,7 +12,8 @@ setup(
         "asyncpg",
         "aiohttp", # Specify versions as needed
         "certifi",
-        "redis"
+        "redis",
+        "cachetools"
     ],
     # This tells setuptools that the package data (like .json files) should be included
     package_data={

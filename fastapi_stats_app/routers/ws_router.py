@@ -14,7 +14,8 @@ from shared_lib.database import (
     get_popular_commands_data_from_db,
     get_popular_messages_data_from_db,
     get_action_types_distribution_from_db,
-    get_activity_over_time_data_from_db
+    get_activity_over_time_data_from_db,
+    get_new_users_per_day_from_db
 )
 from ..config import LOG_DIR, BOT_LOG_FILE_NAME,FASTAPI_LOG_FILE_NAME # Обновленные импорты
 
@@ -26,76 +27,61 @@ logging.getLogger("aiogram.event").setLevel(logging.WARNING)
 # Класс для управления WebSocket соединениями
 class ConnectionManager:
     def __init__(self, name: str = "default"):
-        self.active_connections: list[WebSocket] = []
+        self.active_connections: set[WebSocket] = set()
         self.name = name  # Для логирования
-        self._lock = asyncio.Lock() # Для защиты списка active_connections
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
-        async with self._lock:
-            self.active_connections.append(websocket)
-        logger.info(f"WebSocket client connected: {websocket.client} to manager '{self.name}'. Total: {len(self.active_connections)}")
+        self.active_connections.add(websocket)
+        logger.info(f"Manager '{self.name}': Client connected {websocket.client}. Total: {len(self.active_connections)}.")
 
     async def disconnect(self, websocket: WebSocket):
-        async with self._lock:
-            if websocket in self.active_connections:
-                self.active_connections.remove(websocket)
-                logger.info(f"WebSocket client {websocket.client} removed from manager '{self.name}'. Total: {len(self.active_connections)}")
-            # else:
-                # logger.debug(f"WebSocket client {websocket.client} already removed or not found in manager '{self.name}'.")
+        self.active_connections.discard(websocket)
+        logger.info(f"Manager '{self.name}': Client disconnected {websocket.client}. Remaining: {len(self.active_connections)}.")
 
     async def send_personal_json(self, data: dict, websocket: WebSocket):
         if websocket.client_state == WebSocketState.CONNECTED:
             try:
                 await websocket.send_json(data)
             except (WebSocketDisconnect, RuntimeError) as e:
-                # These errors are expected if the client disconnects during a send operation.
-                # Log them at a lower level to reduce noise.
-                logger.debug(f"Could not send JSON to {websocket.client} (disconnected): {e}")
+                logger.debug(f"Manager '{self.name}': Could not send JSON to {websocket.client} (disconnected): {e}")
+                await self.disconnect(websocket)
             except Exception as e:
-                logger.error(f"Unexpected error sending personal JSON to {websocket.client} in manager '{self.name}': {e}")
-                # Consider auto-disconnecting on send error after multiple retries or specific errors
+                logger.error(f"Manager '{self.name}': Unexpected error sending personal JSON to {websocket.client}: {e}")
+                await self.disconnect(websocket)
 
     async def send_personal_text(self, message: str, websocket: WebSocket):
         if websocket.client_state == WebSocketState.CONNECTED:
             try:
                 await websocket.send_text(message)
             except (WebSocketDisconnect, RuntimeError) as e:
-                # Gracefully handle cases where the client disconnects while we're trying to send.
-                # This is the exact cause of the "Cannot call 'send' once a close message has been sent" error.
-                logger.debug(f"Could not send text to {websocket.client} (disconnected): {e}")
+                logger.debug(f"Manager '{self.name}': Could not send text to {websocket.client} (disconnected): {e}")
+                await self.disconnect(websocket)
             except Exception as e:
-                logger.error(f"Unexpected error sending personal text to {websocket.client} in manager '{self.name}': {e}")
+                logger.error(f"Manager '{self.name}': Unexpected error sending personal text to {websocket.client}: {e}")
+                await self.disconnect(websocket)
 
     async def _broadcast(self, send_callable_name: str, payload):
-        async with self._lock:
-            # Итерируемся по копии для безопасного удаления во время итерации (если потребуется)
-            connections_to_broadcast = list(self.active_connections)
+        # Create a list of send tasks to run concurrently.
+        connections_to_broadcast = list(self.active_connections)
+        tasks = []
+        for connection in connections_to_broadcast:
+            if send_callable_name == "send_json":
+                tasks.append(connection.send_json(payload))
+            elif send_callable_name == "send_text":
+                tasks.append(connection.send_text(payload))
         
-        if not connections_to_broadcast:
+        if not tasks:
             return
 
-        disconnected_during_broadcast = []
+        # Use asyncio.gather to send all messages concurrently and capture exceptions.
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for connection in connections_to_broadcast:
-            if connection.client_state == WebSocketState.CONNECTED:
-                try:
-                    if send_callable_name == "send_json":
-                        await connection.send_json(payload)
-                    elif send_callable_name == "send_text":
-                        await connection.send_text(payload)
-                except Exception as e: # WebSocketDisconnect, RuntimeError, etc.
-                    logger.warning(f"Error broadcasting {send_callable_name} to {connection.client} in manager '{self.name}': {e}. Marking for disconnect.")
-                    disconnected_during_broadcast.append(connection)
-            else: # Уже отключен или в процессе отключения
-                disconnected_during_broadcast.append(connection)
-        
-        if disconnected_during_broadcast:
-            async with self._lock:
-                for ws in disconnected_during_broadcast:
-                    if ws in self.active_connections: # Проверяем еще раз перед удалением
-                        self.active_connections.remove(ws)
-                        logger.info(f"WebSocket client {ws.client} removed post-broadcast due to error/disconnect from manager '{self.name}'.")
+        # Process results to find and remove disconnected clients.
+        for connection, result in zip(connections_to_broadcast, results):
+            if isinstance(result, Exception):
+                logger.warning(f"Manager '{self.name}': Failed to broadcast to {connection.client}. Error: {result}. Removing.")
+                await self.disconnect(connection)
 
     async def broadcast_json(self, data: dict):
         await self._broadcast("send_json", data)
@@ -143,6 +129,7 @@ async def periodic_stats_updater():
                     'week': await get_activity_over_time_data_from_db(db, period='week'),
                     'month': await get_activity_over_time_data_from_db(db, period='month'),
                 }
+                new_users_data = await get_new_users_per_day_from_db(db)
 
             current_data = {
                 "total_actions": current_actions,
@@ -151,6 +138,7 @@ async def periodic_stats_updater():
                 "popular_messages": popular_messages_data,
                 "action_types_distribution": action_types_data,
                 "activity_over_time": activity_over_time_data,
+                "new_users_per_day": new_users_data,
                 "last_updated": datetime.datetime.now().isoformat()
             }
             # Используем json.dumps для корректного сравнения и хранения JSON-строки

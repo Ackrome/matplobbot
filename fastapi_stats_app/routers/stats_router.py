@@ -14,6 +14,7 @@ from shared_lib.database import (
     get_users_for_action,
     get_all_user_actions
 )
+from shared_lib.redis_client import redis_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -41,6 +42,16 @@ async def get_user_profile(
     sort_by: str = Query('timestamp', description="Поле для сортировки: id, action_type, action_details, timestamp"),
     sort_order: str = Query('desc', description="Порядок сортировки: asc или desc")
 ):
+    # --- Caching Implementation ---
+    cache_key = f"user_profile:{user_id}:p{page}:s{page_size}:{sort_by}:{sort_order}"
+    try:
+        cached_data = await redis_client.get_cache(cache_key)
+        if cached_data:
+            logger.info(f"Cache hit for user profile: {cache_key}")
+            return cached_data
+    except Exception as e:
+        logger.error(f"Redis cache check failed for user profile {user_id}: {e}", exc_info=True)
+
     try:
         async with get_db_connection_obj() as db:
             profile_data = await get_user_profile_data_from_db(
@@ -52,7 +63,7 @@ async def get_user_profile(
             total_actions = profile_data["total_actions"]
             total_pages = math.ceil(total_actions / page_size)
 
-            return {
+            response_data = {
                 **profile_data,
                 "pagination": {
                     "current_page": page,
@@ -62,6 +73,14 @@ async def get_user_profile(
                     "sort_order": sort_order
                 }
             }
+            # --- Store result in cache ---
+            try:
+                # Cache for 5 minutes
+                await redis_client.set_cache(cache_key, response_data, ttl=300)
+            except Exception as e:
+                logger.error(f"Redis cache set failed for user profile {user_id}: {e}", exc_info=True)
+
+            return response_data
     except asyncpg.PostgresError as e:
         logger.error(f"Ошибка базы данных при получении профиля пользователя {user_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Ошибка базы данных (профиль пользователя): {e}")
@@ -75,12 +94,22 @@ async def get_action_users(
     sort_by: str = Query('full_name', description="Поле для сортировки: user_id, full_name, username"),
     sort_order: str = Query('asc', description="Порядок сортировки: asc или desc")
 ):
+    # --- Caching Implementation ---
+    cache_key = f"action_users:{action_type}:{action_details}:p{page}:s{page_size}:{sort_by}:{sort_order}"
+    try:
+        cached_data = await redis_client.get_cache(cache_key)
+        if cached_data:
+            logger.info(f"Cache hit for action users: {cache_key}")
+            return cached_data
+    except Exception as e:
+        logger.error(f"Redis cache check failed for action users: {e}", exc_info=True)
+
     try:
         async with get_db_connection_obj() as db:
             data = await get_users_for_action(db, action_type, action_details, page, page_size, sort_by, sort_order)
             total_users = data["total_users"]
             total_pages = math.ceil(total_users / page_size)
-            return {
+            response_data = {
                 "users": data["users"],
                 "pagination": {
                     "current_page": page,
@@ -90,6 +119,14 @@ async def get_action_users(
                     "sort_order": sort_order
                 }
             }
+            # --- Store result in cache ---
+            try:
+                # Cache for 5 minutes
+                await redis_client.set_cache(cache_key, response_data, ttl=300)
+            except Exception as e:
+                logger.error(f"Redis cache set failed for action users: {e}", exc_info=True)
+
+            return response_data
     except asyncpg.PostgresError as e:
         logger.error(f"Ошибка базы данных при получении пользователей для действия: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Ошибка базы данных (пользователи для действия): {e}")
@@ -97,9 +134,25 @@ async def get_action_users(
 @router.get("/users/{user_id}/export_actions", summary="Экспорт всех действий пользователя", description="Возвращает полный список всех действий пользователя для экспорта в CSV.")
 async def export_user_actions(user_id: int):
     try:
+        # --- Caching Implementation ---
+        cache_key = f"export_actions:{user_id}"
+        try:
+            cached_data = await redis_client.get_cache(cache_key)
+            if cached_data:
+                logger.info(f"Cache hit for user export: {user_id}")
+                return cached_data
+        except Exception as e:
+            logger.error(f"Redis cache check failed for user export {user_id}: {e}", exc_info=True)
+
         async with get_db_connection_obj() as db:
             actions = await get_all_user_actions(db, user_id)
-            return {"actions": actions}
+            response_data = {"actions": actions}
+            # --- Store result in cache ---
+            try:
+                await redis_client.set_cache(cache_key, response_data, ttl=300) # Cache for 5 minutes
+            except Exception as e:
+                logger.error(f"Redis cache set failed for user export {user_id}: {e}", exc_info=True)
+            return response_data
     except asyncpg.PostgresError as e:
         logger.error(f"Ошибка базы данных при экспорте действий пользователя {user_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Ошибка базы данных (экспорт действий): {e}")

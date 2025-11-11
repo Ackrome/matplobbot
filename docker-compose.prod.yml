@@ -44,6 +44,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
 
 
   mpb-scheduler:
@@ -58,6 +62,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9584/health"]
       interval: 30s
@@ -78,6 +86,10 @@ services:
         condition: service_started # API can start once the bot container starts
       postgres:
         condition: service_healthy
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9583/api/health"]
       interval: 30s

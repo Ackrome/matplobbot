@@ -3,6 +3,7 @@ const leaderboardBodyElement = document.getElementById('leaderboard-body');
 const popularActionsStatusElement = document.getElementById('popular-actions-status');
 const actionTypesStatusElement = document.getElementById('action-types-status');
 const activityOverTimeStatusElement = document.getElementById('activity-over-time-status');
+const newUsersStatusElement = document.getElementById('new-users-status');
 const botLogContentElement = document.getElementById('bot-log-content');
 const botLogStatusElement = document.getElementById('bot-log-status');
 const lastUpdatedContainer = document.getElementById('last-updated-container');
@@ -13,6 +14,7 @@ const downloadButtons = {
 let popularActionsChartInstance; // Для нового комбинированного графика
 let actionTypesChartInstance; // Для графика типов действий
 let activityOverTimeChartInstance; // Для графика активности по времени
+let newUsersChartInstance; // Для графика новых пользователей
 
 // Определяем URL для WebSocket. Если используется HTTPS, нужен wss://
 const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -112,6 +114,7 @@ function handleStatsSocketMessage(event) {
                 if (activityOverTimeChartInstance) { activityOverTimeChartInstance.destroy(); activityOverTimeChartInstance = null; }
             } else if (data.total_actions !== undefined) {
                 if (data.last_updated) {
+                    // Update last updated timestamp
                     const date = new Date(data.last_updated);
                     lastUpdatedValueElement.textContent = date.toLocaleString('ru-RU');
                     lastUpdatedContainer.style.display = 'block';
@@ -215,6 +218,19 @@ function handleStatsSocketMessage(event) {
                 }
             }
 
+            if (data.new_users_per_day && Array.isArray(data.new_users_per_day)) {
+                if (data.new_users_per_day.length === 0) {
+                    newUsersStatusElement.textContent = "Нет данных о новых пользователях.";
+                    document.querySelectorAll('.download-btn[data-chart="newUsers"]').forEach(b => b.style.display = 'none');
+                    if (newUsersChartInstance) { newUsersChartInstance.destroy(); newUsersChartInstance = null; }
+                } else {
+                    newUsersStatusElement.textContent = "";
+                    chartDataStore.newUsers = data.new_users_per_day;
+                    document.querySelectorAll('.download-btn[data-chart="newUsers"]').forEach(b => b.style.display = 'inline-block');
+                    updateNewUsersChart(data.new_users_per_day);
+                }
+            }
+
         } catch (e) {
             console.error("Ошибка парсинга WebSocket данных:", e, "Данные:", event.data);
             totalActionsValueElement.textContent = "Ошибка обработки данных";
@@ -222,6 +238,7 @@ function handleStatsSocketMessage(event) {
             popularActionsStatusElement.textContent = "Ошибка обработки данных для графика.";
             actionTypesStatusElement.textContent = "Ошибка обработки данных для графика.";
             activityOverTimeStatusElement.textContent = "Ошибка обработки данных для графика.";
+            newUsersStatusElement.textContent = "Ошибка обработки данных для графика.";
             }
     };
 function handleStatsSocketError(error) {
@@ -231,9 +248,11 @@ function handleStatsSocketError(error) {
         popularActionsStatusElement.textContent = "Ошибка соединения WebSocket для графика.";
         actionTypesStatusElement.textContent = "Ошибка соединения WebSocket для графика.";
         activityOverTimeStatusElement.textContent = "Ошибка соединения WebSocket для графика.";
+        newUsersStatusElement.textContent = "Ошибка соединения WebSocket для графика.";
         if (popularActionsChartInstance) { popularActionsChartInstance.destroy(); popularActionsChartInstance = null; }
         if (actionTypesChartInstance) { actionTypesChartInstance.destroy(); actionTypesChartInstance = null; }
         if (activityOverTimeChartInstance) { activityOverTimeChartInstance.destroy(); activityOverTimeChartInstance = null; }
+        if (newUsersChartInstance) { newUsersChartInstance.destroy(); newUsersChartInstance = null; }
     };
 function handleStatsSocketClose() {
         // UI updates for reconnection attempt
@@ -243,9 +262,11 @@ function handleStatsSocketClose() {
         popularActionsStatusElement.textContent = "Соединение для графика потеряно. Попытка переподключения...";
         actionTypesStatusElement.textContent = "Соединение для графика потеряно. Попытка переподключения...";
         activityOverTimeStatusElement.textContent = "Соединение для графика потеряно. Попытка переподключения...";
+        newUsersStatusElement.textContent = "Соединение для графика потеряно. Попытка переподключения...";
         if (popularActionsChartInstance) { popularActionsChartInstance.destroy(); popularActionsChartInstance = null; }
         if (actionTypesChartInstance) { actionTypesChartInstance.destroy(); actionTypesChartInstance = null; }
         if (activityOverTimeChartInstance) { activityOverTimeChartInstance.destroy(); activityOverTimeChartInstance = null; }
+        if (newUsersChartInstance) { newUsersChartInstance.destroy(); newUsersChartInstance = null; }
     };
 
 function handleLogSocketOpen() {
@@ -681,6 +702,18 @@ const updateActivityOverTimeChart = () => {
     });
 };
 
+const updateNewUsersChart = (data) => {
+    newUsersChartInstance = updateChart({
+        instance: newUsersChartInstance,
+        ctx: document.getElementById('newUsersChart').getContext('2d'),
+        data,
+        type: 'line',
+        labelKey: 'date',
+        countKey: 'count',
+        datasetLabel: 'Новые пользователи',
+        borderColor: 'rgb(153, 102, 255)', // A nice purple
+    });
+};
 function openTab(evt, tabName) {
     var i, tabcontent, tablinks;
     // Скрываем все элементы с классом "tab-content"
@@ -731,14 +764,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 const headerMap = {
                     popularActions: ['Action', 'Count', 'Type'],
                     actionTypes: ['Action Type', 'Count'],
-                    activityOverTime: ['Period', 'Count']
+                    activityOverTime: ['Period', 'Count'],
+                    newUsers: ['Date', 'Count']
                 };
                 downloadCSV(headerMap[chartType], data, `${chartType}_export.csv`);
             } else if (format === 'png') {
                 const chartInstanceMap = {
                     popularActions: popularActionsChartInstance,
                     actionTypes: actionTypesChartInstance,
-                    activityOverTime: activityOverTimeChartInstance
+                    activityOverTime: activityOverTimeChartInstance,
+                    newUsers: newUsersChartInstance
                 };
                 const chart = chartInstanceMap[chartType];
                 if (!chart) return;
@@ -792,7 +827,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 Chart.defaults.color = newThemeColors.legendColor;
                 Chart.defaults.borderColor = newThemeColors.gridColor;
 
-                [popularActionsChartInstance, actionTypesChartInstance, activityOverTimeChartInstance].forEach(chart => {
+                [popularActionsChartInstance, actionTypesChartInstance, activityOverTimeChartInstance, newUsersChartInstance].forEach(chart => {
                     if (chart) {
                         if (chart.options.scales) {
                             if (chart.options.scales.x) {

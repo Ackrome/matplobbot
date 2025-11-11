@@ -253,6 +253,7 @@ class BaseManager:
             "favorites": self.library_manager.favorites_command,
             "latex": self.rendering_manager.latex_command,
             "mermaid": self.rendering_manager.mermaid_command,
+            "offershorter": self.suggestions_manager.cmd_offer_shorter,
             "settings": self.settings_manager.command_settings_private,
             "help": self.command_help_private,
         }

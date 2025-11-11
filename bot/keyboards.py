@@ -97,6 +97,7 @@ async def get_help_inline_keyboard(user_id: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_settings"), callback_data="help_cmd_settings")],
         [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_latex"), callback_data="help_cmd_latex")],
         [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_mermaid"), callback_data="help_cmd_mermaid")]
+        [InlineKeyboardButton(text=translator.gettext(lang, "help_btn_offershorter"), callback_data="help_cmd_offershorter")]
     ]
     if user_id in ADMIN_USER_IDS:
         inline_keyboard_rows.append([InlineKeyboardButton(text=translator.gettext(lang, "help_btn_update"), callback_data="help_cmd_update")])

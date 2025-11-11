@@ -1,18 +1,18 @@
 import logging
-from datetime import datetime, timedelta
-import aiohttp
-import json
+from datetime import date, datetime, timedelta
+import aiohttp, collections
+import json, os
 import asyncio
 import hashlib, random
 from zoneinfo import ZoneInfo
-from .config import BOT_TOKEN
+from .config import BOT_TOKEN, LOG_DIR
 
 # We need to import these from the bot's services.
 # In a real-world scenario, this might be a shared library.
 from shared_lib.services.university_api import RuzAPIClient, RuzAPIError
 from shared_lib.services.schedule_service import format_schedule, diff_schedules
 from shared_lib.i18n import translator
-from shared_lib.database import get_subscriptions_for_notification, update_subscription_hash, delete_old_inactive_subscriptions, get_unique_active_subscription_entities, get_subscriptions_for_entity
+from shared_lib.database import get_subscriptions_for_notification, update_subscription_hash, delete_old_inactive_subscriptions, get_all_active_subscriptions, get_all_short_names, get_user_settings, get_admin_daily_summary
 from shared_lib.redis_client import redis_client
 
 logger = logging.getLogger(__name__)
@@ -72,32 +72,48 @@ async def send_daily_schedules(http_session: aiohttp.ClientSession, ruz_api_clie
         if not subscriptions:
             return
 
-        logger.info(f"Found {len(subscriptions)} subscriptions to notify for {current_time_str}.")
-
+        # --- OPTIMIZATION: Group subscriptions by entity to avoid redundant API calls ---
+        grouped_subscriptions = collections.defaultdict(list)
         for sub in subscriptions:
+            entity_key = (sub['entity_type'], sub['entity_id'])
+            grouped_subscriptions[entity_key].append(sub)
+
+        logger.info(f"Found {len(subscriptions)} subscriptions across {len(grouped_subscriptions)} unique entities for {current_time_str}.")
+
+        for entity_key, subs_for_entity in grouped_subscriptions.items():
+            entity_type, entity_id = entity_key
+            # Use the first subscription's name for logging, as it's the same for all in the group.
+            entity_name_for_log = subs_for_entity[0].get('entity_name', 'Unknown')
+            
             try:
-                logger.info(f"Processing subscription ID: {sub['id']} for chat {sub['chat_id']} and entity '{sub['entity_name']}'.")
+                # --- Fetch schedule data ONCE per unique entity ---
+                logger.info(f"Fetching schedule for entity '{entity_name_for_log}' ({entity_type}:{entity_id}) for {len(subs_for_entity)} subscribers.")
                 schedule_data = await ruz_api_client.get_schedule(
-                    sub['entity_type'], sub['entity_id'], start=start_date_str, finish=end_date_str
+                    entity_type, entity_id, start=start_date_str, finish=end_date_str
                 )
 
-                # --- Change Detection & Diff Logic ---
-                # This job does not perform change detection; it simply sends the schedule for the next day.
-                # The check_for_schedule_updates job is responsible for diffs.
-                # We will just format and send.
+                # --- Process and send to all subscribers for this entity ---
+                for sub in subs_for_entity:
+                    try:
+                        lang = await translator.get_language(sub['user_id'], sub['chat_id'])
+                        recipient_chat_id = sub['chat_id']
+                        thread_id = sub.get('message_thread_id')
 
-                lang = await translator.get_language(sub['user_id'], sub['chat_id'])
-                recipient_chat_id = sub['chat_id']
-                thread_id = sub.get('message_thread_id')
-
-                # Always send the full schedule for the upcoming day.
-                logger.debug(f"Sub ID {sub['id']}: Sending full schedule for {target_date.strftime('%Y-%m-%d')}.")
-                formatted_text = format_schedule(schedule_data, lang, sub['entity_name'], sub['entity_type'], start_date=target_date, is_week_view=False)
-                await send_telegram_message(http_session, recipient_chat_id, formatted_text, thread_id)
+                        # Always send the full schedule for the upcoming day.
+                        logger.debug(f"Sub ID {sub['id']}: Formatting and sending schedule for {target_date.strftime('%Y-%m-%d')} to chat {recipient_chat_id}.")
+                        formatted_text = await format_schedule(schedule_data, lang, sub['entity_name'], sub['entity_type'], sub['user_id'], start_date=target_date, is_week_view=False)
+                        await send_telegram_message(http_session, recipient_chat_id, formatted_text, thread_id)
+                        # Small delay between messages to avoid hitting Telegram's rate limits
+                        await asyncio.sleep(0.1)
+                    except Exception as e:
+                        logger.error(f"Failed to send to individual subscriber (sub_id: {sub['id']}, chat_id: {sub['chat_id']}): {e}", exc_info=True)
 
             except Exception as e:
-                logger.error(f"Failed to process and send schedule to chat {sub.get('chat_id')} for entity '{sub['entity_name']}': {e}", exc_info=True)
-    
+                logger.error(f"Failed to process entity group '{entity_name_for_log}': {e}", exc_info=True)
+                # Optionally, notify users in this group that an error occurred
+                # for sub in subs_for_entity:
+                #     await send_telegram_message(http_session, sub['chat_id'], "Не удалось получить расписание из-за ошибки сервера.", sub.get('message_thread_id'))
+
     except Exception as e:
         logger.error(f"Critical error in send_daily_schedules job: {e}", exc_info=True)
 
@@ -108,65 +124,99 @@ async def check_for_schedule_updates(http_session: aiohttp.ClientSession, ruz_ap
     If a change is detected, notifies the user.
     """
     logger.info("Starting schedule change detection job...")
-    moscow_tz = ZoneInfo("Europe/Moscow")
-    start_date = datetime.now(moscow_tz)
-    end_date = start_date + timedelta(weeks=3)
+    
+    # --- NEW: Semester-aware date range logic ---
+    today = datetime.now(ZoneInfo("Europe/Moscow")).date()
+    current_year = today.year
+
+    # Spring semester: from start of February to mid-July.
+    if 2 <= today.month <= 6 or (today.month == 7 and today.day < 15):
+        start_date = date(current_year, 2, 1)
+        end_date = date(current_year, 7, 14)
+    # Fall semester: from mid-July to end of January of the next year.
+    else:
+        # If it's early January, it's still the fall semester of the previous academic year.
+        if today.month == 1:
+            start_date = date(current_year - 1, 7, 15)
+            end_date = date(current_year, 1, 31)
+        else: # It's July 15th or later.
+            start_date = date(current_year, 7, 15)
+            end_date = date(current_year + 1, 1, 31)
+
     start_date_str = start_date.strftime("%Y.%m.%d")
     end_date_str = end_date.strftime("%Y.%m.%d")
+    logger.info(f"Change detection window set for the current semester: {start_date_str} to {end_date_str}")
 
     try:
-        # 1. Fetch unique entities to avoid redundant API calls
-        unique_entities = await get_unique_active_subscription_entities()
-        if not unique_entities:
-            logger.info("Change detection job: No unique active entities found.")
+        # --- OPTIMIZATION: Fetch all subscriptions once and group them in memory ---
+        all_subscriptions = await get_all_active_subscriptions()
+        if not all_subscriptions:
+            logger.info("Change detection job: No active subscriptions found.")
             return
 
-        logger.info(f"Change detection job: Checking {len(unique_entities)} unique entities.")
+        grouped_subscriptions = collections.defaultdict(list)
+        for sub in all_subscriptions:
+            entity_key = (sub['entity_type'], sub['entity_id'])
+            grouped_subscriptions[entity_key].append(sub)
 
-        # 2. Loop through unique entities, not all subscriptions
-        for entity in unique_entities:
+        logger.info(f"Change detection job: Checking {len(grouped_subscriptions)} unique entities for {len(all_subscriptions)} total subscriptions.")
+
+        # Pre-fetch all short names once to pass into the diff function
+        short_names_map = await get_all_short_names()
+
+        # 2. Loop through unique entities
+        for entity_key, subs_for_entity in grouped_subscriptions.items():
+            entity_type, entity_id = entity_key
+            entity_name = subs_for_entity[0]['entity_name'] # All subs in this group have the same name
+
             try:
                 # Fetch schedule data ONCE per unique entity
                 new_schedule_data = await ruz_api_client.get_schedule(
-                    entity['entity_type'], entity['entity_id'], start=start_date_str, finish=end_date_str
+                    entity_type, entity_id, start=start_date_str, finish=end_date_str
                 )
                 new_hash = hashlib.sha256(json.dumps(new_schedule_data, sort_keys=True).encode()).hexdigest()
 
-                # Get all subscriptions for this specific entity
-                subscriptions_for_entity = await get_subscriptions_for_entity(entity['entity_type'], entity['entity_id'])
-
-                # Use the first subscription's hash as a reference. They should all be the same for the same entity.
-                # If not, this logic will self-correct on the next run.
-                reference_hash = subscriptions_for_entity[0].get('last_schedule_hash') if subscriptions_for_entity else None
+                # Use the first subscription's hash as a reference.
+                reference_hash = subs_for_entity[0].get('last_schedule_hash')
 
                 if reference_hash and new_hash != reference_hash:
-                    logger.info(f"Change detected for entity '{entity['entity_name']}'. Notifying {len(subscriptions_for_entity)} subscribers.")
+                    logger.info(f"Change detected for entity '{entity_name}'. Notifying {len(subs_for_entity)} subscribers.")
                     # Fetch old data from Redis using the first subscription as a reference
-                    ref_sub = subscriptions_for_entity[0]
+                    ref_sub = subs_for_entity[0]
                     redis_key = f"schedule_data:{ref_sub['id']}"
                     old_schedule_data_raw = await redis_client.get_user_cache(ref_sub['user_id'], redis_key)
                     old_schedule_data = json.loads(old_schedule_data_raw) if old_schedule_data_raw else None
 
-                    # Notify all subscribers for this entity
-                    for sub in subscriptions_for_entity:
+                    # --- OPTIMIZATION: Generate diff text once per language ---
+                    diffs_by_lang = {}
+
+                    for sub in subs_for_entity:
                         lang = await translator.get_language(sub['user_id'], sub['chat_id'])
-                        diff_text = diff_schedules(old_schedule_data, new_schedule_data, lang) if old_schedule_data else None
-                        if diff_text:
+                        if lang not in diffs_by_lang:
+                            # --- FIX: Only generate a diff if there is old data to compare against ---
+                            if old_schedule_data:
+                                diffs_by_lang[lang] = diff_schedules(old_schedule_data, new_schedule_data, lang, use_short_names=True, short_names_map=short_names_map)
+                            else:
+                                # No old data means this is the first check for this subscription. No diff to generate.
+                                diffs_by_lang[lang] = None
+                        
+                        # Send notification if a diff was generated for this language
+                        if diffs_by_lang[lang]:
                             header = translator.gettext(lang, "schedule_change_notification", entity_name=sub['entity_name'])
-                            await send_telegram_message(http_session, sub['chat_id'], f"{header}\n\n{diff_text}", sub.get('message_thread_id'))
+                            await send_telegram_message(http_session, sub['chat_id'], f"{header}\n\n{diffs_by_lang[lang]}", sub.get('message_thread_id'))
 
                 # 3. Update state for ALL subscriptions of this entity
-                for sub in subscriptions_for_entity:
+                for sub in subs_for_entity:
                     await update_subscription_hash(sub['id'], new_hash)
                     await redis_client.set_user_cache(sub['user_id'], f"schedule_data:{sub['id']}", json.dumps(new_schedule_data), ttl=None)
 
                 # 4. Stagger requests to avoid thundering herd
                 await asyncio.sleep(1 + random.uniform(0.5, 1.5))
 
-            except RuzAPIError as e: # Be more specific with API errors
-                logger.warning(f"Change detection: RUZ API error for entity '{entity.get('entity_name')}': {e}")
-            except Exception as e: # Catch other errors
-                logger.error(f"Change detection: Failed to process entity '{entity.get('entity_name')}': {e}", exc_info=True)
+            except RuzAPIError as e:
+                logger.warning(f"Change detection: RUZ API error for entity '{entity_name}': {e}")
+            except Exception as e:
+                logger.error(f"Change detection: Failed to process entity '{entity_name}': {e}", exc_info=True)
     except Exception as e:
         logger.error(f"Critical error in check_for_schedule_updates job: {e}", exc_info=True)
 
@@ -182,3 +232,62 @@ async def prune_inactive_subscriptions():
             logger.info(f"Successfully pruned {deleted_count} old, inactive subscriptions from the database.")
     except Exception as e:
         logger.error(f"Critical error in prune_inactive_subscriptions job: {e}", exc_info=True)
+
+async def cleanup_old_log_files(days_to_keep: int = 30):
+    """
+    Periodically cleans up log files older than a specified number of days.
+    """
+    logger.info(f"Starting job to clean up log files older than {days_to_keep} days...")
+    try:
+        now = datetime.now()
+        cutoff = now - timedelta(days=days_to_keep)
+        
+        if not os.path.exists(LOG_DIR):
+            logger.warning(f"Log directory {LOG_DIR} does not exist. Skipping cleanup.")
+            return
+
+        deleted_count = 0
+        for filename in os.listdir(LOG_DIR):
+            file_path = os.path.join(LOG_DIR, filename)
+            if os.path.isfile(file_path) and filename.endswith('.log'):
+                try:
+                    file_mod_time = datetime.fromtimestamp(os.path.getmtime(file_path))
+                    if file_mod_time < cutoff:
+                        os.remove(file_path)
+                        logger.info(f"Deleted old log file: {file_path}")
+                        deleted_count += 1
+                except Exception as e:
+                    logger.error(f"Error processing or deleting log file {file_path}: {e}")
+        logger.info(f"Log cleanup finished. Deleted {deleted_count} old log files.")
+    except Exception as e:
+        logger.error(f"Critical error in cleanup_old_log_files job: {e}", exc_info=True)
+
+async def send_admin_summary(http_session: aiohttp.ClientSession):
+    """
+    Runs every minute, checks if it's time to send a daily summary to any admin,
+    and sends it if the time matches their personal setting.
+    """
+    from .config import ADMIN_USER_IDS
+    if not ADMIN_USER_IDS:
+        return
+
+    moscow_tz = ZoneInfo("Europe/Moscow")
+    current_time_str = datetime.now(moscow_tz).strftime("%H:%M")
+    current_weekday = datetime.now(moscow_tz).weekday() # 0=Monday, 6=Sunday
+
+    for admin_id in ADMIN_USER_IDS:
+        try:
+            settings = await get_user_settings(admin_id)
+            summary_time = settings.get('admin_daily_summary_time', '09:00')
+            summary_days = settings.get('admin_summary_days', [0, 1, 2, 3, 4]) # Default to Mon-Fri
+
+            # --- NEW: Check if today is a selected day for the summary ---
+            if summary_time == current_time_str and current_weekday in summary_days:
+                logger.info(f"Time match for admin {admin_id}. Triggering summary send via bot command.")
+                # This is a simplified way to trigger the bot. In a more complex system,
+                # you might use a message queue (like RabbitMQ) or a direct API call
+                # to an internal endpoint on the bot service.
+                await send_telegram_message(http_session, admin_id, "/send_admin_summary", None) # This will be handled by the bot
+
+        except Exception as e:
+            logger.error(f"Failed to process or send daily summary for admin {admin_id}: {e}", exc_info=True)

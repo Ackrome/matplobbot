@@ -6,15 +6,17 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton, Message, CallbackQuery
 from types import SimpleNamespace
 import re, datetime
-import asyncpg # Import asyncpg to catch specific DB errors
+import asyncpg
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .base import BaseManager # Only for type checking
     from .schedule import ScheduleManager
-from aiogram import Bot # Import Bot for mock_callback
-from shared_lib.database import get_user_settings, get_user_repos, update_user_settings_db, get_user_subscriptions, remove_schedule_subscription, get_chat_subscriptions, toggle_subscription_status, update_subscription_notification_time, get_chat_settings, update_chat_settings_db, SubscriptionConflictError, delete_all_user_data
+    from .admin import AdminManager
+from aiogram import Bot
+from shared_lib.database import get_user_settings, get_user_repos, update_user_settings_db, get_user_subscriptions, remove_schedule_subscription, get_chat_subscriptions, toggle_subscription_status, update_subscription_notification_time, get_chat_settings, update_chat_settings_db, SubscriptionConflictError, delete_all_user_data, get_all_short_names_with_ids, delete_short_name_by_id
 from shared_lib.i18n import translator
 from .admin import AdminOrCreatorFilter
+from ..config import ADMIN_USER_IDS
 
 import logging
 logger = logging.getLogger(__name__)
@@ -29,11 +31,13 @@ SUBSCRIPTIONS_PER_PAGE = 5
 
 class SettingsStates(StatesGroup):
     awaiting_new_sub_time = State()
+    awaiting_admin_summary_time = State()
 
 class SettingsManager:
-    def __init__(self, schedule_manager: 'ScheduleManager'):
+    def __init__(self, schedule_manager: 'ScheduleManager', admin_manager: 'AdminManager'):
         self.router = Router()
         self.schedule_manager = schedule_manager
+        self.admin_manager = admin_manager
         self.base_manager: 'BaseManager' | None = None # Will be set later
         self._register_handlers()
         self.AVAILABLE_LANGUAGES = AVAILABLE_LANGUAGES
@@ -49,6 +53,7 @@ class SettingsManager:
         self.router.callback_query(F.data == "back_to_settings")(self.cq_back_to_settings)
 
         # Display settings
+        self.router.callback_query(F.data == "settings_toggle_short_names")(self.cq_toggle_short_names)
         self.router.callback_query(F.data == "settings_toggle_docstring")(self.cq_toggle_docstring)
         self.router.callback_query(F.data == "settings_cycle_md_mode")(self.cq_cycle_md_mode)
 
@@ -79,14 +84,25 @@ class SettingsManager:
 
         # Handler for when user provides the new time
         self.router.message(SettingsStates.awaiting_new_sub_time)(self.process_new_subscription_time)
+        self.router.message(SettingsStates.awaiting_admin_summary_time)(self.process_new_admin_summary_time)
 
         # Handler for restarting the onboarding tour
         self.router.callback_query(F.data == "restart_onboarding")(self.cq_restart_onboarding_prompt)
         self.router.callback_query(F.data == "restart_onboarding_confirm")(self.cq_confirm_restart_onboarding)
 
+        # Admin-specific settings
+        self.router.callback_query(F.data == "admin_settings_summary_time")(self.cq_change_admin_summary_time_prompt)
+        self.router.callback_query(F.data == "admin_get_summary_now")(self.cq_get_admin_summary_now)
+        self.router.callback_query(F.data.startswith("admin_toggle_summary_day:"))(self.cq_toggle_admin_summary_day)
+
         # Handlers for deleting all user data
         self.router.callback_query(F.data == "delete_my_data")(self.cq_delete_my_data_prompt)
         self.router.callback_query(F.data == "delete_my_data_confirm")(self.cq_confirm_delete_my_data)
+
+        # --- NEW: Short Name Management Handlers ---
+        self.router.callback_query(F.data == "manage_short_names")(self.cq_manage_short_names)
+        self.router.callback_query(F.data.startswith("sname_del:"))(self.cq_delete_short_name)
+
 
     async def cq_restart_onboarding_prompt(self, callback: CallbackQuery):
         """Asks the user to confirm restarting the onboarding tour."""
@@ -136,6 +152,14 @@ class SettingsManager:
         lang = settings.get('language', 'en')
         builder = InlineKeyboardBuilder()
 
+        # --- NEW: Short Names Toggle ---
+        short_names_status_key = "settings_docstring_on" if settings.get('use_short_names', True) else "settings_docstring_off"
+        builder.row(InlineKeyboardButton(
+            text=translator.gettext(lang, "settings_use_short_names", status=translator.gettext(lang, short_names_status_key)),
+            callback_data="settings_toggle_short_names"
+        ))
+        # --- END NEW ---
+
         # Docstring toggle
         docstring_status_key = "settings_docstring_on" if settings['show_docstring'] else "settings_docstring_off"
         builder.row(InlineKeyboardButton(
@@ -183,6 +207,29 @@ class SettingsManager:
         # Restart Onboarding Tour
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "settings_restart_onboarding_btn"), callback_data="restart_onboarding"))
 
+        # --- Admin-only settings ---
+        if user_id in ADMIN_USER_IDS:
+            summary_time = settings.get('admin_daily_summary_time', '09:00')
+            builder.row(InlineKeyboardButton(
+                text=translator.gettext(lang, "admin_settings_summary_time_btn", time=summary_time),
+                callback_data="admin_settings_summary_time"
+            ))
+            # --- NEW: Get Summary Now button ---
+            builder.row(InlineKeyboardButton(
+                text=translator.gettext(lang, "admin_get_summary_now_btn"),
+                callback_data="admin_get_summary_now"
+            ))
+            # --- NEW: Weekday selector for admin summary ---
+            summary_days = settings.get('admin_summary_days', [0,1,2,3,4])
+            day_names = translator.gettext(lang, "calendar_days_short").split(',')
+            day_buttons = []
+            for i, day_name in enumerate(day_names):
+                status_emoji = "✅" if i in summary_days else "❌"
+                day_buttons.append(InlineKeyboardButton(text=f"{status_emoji} {day_name}", callback_data=f"admin_toggle_summary_day:{i}"))
+            builder.row(*day_buttons)
+            # --- END NEW ---
+
+
         # Delete all user data
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "settings_delete_my_data_btn"), callback_data="delete_my_data"))
 
@@ -219,6 +266,17 @@ class SettingsManager:
         keyboard = await self.get_settings_keyboard(user_id)
         await callback.message.edit_text(translator.gettext(lang, "settings_menu_header"), reply_markup=keyboard.as_markup())
         await callback.answer()
+
+    async def cq_toggle_short_names(self, callback: CallbackQuery):
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        settings = await get_user_settings(user_id)
+        settings['use_short_names'] = not settings.get('use_short_names', True)
+        await update_user_settings_db(user_id, settings)
+        keyboard = await self.get_settings_keyboard(user_id)
+        await callback.message.edit_reply_markup(reply_markup=keyboard.as_markup())
+        await callback.answer(translator.gettext(lang, "settings_short_names_updated"))
+
 
     async def cq_toggle_docstring(self, callback: CallbackQuery):
         user_id = callback.from_user.id
@@ -463,6 +521,40 @@ class SettingsManager:
         except (ValueError, IndexError):
             await callback.answer(translator.gettext(lang, "subscription_info_outdated"), show_alert=True)
 
+    async def cq_change_admin_summary_time_prompt(self, callback: CallbackQuery, state: FSMContext):
+        lang = await translator.get_language(callback.from_user.id)
+        await state.set_state(SettingsStates.awaiting_admin_summary_time)
+        await callback.message.edit_text(translator.gettext(lang, "admin_settings_summary_time_prompt"))
+        await callback.answer()
+
+    async def cq_get_admin_summary_now(self, callback: CallbackQuery, bot: Bot):
+        """Handles the 'Get Summary Now' button click for admins."""
+        await callback.answer("Запрашиваю сводку...")
+        # We reuse the command handler, passing the admin's ID as the target.
+        # The key fix is to pass the admin's ID (from `callback.from_user.id`)
+        # as the `target_chat_id` to the command handler.
+        await self.admin_manager.send_admin_summary_command(callback.message, bot, target_chat_id=callback.from_user.id)
+
+    async def cq_toggle_admin_summary_day(self, callback: CallbackQuery):
+        """Toggles a day for the admin's daily summary."""
+        user_id = callback.from_user.id
+        try:
+            day_to_toggle = int(callback.data.split(":")[1])
+            settings = await get_user_settings(user_id)
+            summary_days = settings.get('admin_summary_days', [])
+            if day_to_toggle in summary_days:
+                summary_days.remove(day_to_toggle)
+            else:
+                summary_days.append(day_to_toggle)
+            settings['admin_summary_days'] = sorted(summary_days)
+            await update_user_settings_db(user_id, settings)
+            keyboard = await self.get_settings_keyboard(user_id)
+            await callback.message.edit_reply_markup(reply_markup=keyboard.as_markup())
+        except (ValueError, IndexError):
+            logger.error(f"Invalid admin_toggle_summary_day callback data: {callback.data}")
+        finally:
+            await callback.answer()
+
     async def process_new_subscription_time(self, message: Message, state: FSMContext, bot: Bot):
         user_id, lang = message.from_user.id, await translator.get_language(message.from_user.id, message.chat.id)
         time_str = message.text.strip()
@@ -510,6 +602,29 @@ class SettingsManager:
             await message.answer(translator.gettext(lang, "subscription_update_failed_general")) # Use answer instead of reply
         finally:
             await state.clear()
+
+    async def process_new_admin_summary_time(self, message: Message, state: FSMContext):
+        """Handles the new time input for the admin's daily summary."""
+        user_id, lang = message.from_user.id, await translator.get_language(message.from_user.id, message.chat.id)
+        time_str = message.text.strip()
+
+        if not re.match(r"^\d{1,2}:\d{2}$", time_str):
+            await message.reply(translator.gettext(lang, "schedule_invalid_time_format"))
+            return
+
+        try:
+            new_time = datetime.datetime.strptime(time_str, "%H:%M").time()
+            settings = await get_user_settings(user_id)
+            settings['admin_daily_summary_time'] = new_time.strftime("%H:%M")
+            await update_user_settings_db(user_id, settings)
+            await message.answer(translator.gettext(lang, "admin_summary_time_updated", time=new_time.strftime("%H:%M")))
+        except ValueError:
+            await message.answer(translator.gettext(lang, "schedule_invalid_time_value"))
+        finally:
+            await state.clear()
+            # Show the main settings menu again
+            keyboard = await self.get_settings_keyboard(user_id)
+            await message.answer(translator.gettext(lang, "settings_menu_header"), reply_markup=keyboard.as_markup())
 
     # --- NEW DELETION HANDLERS ---
 
@@ -577,3 +692,36 @@ class SettingsManager:
                 await callback.answer(translator.gettext(lang, "subscription_info_outdated"), show_alert=True)
         except (ValueError, IndexError):
             await callback.answer(translator.gettext(lang, "subscription_info_outdated"), show_alert=True)
+
+    # --- Short Name Management ---
+
+    async def _get_short_names_keyboard(self, user_id: int) -> InlineKeyboardBuilder:
+        """Builds the keyboard for managing approved short names."""
+        lang = await translator.get_language(user_id)
+        short_names = await get_all_short_names_with_ids()
+        builder = InlineKeyboardBuilder()
+
+        for item in short_names:
+            # Using f-string for clarity, but could also use .format()
+            button_text = f"'{item['short_name']}' ⟵ '{item['full_name']}'"
+            builder.row(
+                InlineKeyboardButton(text=button_text, callback_data="noop"),
+                InlineKeyboardButton(text=translator.gettext(lang, "btn_delete"), callback_data=f"sname_del:{item['id']}")
+            )
+        
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "back_to_settings"), callback_data="back_to_settings"))
+        return builder, len(short_names) > 0
+
+    async def cq_manage_short_names(self, callback: CallbackQuery):
+        lang = await translator.get_language(callback.from_user.id)
+        keyboard, has_items = await self._get_short_names_keyboard(callback.from_user.id)
+        header_text = translator.gettext(lang, "short_names_management_header") if has_items else translator.gettext(lang, "short_names_list_empty")
+        await callback.message.edit_text(header_text, reply_markup=keyboard.as_markup())
+        await callback.answer()
+
+    async def cq_delete_short_name(self, callback: CallbackQuery):
+        short_name_id = int(callback.data.split(":")[1])
+        await delete_short_name_by_id(short_name_id)
+        await callback.answer(translator.gettext(await translator.get_language(callback.from_user.id), "short_name_deleted_success"))
+        # Refresh the menu
+        await self.cq_manage_short_names(callback)

@@ -9,7 +9,7 @@ import aiohttp, aiohttp.web
 load_dotenv()
 
 from scheduler_app.config import LOG_DIR, SCHEDULER_LOG_FILE, BOT_TOKEN
-from scheduler_app.jobs import send_daily_schedules, check_for_schedule_updates, prune_inactive_subscriptions
+from scheduler_app.jobs import send_daily_schedules, check_for_schedule_updates, prune_inactive_subscriptions, send_admin_summary, cleanup_old_log_files
 from shared_lib.database import init_db_pool, close_db_pool, init_db, get_db_connection_obj
 
 # We need to import this from the bot's services
@@ -66,6 +66,21 @@ async def main():
             hour=3, minute=0
         )
 
+        # Add the new admin summary job to run every minute
+        scheduler.add_job(
+            send_admin_summary,
+            trigger='cron',
+            minute='*',
+            kwargs={'http_session': session}
+        )
+
+        # Add the new log cleanup job to run once a day (e.g., at 4 AM Moscow time)
+        scheduler.add_job(
+            cleanup_old_log_files,
+            trigger='cron',
+            hour=4, minute=0,
+            kwargs={'days_to_keep': 30}
+        )
         # --- Health Check Server Setup ---
         async def health_check(request):
             try:
