@@ -36,10 +36,6 @@ services:
     volumes:
       - bot_logs:/app/logs        # Именованный volume для логов бота
       - ./examples:/app/examples    # Volume для файлов-примеров
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-      - 1.1.1.1
     depends_on:
       redis:
         condition: service_healthy
@@ -57,10 +53,6 @@ services:
     env_file: ./.env # env_file is sufficient
     volumes:
       - bot_logs:/app/logs
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-      - 1.1.1.1
     depends_on:
       postgres:
         condition: service_healthy
@@ -81,10 +73,6 @@ services:
     env_file: ./.env
     volumes:
       - bot_logs:/app/logs        # Используем тот же volume для доступа к логам бота
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-      - 1.1.1.1
     depends_on:
       mpb-telegram-bot:
         condition: service_started # API can start once the bot container starts
