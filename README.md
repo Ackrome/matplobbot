@@ -60,9 +60,9 @@ The bot features a sophisticated pipeline for displaying `.md` files from GitHub
 
 | Display Mode | Description |
 | :--- | :--- |
-| 🖼 **Text + Images** | Renders the document directly into the chat, splitting it into a series of text messages and generated images for equations and diagrams. |
-| 📄 **HTML File** | Generates a fully self-contained `.html` file, bundling all necessary CSS and JS. Mermaid diagrams are interactive. |
 | ⚫ **MD File** | Sends the original, raw `.md` file without any processing. |
+| 📄 **HTML File** | Generates a fully self-contained `.html` file with a navigation panel, client-side rendering for LaTeX (via KaTeX) and Mermaid diagrams, and a modern, responsive design with theme support. |
+|   **PDF File** | On-the-fly compilation of the Markdown file into a professional-quality PDF document using a robust **Pandoc + TeX Live** pipeline. This process correctly handles complex LaTeX equations and Mermaid diagrams, embedding them directly into the final PDF. |
 
 #### 📅 University Schedule Integration
 The bot now integrates with the university's schedule API, offering a rich set of features for students and teachers.
@@ -103,6 +103,7 @@ The bot now integrates with the university's schedule API, offering a rich set o
   <img src="image\notes\calendar_screenshot.png" alt="Step 3: Calendar View" width="420" style="border: 2px solid #24292e; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin: 8px 0;">
 
 </div>
+
 
 <!-- <div style="display: flex; flex-direction: column; align-items: center; gap: 25px; margin: 20px auto; max-width: 420px;">
   <img src="image\notes\schedule_en_1.png" alt="Interactive Calendar" width="400" style="border: 2px solid #3498db; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
@@ -267,6 +268,7 @@ This is the recommended method for running the project.
 | **Personalization** | | |
 | `/favorites` | View, manage, and access your saved favorite code examples. | Send the command to see your list. You can add items from search results or library browsing. |
 | `/settings` | Access and modify your personal settings. | Configure docstring visibility, Markdown display format, LaTeX quality, and manage your GitHub repositories. |
+| `/offershorter` | Suggest a shorter, more convenient name for a long discipline title. | Send the command to start the suggestion process. |
 | **Admin Commands** | | |
 | `/update` | Updates the `matplobblib` library to the latest version from PyPI. | *(Admin-only)* Send the command to perform a live update. |
 | `/clear_cache` | Clears all application caches (in-memory and database). | *(Admin-only)* Useful for forcing the bot to fetch fresh data. |
@@ -278,33 +280,30 @@ graph TD;
         A[User sends /start] --> B{Is onboarding_completed?};
     end
 
-    B -- No --> C[Show Welcome & 'Next' button];
+    B -- No --> C[Show Welcome with 'Next' and 'Skip' buttons];
     B -- Yes --> Z[Show Regular Welcome];
-
     C --> D{User clicks 'Next'};
-    D --> E[Show GitHub Feature];
+    C -- Skip --> Q[Set onboarding_completed = true];
 
-    subgraph "GitHub Step"
-        E --> F["'Add Repository' button (manage_repos)"];
-        E --> H["'Next' button (onboarding_next)"];
-        F --> G[User interacts with Repo Management];
-        G --> H;
+    D --> E[Show GitHub Feature & 'Add Repository' button];
+    
+    subgraph "Feature Interaction Steps"
+        E --> I{User clicks 'Next'};
+        I --> J[Show Library Feature & 'Next' button];
+        J --> K{User clicks 'Next'};
+        K --> L[Show Rendering Feature & 'Try LaTeX' button];
+        L --> M{User clicks 'Next'};
+        M --> N[Show Schedule Feature & 'Try Schedule' button];
+        N --> O{User clicks 'Next'};
     end
 
-    H --> I{User clicks 'Next'};
-    I --> J[Show Library Feature & 'Next' button];
-    J --> K{User clicks 'Next'};
-    K --> L[Show Rendering Feature & 'Next' button];
-    L --> M{User clicks 'Next'};
-    M --> N[Show Schedule Feature & 'Next' button];
-    N --> O{User clicks 'Next'};
-    O --> P[Show Final Message & 'Finish' button];
-    P --> Q{User clicks 'Finish'};
+    O --> P[Show Final Message & 'Finish Tour' button];
+    P --> Q{User clicks 'Finish Tour'};
     Q --> R[Set onboarding_completed = true];
     R --> S[Show Main Menu Keyboard];
 
-    style Z fill:#f9f,stroke:#333,stroke-width:2px;
-    style S fill:#ccf,stroke:#333,stroke-width:2px;
+    style Z fill:#f90934,stroke:#333,stroke-width:2px
+    style S fill:#cc762f,stroke:#333,stroke-width:2px
 ```
 
 ### 🚀 CI/CD Pipeline
@@ -326,9 +325,9 @@ The entire process is event-driven and fully automated. It now includes automati
 graph TD
     subgraph "GitHub (Public Cloud)"
         A[Developer pushes to main] --> B{GitHub Actions: Auto-Version};
-        B --> |Commit back to main| C{GitHub Actions: Publish};
+        B --> |Commits back to main| C{GitHub Actions: Publish Library};
         C --> |Pushes package| D[PyPI Repository];
-        C --> E{Build & Push Images};
+        C --> E{Build & Push All Images};
         E --> F[GitHub Container Registry];
     end
 
@@ -338,18 +337,18 @@ graph TD
         H(Jenkins VM)
         I(Application VM)
 
-        E -- "Triggers Deploy via Tailscale" --> H;
+        E -- "Triggers Deploy via Tailscale IP" --> H;
         H -- "Executes Deploy via SSH" --> I;
     end
-
+    
     B -- "Assigns Job" --> G;
 
-    subgraph "Deployment on Application VM"
+    subgraph "Deployment Steps on Application VM"
         direction TB
-        I --> J{1. Git Pull};
-        J --> K{2. Jenkins creates .env};
-        K --> L{3. Pull new images};
-        L --> M{4. docker-compose up -d};
+        I --> J["1. Git Pull (Get latest deploy scripts)"];
+        J --> K["2. Jenkins creates .env file from secrets"];
+        K --> L["3. Pull new Bot, API, & Scheduler images"];
+        L --> M["4. docker-compose up -d"];
         M --> N[🚀 New version is live!];
     end
 ```
@@ -359,7 +358,7 @@ graph TD
 1.  **Commit & Push**: A developer pushes new code to the `main` branch.
 2.  **Auto-Versioning**: A GitHub Actions job automatically runs `version_bumper.py`, increments the patch version, and pushes a version commit (e.g., `chore(release): version v0.5.1`) back to the `main` branch.
 3.  **Publish Library**: Triggered by the new version commit, a second job builds the `matplobbot-shared` library and publishes the new version to **PyPI**.
-4.  **Build & Push Images**: A third job waits for the library to be published. It then builds new Docker images for the `bot`, `api`, and `scheduler` services, installing the newly published library from PyPI. The images are tagged and pushed to GitHub Container Registry (GHCR).
+4.  **Build & Push Images**: A third job waits for the library to be published. It then builds new Docker images for the `bot`, `api`, and `scheduler` services.This build process installs the newly published shared library from PyPI. The images are tagged with the commit SHA and `:latest`, then pushed to GitHub Container Registry (GHCR).
 5.  **Secure Trigger for CD**: Upon successful image push, the workflow triggers a job on the **self-hosted runner**, which securely sends a webhook to the Jenkins server over the private Tailscale network.
 6.  **Deployment Orchestration**: The Jenkins pipeline takes over, connecting to the **Application VM** via SSH to:
     *   Pull the latest changes from the Git repository (to get the updated `docker-compose.prod.yml`).
