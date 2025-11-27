@@ -11,3 +11,4 @@ pandoc_mermaid_filter.txt
 dockerfile.txt
 .repomix
 repomix-output.xml
+.venv

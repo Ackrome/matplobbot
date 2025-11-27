@@ -22,8 +22,8 @@ services:
     restart: unless-stopped
     env_file: ./.env
     # No need to expose ports to the host if only other containers need to access it.
-    # ports:
-    #   - "5432:5432"
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
