@@ -84,6 +84,13 @@ services:
       timeout: 10s
       retries: 3
 
+  migrator:
+    image: ghcr.io/ackrome/matplobbot-shared:${BOT_TAG:-latest} 
+    command: ["/bin/bash", "-c", "alembic upgrade head"]
+    env_file: ./.env
+    depends_on:
+      postgres:
+        condition: service_healthy
 volumes:
   bot_logs:
   redis_data:

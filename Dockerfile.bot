@@ -78,6 +78,8 @@ WORKDIR /
 # Copy shared library source code FIRST
 COPY shared_lib/ /shared_lib/
 COPY setup.py /
+COPY alembic.ini /
+COPY alembic/ /alembic/
 
 COPY requirements.txt .
 
