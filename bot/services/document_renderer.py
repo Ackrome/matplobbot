@@ -1,26 +1,29 @@
 import io
 import re
-import subprocess
-import tempfile
-from PIL import Image
+import os
 import asyncio
-import shutil
+import base64
+import logging
 import html
 import datetime
-import logging
+import tempfile
+import subprocess
 from bs4 import BeautifulSoup
 from markdown_it import MarkdownIt
 
+# Импортируем конфигурацию (пути к шаблонам Pandoc и фильтрам остались нужны для PDF)
+from ..config import *
+
+# Импортируем задачи Celery
+from shared_lib.tasks import render_latex, render_mermaid
 
 logger = logging.getLogger(__name__)
 
-
-
-from ..config import *
-
-
 def _pmatrix_hline_fixer(match: re.Match) -> str:
-    """Callback-функция для исправления \hline внутри pmatrix."""
+    """
+    Callback-функция для исправления \\hline внутри pmatrix.
+    Используется при подготовке Markdown для PDF конвертации.
+    """
     matrix_content = match.group(1)
     if r'\hline' in matrix_content:
         lines = matrix_content.strip().split(r'\\')
@@ -40,9 +43,6 @@ def _pmatrix_hline_fixer(match: re.Match) -> str:
 
 def convert_html_to_telegram_html(html_content: str) -> str:
     """Converts generic HTML to Telegram-supported HTML."""
-    # This is a simplified converter. For complex HTML, a library like `beautifulsoup4` would be better.
-    # The order of replacements is important.
-    
     # Pre-formatted text (code blocks)
     html_content = html_content.replace('<pre><code>', '<pre>').replace('</code></pre>', '</pre>')
 
@@ -81,198 +81,69 @@ def convert_html_to_telegram_html(html_content: str) -> str:
     return '\n'.join(filter(None, lines))
 
 
-# --- LaTeX Rendering ---
-def _render_latex_sync(latex_string: str, padding: int, dpi: int, is_display_override: bool | None = None) -> io.BytesIO:
-    """Синхронная функция для рендеринга LaTeX в PNG с использованием latex и dvipng, с добавлением отступов."""
+# --- LaTeX Rendering (Via Celery) ---
 
-    # Для команды /latex по умолчанию считаем формулу блочной (display) для лучшего качества.
-    # Для обработки markdown флаг передается явно.
+async def render_latex_to_image(latex_string: str, padding: int, dpi: int = 300, is_display_override: bool | None = None) -> io.BytesIO:
+    """
+    Асинхронная функция, которая отправляет задачу рендеринга LaTeX в очередь Celery.
+    """
     is_display = is_display_override if is_display_override is not None else True
 
-    # Сначала просто убираем пробелы по краям
-    processed_latex = latex_string.strip()
+    # Отправляем задачу в Redis. .delay() возвращает AsyncResult.
+    task = render_latex.delay(latex_string, padding, dpi, is_display)
 
-    # Heuristic fix for a common user error: placing \tag after the environment.
-    # This moves the tag inside, right before the \end{...} command.
-    processed_latex = re.sub(
-        r'(\\end\{([a-zA-Z\*]+)\})(\s*\\tag\{.*?\})',
-        r'\3 \1',
-        processed_latex,
-        flags=re.DOTALL
-    )
+    # Функция для блокирующего ожидания результата (будет запущена в отдельном потоке)
+    def wait_for_task():
+        # Ждем результат максимум 40 секунд (чуть меньше лимита воркера)
+        return task.get(timeout=40)
 
-    # Heuristic fix for primitive TeX commands like \atop used after an environment.
-    processed_latex = re.sub(
-        r'(\\end\{([a-zA-Z\*]+)\})(\s*\\atop\s*(\\text\{.*?\}))',
-        r'\\ \4 \1',
-        processed_latex,
-        flags=re.DOTALL
-    )
-    
-    # --- 
-    # NOTE: pmatrix->array conversion is handled by pandoc_math_filter.lua
-    # (we skip the Python-level regex to avoid double-conversion that corrupts math).
+    try:
+        # Используем to_thread, чтобы ожидание ответа от Redis не блокировало Event Loop бота
+        result = await asyncio.to_thread(wait_for_task)
 
-    # Heuristic fix for pmatrix environments containing \hline.
-    # The pmatrix environment does not support \hline, causing a compilation error.
-    # This fix replaces the pmatrix with a functionally equivalent array environment
-    # which does support \hline.
-    # processed_latex = re.sub(
-    #     r'\\begin{pmatrix}(.*?)\\end{pmatrix}', 
-    #     _pmatrix_hline_fixer, 
-    #     processed_latex, 
-    #     flags=re.DOTALL
-    # )
-    # --- 
-
-    # Более интеллектуальная обработка переносов строк.
-    if not re.search(r'\\begin\{[a-zA-Z\*]+\}.*?\\end\{[a-zA-Z\*]+\}', processed_latex, re.DOTALL):
-        processed_latex = processed_latex.replace('\n', ' ')
-    else:
-        pass
-
-    s = processed_latex
-
-    # Список окружений, которые сами создают математический режим.
-    standalone_math_envs = [
-        'equation', 'equation*', 'align', 'align*', 'gather', 'gather*',
-        'multline', 'multline*', 'displaymath', 'math', 'alignat', 'alignat*',
-        'flalign', 'flalign*', 'gathered' # Added gathered to the list
-    ]
-    # Проверяем, начинается ли строка с \begin{...}
-    starts_with_standalone_env = False
-    match = re.match(r'\\begin\{([a-zA-Z\*]+)\}', s.strip())
-    if match and match.group(1) in standalone_math_envs:
-        starts_with_standalone_env = True
-
-    is_already_math_env = (
-        (s.startswith('$') and s.endswith('$')) or
-        (s.startswith('$$') and s.endswith('$$')) or
-        (s.startswith(r'\[') and s.endswith(r'\]')) or
-        starts_with_standalone_env
-    )
-    
-    contains_tag = r'\tag' in s
-    
-    # The \tag command is only for display math, so we force display mode.
-    if contains_tag:
-        is_display = True
-
-    # Only wrap the expression if it isn't already in a math environment
-    if not is_already_math_env:
-        if contains_tag:
-            processed_latex = f'\\begin{{equation*}}\n{processed_latex}\n\\end{{equation*}}'
+        if result.get('status') == 'success':
+            # Декодируем Base64 обратно в байты изображения
+            img_data = base64.b64decode(result['image'])
+            return io.BytesIO(img_data)
         else:
-            if is_display:
-                processed_latex = f'\\[{processed_latex}\\]'
-            else:
-                processed_latex = f'${processed_latex}$'
-                
-    full_latex_code = LATEX_PREAMBLE + processed_latex + LATEX_POSTAMBLE
+            error_msg = result.get('error', 'Unknown error')
+            raise ValueError(f"Ошибка рендеринга LaTeX (Worker): {error_msg}")
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        tex_path = os.path.join(temp_dir, 'formula.tex')
-        log_path = os.path.join(temp_dir, 'formula.log')
-        dvi_path = os.path.join(temp_dir, 'formula.dvi')
-        png_path = os.path.join(temp_dir, 'formula.png')
+    except Exception as e:
+        logger.error(f"Failed to render LaTeX via Celery: {e}", exc_info=True)
+        # Если Celery недоступен или таймаут, пробрасываем ошибку пользователю
+        raise ValueError(f"Сервис рендеринга временно недоступен или произошла ошибка: {e}")
 
-        with open(tex_path, 'w', encoding='utf-8') as f:
-            f.write(full_latex_code)
 
-        # --- Запуск LaTeX ---
-        process = subprocess.run(
-            ['latex', '-interaction=nonstopmode', '-output-directory', temp_dir, tex_path],
-            capture_output=True, text=True, encoding='utf-8', errors='ignore'
-        )
-
-        # --- Проверка на ошибки LaTeX ---
-        if not os.path.exists(dvi_path) or process.returncode != 0:
-            error_message = "Неизвестная ошибка LaTeX."
-            if os.path.exists(log_path):
-                with open(log_path, 'r', encoding='utf-8', errors='ignore') as log_file:
-                    log_content = log_file.read()
-                    error_lines = [line for line in log_content.split('\n') if line.startswith('! ')]
-                    if error_lines:
-                        error_message = error_lines[0].strip()
-                    else:
-                       error_message = "...\n" + "\n".join(log_content.split('\n')[-20:])
-                       raise ValueError(f"Ошибка компиляции LaTeX:\n{error_message}")
-
-        # --- Запуск dvipng для конвертации DVI в PNG ---
-        dvipng_process = subprocess.run(
-            ['dvipng', '-D', str(dpi), '-T', 'tight', '-bg', 'Transparent', '-o', png_path, dvi_path],
-            capture_output=True, text=True, encoding='utf-8', errors='ignore'
-        )
-        
-        if dvipng_process.returncode != 0 or not os.path.exists(png_path):
-            raise RuntimeError(f"Ошибка dvipng: {dvipng_process.stderr}")
-
-        # --- Добавление отступов и выравнивание с помощью Pillow ---
-        with Image.open(png_path) as img:
-            if is_display:
-                target_width = 600
-                final_width = max(img.width + 2 * padding, target_width)
-                final_height = img.height + 2 * padding
-                new_img = Image.new("RGBA", (final_width, final_height), (0, 0, 0, 0))
-                paste_x = (final_width - img.width) // 2
-                paste_y = padding
-                new_img.paste(img, (paste_x, paste_y))
-            else:
-                final_width = img.width + 2 * padding
-                final_height = img.height + 2 * padding
-                new_img = Image.new("RGBA", (final_width, final_height), (0, 0, 0, 0))
-                new_img.paste(img, (padding, padding))
-
-            buf = io.BytesIO()
-            new_img.save(buf, format='PNG')
-            buf.seek(0)
-            return buf
-                    
-async def render_latex_to_image(latex_string: str, padding: int, dpi:int = 300, is_display_override: bool | None = None) -> io.BytesIO:
-    """Асинхронная обертка для рендеринга LaTeX, выполняемая в отдельном потоке."""
-    return await asyncio.to_thread(_render_latex_sync, latex_string, padding, dpi, is_display_override)
-
-# --- Mermaid Rendering ---
-def _render_mermaid_sync(mermaid_code: str) -> io.BytesIO:
-    """Синхронная функция для рендеринга Mermaid в PNG с использованием mmdc."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        input_path = os.path.join(temp_dir, 'diagram.mmd')
-        output_path = os.path.join(temp_dir, 'diagram.png')
-
-        with open(input_path, 'w', encoding='utf-8') as f:
-            f.write(mermaid_code)
-
-        # Dynamically find the mmdc executable path
-        mmdc_path = shutil.which('mmdc')
-        if not mmdc_path:
-            raise FileNotFoundError("Mermaid CLI (mmdc) not found in PATH. Please ensure it is installed correctly in the Docker image.")
-
-        # Запуск Mermaid CLI (mmdc)
-        process = subprocess.run(
-            [
-                mmdc_path, '-p', str(PUPPETEER_CONFIG_PATH),
-                '-i', input_path, '-o', output_path, '-b', 'transparent'
-            ],
-            capture_output=True, text=True, encoding='utf-8', errors='ignore'
-        )
-
-        if process.returncode != 0 or not os.path.exists(output_path):
-            error_output = process.stderr or process.stdout or "Unknown error."
-            # Очищаем вывод от лишней информации Puppeteer
-            clean_error = re.sub(r'\(node:\d+\) \[[^\]]+\] ', '', error_output)
-            raise ValueError(f"Ошибка рендеринга Mermaid:\n{clean_error.strip()}")
-
-        # Читаем результат в буфер
-        with open(output_path, 'rb') as f:
-            buf = io.BytesIO(f.read())
-        
-        buf.seek(0)
-        return buf
+# --- Mermaid Rendering (Via Celery) ---
 
 async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
-    """Асинхронная обертка для рендеринга Mermaid, выполняемая в отдельном потоке."""
-    return await asyncio.to_thread(_render_mermaid_sync, mermaid_code)
+    """
+    Асинхронная функция, которая отправляет задачу рендеринга Mermaid в очередь Celery.
+    """
+    task = render_mermaid.delay(mermaid_code)
 
+    def wait_for_task():
+        return task.get(timeout=40)
+
+    try:
+        result = await asyncio.to_thread(wait_for_task)
+
+        if result.get('status') == 'success':
+            img_data = base64.b64decode(result['image'])
+            return io.BytesIO(img_data)
+        else:
+            error_msg = result.get('error', 'Unknown error')
+            raise ValueError(f"Ошибка рендеринга Mermaid (Worker): {error_msg}")
+
+    except Exception as e:
+        logger.error(f"Failed to render Mermaid via Celery: {e}", exc_info=True)
+        raise ValueError(f"Сервис рендеринга временно недоступен: {e}")
+
+
+# --- Markdown to PDF (Local Pandoc) ---
+# Эту логику пока оставляем локальной, так как она требует передачи контекста (заголовки, файлы)
+# и сложнее для сериализации. В будущем тоже стоит вынести в таску.
 
 def _convert_md_to_pdf_pandoc_sync(markdown_string: str, title: str, contributors: list | None = None, last_modified_date: str | None = None) -> io.BytesIO:
     """
@@ -483,14 +354,6 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
 
     for heading in headings:
         text = heading.get_text()
-        # Create a URL-friendly "slug" for the ID
-        # --- WIKILINK FIX: Use original heading text for TOC, not slugified version ---
-        # The slug is only for the 'id' attribute. The visible text should be original.
-        # This was already correct, just adding a comment for clarity.
-        # slug_base = re.sub(r'[^\w\s-]', '', text.lower()).strip().replace(' ', '-')
-        # ...
-        # toc_items.append({'level': level, 'text': text, 'id': slug})
-
         slug_base = re.sub(r'[^\w\s-]', '', text.lower()).strip().replace(' ', '-')
         slug = slug_base
         counter = 1
@@ -570,10 +433,10 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
             --bg-color: #ffffff; --text-color: #24292e; --link-color: #0366d6;
             --border-color: #eaecef; --code-bg-color: #f6f8fa;
         }}
-        html {{ scroll-behavior: smooth; }} /* This enables smooth scrolling */
+        html {{ scroll-behavior: smooth; }}
         body {{ 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            line-height: 1.6; margin: 0 auto; padding: 20px 20px 20px 300px; /* Add left padding for TOC */
+            line-height: 1.6; margin: 0 auto; padding: 20px 20px 20px 300px;
             max-width: 800px; 
             background-color: var(--bg-color); color: var(--text-color);
         }}
@@ -583,8 +446,6 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
                 --border-color: #30363d; --code-bg-color: #161b22;
             }}
         }}
-
-        /* ----- Navigation Panel (TOC) Styles ----- */
         .toc {{
             position: fixed;
             top: 20px;
@@ -623,13 +484,11 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
         .toc .toc-level-2 {{ margin-left: 15px; }}
         .toc .toc-level-3 {{ margin-left: 30px; }}
 
-        /* Responsive: Hide TOC on smaller screens */
         @media (max-width: 1200px) {{
             .toc {{ display: none; }}
-            body {{ padding: 20px; }} /* Reset body padding */
+            body {{ padding: 20px; }}
         }}
 
-        /* ----- General Element Styling ----- */
         a {{ color: var(--link-color); }}
         pre {{ background-color: var(--code-bg-color); padding: 16px; overflow: auto; border-radius: 6px; position: relative; border: 1px solid var(--border-color); }}
         code {{ font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace; }}
@@ -671,4 +530,3 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
 </body>
 </html>"""
     return full_html_doc
-

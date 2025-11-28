@@ -91,6 +91,24 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  mpb-worker:
+      # Используем тот же контекст сборки/образ, что и бот
+      build:
+        context: .
+        dockerfile: Dockerfile.bot
+      # Или для prod: image: ghcr.io/ackrome/matplobbot-bot:${BOT_TAG:-latest}
+      command: celery -A shared_lib.celery_app worker --loglevel=info
+      restart: unless-stopped
+      env_file: ./.env
+      environment:
+        - REDIS_URL=redis://redis:6379/0
+      volumes:
+        - bot_logs:/app/logs
+      depends_on:
+        redis:
+          condition: service_healthy
+
 volumes:
   bot_logs:
   redis_data:

@@ -1,0 +1,70 @@
+FROM node:20-slim
+
+ARG MIRROR_SITE=http://mirror.truenetwork.ru
+ENV DEBIAN_FRONTEND=noninteractive \
+    APT_OPTS="-y --no-install-recommends" \
+    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    HOME=/home/appuser
+
+# 1. Установка Python, TeXLive, Pandoc и зависимостей Chrome
+RUN echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/99retries && \
+    find /etc/apt -name "*.list" -exec sed -i "s|http://deb\.debian\.org|${MIRROR_SITE}|g" {} + || true; \
+    find /etc/apt -name "*.sources" -exec sed -i "s|URIs: http://deb\.debian\.org|URIs: ${MIRROR_SITE}|g" {} + || true; \
+    apt-get update && \
+    apt-get install $APT_OPTS \
+        python3 python3-pip python3-venv git curl build-essential procps \
+        ca-certificates wget xdg-utils fonts-liberation fonts-dejavu-core fonts-dejavu \
+        libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdbus-1-3 \
+        libdrm2 libgbm1 libgtk-3-0 libpango-1.0-0 libpangocairo-1.0-0 libx11-6 \
+        libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 libxext6 \
+        libxfixes3 libxi6 libxrandr2 libxrender1 libxss1 libxtst6 libasound2 \
+        libgdk-pixbuf-2.0-0 \
+        pandoc \
+        texlive-latex-base \
+        texlive-latex-recommended \
+        texlive-latex-extra \
+        texlive-fonts-recommended \
+        texlive-fonts-extra \
+        texlive-xetex \
+        texlive-pictures \
+        texlive-science \
+        texlive-bibtex-extra \
+        dvipng \
+        ghostscript \
+        texlive-lang-all \
+        latexmk \
+        gosu \
+        dos2unix && \
+    rm -rf /var/lib/apt/lists/*
+
+# 2. Установка Mermaid CLI
+RUN set -eux; \
+    npm install -g @mermaid-js/mermaid-cli --no-fund --no-update-notifier; \
+    mmdc --version || true
+
+WORKDIR /app
+
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY shared_lib/ /shared_lib/
+COPY setup.py /
+COPY requirements.txt .
+
+# Обновляем pip внутри venv и ставим зависимости надежнее
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir --default-timeout=100 --retries 5 / && \
+    pip install --no-cache-dir --default-timeout=100 --retries 5 -r requirements.txt
+
+# 5. Копируем ресурсы для рендеринга (фильтры, конфиги, шаблоны)
+# Важно: пути должны совпадать с BASE_DIR в shared_lib/tasks.py
+COPY bot/puppeteer-config.json /app/bot/
+COPY bot/pandoc_mermaid_filter.py /app/bot/
+COPY bot/pandoc_math_filter.lua /app/bot/
+COPY bot/templates/ /app/bot/templates/
+
+# Делаем скрипты исполняемыми, чтобы Pandoc мог их вызвать
+RUN chmod +x /app/bot/pandoc_mermaid_filter.py
+
+# Запуск воркера
+CMD ["celery", "-A", "shared_lib.celery_app", "worker", "--loglevel=info", "--concurrency=2"]

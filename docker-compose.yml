@@ -27,6 +27,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+  
 
   mpb-telegram-bot:
     build:
@@ -35,6 +36,8 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
     env_file: ./.env # env_file is sufficient
+    environment:
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - bot_logs:/app/logs        # Именованный volume для логов бота
       - ./examples:/app/examples    # Volume для файлов-примеров
@@ -86,6 +89,19 @@ services:
       timeout: 10s
       retries: 3
 
+  mpb-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    restart: unless-stopped
+    env_file: ./.env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - bot_logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
 volumes:
   bot_logs:
   postgres_data:

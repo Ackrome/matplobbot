@@ -26,3 +26,4 @@ markdown-it-py
 cachetools
 alembic
 sqlalchemy
+celery==5.3.6

@@ -12,9 +12,10 @@ COPY setup.py /
 COPY fastapi_stats_app/requirements.txt .
 
 # Install curl, then the local shared_lib, then the app-specific requirements.
-RUN apt-get update && apt-get install -y curl && \
-    pip install --no-cache-dir / && \
-    pip install --no-cache-dir -r requirements.txt && \
+RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+    pip install --upgrade pip && \
+    pip install --no-cache-dir --default-timeout=100 --retries 5 / && \
+    pip install --no-cache-dir --default-timeout=100 --retries 5 -r requirements.txt && \
     rm -rf /var/lib/apt/lists/*
 # --- END: CORRECTED INSTALLATION BLOCK ---
 

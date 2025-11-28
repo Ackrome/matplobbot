@@ -1,104 +1,22 @@
 # Dockerfile.bot
+FROM python:3.11-slim
 
-FROM node:20-slim
+WORKDIR /app
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl git build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-# ARG MIRROR_SITE=http://cdn-fastly.deb.debian.org
-ARG MIRROR_SITE=http://mirror.truenetwork.ru
-
-# noninteractive to avoid tzdata/ui prompts
-ENV DEBIAN_FRONTEND=noninteractive \
-    APT_OPTS="-y --no-install-recommends"
-
-# --- BEST PRACTICES START ---
-# Add a layer to configure apt to automatically retry failed downloads.
-# This makes the build much more resilient to temporary network issues.
-RUN echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/99retries
-# --- BEST PRACTICES END ---
-
-# 1) small essentials + python
-RUN set -eux; \
-    find /etc/apt -name "*.list" -exec sed -i "s|http://deb\.debian\.org|${MIRROR_SITE}|g" {} + || true; \
-    find /etc/apt -name "*.sources" -exec sed -i "s|URIs: http://deb\.debian\.org|URIs: ${MIRROR_SITE}|g" {} + || true; \
-    apt-get update; \
-    apt-get install $APT_OPTS \
-      python3 python3-pip ca-certificates wget xdg-utils fonts-liberation fonts-dejavu-core \
-      fonts-dejavu python3.11-venv git \
-      git curl build-essential procps && \
-    rm -rf /var/lib/apt/lists/*
-
-# 2) Puppeteer/Chromium dependencies for mermaid-cli
-RUN set -eux; \
-    find /etc/apt -name "*.list" -exec sed -i "s|http://deb\.debian\.org|${MIRROR_SITE}|g" {} + || true; \
-    find /etc/apt -name "*.sources" -exec sed -i "s|URIs: http://deb\.debian\.org|URIs: ${MIRROR_SITE}|g" {} + || true; \
-    apt-get update; \
-    apt-get install $APT_OPTS \
-      libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdbus-1-3 \
-      libdrm2 libgbm1 libgtk-3-0 libpango-1.0-0 libpangocairo-1.0-0 libx11-6 \
-      libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 libxext6 \
-      libxfixes3 libxi6 libxrandr2 libxrender1 libxss1 libxtst6 libasound2 \
-      libgdk-pixbuf-2.0-0 && \
-    rm -rf /var/lib/apt/lists/*
-
-# 3) TeX packages (split so you can prune/change easily)
-RUN set -eux; \
-    find /etc/apt -name "*.list" -exec sed -i "s|http://deb\.debian\.org|${MIRROR_SITE}|g" {} + || true; \
-    find /etc/apt -name "*.sources" -exec sed -i "s|URIs: http://deb\.debian\.org|URIs: ${MIRROR_SITE}|g" {} + || true; \
-    apt-get update && \
-    apt-get install $APT_OPTS pandoc && \
-    apt-get install $APT_OPTS \
-      texlive-latex-base \
-      texlive-latex-recommended \
-      texlive-latex-extra \
-      texlive-fonts-recommended \
-      texlive-fonts-extra \
-      texlive-xetex \
-      texlive-pictures \
-      texlive-science \
-      texlive-bibtex-extra \
-      dvipng \
-      ghostscript \
-      texlive-lang-all \
-      latexmk \
-      gosu \
-      dos2unix && \
-    rm -rf /var/lib/apt/lists/*
-
-# 4) Install mermaid-cli globally (npm already exists in node:20-slim)
-RUN set -eux; \
-    npm install -g @mermaid-js/mermaid-cli --no-fund --no-update-notifier; \
-    mmdc --version || true
-
-# Clean up apt lists one last time
-RUN rm -rf /var/lib/apt/lists/*
-
-WORKDIR /
-
-# --- START: CORRECTED VENV INSTALLATION BLOCK ---
-# Copy shared library source code FIRST
 COPY shared_lib/ /shared_lib/
 COPY setup.py /
-COPY alembic.ini /
-COPY alembic/ /alembic/
-
 COPY requirements.txt .
+COPY alembic.ini .
+COPY alembic/ ./alembic/
 
-RUN python3 -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-# Install the local shared_lib package, then the rest of the requirements
-# Install the local shared_lib package. This will also install its own dependencies (like asyncpg, aiohttp).
-RUN pip install --no-cache-dir /
-RUN pip install --no-cache-dir -r requirements.txt
-# --- END: CORRECTED VENV INSTALLATION BLOCK ---
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir --default-timeout=100 --retries 5 / && \
+    pip install --no-cache-dir --default-timeout=100 --retries 5 -r requirements.txt
 
-# Set environment variables for Puppeteer and Matplotlib
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    HOME=/home/appuser \
-    MPLCONFIGDIR=/home/appuser/.config/matplotlib \
-    NUMBA_DISABLE_JITCACHE=1
-
-# Copy the rest of the application code
-COPY bot/puppeteer-config.json /bot/
-COPY bot/ /bot/
+COPY bot/ /app/bot/
 
 CMD ["python3", "-m", "bot.main"]
