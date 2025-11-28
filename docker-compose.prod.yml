@@ -93,22 +93,18 @@ services:
         condition: service_healthy
 
   mpb-worker:
-      # Используем тот же контекст сборки/образ, что и бот
-      build:
-        context: .
-        dockerfile: Dockerfile.bot
-      # Или для prod: image: ghcr.io/ackrome/matplobbot-bot:${BOT_TAG:-latest}
-      command: celery -A shared_lib.celery_app worker --loglevel=info
-      restart: unless-stopped
-      env_file: ./.env
-      environment:
-        - REDIS_URL=redis://redis:6379/0
-      volumes:
-        - bot_logs:/app/logs
-      depends_on:
-        redis:
-          condition: service_healthy
-
+    image: ghcr.io/ackrome/matplobbot-worker:${WORKER_TAG:-latest} # <--- Use tag from ENV
+    restart: unless-stopped
+    # command is baked into Dockerfile.worker, but can be overridden if needed
+    # command: celery -A shared_lib.celery_app worker --loglevel=info --concurrency=2
+    env_file: ./.env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - bot_logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
 volumes:
   bot_logs:
   redis_data:
