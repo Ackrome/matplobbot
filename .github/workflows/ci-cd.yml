@@ -7,6 +7,7 @@ env:
   IMAGE_OWNER: ackrome
 
 jobs:
+  # 1. Авто-версионирование (без изменений)
   auto-version-patch:
     name: Auto-Version Patch Release
     if: "!contains(github.event.head_commit.message, 'chore(release)')"
@@ -39,6 +40,7 @@ jobs:
           git commit -m "chore(release): auto-version patch [skip ci]"
           git push origin HEAD:main
 
+  # 2. Публикация библиотеки (без изменений)
   publish-shared-lib:
     name: Build and Publish Shared Library to PyPI
     needs: [auto-version-patch]
@@ -60,10 +62,10 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: twine upload dist/*
 
-  # --- ДЖОБА 1: Worker (Тяжелая) ---
-  build-worker:
+  # 3. СБОРКА ВСЕХ ОБРАЗОВ (ОБЪЕДИНЕННАЯ И БЫСТРАЯ)
+  build-and-push:
     needs: [publish-shared-lib]
-    name: Build Heavy Worker
+    name: Build All Services
     runs-on: self-hosted
     permissions:
       contents: read
@@ -72,11 +74,9 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
 
-      # Только базовая очистка, так как buildx prune не поддерживается
-      - name: Aggressive Pre-Clean
-        run: |
-          echo "Cleaning up docker system..."
-          docker system prune -a -f --volumes || true
+      # Мягкая очистка: удаляем только мусор, КЭШ ОСТАВЛЯЕМ
+      - name: Maintenance Cleanup
+        run: docker system prune -f
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -88,6 +88,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # --- WORKER (Heavy) ---
+      # Собираем первым, так как он самый долгий.
+      # При повторном запуске Docker увидит кэш и пропустит сборку TeXLive!
       - name: Build and push Worker
         uses: docker/build-push-action@v4
         with:
@@ -98,35 +101,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-worker:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-worker:latest
 
-      - name: Post-Clean
-        if: always()
-        run: docker system prune -a -f --volumes || true
-
-  # --- ДЖОБА 2: Остальные сервисы (Легкие) ---
-  build-services:
-    needs: [build-worker]
-    name: Build Bot Services
-    runs-on: self-hosted
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-
-      - name: Intermediate Cleanup
-        run: docker system prune -a -f --volumes || true
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v2
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
+      # --- BOT ---
       - name: Build and push Bot
         uses: docker/build-push-action@v4
         with:
@@ -137,6 +112,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-bot:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-bot:latest
 
+      # --- API ---
       - name: Build and push API
         uses: docker/build-push-action@v4
         with:
@@ -147,6 +123,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-api:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-api:latest
 
+      # --- SCHEDULER ---
       - name: Build and push Scheduler
         uses: docker/build-push-action@v4
         with:
@@ -157,13 +134,10 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-scheduler:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-scheduler:latest
 
-      - name: Final Cleanup
-        if: always()
-        run: docker system prune -a -f --volumes || true
-
+  # 4. Триггер деплоя (Jenkins)
   trigger-deployment:
     name: Trigger Jenkins Deployment
-    needs: [build-services]
+    needs: [build-and-push]
     runs-on: self-hosted
     steps:
       - name: Trigger Jenkins Job via cURL
