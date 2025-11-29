@@ -1,64 +1,87 @@
 <!DOCTYPE html>
-<html lang="ru" data-theme="light">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Профиль пользователя</title>
-    <!-- We can reuse most of the styles from index.html -->
-    <link rel="stylesheet" href="/static/css/styles.css">
+    <title>User Chat - Matplobbot</title>
+    
+    <!-- Tailwind & Config -->
+    <script>
+        window.tailwind = { darkMode: 'class' }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="/static/css/styles.css?v=10">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body>
-    <div class="container">
-        <div class="theme-switcher" id="theme-toggle-button">Сменить тему</div>
-        <a href="/" style="text-decoration: none; color: inherit; display: inline-block; margin-bottom: 20px;">&larr; Назад к статистике</a>
+<body class="font-sans antialiased h-screen flex flex-col overflow-hidden">
 
-        <div id="user-profile-header" style="display: flex; align-items: center; gap: 20px; margin-bottom: 30px;">
-            <!-- Skeleton Loader for Profile -->
-            <div class="skeleton skeleton-avatar"></div>
-            <div>
-                <div class="skeleton skeleton-h2"></div>
-                <div class="skeleton skeleton-p"></div>
+    <!-- 1. Header (User Profile) -->
+    <header class="theme-nav border-b border-gray-200 dark:border-gray-700 flex-none z-20 shadow-sm">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <a href="/" class="text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                </a>
+                
+                <!-- User Info Container (Populated by JS) -->
+                <div id="user-profile-header" class="flex items-center gap-3">
+                    <div class="skeleton w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700"></div>
+                    <div>
+                        <div class="skeleton h-4 w-32 bg-gray-200 dark:bg-gray-700 mb-1"></div>
+                        <div class="skeleton h-3 w-20 bg-gray-200 dark:bg-gray-700"></div>
+                    </div>
+                </div>
             </div>
+
+            <!-- Theme Toggle -->
+            <button id="theme-toggle-button" class="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none transition-colors">
+                <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 100 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- 2. Chat Area -->
+    <main class="flex-grow chat-background relative flex flex-col justify-between overflow-hidden">
+        <!-- Messages Scroll Area -->
+        <div id="actions-body" class="chat-scroll-area overflow-y-auto px-4 py-4 flex flex-col items-start gap-1 max-w-4xl mx-auto w-full h-full">
+            <!-- Messages will be injected here -->
+            <div class="w-full text-center text-gray-500 mt-10">Загрузка истории...</div>
         </div>
 
-        <h2 id="actions-table-title">Действия пользователя</h2>
+        <!-- Sticky Date (Optional, handled by JS inside scroll area usually, but logic below puts it inline) -->
+    </main>
 
-        <div style="margin-bottom: 15px;">
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <input type="text" id="search-input" placeholder="Фильтр по типу или деталям действия..." style="flex-grow: 1; padding: 10px; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc;">
-                <button id="download-all-csv-btn" class="download-btn">💾 Скачать все (CSV)</button>
+    <!-- 3. Footer (Filter/Search like Input) -->
+    <footer class="theme-nav border-t border-gray-200 dark:border-gray-700 flex-none p-4 z-20">
+        <div class="max-w-4xl mx-auto flex flex-col sm:flex-row gap-3 items-center">
+            
+            <!-- Pagination (Left) -->
+            <div id="pagination-controls" class="flex gap-2 text-sm">
+                <!-- Pagination Buttons JS -->
             </div>
+
+            <!-- Fake Input (Filter) -->
+            <div class="relative flex-grow w-full">
+                <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
+                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
+                    </svg>
+                </div>
+                <input type="text" id="search-input" class="block w-full p-3 pl-10 text-sm text-gray-900 border border-gray-300 rounded-full bg-gray-50 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 transition-colors" placeholder="Поиск по истории (команды, сообщения)...">
+            </div>
+
+            <!-- Export Button -->
+            <button id="download-all-csv-btn" class="p-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-md transition transform hover:scale-105" title="Скачать всю историю CSV">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            </button>
         </div>
+        <div id="loading-status" class="text-center text-xs text-red-500 mt-2 h-4"></div>
+    </footer>
 
-        <table id="actions-table">
-            <thead>
-                <tr>
-                    <th class="sortable" data-sort-by="id">ID Действия</th>
-                    <th class="sortable" data-sort-by="action_type">Тип</th>
-                    <th class="sortable" data-sort-by="action_details">Детали</th>
-                    <th class="sortable" data-sort-by="timestamp">Время</th>
-                </tr>
-            </thead>
-            <tbody id="actions-body">
-                <!-- Skeleton Loader for Table -->
-                <tr class="skeleton-row"><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td></tr>
-                <tr class="skeleton-row"><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td></tr>
-                <tr class="skeleton-row"><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td></tr>
-                <tr class="skeleton-row"><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td></tr>
-                <tr class="skeleton-row"><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td><td><div class="skeleton skeleton-text"></div></td></tr>
-            </tbody>
-        </table>
-        <p id="loading-status" style="text-align:center;"></p>
-
-        <div id="pagination-controls" class="pagination-container" style="margin-top: 20px; text-align: center;">
-            <!-- Pagination buttons will be inserted here by JavaScript -->
-        </div>
-
-    </div>
-
-    <button id="back-to-top-btn" title="Наверх">▲</button>
-
-    <script src="/static/js/theme.js"></script>
-    <script src="/static/js/user_details.js"></script>
+    <script src="/static/js/theme.js?v=10"></script>
+    <script src="/static/js/user_details.js?v=10"></script>
 </body>
 </html>

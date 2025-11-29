@@ -27,7 +27,6 @@
     "settings_md_mode_html": "📁 .html file",
     "settings_md_mode_pdf": "📁 .pdf file",
     "settings_md_mode_unknown": "❓ Unknown",
-    "settings_use_short_names": "Use short names: {status}",
     "settings_latex_padding": "LaTeX Padding: {padding}px",
     "settings_latex_padding_changed": "Padding changed to {padding}px",
     "settings_latex_dpi": "LaTeX DPI: {dpi}dpi",
@@ -267,5 +266,10 @@
     "short_name_deleted_success": "Short name mapping has been deleted.",
     "schedule_previous_searches": "Your previous searches:",
     "schedule_clear_history_btn": "🗑️ Clear History",
-    "schedule_history_cleared": "✅ Search history cleared."
+    "schedule_history_cleared": "✅ Search history cleared.",
+    "settings_use_short_names": "Use short names: {status}",
+    "settings_show_schedule_emojis": "Schedule Emojis: {status}", 
+    "settings_schedule_emojis_updated": "Schedule emojis setting updated.",
+    "settings_show_lecturer_emails": "Lecturer Emails: {status}",
+    "settings_lecturer_emails_updated": "Lecturer emails setting updated."
 }

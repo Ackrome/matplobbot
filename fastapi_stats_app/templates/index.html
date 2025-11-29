@@ -1,144 +1,231 @@
 <!DOCTYPE html>
-<html lang="ru" data-theme="light">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Статистика Бота</title>
-    <link rel="stylesheet" href="/static/css/styles.css">
+    <title>Matplobbot Dashboard</title>
+    
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- CSS (v=9 для сброса кэша) -->
+    <link rel="stylesheet" href="/static/css/styles.css?v=9">
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 
+<!-- Body больше не полагается только на классы Tailwind -->
+<body class="font-sans antialiased">
 
-<body>
-    <div class="container">
-        <div class="theme-switcher" id="theme-toggle-button">Сменить тему</div>
-         <h1>Статистика Телеграм Бота</h1>
-         
-        <div id="stats-data">
-            <div class="stat-item" id="total-actions-item">
-                <strong>Общее количество действий:</strong> <span id="total-actions-value">Подключение...</span>
+    <!-- Top Navigation (добавлен класс theme-nav) -->
+    <nav class="theme-nav border-b border-gray-200 dark:border-gray-700 fixed w-full z-30 top-0 start-0 transition-colors duration-300">
+        <div class="max-w-screen-2xl flex flex-wrap items-center justify-between mx-auto p-4">
+            <a href="/" class="flex items-center space-x-3 rtl:space-x-reverse">
+                <span class="self-center text-2xl font-bold whitespace-nowrap text-blue-600 dark:text-blue-400">Matplobbot</span>
+                <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-blue-900 dark:text-blue-300">Stats</span>
+            </a>
+            <div class="flex items-center space-x-4">
+                <div class="text-sm text-gray-500 dark:text-gray-400 hidden sm:block" id="connection-status">
+                    <span class="w-2.5 h-2.5 bg-green-500 rounded-full inline-block mr-1 animate-pulse"></span> Online
+                </div>
+                
+                <button id="theme-toggle-button" type="button" class="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700 transition-colors">
+                    <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                    <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 100 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+                </button>
             </div>
-            <div id="last-updated-container" style="text-align: right; font-size: 0.9em; color: #666; margin-top: -5px; margin-bottom: 10px; display: none;">
-                Последнее обновление: <span id="last-updated-value">...</span>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="pt-24 px-4 pb-8 max-w-screen-2xl mx-auto">
+        
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <!-- Total Actions (Добавлен класс theme-card) -->
+            <div class="theme-card p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 transition hover:shadow-md">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Всего действий</p>
+                        <h3 class="text-3xl font-bold mt-2" id="total-actions-value">...</h3>
+                    </div>
+                    <div class="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+                </div>
+                <div id="last-updated-container" class="mt-4 text-xs text-gray-400 hidden">
+                    Обновлено: <span id="last-updated-value">...</span>
+                </div>
             </div>
 
-            <!-- Контейнер для вкладок -->
-            <div class="tab-container">
-                <button class="tab-button active" onclick="openTab(event, 'popularActionsTab')">Популярные действия</button>
-                <button class="tab-button" onclick="openTab(event, 'typesTab')">Типы действий</button>
-                <button class="tab-button" onclick="openTab(event, 'activityTimeTab')">Активность по времени</button>
-                <button class="tab-button" onclick="openTab(event, 'newUsersTab')">Новые пользователи</button>
-                <button class="tab-button" onclick="openTab(event, 'logTab')">Лог Бота</button>
+            <!-- Status Card (Добавлен класс theme-card) -->
+            <div class="theme-card p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 transition hover:shadow-md">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Статус системы</p>
+                        <h3 class="text-xl font-bold mt-2 text-green-500">Operational</h3>
+                    </div>
+                    <div class="p-2 bg-green-50 dark:bg-green-900/30 rounded-lg text-green-600 dark:text-green-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                </div>
             </div>
+        </div>
 
-            <!-- Содержимое вкладок -->
-            <div id="popularActionsTab" class="tab-content" style="display: block;"> <!-- Первая вкладка активна по умолчанию -->
-                <div class="chart-wrapper">
-                    <h2>
-                        Популярные действия
-                        <div id="popular-actions-filter" style="display: inline-block; margin-left: 20px; font-size: 14px; font-weight: normal;">
-                            <label><input type="radio" name="actionFilter" value="all" checked> Все</label>
-                            <label style="margin-left: 10px;"><input type="radio" name="actionFilter" value="commands"> Команды</label>
-                            <label style="margin-left: 10px;"><input type="radio" name="actionFilter" value="messages"> Сообщения</label>
+        <!-- Charts Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Popular Actions (Добавлен класс theme-card) -->
+            <div class="theme-card p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-bold">Популярные действия</h2>
+                    <div class="flex space-x-4 text-xs items-center text-gray-600 dark:text-gray-300" id="popular-actions-filter">
+                        <label class="cursor-pointer flex items-center"><input type="radio" name="actionFilter" value="all" checked class="mr-1 accent-blue-600"> Все</label>
+                        <label class="cursor-pointer flex items-center"><input type="radio" name="actionFilter" value="commands" class="mr-1 accent-blue-600"> Команды</label>
+                        <label class="cursor-pointer flex items-center"><input type="radio" name="actionFilter" value="messages" class="mr-1 accent-blue-600"> Сообщ.</label>
+                        <div class="flex space-x-1">
+                            <button class="download-btn p-1 hover:text-blue-500 transition" data-chart="popularActions" data-format="csv" title="Скачать CSV">💾</button>
+                            <button class="download-btn p-1 hover:text-green-500 transition" data-chart="popularActions" data-format="png" title="Скачать PNG">🖼️</button>
                         </div>
-                        <button class="download-btn" data-chart="popularActions" data-format="csv" style="display: none;">💾 CSV</button>
-                        <button class="download-btn" data-chart="popularActions" data-format="png" style="display: none;">🖼️ PNG</button>
-                    </h2>
+                    </div>
+                </div>
+                <div class="relative h-64 w-full">
                     <canvas id="popularActionsChart"></canvas>
-                    <p id="popular-actions-status" style="text-align:center;"></p>
                 </div>
+                <p id="popular-actions-status" class="text-center text-sm text-gray-500 mt-2"></p>
             </div>
 
-            <div id="typesTab" class="tab-content">
-                <div class="chart-wrapper" style="min-width: 300px; max-width: 500px; margin: 20px auto;"> <!-- Центрируем круговую диаграмму -->
-                    <h2>Типы действий <button class="download-btn" data-chart="actionTypes" data-format="csv" style="display: none;">💾 CSV</button>
-                    <button class="download-btn" data-chart="actionTypes" data-format="png" style="display: none;">🖼️ PNG</button></h2>
-                    <canvas id="actionTypesChart" style="height: 400px;"></canvas>
-                    <p id="action-types-status" style="text-align:center;"></p>
-                </div>
-            </div>
-
-            <div id="activityTimeTab" class="tab-content">
-                <div class="chart-wrapper">
-                    <h2>
-                        Активность по времени
-                        <div id="activity-time-filter" style="display: inline-block; margin-left: 20px; font-size: 14px; font-weight: normal;">
-                            <label><input type="radio" name="timeFilter" value="day" checked> По дням</label>
-                            <label style="margin-left: 10px;"><input type="radio" name="timeFilter" value="week"> По неделям</label>
-                            <label style="margin-left: 10px;"><input type="radio" name="timeFilter" value="month"> По месяцам</label>
+            <!-- Activity Over Time (Добавлен класс theme-card) -->
+            <div class="theme-card p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-bold">Активность</h2>
+                    <div class="flex space-x-4 text-xs items-center text-gray-600 dark:text-gray-300" id="activity-time-filter">
+                        <label class="cursor-pointer flex items-center"><input type="radio" name="timeFilter" value="day" checked class="mr-1 accent-blue-600"> Дни</label>
+                        <label class="cursor-pointer flex items-center"><input type="radio" name="timeFilter" value="week" class="mr-1 accent-blue-600"> Недели</label>
+                        <label class="cursor-pointer flex items-center"><input type="radio" name="timeFilter" value="month" class="mr-1 accent-blue-600"> Месяцы</label>
+                        <div class="flex space-x-1">
+                            <button class="download-btn p-1 hover:text-blue-500 transition" data-chart="activityOverTime" data-format="csv" title="Скачать CSV">💾</button>
+                            <button class="download-btn p-1 hover:text-green-500 transition" data-chart="activityOverTime" data-format="png" title="Скачать PNG">🖼️</button>
                         </div>
-                        <button class="download-btn" data-chart="activityOverTime" data-format="csv" style="display: none;">💾 CSV</button>
-                        <button class="download-btn" data-chart="activityOverTime" data-format="png" style="display: none;">🖼️ PNG</button>
-                    </h2>
+                    </div>
+                </div>
+                <div class="relative h-64 w-full">
                     <canvas id="activityOverTimeChart"></canvas>
-                    <p id="activity-over-time-status" style="text-align:center;"></p>
                 </div>
+                <p id="activity-over-time-status" class="text-center text-sm text-gray-500 mt-2"></p>
             </div>
 
-            <div id="newUsersTab" class="tab-content">
-                <div class="chart-wrapper">
-                    <h2>Новые пользователи по дням
-                        <button class="download-btn" data-chart="newUsers" data-format="csv" style="display: none;">💾 CSV</button>
-                        <button class="download-btn" data-chart="newUsers" data-format="png" style="display: none;">🖼️ PNG</button></h2>
+            <!-- New Users (Добавлен класс theme-card) -->
+            <div class="theme-card p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-bold">Новые пользователи</h2>
+                    <div class="flex space-x-1">
+                        <button class="download-btn p-1 hover:text-blue-500 transition" data-chart="newUsers" data-format="csv" title="Скачать CSV">💾</button>
+                        <button class="download-btn p-1 hover:text-green-500 transition" data-chart="newUsers" data-format="png" title="Скачать PNG">🖼️</button>
+                    </div>
+                </div>
+                <div class="relative h-64 w-full">
                     <canvas id="newUsersChart"></canvas>
-                    <p id="new-users-status" style="text-align:center;"></p>
+                </div>
+                <p id="new-users-status" class="text-center text-sm text-gray-500 mt-2"></p>
+            </div>
+
+            <!-- Action Types (Добавлен класс theme-card) -->
+            <div class="theme-card p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-bold">Типы действий</h2>
+                    <div class="flex space-x-1">
+                        <button class="download-btn p-1 hover:text-blue-500 transition" data-chart="actionTypes" data-format="csv" title="Скачать CSV">💾</button>
+                        <button class="download-btn p-1 hover:text-green-500 transition" data-chart="actionTypes" data-format="png" title="Скачать PNG">🖼️</button>
+                    </div>
+                </div>
+                <div class="relative h-64 w-full flex justify-center">
+                    <canvas id="actionTypesChart"></canvas>
+                </div>
+                <p id="action-types-status" class="text-center text-sm text-gray-500 mt-2"></p>
+            </div>
+        </div>
+
+        <!-- Leaderboard & Logs -->
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <!-- Leaderboard (Добавлен класс theme-card) -->
+            <div class="xl:col-span-2 theme-card rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col h-[600px]">
+                <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30">
+                    <h2 class="text-lg font-bold">🏆 Таблица лидеров</h2>
+                </div>
+                <div class="overflow-x-auto flex-grow theme-card">
+                    <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 sticky top-0">
+                            <tr>
+                                <th scope="col" class="px-6 py-3">#</th>
+                                <th scope="col" class="px-6 py-3">Пользователь</th>
+                                <th scope="col" class="px-6 py-3">Тэг</th>
+                                <th scope="col" class="px-6 py-3">Действия</th>
+                                <th scope="col" class="px-6 py-3">Последняя активность</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboard-body" class="divide-y divide-gray-200 dark:divide-gray-700">
+                            <!-- JS rows -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
-            <div id="logTab" class="tab-content">
-                <h2>Лог Бота (в реальном времени)</h2>
-                <pre id="bot-log-content">Подключение к логу...</pre>
-                <p id="bot-log-status" style="text-align:center;"></p>
-            </div>
 
-
-            <!-- Таблица лидеров теперь ниже -->
-            <h2 style="margin-top: 60px;">Таблица лидеров</h2>
-            <table id="leaderboard-table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th style="border-right: none;">Аватар</th>
-                        <th style="border-left: none; ">Пользователь (Полное имя)</th>
-                        <th>Тэг Телеграм</th>
-                        <th>Кол-во действий</th>
-                        <th>Последнее действие</th>
-                    </tr>
-                </thead>
-                <tbody id="leaderboard-body">
-                    <!-- Skeleton Loader for Leaderboard -->
-                    <tr class="skeleton-row">
-                        <td><div class="skeleton skeleton-text" style="width: 20px; height: 20px; margin: auto;"></div></td>
-                        <td><div class="skeleton skeleton-avatar" style="width: 60px; height: 60px; margin: auto;"></div></td>
-                        <td><div class="skeleton skeleton-text" style="width: 80%;"></div></td>
-                        <td><div class="skeleton skeleton-text" style="width: 70%;"></div></td>
-                        <td><div class="skeleton skeleton-text" style="width: 50%;"></div></td>
-                        <td><div class="skeleton skeleton-text" style="width: 90%;"></div></td>
-                    </tr>
-                    <tr class="skeleton-row"><td><div class="skeleton skeleton-text" style="width: 20px; height: 20px; margin: auto;"></div></td><td><div class="skeleton skeleton-avatar" style="width: 60px; height: 60px; margin: auto;"></div></td><td><div class="skeleton skeleton-text" style="width: 75%;"></div></td><td><div class="skeleton skeleton-text" style="width: 65%;"></div></td><td><div class="skeleton skeleton-text" style="width: 45%;"></div></td><td><div class="skeleton skeleton-text" style="width: 85%;"></div></td></tr>
-                    <tr class="skeleton-row"><td><div class="skeleton skeleton-text" style="width: 20px; height: 20px; margin: auto;"></div></td><td><div class="skeleton skeleton-avatar" style="width: 60px; height: 60px; margin: auto;"></div></td><td><div class="skeleton skeleton-text" style="width: 82%;"></div></td><td><div class="skeleton skeleton-text" style="width: 72%;"></div></td><td><div class="skeleton skeleton-text" style="width: 52%;"></div></td><td><div class="skeleton skeleton-text" style="width: 88%;"></div></td></tr>
-                    <tr class="skeleton-row"><td><div class="skeleton skeleton-text" style="width: 20px; height: 20px; margin: auto;"></div></td><td><div class="skeleton skeleton-avatar" style="width: 60px; height: 60px; margin: auto;"></div></td><td><div class="skeleton skeleton-text" style="width: 78%;"></div></td><td><div class="skeleton skeleton-text" style="width: 68%;"></div></td><td><div class="skeleton skeleton-text" style="width: 48%;"></div></td><td><div class="skeleton skeleton-text" style="width: 87%;"></div></td></tr>
-                </tbody>
-            </table>
-         </div>
-     </div>
- 
-    <button id="back-to-top-btn" title="Наверх">▲</button>
-
-    <!-- Modal for showing users -->
-    <div id="user-list-modal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <span class="modal-close-btn">&times;</span>
-            <h3 id="modal-title">Пользователи, выполнившие действие</h3>
-            <div id="modal-body">Загрузка...</div>
-            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
-                <div id="modal-pagination-controls" class="pagination-container"></div>
-                <button id="modal-copy-btn" class="download-btn" style="display: none;">📋 Копировать</button>
-                <button id="modal-download-csv-btn" class="download-btn" style="display: none;">💾 Скачать CSV</button>
+            <!-- Logs (Особый класс log-container для темного фона всегда) -->
+            <div class="theme-card rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col h-[600px]">
+                <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30 flex justify-between items-center">
+                    <h2 class="text-lg font-bold flex items-center">
+                        <span class="relative flex h-3 w-3 mr-2">
+                          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                          <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                        </span>
+                        Live Log
+                    </h2>
+                    <p id="bot-log-status" class="text-xs text-gray-500"></p>
+                </div>
+                <!-- log-container принудительно темный -->
+                <div class="flex-grow overflow-hidden relative log-container font-mono text-xs rounded-b-xl">
+                    <div id="bot-log-content" class="absolute inset-0 overflow-y-auto p-4 space-y-1">
+                        <div class="animate-pulse">Подключение к потоку логов...</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="/static/js/theme.js"></script>
-    <script src="/static/js/main.js"></script>
- </body>
- </html>
+    <!-- Modals & Buttons ... -->
+    <!-- (Оставляем как есть, только подвал скриптов обновляем) -->
+    
+    <div id="user-list-modal" class="fixed inset-0 z-50 hidden bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="theme-card w-full max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h3 id="modal-title" class="text-xl font-bold">Пользователи</h3>
+                <button class="modal-close-btn text-gray-400 hover:text-gray-600 transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="modal-body" class="p-0 overflow-y-auto flex-grow">
+            </div>
+            <div class="p-5 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-700/50 rounded-b-xl">
+                <div id="modal-pagination-controls" class="flex space-x-1"></div>
+                <div class="flex space-x-2">
+                    <button id="modal-copy-btn" class="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded text-sm transition">📋 Копия</button>
+                    <button id="modal-download-csv-btn" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition">💾 CSV</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button id="back-to-top-btn" class="fixed bottom-8 right-8 bg-blue-600 text-white p-3 rounded-full shadow-lg hover:bg-blue-700 transition transform hover:-translate-y-1 hidden z-40">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
+    </button>
+
+    <script src="/static/js/theme.js?v=9"></script>
+    <script src="/static/js/main.js?v=9"></script>
+</body>
+</html>

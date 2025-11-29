@@ -4,6 +4,7 @@ import os
 import aiohttp
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
+from aiogram.client.session.aiohttp import AiohttpSession
 
 from .handlers import setup_handlers
 from .middleware import GroupMentionCommandMiddleware
@@ -69,13 +70,21 @@ async def set_bot_commands(bot: Bot):
         types.BotCommand(command="cancel", description=translator.gettext("en", "command_desc_cancel")),
     ]
 
-    # Set commands for all private chats (default scope)
-    await bot.set_my_commands(user_commands_ru, scope=types.BotCommandScopeAllPrivateChats(), language_code="ru")
-    await bot.set_my_commands(user_commands_en, scope=types.BotCommandScopeAllPrivateChats(), language_code="en")
-    
-    logging.info("Default user commands have been set.")
+    try:
+        # Set commands for all private chats (default scope)
+        await bot.set_my_commands(user_commands_ru, scope=types.BotCommandScopeAllPrivateChats(), language_code="ru")
+        await bot.set_my_commands(user_commands_en, scope=types.BotCommandScopeAllPrivateChats(), language_code="en")
+        logging.info("Default user commands have been set.")
+    except Exception as e:
+        # Логируем ошибку, но не роняем бота. Команды могут не обновиться, но бот должен работать.
+        logging.error(f"Failed to set bot commands: {e}")
 
 async def main():
+    # Настраиваем сессию для бота с увеличенным таймаутом
+    # Это решает проблему ServerDisconnectedError
+    bot_session = AiohttpSession(timeout=60)
+    bot = Bot(BOT_TOKEN, session=bot_session)
+
     async def on_shutdown(dispatcher: Dispatcher):
         logging.warning("Shutting down...")
         await dispatcher.storage.close()
@@ -84,10 +93,10 @@ async def main():
     await init_db_pool()
     await init_db()
 
-    timeout = aiohttp.ClientTimeout(total=60)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        bot = Bot(BOT_TOKEN)
-        ruz_api_client_instance = create_ruz_api_client(session)
+    # Создаем отдельную сессию для RUZ API клиента
+    timeout_client = aiohttp.ClientTimeout(total=60)
+    async with aiohttp.ClientSession(timeout=timeout_client) as ruz_session:
+        ruz_api_client_instance = create_ruz_api_client(ruz_session)
 
         dp = Dispatcher()
         dp.shutdown.register(on_shutdown)
@@ -96,7 +105,9 @@ async def main():
         
         setup_handlers(dp, bot=bot, ruz_api_client=ruz_api_client_instance)
         
+        # Безопасная установка команд
         await set_bot_commands(bot)
+        
         await dp.start_polling(bot)
 
 if __name__ == '__main__':

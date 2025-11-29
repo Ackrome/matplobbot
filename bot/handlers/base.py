@@ -21,6 +21,7 @@ from aiogram import types
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .settings import SettingsManager # Only for type checking
+    from .suggestions import SuggestionsManager # <--- ДОБАВЛЕНО для тайпхинтинга
 
 from shared_lib.i18n import translator
 
@@ -55,7 +56,8 @@ class BaseManager:
         schedule_manager: ScheduleManager,
         rendering_manager: RenderingManager,
         admin_manager: AdminManager,
-        settings_manager: 'SettingsManager' # Use forward reference for runtime
+        settings_manager: 'SettingsManager',
+        suggestions_manager: 'SuggestionsManager' # <--- ДОБАВЛЕНО
     ):
         self.router = Router()
         self.library_manager = library_manager
@@ -64,6 +66,7 @@ class BaseManager:
         self.rendering_manager = rendering_manager
         self.admin_manager = admin_manager
         self.settings_manager = settings_manager
+        self.suggestions_manager = suggestions_manager # <--- ДОБАВЛЕНО
         self._register_handlers()
 
     def _register_handlers(self):
@@ -253,7 +256,7 @@ class BaseManager:
             "favorites": self.library_manager.favorites_command,
             "latex": self.rendering_manager.latex_command,
             "mermaid": self.rendering_manager.mermaid_command,
-            "offershorter": self.suggestions_manager.cmd_offer_shorter,
+            "offershorter": self.suggestions_manager.cmd_offer_shorter, # <--- Теперь это поле существует
             "settings": self.settings_manager.command_settings_private,
             "help": self.command_help_private,
         }

@@ -51,6 +51,8 @@ DEFAULT_SETTINGS = {
     'md_display_mode': 'md_file',
     'latex_dpi': 300,
     'language': 'en',
+    'show_schedule_emojis': True,
+    'show_lecturer_emails': True, 
     'use_short_names': True,
     'admin_daily_summary_time': '09:00', # Default time for admin summary
     'admin_summary_days': [0, 1, 2, 3, 4], # NEW: Mon-Fri by default

@@ -42,23 +42,30 @@ class ConnectionManager:
             self.active_connections.remove(websocket)
             logger.info(f"WS Manager '{self.name}': Client disconnected {websocket.client}. Remaining: {len(self.active_connections)}")
 
-    async def send_personal_json(self, data: Dict[str, Any], websocket: WebSocket):
-        """Отправляет JSON конкретному клиенту."""
+    async def send_personal_json(self, data: Dict[str, Any], websocket: WebSocket) -> bool:
+        """Отправляет JSON конкретному клиенту. Возвращает True, если успешно."""
         if websocket.client_state == WebSocketState.CONNECTED:
             try:
                 await websocket.send_json(data)
+                return True
             except Exception as e:
                 logger.error(f"WS Manager '{self.name}': Error sending JSON to {websocket.client}: {e}")
                 await self.disconnect(websocket)
+                return False
+        return False
 
-    async def send_personal_text(self, message: str, websocket: WebSocket):
-        """Отправляет текст конкретному клиенту."""
+    async def send_personal_text(self, message: str, websocket: WebSocket) -> bool:
+        """Отправляет текст конкретному клиенту. Возвращает True, если успешно."""
         if websocket.client_state == WebSocketState.CONNECTED:
             try:
                 await websocket.send_text(message)
+                return True
             except Exception as e:
-                logger.error(f"WS Manager '{self.name}': Error sending text to {websocket.client}: {e}")
+                # Логируем ошибку только один раз при разрыве, чтобы не спамить
+                # logger.error(f"WS Manager '{self.name}': Error sending text: {e}")
                 await self.disconnect(websocket)
+                return False
+        return False
 
     async def broadcast_json(self, data: Dict[str, Any]):
         """Рассылает JSON всем активным клиентам."""
@@ -193,10 +200,14 @@ async def stream_log_file_to_websocket(websocket: WebSocket, manager: Connection
             async with aiofiles.open(bot_log_full_path, mode='r', encoding='utf-8', errors='ignore') as f:
                 lines = await f.readlines()
                 for line in lines[-50:]:
-                    await manager.send_personal_text(line.strip(), websocket)
-                await manager.send_personal_text("--- LIVE LOG STREAM STARTED ---", websocket)
+                    if not await manager.send_personal_text(line.strip(), websocket):
+                        return # Выход, если клиент отключился
+                
+                if not await manager.send_personal_text("--- LIVE LOG STREAM STARTED ---", websocket):
+                    return
         else:
-            await manager.send_personal_text(f"Waiting for log file: {bot_log_full_path}...", websocket)
+            if not await manager.send_personal_text(f"Waiting for log file: {bot_log_full_path}...", websocket):
+                return
 
         # 2. Ожидание появления файла
         while not os.path.exists(bot_log_full_path):
@@ -211,13 +222,19 @@ async def stream_log_file_to_websocket(websocket: WebSocket, manager: Connection
             while websocket.client_state == WebSocketState.CONNECTED:
                 line = await f.readline()
                 if line:
-                    await manager.send_personal_text(line.strip(), websocket)
+                    # ВАЖНОЕ ИСПРАВЛЕНИЕ: Проверяем результат отправки
+                    success = await manager.send_personal_text(line.strip(), websocket)
+                    if not success:
+                        logger.info("Client disconnected during log stream. Stopping stream.")
+                        break
                 else:
                     await asyncio.sleep(0.5)
 
     except Exception as e:
-        logger.error(f"Log Stream Error: {e}")
-        await manager.send_personal_text(f"Error reading log: {str(e)}", websocket)
+        # Игнорируем ошибку "Cannot call send...", так как мы её уже обработали выше
+        if "Cannot call \"send\"" not in str(e):
+            logger.error(f"Log Stream Error: {e}")
+            await manager.send_personal_text(f"Error reading log: {str(e)}", websocket)
 
 @router.websocket("/ws/bot_log")
 async def websocket_bot_log_endpoint(websocket: WebSocket):

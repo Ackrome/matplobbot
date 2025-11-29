@@ -267,5 +267,9 @@
     "short_name_deleted_success": "Сокращение было удалено.",
     "schedule_previous_searches": "Ваши предыдущие поиски:",
     "schedule_clear_history_btn": "🗑️ Очистить историю",
-    "schedule_history_cleared": "✅ История поиска очищена."
+    "schedule_history_cleared": "✅ История поиска очищена.",
+    "settings_show_schedule_emojis": "Эмодзи в расписании: {status}",
+    "settings_schedule_emojis_updated": "Настройка эмодзи в расписании обновлена.",
+    "settings_show_lecturer_emails": "Email преподавателей: {status}",
+    "settings_lecturer_emails_updated": "Настройка отображения Email обновлена."
 }

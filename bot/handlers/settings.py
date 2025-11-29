@@ -54,6 +54,8 @@ class SettingsManager:
 
         # Display settings
         self.router.callback_query(F.data == "settings_toggle_short_names")(self.cq_toggle_short_names)
+        self.router.callback_query(F.data == "settings_toggle_emojis")(self.cq_toggle_schedule_emojis) 
+        self.router.callback_query(F.data == "settings_toggle_emails")(self.cq_toggle_lecturer_emails)
         self.router.callback_query(F.data == "settings_toggle_docstring")(self.cq_toggle_docstring)
         self.router.callback_query(F.data == "settings_cycle_md_mode")(self.cq_cycle_md_mode)
 
@@ -157,6 +159,16 @@ class SettingsManager:
         builder.row(InlineKeyboardButton(
             text=translator.gettext(lang, "settings_use_short_names", status=translator.gettext(lang, short_names_status_key)),
             callback_data="settings_toggle_short_names"
+        ))
+        emojis_status_key = "settings_docstring_on" if settings.get('show_schedule_emojis', True) else "settings_docstring_off"
+        builder.row(InlineKeyboardButton(
+            text=translator.gettext(lang, "settings_show_schedule_emojis", status=translator.gettext(lang, emojis_status_key)),
+            callback_data="settings_toggle_emojis"
+        ))
+        emails_status_key = "settings_docstring_on" if settings.get('show_lecturer_emails', True) else "settings_docstring_off"
+        builder.row(InlineKeyboardButton(
+            text=translator.gettext(lang, "settings_show_lecturer_emails", status=translator.gettext(lang, emails_status_key)),
+            callback_data="settings_toggle_emails"
         ))
         # Docstring toggle
         docstring_status_key = "settings_docstring_on" if settings['show_docstring'] else "settings_docstring_off"
@@ -262,6 +274,36 @@ class SettingsManager:
         keyboard = await self.get_settings_keyboard(user_id)
         await callback.message.edit_text(translator.gettext(lang, "settings_menu_header"), reply_markup=keyboard.as_markup())
         await callback.answer()
+
+    async def cq_toggle_schedule_emojis(self, callback: CallbackQuery):
+        """Toggles the display of colored squares in the schedule."""
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        settings = await get_user_settings(user_id)
+        
+        # Toggle the boolean
+        settings['show_schedule_emojis'] = not settings.get('show_schedule_emojis', True)
+        
+        await update_user_settings_db(user_id, settings)
+        
+        keyboard = await self.get_settings_keyboard(user_id)
+        await callback.message.edit_reply_markup(reply_markup=keyboard.as_markup())
+        await callback.answer(translator.gettext(lang, "settings_schedule_emojis_updated"))
+    
+    async def cq_toggle_lecturer_emails(self, callback: CallbackQuery):
+        """Toggles the display of lecturer emails in the schedule."""
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        settings = await get_user_settings(user_id)
+        
+        # Toggle the boolean
+        settings['show_lecturer_emails'] = not settings.get('show_lecturer_emails', True)
+        
+        await update_user_settings_db(user_id, settings)
+        
+        keyboard = await self.get_settings_keyboard(user_id)
+        await callback.message.edit_reply_markup(reply_markup=keyboard.as_markup())
+        await callback.answer(translator.gettext(lang, "settings_lecturer_emails_updated"))
 
     async def cq_toggle_short_names(self, callback: CallbackQuery):
         user_id = callback.from_user.id
