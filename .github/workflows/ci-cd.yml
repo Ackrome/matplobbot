@@ -4,140 +4,93 @@ on:
   push: { branches: [ "main" ] }
 env:
   REGISTRY: ghcr.io
-  IMAGE_OWNER: ackrome # Use your GitHub username (lowercase)
+  IMAGE_OWNER: ackrome
 
 jobs:
   auto-version-patch:
     name: Auto-Version Patch Release
-    # This job runs ONLY on a push to main, NOT on a tag push.
-    # It also checks that the commit is not a release commit to prevent loops from other sources.
     if: "!contains(github.event.head_commit.message, 'chore(release)')"
     outputs:
       new_version: ${{ steps.bumper.outputs.new_version }}
       commit_sha: ${{ steps.checkout.outputs.commit_sha }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Needs permission to push commits and tags
+      contents: write
     steps:
       - name: Check out code
         uses: actions/checkout@v3
         with:
-          ref: main # Checkout the main branch directly
-          # We need to fetch all history and tags for the bumper script to work correctly
+          ref: main
           fetch-depth: 0
-          # Use a PAT to allow pushing back to the repo
           token: ${{ secrets.GH_PAT }}
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-
       - name: Configure Git User
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
       - name: Run Version Bumper for Patch
         id: bumper
-        # We run the script without --commit to prevent it from pushing.
-        # We capture the output to pass it to other jobs.
         run: |
           python version_bumper.py patch
-          # The script modifies files, now we commit them
           git add setup.py requirements.txt
-          # Use a standard commit message and [skip ci] to prevent loops
           git commit -m "chore(release): auto-version patch [skip ci]"
-          git push origin HEAD:main # Explicitly push the current HEAD to the main branch
+          git push origin HEAD:main
 
   publish-shared-lib:
     name: Build and Publish Shared Library to PyPI
     needs: [auto-version-patch]
     runs-on: ubuntu-latest
-    # No special permissions are needed for PyPI
-    
     steps:
       - name: Check out code
         uses: actions/checkout@v3
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-
       - name: Install build dependencies
         run: python -m pip install --upgrade pip build twine
-
       - name: Build package
         run: python -m build
-
       - name: Publish package to PyPI
         env:
-          # The username is always __token__ for API token authentication
           TWINE_USERNAME: __token__
-          # The password is the API token itself
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: twine upload dist/*
 
-
-  test-build-and-push:
+  # --- ДЖОБА 1: Worker (Тяжелая) ---
+  build-worker:
     needs: [publish-shared-lib]
-    name: Test, Build and Push
+    name: Build Heavy Worker
     runs-on: self-hosted
     permissions:
       contents: read
       packages: write
-
     steps:
-
       - name: Check out code
         uses: actions/checkout@v3
-      
-      - name: Aggressive Docker Cleanup
-        run: |
-          echo "Cleaning up docker system to free space..."
-          # Удаляем остановленные контейнеры и неиспользуемые слои
-          docker system prune -f
-          # Удаляем кэш сборки buildx (самый жирный потребитель места)
-          docker buildx prune -a -f
-          # Опционально: удаляем старые образы, если места критически мало
-          # docker rmi $(docker images -f "dangling=true" -q) || true
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-        with:
-          platforms: all
+      # Только базовая очистка, так как buildx prune не поддерживается
+      - name: Aggressive Pre-Clean
+        run: |
+          echo "Cleaning up docker system..."
+          docker system prune -a -f --volumes || true
 
       - name: Set up Docker Buildx
-        id: buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Log in to GitHub Container Registry
+      - name: Log in to GHCR
         uses: docker/login-action@v2
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # --- Build BOT ---
-      - name: Build and push matplobbot-bot
+      - name: Build and push Worker
         uses: docker/build-push-action@v4
         with:
-          build-args: |
-            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-          context: .
-          file: ./Dockerfile.bot
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-bot:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-bot:latest
-
-      # --- Build WORKER ---
-      - name: Build and push matplobbot-worker
-        uses: docker/build-push-action@v4
-        with:
-          build-args: |
-            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
           context: .
           file: ./Dockerfile.worker
           push: true
@@ -145,12 +98,48 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-worker:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-worker:latest
 
-      # --- Build API ---
-      - name: Build and push matplobbot-api
+      - name: Post-Clean
+        if: always()
+        run: docker system prune -a -f --volumes || true
+
+  # --- ДЖОБА 2: Остальные сервисы (Легкие) ---
+  build-services:
+    needs: [build-worker]
+    name: Build Bot Services
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Intermediate Cleanup
+        run: docker system prune -a -f --volumes || true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Bot
         uses: docker/build-push-action@v4
         with:
-          build-args: |
-            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+          context: .
+          file: ./Dockerfile.bot
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-bot:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-bot:latest
+
+      - name: Build and push API
+        uses: docker/build-push-action@v4
+        with:
           file: ./fastapi_stats_app/Dockerfile
           context: .
           push: true
@@ -158,12 +147,9 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-api:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-api:latest
 
-      # --- Build SCHEDULER ---
-      - name: Build and push matplobbot-scheduler
+      - name: Build and push Scheduler
         uses: docker/build-push-action@v4
         with:
-          build-args: |
-            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
           context: .
           file: ./scheduler_app/Dockerfile
           push: true
@@ -171,20 +157,17 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-scheduler:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-scheduler:latest
 
-      - name: Clean up Docker resources
+      - name: Final Cleanup
         if: always()
-        run: |
-          docker system prune --all --force
+        run: docker system prune -a -f --volumes || true
 
   trigger-deployment:
     name: Trigger Jenkins Deployment
-    needs: [test-build-and-push]
+    needs: [build-services]
     runs-on: self-hosted
-
     steps:
       - name: Trigger Jenkins Job via cURL
         run: |
-          # Added WORKER_IMAGE_TAG
           curl -X POST "${{ secrets.JENKINS_URL }}/job/matplobbot-deploy/buildWithParameters" \
             --user "${{ secrets.JENKINS_USER }}:${{ secrets.JENKINS_TOKEN }}" \
             --data-urlencode "BOT_IMAGE_TAG=${{ github.sha }}" \
