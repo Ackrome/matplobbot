@@ -1,70 +1,94 @@
-# c:/Users/ivant/Desktop/proj/matplobbot/fastapi_stats_app/routers/stats_router.py
-from fastapi import APIRouter, HTTPException, Query
+# fastapi_stats_app/routers/stats_router.py
+from fastapi import APIRouter, HTTPException, Query, status
 import asyncpg
 import math
 import logging
+from typing import Any
+
 from shared_lib.database import (
-    get_db_connection_obj, # This function is in shared_lib/database.py
-    get_leaderboard_data_from_db,
-    get_popular_commands_data_from_db,
-    get_popular_messages_data_from_db,
-    get_action_types_distribution_from_db,
-    get_activity_over_time_data_from_db,
+    get_db_connection_obj,
     get_user_profile_data_from_db,
     get_users_for_action,
     get_all_user_actions
 )
 from shared_lib.redis_client import redis_client
+from shared_lib.schemas import (
+    UserProfileResponse, 
+    ActionUsersResponse, 
+    ExportActionsResponse
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-@router.get("/health", summary="Health Check", description="Проверяет состояние сервиса и его зависимостей (например, подключение к БД).")
-async def health_check():
+# TTL кэша в секундах (5 минут)
+CACHE_TTL = 300
+
+@router.get(
+    "/health",
+    summary="Health Check",
+    description="Проверяет доступность сервиса и подключение к базе данных.",
+    response_model=dict[str, str],
+    status_code=status.HTTP_200_OK
+)
+async def health_check() -> dict[str, str]:
     """
-    Проверяет работоспособность сервиса. В данном случае, основная проверка -
-    это возможность успешно выполнить запрос к базе данных.
+    Легковесная проверка здоровья сервиса.
     """
     try:
         async with get_db_connection_obj() as db:
-            # Выполняем очень простой и быстрый запрос, чтобы проверить, что соединение с БД живо.
             await db.fetchval("SELECT 1")
         return {"status": "ok", "database": "connected"}
     except Exception as e:
-        logger.error(f"Health check failed: Database connection error: {e}", exc_info=True)
-        raise HTTPException(status_code=503, detail={"status": "error", "database": "disconnected", "reason": str(e)})
+        logger.error(f"Health check failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"status": "error", "database": "disconnected", "reason": str(e)}
+        )
 
-@router.get("/users/{user_id}/profile", summary="Профиль пользователя и его действия", description="Возвращает детали профиля пользователя и полный список его действий.")
+@router.get(
+    "/users/{user_id}/profile",
+    summary="Профиль пользователя",
+    description="Возвращает детальную информацию о пользователе и историю его действий с пагинацией.",
+    response_model=UserProfileResponse
+)
 async def get_user_profile(
     user_id: int,
     page: int = Query(1, ge=1, description="Номер страницы"),
-    page_size: int = Query(50, ge=1, le=200, description="Количество записей на странице"),
-    sort_by: str = Query('timestamp', description="Поле для сортировки: id, action_type, action_details, timestamp"),
-    sort_order: str = Query('desc', description="Порядок сортировки: asc или desc")
-):
-    # --- Caching Implementation ---
+    page_size: int = Query(50, ge=1, le=200, description="Размер страницы"),
+    sort_by: str = Query('timestamp', description="Поле сортировки (id, action_type, action_details, timestamp)"),
+    sort_order: str = Query('desc', description="Порядок сортировки (asc, desc)")
+) -> Any:
+    # 1. Проверяем кэш
     cache_key = f"user_profile:{user_id}:p{page}:s{page_size}:{sort_by}:{sort_order}"
     try:
         cached_data = await redis_client.get_cache(cache_key)
         if cached_data:
             logger.info(f"Cache hit for user profile: {cache_key}")
+            # Возвращаем dict, FastAPI сам провалидирует его через UserProfileResponse
             return cached_data
     except Exception as e:
-        logger.error(f"Redis cache check failed for user profile {user_id}: {e}", exc_info=True)
+        logger.warning(f"Redis cache error: {e}")
 
+    # 2. Запрашиваем БД
     try:
         async with get_db_connection_obj() as db:
             profile_data = await get_user_profile_data_from_db(
                 db, user_id, page, page_size, sort_by, sort_order
             )
+            
             if profile_data is None:
                 raise HTTPException(status_code=404, detail="Пользователь не найден.")
 
+            # Расчет пагинации
             total_actions = profile_data["total_actions"]
-            total_pages = math.ceil(total_actions / page_size)
+            total_pages = math.ceil(total_actions / page_size) if page_size > 0 else 0
 
+            # Формируем ответ, соответствующий UserProfileResponse
             response_data = {
-                **profile_data,
+                "user_details": profile_data["user_details"],
+                "actions": profile_data["actions"],
+                "total_actions": total_actions, # Дублируем для верхнего уровня
                 "pagination": {
                     "current_page": page,
                     "total_pages": total_pages,
@@ -73,42 +97,52 @@ async def get_user_profile(
                     "sort_order": sort_order
                 }
             }
-            # --- Store result in cache ---
+
+            # 3. Сохраняем в кэш (fire-and-forget, ошибки не должны ломать запрос)
             try:
-                # Cache for 5 minutes
-                await redis_client.set_cache(cache_key, response_data, ttl=300)
+                await redis_client.set_cache(cache_key, response_data, ttl=CACHE_TTL)
             except Exception as e:
-                logger.error(f"Redis cache set failed for user profile {user_id}: {e}", exc_info=True)
+                logger.error(f"Failed to set cache: {e}")
 
             return response_data
-    except asyncpg.PostgresError as e:
-        logger.error(f"Ошибка базы данных при получении профиля пользователя {user_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Ошибка базы данных (профиль пользователя): {e}")
 
-@router.get("/stats/action_users", summary="Пользователи для действия", description="Возвращает список пользователей, совершивших определенное действие.")
+    except asyncpg.PostgresError as e:
+        logger.error(f"Database error fetching user profile {user_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Database Error")
+
+@router.get(
+    "/stats/action_users",
+    summary="Пользователи по действию",
+    description="Возвращает список пользователей, совершивших конкретное действие (команду или сообщение).",
+    response_model=ActionUsersResponse
+)
 async def get_action_users(
-    action_type: str = Query(..., description="Тип действия ('command' или 'message')"),
-    action_details: str = Query(..., description="Детали действия (текст команды или сообщения)"),
+    action_type: str = Query(..., description="Тип действия (command, text_message)"),
+    action_details: str = Query(..., description="Содержание действия (например, /start)"),
     page: int = Query(1, ge=1, description="Номер страницы"),
-    page_size: int = Query(15, ge=1, le=100, description="Количество пользователей на странице"),
-    sort_by: str = Query('full_name', description="Поле для сортировки: user_id, full_name, username"),
-    sort_order: str = Query('asc', description="Порядок сортировки: asc или desc")
-):
-    # --- Caching Implementation ---
+    page_size: int = Query(15, ge=1, le=100, description="Размер страницы"),
+    sort_by: str = Query('full_name', description="Поле сортировки (full_name, username)"),
+    sort_order: str = Query('asc', description="Порядок сортировки (asc, desc)")
+) -> Any:
+    # 1. Проверяем кэш
     cache_key = f"action_users:{action_type}:{action_details}:p{page}:s{page_size}:{sort_by}:{sort_order}"
     try:
         cached_data = await redis_client.get_cache(cache_key)
         if cached_data:
-            logger.info(f"Cache hit for action users: {cache_key}")
             return cached_data
     except Exception as e:
-        logger.error(f"Redis cache check failed for action users: {e}", exc_info=True)
+        logger.warning(f"Redis cache error: {e}")
 
+    # 2. Запрашиваем БД
     try:
         async with get_db_connection_obj() as db:
-            data = await get_users_for_action(db, action_type, action_details, page, page_size, sort_by, sort_order)
+            data = await get_users_for_action(
+                db, action_type, action_details, page, page_size, sort_by, sort_order
+            )
+            
             total_users = data["total_users"]
-            total_pages = math.ceil(total_users / page_size)
+            total_pages = math.ceil(total_users / page_size) if page_size > 0 else 0
+
             response_data = {
                 "users": data["users"],
                 "pagination": {
@@ -119,40 +153,50 @@ async def get_action_users(
                     "sort_order": sort_order
                 }
             }
-            # --- Store result in cache ---
+
+            # 3. Сохраняем в кэш
             try:
-                # Cache for 5 minutes
-                await redis_client.set_cache(cache_key, response_data, ttl=300)
+                await redis_client.set_cache(cache_key, response_data, ttl=CACHE_TTL)
             except Exception as e:
-                logger.error(f"Redis cache set failed for action users: {e}", exc_info=True)
+                logger.error(f"Failed to set cache: {e}")
 
             return response_data
+
     except asyncpg.PostgresError as e:
-        logger.error(f"Ошибка базы данных при получении пользователей для действия: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Ошибка базы данных (пользователи для действия): {e}")
+        logger.error(f"Database error fetching action users: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Database Error")
 
-@router.get("/users/{user_id}/export_actions", summary="Экспорт всех действий пользователя", description="Возвращает полный список всех действий пользователя для экспорта в CSV.")
-async def export_user_actions(user_id: int):
+@router.get(
+    "/users/{user_id}/export_actions",
+    summary="Экспорт действий",
+    description="Выгружает полную историю действий пользователя для экспорта (например, в CSV).",
+    response_model=ExportActionsResponse
+)
+async def export_user_actions(user_id: int) -> Any:
+    # 1. Проверяем кэш
+    cache_key = f"export_actions:{user_id}"
     try:
-        # --- Caching Implementation ---
-        cache_key = f"export_actions:{user_id}"
-        try:
-            cached_data = await redis_client.get_cache(cache_key)
-            if cached_data:
-                logger.info(f"Cache hit for user export: {user_id}")
-                return cached_data
-        except Exception as e:
-            logger.error(f"Redis cache check failed for user export {user_id}: {e}", exc_info=True)
+        cached_data = await redis_client.get_cache(cache_key)
+        if cached_data:
+            return cached_data
+    except Exception as e:
+        logger.warning(f"Redis cache error: {e}")
 
+    # 2. Запрашиваем БД
+    try:
         async with get_db_connection_obj() as db:
             actions = await get_all_user_actions(db, user_id)
+            
             response_data = {"actions": actions}
-            # --- Store result in cache ---
+
+            # 3. Сохраняем в кэш
             try:
-                await redis_client.set_cache(cache_key, response_data, ttl=300) # Cache for 5 minutes
+                await redis_client.set_cache(cache_key, response_data, ttl=CACHE_TTL)
             except Exception as e:
-                logger.error(f"Redis cache set failed for user export {user_id}: {e}", exc_info=True)
+                logger.error(f"Failed to set cache: {e}")
+
             return response_data
+
     except asyncpg.PostgresError as e:
-        logger.error(f"Ошибка базы данных при экспорте действий пользователя {user_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Ошибка базы данных (экспорт действий): {e}")
+        logger.error(f"Database error exporting actions for user {user_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Database Error")

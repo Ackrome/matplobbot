@@ -1,15 +1,17 @@
-# c:/Users/ivant/Desktop/proj/matplobbot/fastapi_stats_app/routers/ws_router.py
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+# fastapi_stats_app/routers/ws_router.py
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 import logging
 import asyncio
 import aiofiles
-import asyncpg, datetime
-import json # Добавляем импорт json
+import asyncpg
+import datetime
+import json
 import os
+from typing import Set, Dict, Any
 
 from shared_lib.database import (
-    get_db_connection_obj, # This function is in shared_lib/database.py
+    get_db_connection_obj,
     get_leaderboard_data_from_db,
     get_popular_commands_data_from_db,
     get_popular_messages_data_from_db,
@@ -17,113 +19,105 @@ from shared_lib.database import (
     get_activity_over_time_data_from_db,
     get_new_users_per_day_from_db
 )
-from ..config import LOG_DIR, BOT_LOG_FILE_NAME,FASTAPI_LOG_FILE_NAME # Обновленные импорты
+from ..config import LOG_DIR, BOT_LOG_FILE_NAME
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-# Конфигурация logging.basicConfig теперь находится в main.py и выполняется при старте приложения.
-logging.getLogger("aiogram.event").setLevel(logging.WARNING)
 
-# Класс для управления WebSocket соединениями
+# --- WebSocket Connection Manager ---
+
 class ConnectionManager:
+    """Менеджер для управления множеством WebSocket соединений."""
     def __init__(self, name: str = "default"):
-        self.active_connections: set[WebSocket] = set()
-        self.name = name  # Для логирования
+        self.active_connections: Set[WebSocket] = set()
+        self.name = name
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.add(websocket)
-        logger.info(f"Manager '{self.name}': Client connected {websocket.client}. Total: {len(self.active_connections)}.")
+        logger.info(f"WS Manager '{self.name}': Client connected {websocket.client}. Total: {len(self.active_connections)}")
 
     async def disconnect(self, websocket: WebSocket):
-        self.active_connections.discard(websocket)
-        logger.info(f"Manager '{self.name}': Client disconnected {websocket.client}. Remaining: {len(self.active_connections)}.")
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+            logger.info(f"WS Manager '{self.name}': Client disconnected {websocket.client}. Remaining: {len(self.active_connections)}")
 
-    async def send_personal_json(self, data: dict, websocket: WebSocket):
+    async def send_personal_json(self, data: Dict[str, Any], websocket: WebSocket):
+        """Отправляет JSON конкретному клиенту."""
         if websocket.client_state == WebSocketState.CONNECTED:
             try:
                 await websocket.send_json(data)
-            except (WebSocketDisconnect, RuntimeError) as e:
-                logger.debug(f"Manager '{self.name}': Could not send JSON to {websocket.client} (disconnected): {e}")
-                await self.disconnect(websocket)
             except Exception as e:
-                logger.error(f"Manager '{self.name}': Unexpected error sending personal JSON to {websocket.client}: {e}")
+                logger.error(f"WS Manager '{self.name}': Error sending JSON to {websocket.client}: {e}")
                 await self.disconnect(websocket)
 
     async def send_personal_text(self, message: str, websocket: WebSocket):
+        """Отправляет текст конкретному клиенту."""
         if websocket.client_state == WebSocketState.CONNECTED:
             try:
                 await websocket.send_text(message)
-            except (WebSocketDisconnect, RuntimeError) as e:
-                logger.debug(f"Manager '{self.name}': Could not send text to {websocket.client} (disconnected): {e}")
-                await self.disconnect(websocket)
             except Exception as e:
-                logger.error(f"Manager '{self.name}': Unexpected error sending personal text to {websocket.client}: {e}")
+                logger.error(f"WS Manager '{self.name}': Error sending text to {websocket.client}: {e}")
                 await self.disconnect(websocket)
 
-    async def _broadcast(self, send_callable_name: str, payload):
-        # Create a list of send tasks to run concurrently.
-        connections_to_broadcast = list(self.active_connections)
-        tasks = []
-        for connection in connections_to_broadcast:
-            if send_callable_name == "send_json":
-                tasks.append(connection.send_json(payload))
-            elif send_callable_name == "send_text":
-                tasks.append(connection.send_text(payload))
-        
-        if not tasks:
+    async def broadcast_json(self, data: Dict[str, Any]):
+        """Рассылает JSON всем активным клиентам."""
+        if not self.active_connections:
             return
-
-        # Use asyncio.gather to send all messages concurrently and capture exceptions.
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Process results to find and remove disconnected clients.
-        for connection, result in zip(connections_to_broadcast, results):
-            if isinstance(result, Exception):
-                logger.warning(f"Manager '{self.name}': Failed to broadcast to {connection.client}. Error: {result}. Removing.")
-                await self.disconnect(connection)
-
-    async def broadcast_json(self, data: dict):
-        await self._broadcast("send_json", data)
+        
+        # Создаем копию списка, чтобы избежать ошибки изменения размера множества во время итерации
+        connections = list(self.active_connections)
+        for connection in connections:
+            await self.send_personal_json(data, connection)
 
     async def broadcast_text(self, message: str):
-        await self._broadcast("send_text", message)
+        """Рассылает текст всем активным клиентам."""
+        if not self.active_connections:
+            return
+            
+        connections = list(self.active_connections)
+        for connection in connections:
+            await self.send_personal_text(message, connection)
 
-
-# Создаем экземпляры менеджеров
+# Глобальные менеджеры
 stats_manager = ConnectionManager(name="stats")
 log_manager = ConnectionManager(name="bot_log")
 
-# Глобальное состояние для задачи обновления статистики
-stats_update_task = None
-last_sent_stats_data_str = "" # Для предотвращения отправки одних и тех же данных
-last_checked_actions_count = -1 # Для быстрой проверки изменений
+# Глобальные переменные для background task
+stats_update_task: asyncio.Task | None = None
+last_sent_stats_data_str: str = ""
+last_checked_actions_count: int = -1
 
 async def periodic_stats_updater():
+    """Фоновая задача: собирает статистику из БД и рассылает её клиентам при изменениях."""
     global last_sent_stats_data_str, last_checked_actions_count
     logger.info("Starting periodic_stats_updater task.")
+    
     while True:
-        if not stats_manager.active_connections: # Выполняем только если есть активные соединения
-            await asyncio.sleep(5) # Спим дольше, если никто не подключен
-            continue
         try:
+            # Оптимизация: если нет клиентов, спим дольше и не грузим БД
+            if not stats_manager.active_connections:
+                await asyncio.sleep(5)
+                continue
+
             async with get_db_connection_obj() as db:
-                # Use fetchval to get a single value directly
+                # Быстрая проверка: изменилось ли количество действий?
                 current_actions = await db.fetchval("SELECT COUNT(*) FROM user_actions") or 0
 
-                # Если количество действий не изменилось, нет смысла пересчитывать остальное
                 if current_actions == last_checked_actions_count:
-                    await asyncio.sleep(2) # Короткая пауза и следующая итерация
+                    await asyncio.sleep(2)
                     continue
                 
-                logger.info(f"Action count changed from {last_checked_actions_count} to {current_actions}. Fetching full stats.")
                 last_checked_actions_count = current_actions
+                logger.debug(f"Action count changed. Fetching full stats (Total: {current_actions}).")
 
+                # Параллельный сбор данных можно было бы сделать через asyncio.gather, 
+                # но для asyncpg один коннект - один запрос. Последовательно тоже ок.
                 leaderboard_data = await get_leaderboard_data_from_db(db)
                 popular_commands_data = await get_popular_commands_data_from_db(db)
                 popular_messages_data = await get_popular_messages_data_from_db(db)
                 action_types_data = await get_action_types_distribution_from_db(db)
-                # Fetch activity data for all periods
+                
                 activity_over_time_data = {
                     'day': await get_activity_over_time_data_from_db(db, period='day'),
                     'week': await get_activity_over_time_data_from_db(db, period='week'),
@@ -141,153 +135,98 @@ async def periodic_stats_updater():
                 "new_users_per_day": new_users_data,
                 "last_updated": datetime.datetime.now().isoformat()
             }
-            # Используем json.dumps для корректного сравнения и хранения JSON-строки
+
+            # Сериализуем для сравнения
             current_data_json_str = json.dumps(current_data, ensure_ascii=False, sort_keys=True)
 
             if current_data_json_str != last_sent_stats_data_str:
                 await stats_manager.broadcast_json(current_data)
-                last_sent_stats_data_str = current_data_json_str # Сохраняем JSON-строку
-                logger.info(f"StatsUpdater: Broadcasted updated stats (total_actions: {current_actions}, leaderboard: {len(leaderboard_data)} users, ...)")
+                last_sent_stats_data_str = current_data_json_str
+                logger.info("Broadcasted updated stats.")
 
         except asyncpg.PostgresError as e:
-            logger.error(f"StatsUpdater: Database error: {e}", exc_info=True)
-            await stats_manager.broadcast_json({"error": "Ошибка получения данных из БД для статистики"})
-            await asyncio.sleep(10) # Пауза перед повторной попыткой при ошибке БД
-        except HTTPException as e: # Может быть вызвано get_db_connection_obj
-            logger.error(f"StatsUpdater: HTTPException: {e.detail}")
-            await stats_manager.broadcast_json({"error": e.detail})
+            logger.error(f"StatsUpdater DB Error: {e}")
+            await stats_manager.broadcast_json({"error": "Database error fetching stats"})
             await asyncio.sleep(10)
         except Exception as e:
-            logger.error(f"StatsUpdater: Unexpected error: {e}", exc_info=True)
-            await stats_manager.broadcast_json({"error": "Непредвиденная ошибка на сервере при обновлении статистики"})
+            logger.error(f"StatsUpdater Unexpected Error: {e}", exc_info=True)
+            await stats_manager.broadcast_json({"error": "Internal server error updating stats"})
             await asyncio.sleep(10)
             
-        await asyncio.sleep(2) # Интервал для проверки/отправки обновлений
+        await asyncio.sleep(2)
 
 @router.websocket("/ws/stats/total_actions")
 async def websocket_total_actions_endpoint(websocket: WebSocket):
-    global stats_update_task, last_sent_stats_data_str # Убедимся, что last_sent_stats_data_str доступен
+    """Эндпоинт WebSocket для живой статистики."""
+    global stats_update_task
+    
     await stats_manager.connect(websocket)
 
-    # Отправить текущие кэшированные данные новому клиенту, если они есть
+    # Отправляем последние известные данные сразу при подключении
     if last_sent_stats_data_str:
         try:
-            # last_sent_stats_data_str хранит JSON-строку, которую нужно преобразовать в Python dict
-            data_to_send = json.loads(last_sent_stats_data_str)
-            await stats_manager.send_personal_json(data_to_send, websocket)
-            logger.info(f"Sent initial cached stats data to newly connected client {websocket.client}")
-        except json.JSONDecodeError:
-            logger.error(f"Failed to parse last_sent_stats_data_str for initial send to {websocket.client}. Data: '{last_sent_stats_data_str[:200]}...'")
+            await stats_manager.send_personal_json(json.loads(last_sent_stats_data_str), websocket)
         except Exception as e:
-            logger.error(f"Error sending initial cached stats data to {websocket.client}: {e}", exc_info=True)
+            logger.error(f"Error sending initial stats: {e}")
 
-    # Запускаем фоновую задачу, если она еще не запущена
+    # Запускаем фоновую задачу (синглтон)
     if stats_update_task is None or stats_update_task.done():
-        if stats_update_task and stats_update_task.done(): # Проверяем, не завершилась ли задача с ошибкой
-            try:
-                stats_update_task.result() 
-            except Exception as e:
-                logger.error(f"Previous stats_update_task ended with error: {e}")
-        logger.info("Creating and starting new periodic_stats_updater task.")
         stats_update_task = asyncio.create_task(periodic_stats_updater())
     
     try:
-        while websocket.client_state == WebSocketState.CONNECTED:
-            # Этот цикл удерживает соединение открытым и обрабатывает WebSocketDisconnect.
-            # Мы не ожидаем сообщений от клиента здесь, сервер сам отправляет данные.
-            await websocket.receive_text() # Ожидаем любое сообщение или разрыв соединения
+        while True:
+            # Просто поддерживаем соединение, данные идут от сервера к клиенту
+            await websocket.receive_text()
     except WebSocketDisconnect:
-        logger.info(f"Client {websocket.client} disconnected from stats websocket.")
-    except Exception as e: # Другие возможные ошибки WebSocket
-        logger.error(f"Unexpected error in stats websocket for {websocket.client}: {e}", exc_info=True)
-        if websocket.client_state != WebSocketState.DISCONNECTED:
-            try:
-                await websocket.close(code=1011) # Internal server error
-            except RuntimeError: # pragma: no cover
-                logger.warning(f"Stats WS: Error closing connection for {websocket.client}, already closed.")
-    finally:
         await stats_manager.disconnect(websocket)
-        logger.info(f"Stats WebSocket session ended for client: {websocket.client}")
-        # Можно добавить логику остановки periodic_stats_updater, если активных клиентов не осталось,
-        # но текущая реализация periodic_stats_updater сама проверяет наличие активных клиентов.
+    except Exception as e:
+        logger.error(f"Stats WS Error: {e}")
+        await stats_manager.disconnect(websocket)
 
 async def stream_log_file_to_websocket(websocket: WebSocket, manager: ConnectionManager):
-    bot_log_full_path = os.path.join(LOG_DIR, BOT_LOG_FILE_NAME) # Формируем путь здесь
+    """Читает лог-файл и отправляет новые строки в WebSocket (аналог tail -f)."""
+    bot_log_full_path = os.path.join(LOG_DIR, BOT_LOG_FILE_NAME)
+    
     try:
-        # Отправляем последние N строк при подключении
-        try:
+        # 1. Отправка последних строк
+        if os.path.exists(bot_log_full_path):
             async with aiofiles.open(bot_log_full_path, mode='r', encoding='utf-8', errors='ignore') as f:
                 lines = await f.readlines()
-                last_lines = lines[-50:]
-                if last_lines:
-                    await manager.send_personal_text("--- Последние строки лога ---", websocket)
-                    for line in last_lines:
-                        if websocket.client_state != WebSocketState.CONNECTED: return
-                        await manager.send_personal_text(line.strip(), websocket)
-                    await manager.send_personal_text("--- Начало трансляции новых логов ---", websocket)
-        except FileNotFoundError:
-            if websocket.client_state != WebSocketState.DISCONNECTED:
-                await manager.send_personal_text(f"ПРЕДУПРЕЖДЕНИЕ: Файл лога {bot_log_full_path} еще не создан ботом.", websocket)
+                for line in lines[-50:]:
+                    await manager.send_personal_text(line.strip(), websocket)
+                await manager.send_personal_text("--- LIVE LOG STREAM STARTED ---", websocket)
+        else:
+            await manager.send_personal_text(f"Waiting for log file: {bot_log_full_path}...", websocket)
 
-        # Ожидаем создания файла, если его нет
-        if not os.path.exists(bot_log_full_path):
-            logger.warning(f"Log file {bot_log_full_path} does not exist. Waiting for it to be created.")
-            while not os.path.exists(bot_log_full_path):
-                if websocket.client_state != WebSocketState.CONNECTED: return
-                await manager.send_personal_text(f"ОЖИДАНИЕ: Файл лога {bot_log_full_path} еще не создан...", websocket)
-                await asyncio.sleep(5)
-            if websocket.client_state == WebSocketState.CONNECTED:
-                 await manager.send_personal_text(f"ИНФО: Файл лога {bot_log_full_path} найден. Начинаю трансляцию.", websocket)
+        # 2. Ожидание появления файла
+        while not os.path.exists(bot_log_full_path):
+            await asyncio.sleep(2)
+            if websocket.client_state != WebSocketState.CONNECTED:
+                return
 
-        # Стриминг новых строк
+        # 3. Стриминг
         async with aiofiles.open(bot_log_full_path, mode='r', encoding='utf-8', errors='ignore') as f:
-            await f.seek(0, os.SEEK_END) # Переходим в конец файла
+            await f.seek(0, os.SEEK_END)
+            
             while websocket.client_state == WebSocketState.CONNECTED:
                 line = await f.readline()
-                if not line:
-                    await asyncio.sleep(0.2) # Ждем новые строки
-                    continue
-                if websocket.client_state == WebSocketState.CONNECTED: # Дополнительная проверка перед отправкой
+                if line:
                     await manager.send_personal_text(line.strip(), websocket)
                 else:
-                    break # Выходим из цикла, если клиент отключился
+                    await asyncio.sleep(0.5)
 
-    except FileNotFoundError: # На случай, если файл удален между проверками
-        logger.error(f"Log Stream: Файл лога не найден во время стриминга: {bot_log_full_path}")
-        if websocket.client_state == WebSocketState.CONNECTED:
-            await manager.send_personal_text(f"ОШИБКА: Файл лога не найден: {bot_log_full_path}.", websocket)
     except Exception as e:
-        # WebSocketDisconnect будет обработан в вызывающей функции websocket_bot_log_endpoint
-        if not isinstance(e, WebSocketDisconnect):
-            logger.error(f"Log Stream: Ошибка при чтении файла лога: {e}", exc_info=True)
-            if websocket.client_state == WebSocketState.CONNECTED:
-                try:
-                    await manager.send_personal_text(f"ОШИБКА СЕРВЕРА ПРИ ЧТЕНИИ ЛОГА: {str(e)}", websocket)
-                except Exception as send_err:
-                    logger.error(f"Log Stream: Error sending error message to client: {send_err}")
+        logger.error(f"Log Stream Error: {e}")
+        await manager.send_personal_text(f"Error reading log: {str(e)}", websocket)
 
 @router.websocket("/ws/bot_log")
 async def websocket_bot_log_endpoint(websocket: WebSocket):
+    """Эндпоинт WebSocket для стриминга логов."""
     await log_manager.connect(websocket)
     try:
         await stream_log_file_to_websocket(websocket, log_manager)
-        # stream_log_file_to_websocket будет работать, пока соединение активно.
-        # Если он завершится (например, из-за ошибки файла, не обработанной внутри),
-        # соединение может закрыться. Для явного удержания:
-        while websocket.client_state == WebSocketState.CONNECTED:
-             # Этот цикл гарантирует, что эндпоинт не завершится, пока клиент подключен,
-             # даже если stream_log_file_to_websocket завершился по какой-то причине, кроме disconnect.
-            await asyncio.sleep(1) # Просто поддерживаем жизнь, проверяя состояние.
-
     except WebSocketDisconnect:
-        logger.info(f"Client {websocket.client} disconnected from bot_log websocket (expected).")
-    except Exception as e: # Другие возможные ошибки WebSocket
-        logger.error(f"Unexpected error in bot_log websocket for {websocket.client}: {e}", exc_info=True)
-        if websocket.client_state != WebSocketState.DISCONNECTED:
-            try:
-                await websocket.close(code=1011)
-            except RuntimeError:
-                logger.warning(f"WebSocket лог: Ошибка при попытке закрыть соединение для {websocket.client}, возможно уже закрыто.")
-    finally:
         await log_manager.disconnect(websocket)
-        logger.info(f"Bot Log WebSocket session ended for client: {websocket.client}")
+    except Exception as e:
+        logger.error(f"Bot Log WS Error: {e}")
+        await log_manager.disconnect(websocket)

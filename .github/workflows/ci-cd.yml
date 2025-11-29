@@ -133,6 +133,10 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-scheduler:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-scheduler:latest
+            
+      - name: Soft Cleanup
+        if: always()
+        run: docker system prune -f  # Без -a и без --volumes
 
   # 4. Триггер деплоя (Jenkins)
   trigger-deployment:
