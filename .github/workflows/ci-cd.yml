@@ -79,9 +79,6 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: twine upload dist/*
 
-# .github/workflows/ci-cd.yml
-
-# ... (jobs: auto-version-patch, publish-shared-lib остаются без изменений)
 
   test-build-and-push:
     needs: [publish-shared-lib]
@@ -92,11 +89,19 @@ jobs:
       packages: write
 
     steps:
+
       - name: Check out code
         uses: actions/checkout@v3
       
-      - name: Clean Docker Build Cache
-        run: docker buildx prune --all --force
+      - name: Aggressive Docker Cleanup
+        run: |
+          echo "Cleaning up docker system to free space..."
+          # Удаляем остановленные контейнеры и неиспользуемые слои
+          docker system prune -f
+          # Удаляем кэш сборки buildx (самый жирный потребитель места)
+          docker buildx prune -a -f
+          # Опционально: удаляем старые образы, если места критически мало
+          # docker rmi $(docker images -f "dangling=true" -q) || true
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
