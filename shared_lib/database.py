@@ -3,6 +3,7 @@ import datetime
 import logging
 import json
 import os
+from .redis_client import redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -153,24 +154,48 @@ async def init_db():
 
     logger.info("Database tables initialized.")
 
-async def log_user_action(user_id: int, username: str | None, full_name: str, avatar_pic_url: str | None, action_type: str, action_details: str | None):
+
+async def log_user_action(user_id: int, username: str | None, full_name: str | None, avatar_pic_url: str | None, action_type: str, action_details: str | None):
     async with pool.acquire() as connection:
         try:
-            await connection.execute('''
-                INSERT INTO users (user_id, username, full_name, avatar_pic_url)
-                VALUES ($1, $2, $3, $4)
-                ON CONFLICT(user_id) DO UPDATE SET
-                    username = EXCLUDED.username,
-                    full_name = EXCLUDED.full_name,
-                    avatar_pic_url = EXCLUDED.avatar_pic_url;
-            ''', user_id, username, full_name, avatar_pic_url)
-            await connection.execute('''
+            # 1. Вставляем действие
+            row = await connection.fetchrow('''
                 INSERT INTO user_actions (user_id, action_type, action_details)
-                VALUES ($1, $2, $3);
+                VALUES ($1, $2, $3)
+                RETURNING id, timestamp;
             ''', user_id, action_type, action_details)
+
+            # 2. Обновляем пользователя (если это не админское сообщение)
+            if full_name and full_name != "Admin" and full_name != "System":
+                await connection.execute('''
+                    INSERT INTO users (user_id, username, full_name, avatar_pic_url)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT(user_id) DO UPDATE SET
+                        username = EXCLUDED.username,
+                        full_name = EXCLUDED.full_name,
+                        avatar_pic_url = EXCLUDED.avatar_pic_url;
+                ''', user_id, username, full_name, avatar_pic_url)
+            else:
+                await connection.execute('''
+                    INSERT INTO users (user_id, full_name)
+                    VALUES ($1, 'Unknown User')
+                    ON CONFLICT(user_id) DO NOTHING;
+                ''', user_id)
+
+            # --- 3. НОВОЕ: Публикуем событие в Redis ---
+            # Формируем payload, который похож на то, что отдает API
+            payload = {
+                "id": row['id'],
+                "action_type": action_type,
+                "action_details": action_details,
+                "timestamp": row['timestamp'].isoformat()
+            }
+            # Публикуем в канал user_updates:{user_id}
+            await redis_client.client.publish(f"user_updates:{user_id}", json.dumps(payload))
+
         except Exception as e:
             logger.error(f"Error logging user action to DB: {e}", exc_info=True)
-
+            
 async def get_user_settings(user_id: int) -> dict:
     async with pool.acquire() as connection:
         settings_json = await connection.fetchval("SELECT settings FROM users WHERE user_id = $1", user_id)

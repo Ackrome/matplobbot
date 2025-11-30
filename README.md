@@ -20,6 +20,15 @@
     <img src="https://img.shields.io/badge/Pydantic-E92063?style=for-the-badge&logo=Pydantic&logoColor=white" alt="Pydantic">
     <img src="https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=github-actions&logoColor=white" alt="GithubActions">
     <img src="https://img.shields.io/badge/redis-%23DD0031.svg?&style=for-the-badge&logo=redis&logoColor=white" alt="Redis">
+    <img src="https://img.shields.io/badge/celery-%2337814A.svg?&style=for-the-badge&logo=celery&logoColor=white">
+    <img src="https://img.shields.io/badge/aiohttp-%232C5BB4.svg?&style=for-the-badge&logo=aiohttp&logoColor=white">
+    <img src="https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white">
+    <img src="https://img.shields.io/badge/chart.js-F5788D.svg?style=for-the-badge&logo=chart.js&logoColor=white">
+    <img src="https://img.shields.io/badge/puppeteer-%2340B5A4.svg?style=for-the-badge&logo=puppeteer&logoColor=white">
+  </p>
+  
+  <p align="center">
+    <img src="https://img.shields.io/github/actions/workflow/status/Ackrome/matplobbot/ci-cd.yml?style=for-the-badge&label=Build&logo=github">
   </p>
   <h2>Reach it on telegram</h2>
   <p align="center">
@@ -37,6 +46,7 @@ This project is a powerful, dual-component system designed for advanced interact
 1.  **Matplobbot (Telegram Bot)**: The primary user-facing service. A sophisticated asynchronous bot built on `aiogram 3` that serves as an intelligent gateway to programming libraries and educational materials. It handles all user commands, interactions, and on-demand rendering. All user interactions are logged to a shared PostgreSQL database.
 2.  **Scheduler Service**: A new, standalone asynchronous service responsible for all background and time-based tasks. Its primary role is to provide proactive daily schedule notifications to users, complete with intelligent change-detection to prevent spam.
 3.  **Stats Dashboard (FastAPI Web App)**: A real-time monitoring dashboard powered by `FastAPI`. It features a clean, responsive frontend built with vanilla JavaScript and `Chart.js`. The dashboard provides deep insights into bot usage statistics by querying the shared PostgreSQL database and streams live log events directly from the bot's log file via WebSockets.
+4.  **Worker Service**: A dedicated heavy-lifting service powered by **Celery**. It handles resource-intensive tasks such as compiling LaTeX formulas, rendering Mermaid diagrams via Puppeteer, and converting Markdown to PDF using Pandoc. This ensures the main bot process remains responsive even during complex document generation.
 
 The entire ecosystem is orchestrated by Docker Compose, utilizing shared volumes for the database and logs, which ensures data consistency and perfect integration between the three services.
 
@@ -136,6 +146,10 @@ The bot now integrates with the university's schedule API, offering a rich set o
     -   Select their preferred Markdown display mode.
     -   Fine-tune LaTeX rendering quality (DPI and padding).
     -   Manage their personal list of GitHub repositories.
+-   **Smart Subject Renaming (`/offershorter`)**:
+    -   Users can suggest shorter, cleaner aliases for long university discipline names (e.g., changing "Mathematics and Linear Algebra..." to "Math").
+    -   Suggestions are sent to admins for approval via an inline interface.
+    -   Once approved, the short name is globally applied to schedule notifications for all users who opted in.
 
 #### 👑 Administration
 -   **Live Library Updates (`/update`)**: (Admin-only) Fetches the latest version of the `matplobblib` library from PyPI and dynamically reloads the module without bot downtime.
@@ -146,7 +160,7 @@ The bot now integrates with the university's schedule API, offering a rich set o
 The dashboard provides a live, data-rich view of the bot's health and user engagement.
 
 <div align="center">
-  <img src="image/notes/Dashboard.png" alt="Dashboard Screenshot" width="800">
+    <img src="image/notes/Dashboard.png" alt="Dashboard" width="800" style="border: 2px solid #24292e; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin: 8px 0;">
 </div>
 
 -   **Real-time Updates**: All statistical charts and counters update instantly via **WebSocket** connections, providing a true live monitoring experience.
@@ -161,6 +175,16 @@ The dashboard provides a live, data-rich view of the bot's health and user engag
 -   **Detailed User Profile Pages**: The dashboard is no longer just an aggregate view. Clicking on a user in the leaderboard navigates to a dedicated profile page showing their complete, paginated, sortable, and filterable action history.
 -   **CSV Export**: A user's entire action history can be exported to a CSV file directly from their profile page.
 -   **API for Deeper Analytics**: New API endpoints have been added to allow for deeper analysis, such as finding all users who have performed a specific action.
+-   **User Drill-Down & History**:
+    -   Click on any user in the leaderboard to view their full, paginated interaction history.
+    -   **Search & Filter**: Real-time filtering of user actions history.
+    -   **Data Export**: Download specific user history or chart data as CSV files for offline analysis.
+    -   **Admin Interaction**: Send direct messages to users via the dashboard interface (logged as admin actions).
+
+<div align="center">
+    <img src="image/notes/User.png" alt="User" width="700" style="border: 2px solid #24292e; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin: 8px 0;">
+</div>
+
 
 ## 🛠️ Architecture & Tech Stack
 
@@ -174,10 +198,52 @@ The project is built on modern, asynchronous frameworks with a strong emphasis o
 | **Bot Framework** | **Aiogram 3** (utilizing `Router` for modular handlers) |
 | **Web Framework** | **FastAPI**, Uvicorn |
 | **Database** | **PostgreSQL** (accessed asynchronously via `asyncpg`) |
+| **Task Queue** | **Celery**, **Redis** (Broker & Backend) |
 | **Frontend** | HTML5, CSS3, Vanilla JavaScript, **Chart.js** |
 | **Containerization** | **Docker, Docker Compose** |
 | **Rendering Pipeline** | **Pandoc** with custom Lua & Python filters, **TeX Live**, dvipng, **Mermaid-CLI**, Puppeteer |
 | **Key Libraries** | `aiohttp`, `cachetools`, `python-dotenv` |
+
+## 📂 Project Structure
+
+The project follows a monorepo-style structure with distinct directories for each service and a shared library core.
+
+```text
+.
+├── bot/                 # Main Telegram Bot logic (Handlers, Middlewares)
+├── fastapi_stats_app/   # Web Dashboard & API (Routers, Static files, Templates)
+├── scheduler_app/       # Periodic tasks (Schedule fetching, Notifications)
+├── shared_lib/          # CORE: Shared Database models, Redis client, i18n, Tasks
+├── alembic/             # Database migrations scripts
+├── worker/              # (Implicit via Dockerfile.worker) Heavy processing tasks
+├── docker-compose.yml   # Dev orchestration
+└── docker-compose.prod.yml # Production orchestration
+```
+
+## How Rendering Works
+ 
+```mermaid
+sequenceDiagram
+    participant User
+    participant Bot
+    participant Redis as Redis (Broker)
+    participant Worker as Celery Worker
+    participant DB as Database
+
+    User->>Bot: Sends /latex \frac{a}{b}
+    Bot->>Redis: Pushes render_latex task
+    Bot-->>User: "Rendering..." (Status Msg)
+    
+    Redis->>Worker: Delivers task
+    activate Worker
+    Worker->>Worker: Compiles LaTeX to PNG
+    Worker->>Redis: Stores result
+    deactivate Worker
+    
+    Bot->>Redis: Polls/Gets Result
+    Bot->>User: Sends Photo
+    Bot->>DB: Caches result for future
+```
 
 ### Architectural Highlights
 -   **Shared Core Library**: All common code (database, services, i18n, Redis client) is encapsulated in a `matplobbot-shared` library. This library is versioned and published to PyPI automatically, serving as a single source of truth for all services in the ecosystem.
@@ -185,6 +251,7 @@ The project is built on modern, asynchronous frameworks with a strong emphasis o
 -   **Manager Pattern & Dependency Injection**: The bot's logic is cleanly organized into feature-specific "Manager" classes (`ScheduleManager`, `GitHubManager`, etc.). Dependencies (like the `RuzAPIClient`) are injected at startup, promoting modular and testable code.
 -   **Asynchronous Everywhere**: From database calls (`asyncpg`) to external API requests (`aiohttp`), the entire stack is asynchronous to ensure high performance and scalability.
 -   **Persistent Caching with Redis**: User-specific data and schedule information are now cached in Redis, providing persistence across bot restarts and significantly improving performance.
+
 
 ## ⚙️ Installation & Setup
 
@@ -216,6 +283,7 @@ POSTGRES_HOST=postgres # The service name in docker-compose
 POSTGRES_PORT=5432
 ```
 
+
 ### 3. Running with Docker Compose
 
 This is the recommended method for running the project.
@@ -245,6 +313,18 @@ This is the recommended method for running the project.
     docker compose down
     ```
     -   Your database and log files will persist in named volumes. To remove all data, run `docker-compose down -v`.
+
+#### Database Migrations
+We use **Alembic** for handling database schema changes.
+-   **Production**: Migrations are applied automatically via a dedicated service in `docker-compose.prod.yml` before the app starts.
+-   **Development**: You can generate new migrations when changing `shared_lib/models.py`:
+    ```bash
+    # Generate migration
+    alembic revision --autogenerate -m "Add new table"
+    
+    # Apply migration
+    alembic upgrade head
+    ```
 
 ## 📚 Bot Command Reference
 
@@ -331,6 +411,14 @@ graph TD
         E --> F[GitHub Container Registry];
     end
 
+    subgraph "Docker Images"
+        direction TB
+        F -.-> Img1[Bot Image];
+        F -.-> Img2[API Image];
+        F -.-> Img3[Scheduler Image];
+        F -.-> Img4[Worker Image];
+    end
+
     subgraph "Your Proxmox Network (Private & Secure)"
         direction LR
         G(Self-Hosted Runner)
@@ -347,7 +435,7 @@ graph TD
         direction TB
         I --> J["1. Git Pull (Get latest deploy scripts)"];
         J --> K["2. Jenkins creates .env file from secrets"];
-        K --> L["3. Pull new Bot, API, & Scheduler images"];
+        K --> L["3. Pull new Bot, API, Scheduler & Worker images"];
         L --> M["4. docker-compose up -d"];
         M --> N[🚀 New version is live!];
     end
@@ -365,3 +453,26 @@ graph TD
     *   Securely create the `.env` file from Jenkins credentials.
     *   Execute the `deploy.sh` script.
 7.  **Final Rollout**: The `deploy.sh` script pulls the new Docker images from GHCR and gracefully restarts all services using `docker compose up -d`.
+
+
+## 🗺️ Roadmap
+
+- [ ] *SQLAlchemy Core**: Integrate SQLAlchemy instead of raw SQL
+- [ ] **Semantic Search via Embeddings**: Add semantic Search for all the materials in Bot
+- [ ] **AI Analysis**: Integrate OpenAI/Gemini to generate summaries of lecture notes.
+- [ ] **Multi-University Support**: Abstract the schedule parser to support other universities via plugins.
+- [ ] **Voice Commands**: Allow users to ask for schedules via voice messages.
+
+## 🤝 Contributing
+
+Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+
+1.  Fork the Project
+2.  Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3.  Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4.  Push to the Branch (`git push origin feature/AmazingFeature`)
+5.  Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

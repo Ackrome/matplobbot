@@ -5,27 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Chat - Matplobbot</title>
     
-    <!-- Tailwind & Config -->
     <script>
         window.tailwind = { darkMode: 'class' }
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Custom Styles -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=10">
+    <link rel="stylesheet" href="/static/css/styles.css?v=11">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body class="font-sans antialiased h-screen flex flex-col overflow-hidden">
 
-    <!-- 1. Header (User Profile) -->
+    <!-- 1. Header -->
     <header class="theme-nav border-b border-gray-200 dark:border-gray-700 flex-none z-20 shadow-sm">
-        <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            
+            <!-- Left: User Info -->
             <div class="flex items-center gap-4">
                 <a href="/" class="text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
                 </a>
-                
-                <!-- User Info Container (Populated by JS) -->
                 <div id="user-profile-header" class="flex items-center gap-3">
                     <div class="skeleton w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700"></div>
                     <div>
@@ -35,53 +32,57 @@
                 </div>
             </div>
 
-            <!-- Theme Toggle -->
-            <button id="theme-toggle-button" class="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none transition-colors">
-                <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
-                <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 100 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
-            </button>
+            <!-- Right: Search & Actions -->
+            <div class="flex items-center gap-2 w-full md:w-auto">
+                <!-- Search Input moved to Header -->
+                <div class="relative w-full md:w-64">
+                    <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
+                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
+                        </svg>
+                    </div>
+                    <input type="text" id="search-input" class="block w-full p-2 pl-10 text-sm text-gray-900 border border-gray-300 rounded-lg bg-gray-50 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 transition-colors" placeholder="Поиск в истории...">
+                </div>
+
+                <button id="download-all-csv-btn" class="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="Скачать CSV">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                </button>
+
+                <button id="theme-toggle-button" class="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                    <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                    <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 100 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+                </button>
+            </div>
         </div>
     </header>
 
     <!-- 2. Chat Area -->
     <main class="flex-grow chat-background relative flex flex-col justify-between overflow-hidden">
-        <!-- Messages Scroll Area -->
         <div id="actions-body" class="chat-scroll-area overflow-y-auto px-4 py-4 flex flex-col items-start gap-1 max-w-4xl mx-auto w-full h-full">
-            <!-- Messages will be injected here -->
             <div class="w-full text-center text-gray-500 mt-10">Загрузка истории...</div>
         </div>
-
-        <!-- Sticky Date (Optional, handled by JS inside scroll area usually, but logic below puts it inline) -->
     </main>
 
-    <!-- 3. Footer (Filter/Search like Input) -->
+    <!-- 3. Footer (Message Input) -->
     <footer class="theme-nav border-t border-gray-200 dark:border-gray-700 flex-none p-4 z-20">
-        <div class="max-w-4xl mx-auto flex flex-col sm:flex-row gap-3 items-center">
+        <div class="max-w-4xl mx-auto w-full">
+            <div id="pagination-controls" class="flex justify-center text-sm mb-2 opacity-70">
+                <!-- Pagination buttons here -->
+            </div>
             
-            <!-- Pagination (Left) -->
-            <div id="pagination-controls" class="flex gap-2 text-sm">
-                <!-- Pagination Buttons JS -->
-            </div>
-
-            <!-- Fake Input (Filter) -->
-            <div class="relative flex-grow w-full">
-                <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                    <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
-                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
-                    </svg>
+            <form id="send-message-form" class="flex gap-3 items-end">
+                <div class="relative flex-grow">
+                    <textarea id="message-input" rows="1" class="block w-full p-3 text-sm text-gray-900 bg-white border border-gray-300 rounded-2xl focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 resize-none" placeholder="Написать сообщение пользователю..." required style="min-height: 46px; max-height: 150px;"></textarea>
                 </div>
-                <input type="text" id="search-input" class="block w-full p-3 pl-10 text-sm text-gray-900 border border-gray-300 rounded-full bg-gray-50 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 transition-colors" placeholder="Поиск по истории (команды, сообщения)...">
-            </div>
-
-            <!-- Export Button -->
-            <button id="download-all-csv-btn" class="p-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-md transition transform hover:scale-105" title="Скачать всю историю CSV">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-            </button>
+                <button type="submit" id="send-btn" class="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-md transition transform hover:scale-105 flex-none flex items-center justify-center">
+                    <svg class="w-5 h-5 rotate-90" fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"></path></svg>
+                </button>
+            </form>
+            <div id="loading-status" class="text-center text-xs text-red-500 mt-1 h-4"></div>
         </div>
-        <div id="loading-status" class="text-center text-xs text-red-500 mt-2 h-4"></div>
     </footer>
 
-    <script src="/static/js/theme.js?v=10"></script>
-    <script src="/static/js/user_details.js?v=10"></script>
+    <script src="/static/js/theme.js?v=11"></script>
+    <script src="/static/js/user_details.js?v=11"></script>
 </body>
 </html>

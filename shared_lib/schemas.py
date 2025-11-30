@@ -19,6 +19,10 @@ class PaginationSchema(BaseModel):
     
     model_config = BASE_CONFIG
 
+
+
+class SendMessageRequest(BaseModel):
+    text: str = Field(..., min_length=1, description="Текст сообщения для отправки пользователю")
 # --- Модели Пользователей ---
 
 class UserSummarySchema(BaseModel):

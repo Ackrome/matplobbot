@@ -90,7 +90,8 @@ class AdminManager:
 
     async def update_command(self, message: Message):
         user_id = message.from_user.id
-        lang = await translator.get_user_language(user_id)
+        # --- FIX: replaced get_user_language with get_language ---
+        lang = await translator.get_language(user_id) 
         status_msg = await message.answer(translator.gettext(lang, "admin_update_start", library_name='matplobblib'))
         success, status_message_text = await self._update_library_async('matplobblib', lang)
         

@@ -1,8 +1,10 @@
-# fastapi_stats_app/routers/stats_router.py
 from fastapi import APIRouter, HTTPException, Query, status
 import asyncpg
 import math
 import logging
+import os
+import aiohttp
+import json
 from typing import Any
 
 from shared_lib.database import (
@@ -15,7 +17,8 @@ from shared_lib.redis_client import redis_client
 from shared_lib.schemas import (
     UserProfileResponse, 
     ActionUsersResponse, 
-    ExportActionsResponse
+    ExportActionsResponse,
+    SendMessageRequest 
 )
 
 router = APIRouter()
@@ -23,6 +26,9 @@ logger = logging.getLogger(__name__)
 
 # TTL кэша в секундах (5 минут)
 CACHE_TTL = 300
+
+# Получаем токен из переменных окружения для отправки сообщений
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 @router.get(
     "/health",
@@ -56,19 +62,18 @@ async def get_user_profile(
     user_id: int,
     page: int = Query(1, ge=1, description="Номер страницы"),
     page_size: int = Query(50, ge=1, le=200, description="Размер страницы"),
-    sort_by: str = Query('timestamp', description="Поле сортировки (id, action_type, action_details, timestamp)"),
-    sort_order: str = Query('desc', description="Порядок сортировки (asc, desc)")
+    sort_by: str = Query('timestamp', description="Поле сортировки"),
+    sort_order: str = Query('desc', description="Порядок сортировки")
 ) -> Any:
-    # 1. Проверяем кэш
+    # 1. Проверяем кэш (только если не первая страница, чтобы видеть свежие логи сразу)
     cache_key = f"user_profile:{user_id}:p{page}:s{page_size}:{sort_by}:{sort_order}"
-    try:
-        cached_data = await redis_client.get_cache(cache_key)
-        if cached_data:
-            logger.info(f"Cache hit for user profile: {cache_key}")
-            # Возвращаем dict, FastAPI сам провалидирует его через UserProfileResponse
-            return cached_data
-    except Exception as e:
-        logger.warning(f"Redis cache error: {e}")
+    if page > 1:
+        try:
+            cached_data = await redis_client.get_cache(cache_key)
+            if cached_data:
+                return cached_data
+        except Exception as e:
+            logger.warning(f"Redis cache error: {e}")
 
     # 2. Запрашиваем БД
     try:
@@ -80,15 +85,13 @@ async def get_user_profile(
             if profile_data is None:
                 raise HTTPException(status_code=404, detail="Пользователь не найден.")
 
-            # Расчет пагинации
             total_actions = profile_data["total_actions"]
             total_pages = math.ceil(total_actions / page_size) if page_size > 0 else 0
 
-            # Формируем ответ, соответствующий UserProfileResponse
             response_data = {
                 "user_details": profile_data["user_details"],
                 "actions": profile_data["actions"],
-                "total_actions": total_actions, # Дублируем для верхнего уровня
+                "total_actions": total_actions,
                 "pagination": {
                     "current_page": page,
                     "total_pages": total_pages,
@@ -98,9 +101,9 @@ async def get_user_profile(
                 }
             }
 
-            # 3. Сохраняем в кэш (fire-and-forget, ошибки не должны ломать запрос)
+            # 3. Сохраняем в кэш (недолго)
             try:
-                await redis_client.set_cache(cache_key, response_data, ttl=CACHE_TTL)
+                await redis_client.set_cache(cache_key, response_data, ttl=60) # 1 минута TTL для профиля
             except Exception as e:
                 logger.error(f"Failed to set cache: {e}")
 
@@ -113,18 +116,17 @@ async def get_user_profile(
 @router.get(
     "/stats/action_users",
     summary="Пользователи по действию",
-    description="Возвращает список пользователей, совершивших конкретное действие (команду или сообщение).",
+    description="Возвращает список пользователей, совершивших конкретное действие.",
     response_model=ActionUsersResponse
 )
 async def get_action_users(
-    action_type: str = Query(..., description="Тип действия (command, text_message)"),
-    action_details: str = Query(..., description="Содержание действия (например, /start)"),
+    action_type: str = Query(..., description="Тип действия"),
+    action_details: str = Query(..., description="Содержание действия"),
     page: int = Query(1, ge=1, description="Номер страницы"),
     page_size: int = Query(15, ge=1, le=100, description="Размер страницы"),
-    sort_by: str = Query('full_name', description="Поле сортировки (full_name, username)"),
-    sort_order: str = Query('asc', description="Порядок сортировки (asc, desc)")
+    sort_by: str = Query('full_name', description="Поле сортировки"),
+    sort_order: str = Query('asc', description="Порядок сортировки")
 ) -> Any:
-    # 1. Проверяем кэш
     cache_key = f"action_users:{action_type}:{action_details}:p{page}:s{page_size}:{sort_by}:{sort_order}"
     try:
         cached_data = await redis_client.get_cache(cache_key)
@@ -133,7 +135,6 @@ async def get_action_users(
     except Exception as e:
         logger.warning(f"Redis cache error: {e}")
 
-    # 2. Запрашиваем БД
     try:
         async with get_db_connection_obj() as db:
             data = await get_users_for_action(
@@ -154,7 +155,6 @@ async def get_action_users(
                 }
             }
 
-            # 3. Сохраняем в кэш
             try:
                 await redis_client.set_cache(cache_key, response_data, ttl=CACHE_TTL)
             except Exception as e:
@@ -169,34 +169,76 @@ async def get_action_users(
 @router.get(
     "/users/{user_id}/export_actions",
     summary="Экспорт действий",
-    description="Выгружает полную историю действий пользователя для экспорта (например, в CSV).",
+    description="Выгружает полную историю действий пользователя.",
     response_model=ExportActionsResponse
 )
 async def export_user_actions(user_id: int) -> Any:
-    # 1. Проверяем кэш
-    cache_key = f"export_actions:{user_id}"
-    try:
-        cached_data = await redis_client.get_cache(cache_key)
-        if cached_data:
-            return cached_data
-    except Exception as e:
-        logger.warning(f"Redis cache error: {e}")
-
-    # 2. Запрашиваем БД
     try:
         async with get_db_connection_obj() as db:
             actions = await get_all_user_actions(db, user_id)
-            
-            response_data = {"actions": actions}
-
-            # 3. Сохраняем в кэш
-            try:
-                await redis_client.set_cache(cache_key, response_data, ttl=CACHE_TTL)
-            except Exception as e:
-                logger.error(f"Failed to set cache: {e}")
-
-            return response_data
-
+            return {"actions": actions}
     except asyncpg.PostgresError as e:
         logger.error(f"Database error exporting actions for user {user_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Database Error")
+
+@router.post(
+    "/users/{user_id}/send_message",
+    summary="Отправить сообщение пользователю",
+    description="Отправляет сообщение в Telegram и сохраняет его в БД как исходящее от админа.",
+    status_code=status.HTTP_200_OK
+)
+async def send_message_to_user(user_id: int, message_data: SendMessageRequest):
+    if not BOT_TOKEN:
+        raise HTTPException(status_code=500, detail="BOT_TOKEN не настроен на сервере.")
+
+    text = message_data.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Сообщение не может быть пустым")
+    
+    # 1. Отправка в Telegram через Aiohttp (напрямую в API)
+    tg_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": user_id,
+        "text": text,
+        "parse_mode": "HTML"
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(tg_url, json=payload) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    logger.error(f"Failed to send message to {user_id}: {error_text}")
+                    raise HTTPException(status_code=400, detail=f"Telegram API Error: {error_text}")
+                
+                # Сообщение успешно отправлено
+                # tg_result = await response.json()
+    except aiohttp.ClientError as e:
+        logger.error(f"Network error sending message to {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка сети при отправке в Telegram")
+
+    # 2. Сохранение сообщения в БД
+    # Мы пишем напрямую в таблицу user_actions, минуя обновление таблицы users,
+    # чтобы не перезаписать имя пользователя на "Admin".
+    try:
+        async with get_db_connection_obj() as db:
+            row = await db.fetchrow("""
+                INSERT INTO user_actions (user_id, action_type, action_details, timestamp)
+                VALUES ($1, 'admin_message', $2, NOW())
+                RETURNING id, timestamp
+            """, user_id, text)
+            
+            # --- PUBLISH TO REDIS ---
+            payload = {
+                "id": row['id'],
+                "action_type": 'admin_message',
+                "action_details": text,
+                "timestamp": row['timestamp'].isoformat()
+            }
+            await redis_client.client.publish(f"user_updates:{user_id}", json.dumps(payload))
+            
+    except Exception as e:
+        logger.error(f"Error logging admin message to DB for user {user_id}: {e}", exc_info=True)
+        # Не возвращаем ошибку клиенту, так как сообщение в Телеграм уже ушло
+    
+    return {"status": "success"}

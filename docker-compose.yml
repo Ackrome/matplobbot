@@ -42,6 +42,8 @@ services:
       - bot_logs:/app/logs        # Именованный volume для логов бота
       - ./examples:/app/examples    # Volume для файлов-примеров
     depends_on:
+      mpb-worker:
+        condition: service_started
       redis:
         condition: service_healthy
       postgres:

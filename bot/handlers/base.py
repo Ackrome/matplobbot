@@ -21,7 +21,7 @@ from aiogram import types
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .settings import SettingsManager # Only for type checking
-    from .suggestions import SuggestionsManager # <--- ДОБАВЛЕНО для тайпхинтинга
+    from .suggestions import SuggestionsManager
 
 from shared_lib.i18n import translator
 
@@ -57,7 +57,7 @@ class BaseManager:
         rendering_manager: RenderingManager,
         admin_manager: AdminManager,
         settings_manager: 'SettingsManager',
-        suggestions_manager: 'SuggestionsManager' # <--- ДОБАВЛЕНО
+        suggestions_manager: 'SuggestionsManager'
     ):
         self.router = Router()
         self.library_manager = library_manager
@@ -66,7 +66,7 @@ class BaseManager:
         self.rendering_manager = rendering_manager
         self.admin_manager = admin_manager
         self.settings_manager = settings_manager
-        self.suggestions_manager = suggestions_manager # <--- ДОБАВЛЕНО
+        self.suggestions_manager = suggestions_manager
         self._register_handlers()
 
     def _register_handlers(self):
@@ -256,7 +256,7 @@ class BaseManager:
             "favorites": self.library_manager.favorites_command,
             "latex": self.rendering_manager.latex_command,
             "mermaid": self.rendering_manager.mermaid_command,
-            "offershorter": self.suggestions_manager.cmd_offer_shorter, # <--- Теперь это поле существует
+            "offershorter": self.suggestions_manager.cmd_offer_shorter,
             "settings": self.settings_manager.command_settings_private,
             "help": self.command_help_private,
         }
@@ -269,8 +269,13 @@ class BaseManager:
 
         # For certain commands, we need to pass the user object from the callback, not the message
         message = callback.message
+        
+        # --- FIX: Message objects are immutable in aiogram 3.x.
+        # We must create a new object or pass the user explicitly.
+        # Since the handlers expect 'message', we create a copy with the replaced user.
         if command_suffix in ["myschedule", "update", "clear_cache"]:
-            message.from_user = callback.from_user
+            # Use model_copy to create a new Message instance with updated from_user
+            message = message.model_copy(update={'from_user': callback.from_user})
 
         # Inspect the handler to see if it needs the 'state' argument
         handler_signature = inspect.signature(handler_func)

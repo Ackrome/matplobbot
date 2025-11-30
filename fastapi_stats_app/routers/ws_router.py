@@ -10,6 +10,8 @@ import json
 import os
 from typing import Set, Dict, Any
 
+from shared_lib.redis_client import redis_client # Импортируем клиент
+
 from shared_lib.database import (
     get_db_connection_obj,
     get_leaderboard_data_from_db,
@@ -247,3 +249,35 @@ async def websocket_bot_log_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.error(f"Bot Log WS Error: {e}")
         await log_manager.disconnect(websocket)
+        
+
+@router.websocket("/ws/users/{user_id}")
+async def websocket_user_updates(websocket: WebSocket, user_id: int):
+    """
+    WebSocket для получения обновлений конкретного пользователя в реальном времени.
+    Использует Redis Pub/Sub.
+    """
+    await websocket.accept()
+    logger.info(f"WebSocket connected for user history: {user_id}")
+
+    pubsub = redis_client.client.pubsub()
+    channel_name = f"user_updates:{user_id}"
+    
+    try:
+        # Подписываемся на канал Redis
+        await pubsub.subscribe(channel_name)
+        
+        # Бесконечный цикл чтения из Redis и отправки в WebSocket
+        async for message in pubsub.listen():
+            if message['type'] == 'message':
+                # message['data'] это JSON строка, которую мы отправили из database.py
+                await websocket.send_text(message['data'])
+                
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected for user history: {user_id}")
+    except Exception as e:
+        logger.error(f"Error in user updates WS: {e}")
+    finally:
+        await pubsub.unsubscribe(channel_name)
+        await pubsub.close()
+        # await websocket.close() # Обычно не нужно, если disconnect уже сработал
