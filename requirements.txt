@@ -27,3 +27,4 @@ cachetools
 alembic
 sqlalchemy
 celery==5.3.6
+mdit-py-plugins>=0.5.0

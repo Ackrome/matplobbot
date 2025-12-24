@@ -15,6 +15,8 @@ setup(
         "cachetools",
         "celery",
         "Pillow",
+        "markdown-it-py",
+        "mdit-py-plugins" 
     ],
     # ВАЖНОЕ ИЗМЕНЕНИЕ ЗДЕСЬ:
     package_data={
