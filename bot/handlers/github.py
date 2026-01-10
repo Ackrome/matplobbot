@@ -452,8 +452,8 @@ class GitHubManager:
         target_repo = repos[0] 
         search_key = f"repo:{target_repo}"
         
-        # Top 4 results to fit in 1B model context window (usually 2k-4k tokens)
-        results = await search_engine.search(query, source_type=search_key, top_k=4)
+        # --- FIX: Reduced top_k from 4 to 3 to prevent context overflow ---
+        results = await search_engine.search(query, source_type=search_key, top_k=3)
         
         if not results:
             await status_msg.edit_text(f"❌ I searched `{target_repo}` but found nothing relevant for '**{query}**'.\n_(Tried Vector + Keyword search)_", parse_mode='Markdown')
