@@ -8,12 +8,15 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import matplobblib
 import hashlib
 import logging
+import asyncio
 
 from .. import keyboards as kb, database
 from shared_lib.redis_client import redis_client
 from ..services import library_display
 from ..config import *
 from shared_lib.i18n import translator
+from shared_lib.services.semantic_search import search_engine
+
 
 class Search(StatesGroup):
     query = State()
@@ -160,25 +163,16 @@ class LibraryManager:
         return builder.as_markup()
 
     async def _perform_full_text_search(self, query: str) -> list[dict]:
-        keywords = query.lower().split()
-        if not keywords: return []
-        found_items, found_paths = [], set()
-
-        for submodule_name in matplobblib.submodules:
-            try:
-                module = matplobblib._importlib.import_module(f'matplobblib.{submodule_name}')
-                code_dictionary = module.themes_list_dicts_full
-                for topic_name, codes in code_dictionary.items():
-                    for code_name, code_content in codes.items():
-                        code_path = f"{submodule_name}.{topic_name}.{code_name}"
-                        if code_path in found_paths: continue
-                        search_corpus = f"{submodule_name} {topic_name} {code_name} {code_content}".lower()
-                        if all(keyword in search_corpus for keyword in keywords):
-                            found_items.append({'path': code_path, 'name': code_name})
-                            found_paths.add(code_path)
-            except Exception as e:
-                logging.error(f"Ошибка при поиске в подмодуле {submodule_name}: {e}")
-        return found_items
+        """
+        Использует векторный поиск через Postgres.
+        """
+        try:
+            # search теперь async метод, await'им его напрямую
+            results = await search_engine.search(query, source_type='lib', top_k=20)
+            return results
+        except Exception as e:
+            logging.error(f"Semantic search failed: {e}", exc_info=True)
+            return []
 
     async def search_command(self, message: Message, state: FSMContext):
         lang = await translator.get_language(message.from_user.id, message.chat.id)

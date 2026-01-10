@@ -12,12 +12,16 @@ import os
 import hashlib
 from cachetools import TTLCache
 import re
+import asyncio
 
 from .. import keyboards as kb, database
 from shared_lib.redis_client import redis_client
 from ..services import github_display
 from ..config import *
+from ..services.repo_indexer import index_github_repository
+from shared_lib.services.semantic_search import search_engine
 from shared_lib.i18n import translator
+from shared_lib.services.llm_service import llm_service
 
 router = Router()
 
@@ -57,6 +61,9 @@ class GitHubManager:
         self.router.callback_query(F.data.startswith("repo_del_hash:"))(self.cq_delete_repo)
         self.router.callback_query(F.data.startswith("repo_edit_hash:"))(self.cq_edit_repo_prompt)
         self.router.message(RepoManagement.edit_repo)(self.process_edit_repo)
+        self.router.callback_query(F.data.startswith("repo_index_hash:"))(self.cq_index_repo)
+        # RAG
+        self.router.message(Command('ask'))(self.ask_command)
 
     # --- Browse Handlers ---
 
@@ -235,22 +242,43 @@ class GitHubManager:
         user_data = await state.get_data()
         repo_to_search = user_data.get('repo_to_search')
         user_id = message.from_user.id
-        lang = await translator.get_language(user_id, message.chat.id)
-        await state.clear()
         query = message.text
-        status_msg = await message.answer(translator.gettext(lang, "github_search_in_progress", query=query, repo_path=repo_to_search), parse_mode='markdown')
         
-        results = await self._search_github_md(query, repo_to_search)
+        status_msg = await message.answer(f"🔍 Ищу '{query}' в `{repo_to_search}` (нейропоиск)...", parse_mode='Markdown')
+        
+        # Используем наш векторный движок
+        # source_type = "repo:owner/name"
+        search_key = f"repo:{repo_to_search}"
+        
+        results = await search_engine.search(query, source_type=search_key, top_k=10)
+        
+        if not results:
+            # Fallback на старый поиск через GitHub API, если векторы не дали результата (или база пуста)
+            # await self._search_github_md(query, repo_to_search) # Старый метод
+            await status_msg.edit_text("По вашему запросу ничего не найдено (векторный поиск).")
+            return
 
-        if results is None:
-            await status_msg.edit_text(translator.gettext(lang, "github_search_error"))
-        elif not results:
-            await status_msg.edit_text(translator.gettext(lang, "github_search_no_results", query=query))
-        else:
-            await self._handle_md_search_success(status_msg, user_id, query, repo_to_search, results)
-            return # Success, no need for final message
+        # Формируем результаты для кэша и клавиатуры
+        # Нам нужно адаптировать формат результатов под то, что ждет _get_md_search_results_keyboard
+        # Ожидается список dict c ключом 'path'
+        
+        formatted_results = []
+        seen_files = set()
+        
+        for r in results:
+            # r['path'] выглядит как "folder/file.md#chunk_0"
+            # Нам для открытия файла нужен чистый путь
+            file_path = r['metadata']['file_path']
+            
+            # Дедупликация: если нашли 5 чанков из одного файла, показываем файл один раз
+            # (Или можно показывать с якорями, если реализуешь навигацию по чанкам)
+            if file_path not in seen_files:
+                formatted_results.append({'path': file_path, 'score': r['score']})
+                seen_files.add(file_path)
 
-        await message.answer(translator.gettext(lang, "choose_next_command"), reply_markup=await kb.get_main_reply_keyboard(user_id))
+        await self._handle_md_search_success(status_msg, user_id, query, repo_to_search, formatted_results)
+
+
 
     async def cq_md_search_pagination(self, callback: CallbackQuery):
         user_id = callback.from_user.id
@@ -376,3 +404,77 @@ class GitHubManager:
 
         await state.clear()
         await self._show_repo_management_menu(message, user_id, state)
+    
+    async def cq_index_repo(self, callback: CallbackQuery):
+        repo_hash = callback.data.split(":", 1)[1]
+        repo_path = kb.code_path_cache.get(repo_hash)
+        
+        if not repo_path:
+            await callback.answer("Ошибка: данные устарели", show_alert=True)
+            return
+
+        await callback.answer("Запущена индексация... Я сообщу по завершении.")
+        
+        # Запускаем в фоне
+        asyncio.create_task(self._run_indexing_task(callback.message, repo_path))
+
+    async def _run_indexing_task(self, message: Message, repo_path: str):
+        status_msg = await message.answer(f"⏳ Индексация `{repo_path}` началась...", parse_mode='Markdown')
+        try:
+            await index_github_repository(repo_path)
+            await status_msg.edit_text(f"✅ Индексация `{repo_path}` завершена! Теперь поиск работает по смыслу.", parse_mode='Markdown')
+        except Exception as e:
+            await status_msg.edit_text(f"❌ Ошибка индексации: {e}")
+            
+    async def ask_command(self, message: Message):
+        """
+        Hybrid RAG Handler: /ask [query]
+        """
+        args = message.text.split(maxsplit=1)
+        if len(args) < 2:
+            await message.reply("⚠️ Usage: `/ask <your question>`\nExample: `/ask What is Gini?`", parse_mode='Markdown')
+            return
+        
+        query = args[1]
+        user_id = message.from_user.id
+        
+        # 1. Get User Repos
+        repos = await database.get_user_repos(user_id)
+        if not repos:
+            await message.reply("Please add a GitHub repository in /settings first.")
+            return
+
+        status_msg = await message.answer("🧠 **Thinking...**\n1. Searching notes (Hybrid)...", parse_mode='Markdown')
+        
+        # 2. Search (Hybrid)
+        # We search the first repo for now. 
+        # TODO: Support searching multiple repos (requires loop or generic source_type)
+        target_repo = repos[0] 
+        search_key = f"repo:{target_repo}"
+        
+        # Top 4 results to fit in 1B model context window (usually 2k-4k tokens)
+        results = await search_engine.search(query, source_type=search_key, top_k=4)
+        
+        if not results:
+            await status_msg.edit_text(f"❌ I searched `{target_repo}` but found nothing relevant for '**{query}**'.\n_(Tried Vector + Keyword search)_", parse_mode='Markdown')
+            return
+
+        # 3. Generate
+        await status_msg.edit_text(f"🧠 **Thinking...**\n1. Found {len(results)} relevant notes.\n2. Reading & Generating answer...", parse_mode='Markdown')
+        await message.bot.send_chat_action(message.chat.id, "typing")
+        
+        context_texts = [r['content'] for r in results]
+        answer = await llm_service.generate_answer(query, context_texts)
+        
+        # 4. Format Output
+        # Extract filenames for citation
+        sources = set()
+        for r in results:
+            path = r['metadata'].get('file_path', 'unknown')
+            score = r.get('score', 0.0)
+            sources.add(f"`{path}` (match: {score:.2f})")
+            
+        sources_text = "\n\n📚 **Sources:**\n" + "\n".join(sources)
+        final_response = f"{answer}{sources_text}"
+        
+        await status_msg.edit_text(final_response, parse_mode='Markdown')

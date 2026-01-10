@@ -133,8 +133,9 @@ async def get_repo_management_keyboard(user_id: int, state: FSMContext | None = 
         repo_hash = hashlib.sha1(repo_path.encode()).hexdigest()[:16]
         code_path_cache[repo_hash] = repo_path
         builder.row(
-            InlineKeyboardButton(text=f"Repo: {repo_path}", callback_data="noop"),
+            InlineKeyboardButton(text=f"📂 {repo_path}", callback_data="noop"),
             InlineKeyboardButton(text="✏️", callback_data=f"repo_edit_hash:{repo_hash}"),
+            InlineKeyboardButton(text="🔄", callback_data=f"repo_index_hash:{repo_hash}"),
             InlineKeyboardButton(text=translator.gettext(lang, "favorites_remove_btn"), callback_data=f"repo_del_hash:{repo_hash}")
         )
     builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_add_repo"), callback_data="repo_add_new"))

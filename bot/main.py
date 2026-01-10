@@ -12,6 +12,8 @@ from shared_lib.i18n import translator
 from .logger import UserLoggingMiddleware
 from shared_lib.database import init_db, init_db_pool
 from shared_lib.services.university_api import create_ruz_api_client
+from .services.search_utils import index_matplobblib_library
+from shared_lib.services.semantic_search import search_engine
 
 # Импорт логгера для инициализации конфига
 from . import logger
@@ -107,6 +109,11 @@ async def main():
         
         # Безопасная установка команд
         await set_bot_commands(bot)
+        
+        
+        logging.info("Building semantic search index...")
+        asyncio.create_task(index_matplobblib_library())
+        logging.info("Semantic index built.")
         
         await dp.start_polling(bot)
 
