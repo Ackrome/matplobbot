@@ -452,11 +452,12 @@ class GitHubManager:
         target_repo = repos[0] 
         search_key = f"repo:{target_repo}"
         
-        # --- FIX: Reduced top_k from 4 to 3 to prevent context overflow ---
-        results = await search_engine.search(query, source_type=search_key, top_k=3)
+        # --- OPTIMIZATION 3: Reduce top_k to 2 ---
+        # This drastically reduces the token count sent to the LLM.
+        results = await search_engine.search(query, source_type=search_key, top_k=2)
         
         if not results:
-            await status_msg.edit_text(f"❌ I searched `{target_repo}` but found nothing relevant for '**{query}**'.\n_(Tried Vector + Keyword search)_", parse_mode='Markdown')
+            await status_msg.edit_text(f"❌ I searched `{target_repo}` but found nothing relevant for '**{query}**'.", parse_mode='Markdown')
             return
 
         # 3. Generate

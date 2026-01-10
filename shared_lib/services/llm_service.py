@@ -16,22 +16,25 @@ class LLMService:
         if not context_chunks:
             return "I couldn't find any relevant information in your notes to answer this."
 
-        # Limit context to avoid overflow (Roughly 12000 characters ~= 3000 tokens)
-        # This leaves ~1000 tokens for the system prompt and the answer.
-        MAX_CHARS = 12000
+        # --- OPTIMIZATION 1: Hard Character Limit ---
+        # 1B models have small context windows (4096 tokens). 
+        # We limit context to ~10,000 chars (~2500 tokens) to leave room for the answer.
+        MAX_CHARS = 10000 
         combined_context = ""
         for i, chunk in enumerate(context_chunks):
-            chunk_text = f"\n\n--- CHUNK {i+1} ---\n{chunk}"
-            if len(combined_context) + len(chunk_text) < MAX_CHARS:
-                combined_context += chunk_text
+            # Truncate individual chunks if they are huge
+            clean_chunk = chunk[:4000] 
+            entry = f"\n\n--- SOURCE {i+1} ---\n{clean_chunk}"
+            
+            if len(combined_context) + len(entry) < MAX_CHARS:
+                combined_context += entry
             else:
                 break
         
         system_prompt = (
-            "You are Matplobbot, a helpful teaching assistant. "
-            "Answer the user's question using ONLY the context provided below. "
-            "If the answer is not in the context, say 'I don't have enough information in the notes'. "
-            "Keep the answer concise and use Markdown formatting."
+            "You are Matplobbot. Answer the question using ONLY the provided context. "
+            "If the answer is not in the context, say 'I don't know based on these notes'. "
+            "Be concise."
         )
 
         full_prompt = f"{system_prompt}\n\nCONTEXT:{combined_context}\n\nUSER QUESTION:\n{query}\n\nANSWER:"
@@ -42,12 +45,13 @@ class LLMService:
             "stream": False,
             "options": {
                 "temperature": 0.3,
-                "num_ctx": 4096
+                "num_ctx": 4096 # The model's limit
             }
         }
 
         try:
-            # --- FIX: Increased timeout to 5 minutes for CPU inference ---
+            # --- OPTIMIZATION 2: 5 Minute Timeout ---
+            # CPU inference is slow. We give it 300 seconds.
             timeout = aiohttp.ClientTimeout(total=300) 
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(self.base_url, json=payload) as response:
@@ -57,9 +61,9 @@ class LLMService:
                     else:
                         error_text = await response.text()
                         logger.error(f"Ollama API Error: {response.status} - {error_text}")
-                        return "I'm having trouble thinking right now (LLM Error)."
+                        return f"My brain is overloaded (Error {response.status}). Try a simpler question."
         except Exception as e:
             logger.error(f"LLM Connection Error: {e}")
-            return f"I cannot connect to my brain (Timeout or Connection Error). Details: {e}"
+            return "I cannot connect to my brain (Timeout). The server is busy processing."
 
 llm_service = LLMService()

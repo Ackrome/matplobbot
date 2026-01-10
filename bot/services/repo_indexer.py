@@ -12,14 +12,19 @@ async def index_github_repository(repo_path: str):
     """
     Downloads MD files and indexes them with Hybrid Search (Keyword + Vector).
     """
+    if not GITHUB_TOKEN:
+        logger.error("GITHUB_TOKEN is missing! Cannot index repository.")
+        return
+
     source_type_key = f"repo:{repo_path}"
     
     # 1. Clear old data
     await search_engine.clear_index(source_type=source_type_key)
     logger.info(f"Started indexing repo: {repo_path}")
     
+    # Use 'token' instead of 'Bearer' - safer for Classic PATs
     headers = {
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Authorization": f"token {GITHUB_TOKEN}",
         "Accept": "application/vnd.github.v3+json"
     }
     
@@ -28,7 +33,7 @@ async def index_github_repository(repo_path: str):
             url = f"https://api.github.com/repos/{repo_path}/git/trees/{MD_SEARCH_BRANCH}?recursive=1"
             async with session.get(url) as response:
                 if response.status != 200:
-                    logger.error(f"Failed to fetch file list for {repo_path}: {response.status}")
+                    logger.error(f"Failed to fetch file list for {repo_path}: {response.status} {await response.text()}")
                     return
                 data = await response.json()
                 
@@ -49,14 +54,11 @@ async def index_github_repository(repo_path: str):
                             for i, chunk in enumerate(chunks):
                                 chunk_path = f"{file_path}#chunk_{i}"
                                 
-                                # --- HYBRID SEARCH OPTIMIZATION ---
-                                # We inject the filename and header into the content.
-                                # This ensures 'Gini.md' is found by keyword search 'Gini'.
+                                # Hybrid Search Optimization
                                 filename = file_path.split('/')[-1]
                                 header_text = chunk['header']
                                 body = chunk['content']
                                 
-                                # This format helps both the Embedding Model (context) and TSVECTOR (keywords)
                                 optimized_content = (
                                     f"File: {filename}\n"
                                     f"Section: {header_text}\n"
@@ -78,7 +80,7 @@ async def index_github_repository(repo_path: str):
                         else:
                             logger.warning(f"Failed to download {file_path}")
                             
-                    await asyncio.sleep(0.1) # Rate limit protection
+                    await asyncio.sleep(0.1) 
                     
                 except Exception as e:
                     logger.error(f"Error processing file {file_path}: {e}")
