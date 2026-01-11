@@ -1,29 +1,14 @@
-# fastapi_stats_app/Dockerfile
-FROM python:3.11-slim
+FROM ghcr.io/ackrome/matplobbot-base-python:latest
 
 WORKDIR /
 
-# --- START: CORRECTED INSTALLATION BLOCK ---
-# Copy shared library source code FIRST, as it's a dependency
 COPY shared_lib/ /shared_lib/
 COPY setup.py /
-
-# Copy requirements.txt specific to this app from the build context root
+# scheduler specific reqs might be small, or you can merge them into the base requirements.txt
 COPY fastapi_stats_app/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir /
 
-# Install curl, then the local shared_lib, then the app-specific requirements.
-RUN apt-get update && apt-get install -y --no-install-recommends curl && \
-    pip install --upgrade pip && \
-    pip install --no-cache-dir --default-timeout=100 --retries 5 / && \
-    pip install --no-cache-dir --default-timeout=100 --retries 5 -r requirements.txt && \
-    rm -rf /var/lib/apt/lists/*
-# --- END: CORRECTED INSTALLATION BLOCK ---
-
-# --- CORRECTED COPY STEP ---
-# Copy the application code itself.
-# This copies the *contents* of fastapi_stats_app into the current WORKDIR (/app)
 COPY fastapi_stats_app/ /fastapi_stats_app/
 
-# Since the WORKDIR is /app, the entrypoint is simpler.
-# We don't need the --reload flag in production.
 CMD ["uvicorn", "fastapi_stats_app.main:app", "--host", "0.0.0.0", "--port", "9583"]

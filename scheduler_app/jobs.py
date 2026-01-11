@@ -16,7 +16,8 @@ from shared_lib.database import (
     get_subscriptions_for_notification, update_subscription_hash, 
     delete_old_inactive_subscriptions, get_all_active_subscriptions, 
     get_all_short_names, get_user_settings, get_admin_daily_summary,
-    get_db_connection_obj
+    get_db_connection_obj, get_unique_active_subscription_entities,
+    upsert_cached_schedule
 )
 from shared_lib.redis_client import redis_client
 
@@ -222,6 +223,68 @@ async def check_for_schedule_updates(http_session: aiohttp.ClientSession, ruz_ap
                 logger.error(f"Change detection: Failed to process entity '{entity_name}': {e}", exc_info=True)
     except Exception as e:
         logger.error(f"Critical error in check_for_schedule_updates job: {e}", exc_info=True)
+
+async def update_schedule_cache(http_session: aiohttp.ClientSession, ruz_api_client: RuzAPIClient):
+    """
+    Job to update the cached schedules in the database.
+    Fetching the full semester schedule for all active subscriptions.
+    """
+    logger.info("Starting schedule cache update job...")
+    
+    moscow_tz = ZoneInfo("Europe/Moscow")
+    today = datetime.now(moscow_tz).date()
+    current_year = today.year
+
+    # Determine semester range
+    if 2 <= today.month <= 6 or (today.month == 7 and today.day < 15):
+        start_date = date(current_year, 2, 1)
+        end_date = date(current_year, 7, 14)
+    else:
+        if today.month == 1:
+            start_date = date(current_year - 1, 7, 15)
+            end_date = date(current_year, 1, 31)
+        else:
+            start_date = date(current_year, 7, 15)
+            end_date = date(current_year + 1, 1, 31)
+
+    start_date_str = start_date.strftime("%Y.%m.%d")
+    end_date_str = end_date.strftime("%Y.%m.%d")
+
+    try:
+        unique_entities = await get_unique_active_subscription_entities()
+        if not unique_entities:
+            logger.info("No active subscriptions to cache.")
+            return
+
+        logger.info(f"Updating cache for {len(unique_entities)} unique entities...")
+
+        for entity in unique_entities:
+            entity_type = entity['entity_type']
+            entity_id = entity['entity_id']
+            entity_name = entity['entity_name']
+
+            try:
+                # Fetch full semester schedule
+                schedule_data = await ruz_api_client.get_schedule(
+                    entity_type, entity_id, start=start_date_str, finish=end_date_str
+                )
+                
+                # Update DB
+                await upsert_cached_schedule(entity_type, entity_id, schedule_data)
+                logger.debug(f"Updated cache for {entity_name} ({entity_type}:{entity_id})")
+                
+                # Polite delay
+                await asyncio.sleep(0.5) 
+
+            except RuzAPIError as e:
+                logger.warning(f"Cache update failed for {entity_name}: {e}")
+            except Exception as e:
+                logger.error(f"Error caching schedule for {entity_name}: {e}", exc_info=True)
+
+        logger.info("Schedule cache update job finished.")
+
+    except Exception as e:
+        logger.error(f"Critical error in update_schedule_cache job: {e}", exc_info=True)
 
 
 async def prune_inactive_subscriptions():

@@ -1,6 +1,7 @@
 # shared_lib/models.py
 from sqlalchemy import Column, Integer, BigInteger, String, Boolean, JSON, Time, DateTime, ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import declarative_base
+from sqlalchemy.dialects.postgresql import JSONB
 
 Base = declarative_base()
 
@@ -90,3 +91,15 @@ class UserDisabledShortName(Base):
 
     user_id = Column(BigInteger, ForeignKey('users.user_id', ondelete='CASCADE'), primary_key=True)
     short_name_id = Column(Integer, ForeignKey('discipline_short_names.id', ondelete='CASCADE'), primary_key=True)
+
+class CachedSchedule(Base):
+    """Stores the raw schedule JSON for entities to avoid repeated API calls."""
+    __tablename__ = 'cached_schedules'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    entity_type = Column(String, nullable=False)
+    entity_id = Column(String, nullable=False)
+    schedule_data = Column(JSONB, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (UniqueConstraint('entity_type', 'entity_id', name='uq_cached_schedule_entity'),)

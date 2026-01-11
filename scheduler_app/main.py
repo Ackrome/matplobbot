@@ -9,7 +9,7 @@ import aiohttp, aiohttp.web
 load_dotenv()
 
 from scheduler_app.config import LOG_DIR, SCHEDULER_LOG_FILE, BOT_TOKEN
-from scheduler_app.jobs import send_daily_schedules, check_for_schedule_updates, prune_inactive_subscriptions, send_admin_summary, cleanup_old_log_files
+from scheduler_app.jobs import send_daily_schedules, check_for_schedule_updates, prune_inactive_subscriptions, send_admin_summary, cleanup_old_log_files, update_schedule_cache
 from shared_lib.database import init_db_pool, close_db_pool, init_db, get_db_connection_obj
 
 # We need to import this from the bot's services
@@ -59,6 +59,15 @@ async def main():
             hours=2,
             kwargs={'http_session': session, 'ruz_api_client': ruz_api_client_instance}
         )
+        # Add the new cache update job to run twice a day at 4 AM and 4 PM
+        scheduler.add_job(
+            update_schedule_cache,
+            trigger='cron',
+            hour='4,16',
+            minute=0,
+            kwargs={'http_session': session, 'ruz_api_client': ruz_api_client_instance}
+        )
+        
         # Add the new pruning job to run once a day (e.g., at 3 AM Moscow time)
         scheduler.add_job(
             prune_inactive_subscriptions,

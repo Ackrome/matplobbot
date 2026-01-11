@@ -1,22 +1,20 @@
+# Use your pre-built base image
 # Dockerfile.bot
-FROM python:3.11-slim
+# We reference the image we build in the CI
+FROM ghcr.io/ackrome/matplobbot-base-python:latest
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl git build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY shared_lib/ /shared_lib/
-COPY setup.py /
-COPY requirements.txt .
+# Copy Alembic config
 COPY alembic.ini .
 COPY alembic/ ./alembic/
 
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir --default-timeout=100 --retries 5 / && \
-    pip install --no-cache-dir --default-timeout=100 --retries 5 -r requirements.txt
+# Copy shared lib and install it (Local code install is fast)
+COPY shared_lib/ /shared_lib/
+COPY setup.py /
+RUN pip install --no-cache-dir /
 
+# Copy Bot Code
 COPY bot/ /app/bot/
 
 CMD ["python3", "-m", "bot.main"]

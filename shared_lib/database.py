@@ -149,8 +149,16 @@ async def init_db():
                 PRIMARY KEY (user_id, short_name_id)
             )
             ''')
-
-
+            await connection.execute('''
+            CREATE TABLE IF NOT EXISTS cached_schedules (
+                id SERIAL PRIMARY KEY,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                schedule_data JSONB NOT NULL,
+                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(entity_type, entity_id)
+            )
+            ''')
 
     logger.info("Database tables initialized.")
 
@@ -496,6 +504,38 @@ async def update_subscription_hash(subscription_id: int, new_hash: str):
         raise ConnectionError("Database pool is not initialized.")
     async with pool.acquire() as connection:
         await connection.execute("UPDATE user_schedule_subscriptions SET last_schedule_hash = $1 WHERE id = $2", new_hash, subscription_id)
+
+# --- Cached Schedules ---
+async def upsert_cached_schedule(entity_type: str, entity_id: str, data: list | dict):
+    """Inserts or updates a cached schedule."""
+    if not pool:
+        raise ConnectionError("Database pool is not initialized.")
+    
+    # Ensure data is JSON-compatible (list or dict)
+    json_data = json.dumps(data) if not isinstance(data, str) else data
+    
+    async with pool.acquire() as connection:
+        await connection.execute("""
+            INSERT INTO cached_schedules (entity_type, entity_id, schedule_data)
+            VALUES ($1, $2, $3::jsonb)
+            ON CONFLICT (entity_type, entity_id) DO UPDATE SET
+                schedule_data = EXCLUDED.schedule_data,
+                updated_at = CURRENT_TIMESTAMP;
+        """, entity_type, entity_id, json_data)
+
+async def get_cached_schedule(entity_type: str, entity_id: str) -> list | None:
+    """Retrieves a cached schedule if it exists."""
+    if not pool:
+        raise ConnectionError("Database pool is not initialized.")
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow("""
+            SELECT schedule_data FROM cached_schedules
+            WHERE entity_type = $1 AND entity_id = $2
+        """, entity_type, entity_id)
+        
+        if row:
+            return json.loads(row['schedule_data'])
+        return None
 
 # --- Discipline Short Names ---
 async def add_short_name(full_name: str, short_name: str, admin_id: int):

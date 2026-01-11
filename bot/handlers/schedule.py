@@ -17,6 +17,7 @@ from shared_lib.services.schedule_service import format_schedule, generate_ical_
 from bot.keyboards import get_schedule_type_keyboard, build_search_results_keyboard, code_path_cache, build_calendar_keyboard, InlineKeyboardButton
 from shared_lib.i18n import translator
 from bot import database
+from shared_lib.database import get_cached_schedule
 from shared_lib.redis_client import redis_client
 import asyncio
 
@@ -139,7 +140,18 @@ class ScheduleManager:
                 if selected_entity:
                     entity_name = selected_entity['label']
 
-            schedule_data = await self.api_client.get_schedule(entity_type, entity_id, start=api_date_str, finish=api_date_str)
+            # --- NEW: Check local DB cache first ---
+            schedule_data = []
+            cached_full_schedule = await get_cached_schedule(entity_type, entity_id)
+            
+            if cached_full_schedule:
+                # Filter cached data for today
+                schedule_data = [l for l in cached_full_schedule if l['date'] == api_date_str]
+                logging.info(f"Using cached schedule for {entity_type}:{entity_id}")
+            else:
+                # Fallback to API if not cached
+                logging.info(f"Cache miss for {entity_type}:{entity_id}, fetching from API")
+                schedule_data = await self.api_client.get_schedule(entity_type, entity_id, start=api_date_str, finish=api_date_str)
 
             # --- NEW: Store successful search in history ---
             if entity_name != "Unknown":
@@ -329,7 +341,14 @@ class ScheduleManager:
                 if selected_entity:
                     entity_name = selected_entity['label']
 
-            schedule_data = await self.api_client.get_schedule(entity_type, original_entity_id, start=api_date_str, finish=api_date_str)
+            # --- NEW: Check local DB cache first ---
+            schedule_data = []
+            cached_full_schedule = await get_cached_schedule(entity_type, original_entity_id)
+            if cached_full_schedule:
+                schedule_data = [l for l in cached_full_schedule if l['date'] == api_date_str]
+            else:
+                schedule_data = await self.api_client.get_schedule(entity_type, original_entity_id, start=api_date_str, finish=api_date_str)
+
             # --- FIX: Use keyword arguments for clarity and correctness ---
             formatted_text = await format_schedule(
                 schedule_data=schedule_data,
@@ -375,7 +394,18 @@ class ScheduleManager:
                 if selected_entity:
                     entity_name = selected_entity['label']
 
-            schedule_data = await self.api_client.get_schedule(entity_type, original_entity_id, start=api_start_str, finish=api_end_str)
+            # --- NEW: Check local DB cache first ---
+            schedule_data = []
+            cached_full_schedule = await get_cached_schedule(entity_type, original_entity_id)
+            if cached_full_schedule:
+                # Filter locally for the week range
+                schedule_data = [
+                    l for l in cached_full_schedule 
+                    if start_date <= datetime.strptime(l['date'], "%Y-%m-%d").date() <= end_date
+                ]
+            else:
+                schedule_data = await self.api_client.get_schedule(entity_type, original_entity_id, start=api_start_str, finish=api_end_str)
+
             # --- FIX: Use keyword arguments for clarity and correctness ---
             formatted_text = await format_schedule(
                 schedule_data=schedule_data,
@@ -408,7 +438,16 @@ class ScheduleManager:
         if len(entity_id) == 16 and not entity_id.isdigit():
             original_entity_id = code_path_cache.get(entity_id, entity_id)
 
-        schedule_data = await self.api_client.get_schedule(entity_type, original_entity_id, start=api_start_str, finish=api_end_str)
+        # --- NEW: Check local DB cache first ---
+        schedule_data = []
+        cached_full_schedule = await get_cached_schedule(entity_type, original_entity_id)
+        if cached_full_schedule:
+            schedule_data = [
+                l for l in cached_full_schedule 
+                if start_date <= datetime.strptime(l['date'], "%Y-%m-%d").date() <= end_date
+            ]
+        else:
+            schedule_data = await self.api_client.get_schedule(entity_type, original_entity_id, start=api_start_str, finish=api_end_str)
         
         # --- FIX: Always get entity name from cached search results for reliability ---
         cached_search = await redis_client.get_user_cache(user_id, 'schedule_search')
@@ -480,7 +519,15 @@ class ScheduleManager:
             # This "primes" the subscription so the first check doesn't see a change.
             start_date = datetime.now()
             end_date = start_date + timedelta(weeks=3)
-            schedule_data = await self.api_client.get_schedule(sub_data['sub_entity_type'], sub_data['sub_entity_id'], start=start_date.strftime("%Y.%m.%d"), finish=end_date.strftime("%Y.%m.%d"))
+            
+            # Use cached data if available for initial hash generation
+            cached_full = await get_cached_schedule(sub_data['sub_entity_type'], sub_data['sub_entity_id'])
+            if cached_full:
+                # Use first few weeks of data for the hash
+                schedule_data = [l for l in cached_full if start_date.strftime("%Y-%m-%d") <= l['date'] <= end_date.strftime("%Y-%m-%d")]
+            else:
+                schedule_data = await self.api_client.get_schedule(sub_data['sub_entity_type'], sub_data['sub_entity_id'], start=start_date.strftime("%Y.%m.%d"), finish=end_date.strftime("%Y.%m.%d"))
+            
             new_hash = hashlib.sha256(json.dumps(schedule_data, sort_keys=True).encode()).hexdigest()
             await database.update_subscription_hash(sub_id, new_hash)
             await redis_client.set_user_cache(user_id, f"schedule_data:{sub_id}", json.dumps(schedule_data), ttl=None)
@@ -499,8 +546,14 @@ class ScheduleManager:
         user_id = message.from_user.id
         today_str = today_dt.strftime("%Y.%m.%d")
         try:
-            # The API call is already correct for a single day.
-            schedule_data = await self.api_client.get_schedule(sub['entity_type'], sub['entity_id'], start=today_str, finish=today_str)
+            # --- NEW: Check local DB cache first ---
+            schedule_data = []
+            cached_full_schedule = await get_cached_schedule(sub['entity_type'], sub['entity_id'])
+            if cached_full_schedule:
+                schedule_data = [l for l in cached_full_schedule if l['date'] == today_str]
+            else:
+                schedule_data = await self.api_client.get_schedule(sub['entity_type'], sub['entity_id'], start=today_str, finish=today_str)
+
             formatted_text = await format_schedule(schedule_data, lang, sub['entity_name'], sub['entity_type'], user_id, start_date=today_dt.date())
             await message.answer(formatted_text, parse_mode="HTML")
         except TelegramForbiddenError:

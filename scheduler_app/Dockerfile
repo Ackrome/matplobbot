@@ -1,25 +1,15 @@
-# scheduler_app/Dockerfile
-FROM python:3.11-slim
+# Use your pre-built base image
+FROM ghcr.io/ackrome/matplobbot-base-python:latest
+
 WORKDIR /
 
-# --- START: CORRECTED INSTALLATION BLOCK ---
-# Copy shared library source code FIRST, as it's a dependency
 COPY shared_lib/ /shared_lib/
 COPY setup.py /
-
-# Copy requirements.txt specific to this app from the build context root
-COPY scheduler_app/requirements.txt .
-
-# Install dependencies from requirements.txt FIRST, then install the local shared_lib package.
-# This ensures that the local, up-to-date version of shared_lib overwrites any version from PyPI.
-# 1. Обновляем pip
-# 2. Устанавливаем зависимости с увеличенным таймаутом и повторами
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir --default-timeout=100 --retries 5 -r requirements.txt && \
+# scheduler specific reqs might be small, or you can merge them into the base requirements.txt
+COPY scheduler_app/requirements.txt . 
+RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir /
-# --- END: CORRECTED INSTALLATION BLOCK ---
 
-# Copy the contents of the scheduler_app directory into /app
 COPY scheduler_app/ /scheduler_app/
 
 CMD ["python3", "-m", "scheduler_app.main"]

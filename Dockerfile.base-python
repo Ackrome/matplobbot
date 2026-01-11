@@ -1,0 +1,15 @@
+# Dockerfile.base-python
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 1. Install System Dependencies needed for Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl git build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Install Python Dependencies
+# This layer caches heavily. It only rebuilds if requirements.txt changes.
+COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir --default-timeout=100 --retries 5 -r requirements.txt
