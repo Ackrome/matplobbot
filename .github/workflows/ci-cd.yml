@@ -1,15 +1,33 @@
-name: CI-CD Pipeline for Matplobbot
+name: CI-CD Pipeline
 
 on:
-  push: { branches: [ "main" ] }
+  push:
+    branches: [ "main" ]
+
 env:
   REGISTRY: ghcr.io
   IMAGE_OWNER: ackrome
 
 jobs:
-  # 1. Авто-версионирование (без изменений)
+  # 1. Check what files changed
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      base: ${{ steps.filter.outputs.base }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            base:
+              - 'requirements.txt'
+              - 'Dockerfile.base-python'
+              - 'Dockerfile.base-worker'
+
+  # 2. Auto-Versioning (Independent)
   auto-version-patch:
-    name: Auto-Version Patch Release
+    name: Auto-Version Patch
     if: "!contains(github.event.head_commit.message, 'chore(release)')"
     outputs:
       new_version: ${{ steps.bumper.outputs.new_version }}
@@ -20,6 +38,7 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v3
+        id: checkout
         with:
           ref: main
           fetch-depth: 0
@@ -32,7 +51,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-      - name: Run Version Bumper for Patch
+      - name: Run Version Bumper
         id: bumper
         run: |
           python version_bumper.py patch
@@ -40,41 +59,84 @@ jobs:
           git commit -m "chore(release): auto-version patch [skip ci]"
           git push origin HEAD:main
 
-  # 2. Публикация библиотеки (без изменений)
+  # 3. Publish Shared Lib (Independent)
   publish-shared-lib:
-    name: Build and Publish Shared Library to PyPI
+    name: Publish Shared Lib to PyPI
     needs: [auto-version-patch]
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - name: Install build dependencies
-        run: python -m pip install --upgrade pip build twine
-      - name: Build package
-        run: python -m build
-      - name: Publish package to PyPI
+      - run: python -m pip install --upgrade pip build twine
+      - run: python -m build
+      - name: Upload to PyPI
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: twine upload dist/*
 
-  # 3. СБОРКА ВСЕХ ОБРАЗОВ (ОБЪЕДИНЕННАЯ И БЫСТРАЯ)
-  build-and-push:
-    needs: [publish-shared-lib]
-    name: Build All Services
+  # 4. Build Base Images (Conditional)
+  build-base-images:
+    name: Build Base Images
+    needs: [check-changes]
+    if: needs.check-changes.outputs.base == 'true'
     runs-on: self-hosted
     permissions:
       contents: read
       packages: write
     steps:
-      - name: Check out code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
-      # Мягкая очистка: удаляем только мусор, КЭШ ОСТАВЛЯЕМ
+      - name: Log in to GHCR
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build Python Base
+      - name: Build and Push Base Python
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile.base-python
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-base-python:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Build Worker Base (Heavy)
+      - name: Build and Push Base Worker
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile.base-worker
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-base-worker:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # 5. Build Service Images (Dependent on Logic)
+  build-services:
+    name: Build Service Images
+    needs: [check-changes, build-base-images]
+    # Run if base images were built successfully OR if they were skipped (because not needed)
+    if: |
+      always() && 
+      (needs.build-base-images.result == 'success' || needs.build-base-images.result == 'skipped') &&
+      (needs.check-changes.result == 'success')
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v3
+
       - name: Maintenance Cleanup
         run: docker system prune -f
 
@@ -88,10 +150,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # --- WORKER (Heavy) ---
-      # Собираем первым, так как он самый долгий.
-      # При повторном запуске Docker увидит кэш и пропустит сборку TeXLive!
-      - name: Build and push Worker
+      # WORKER (Uses Base Worker)
+      - name: Build Worker
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -101,8 +161,8 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-worker:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-worker:latest
 
-      # --- BOT ---
-      - name: Build and push Bot
+      # BOT (Uses Base Python)
+      - name: Build Bot
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -112,19 +172,19 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-bot:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-bot:latest
 
-      # --- API ---
-      - name: Build and push API
+      # API (Uses Base Python)
+      - name: Build API
         uses: docker/build-push-action@v4
         with:
-          file: ./fastapi_stats_app/Dockerfile
           context: .
+          file: ./fastapi_stats_app/Dockerfile
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-api:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-api:latest
 
-      # --- SCHEDULER ---
-      - name: Build and push Scheduler
+      # SCHEDULER (Uses Base Python)
+      - name: Build Scheduler
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -133,15 +193,15 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-scheduler:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-scheduler:latest
-            
+
       - name: Soft Cleanup
         if: always()
-        run: docker system prune -f  # Без -a и без --volumes
+        run: docker system prune -f
 
-  # 4. Триггер деплоя (Jenkins)
+  # 6. Deploy
   trigger-deployment:
     name: Trigger Jenkins Deployment
-    needs: [build-and-push]
+    needs: [build-services]
     runs-on: self-hosted
     steps:
       - name: Trigger Jenkins Job via cURL
