@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="matplobbot-shared",
-    version="0.1.79", # Bump version
+    version="0.1.80", # Bump version
     packages=find_packages(include=['shared_lib', 'shared_lib.*']),
     description="Shared library for the Matplobbot ecosystem.",
     author="Ackrome",
