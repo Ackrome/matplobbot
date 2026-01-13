@@ -104,19 +104,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-  mpb-ollama:
-    image: ollama/ollama:latest
-    restart: unless-stopped
-    container_name: mpb-ollama
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - default
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
 volumes:
   bot_logs:

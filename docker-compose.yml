@@ -105,17 +105,6 @@ services:
       redis:
         condition: service_healthy
 
-  mpb-ollama:
-    image: ollama/ollama:latest
-    restart: unless-stopped
-    container_name: mpb-ollama
-    ports:
-      - "11434:11434" # Exposed locally for testing/debugging
-    volumes:
-      - ollama_data:/root/.ollama
-    depends_on:
-      - postgres 
-
 volumes:
   bot_logs:
   postgres_data:
