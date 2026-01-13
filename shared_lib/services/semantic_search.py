@@ -15,24 +15,16 @@ class TextSearchEngine:
 
     async def upsert_document(self, source_type: str, path: str, content: str, metadata: dict):
         """
-        Inserts document for standard text search (No vectors/embeddings).
+        Вставляет документ только для полнотекстового поиска (FTS).
         """
         metadata_json = json.dumps(metadata)
 
-        # We pass an empty vector or null for the embedding column to satisfy the schema, 
-        # or we just ignore it if the column allows nulls. 
-        # Assuming the schema requires it, we pass a zero-vector or modify the query.
-        # Since we are stripping RAG, we rely purely on 'content_ts' (TSVECTOR).
-        
-        # Note: We fill 'embedding' with a dummy zero vector to avoid SQL errors 
-        # if you haven't migrated the column to be nullable. 
-        # 384 is the dimension of the previous model.
-        dummy_vector = "[0]" * 384 
+        # Больше никаких векторов и dummy_vector!
         
         async with get_db_connection_obj() as conn:
             await conn.execute("""
-                INSERT INTO search_documents (source_type, source_path, content, metadata, embedding, content_ts)
-                VALUES ($1, $2, $3, $4, '[0]', to_tsvector('russian', $3))
+                INSERT INTO search_documents (source_type, source_path, content, metadata, content_ts)
+                VALUES ($1, $2, $3, $4, to_tsvector('russian', $3))
                 ON CONFLICT (source_type, source_path) 
                 DO UPDATE SET 
                     content = EXCLUDED.content,
@@ -41,15 +33,19 @@ class TextSearchEngine:
                     created_at = CURRENT_TIMESTAMP
             """, source_type, path, content, metadata_json)
 
-    async def search(self, query: str, source_type: str = None, top_k: int = 5) -> list[dict]:
+    async def search(self, query: str, source_type: str = None, top_k: int = 10) -> list[dict]:
         """
-        Performs standard Full-Text Search using PostgreSQL.
+        Выполняет быстрый полнотекстовый поиск (FTS) средствами PostgreSQL.
         """
-        # Prepare keyword query: replace spaces with & for PG boolean search
+        # Очистка запроса от спецсимволов для tsquery
         clean_query = re.sub(r'[^\w\s]', '', query).strip()
         if not clean_query:
             return []
             
+        # Формируем запрос: слова объединяем через '&' (И) или '|' (ИЛИ)
+        # websearch_to_tsquery - отличная функция, понимает "кавычки" и минус-слова
+        # Но для простоты используем plainto_tsquery или ручную склейку.
+        # Ручная склейка через & дает более строгий поиск.
         ts_query = ' & '.join(clean_query.split())
 
         filter_clause = "AND source_type = $2" if source_type else ""
@@ -57,6 +53,7 @@ class TextSearchEngine:
         if source_type:
             args.append(source_type)
 
+        # Используем ts_rank_cd для ранжирования по релевантности текста
         sql = f"""
             SELECT 
                 source_path, content, metadata,
@@ -88,7 +85,7 @@ class TextSearchEngine:
                 'path': row['source_path'],
                 'content': row['content'],
                 'metadata': meta,
-                'score': row['rank']
+                'score': row['rank'] # Это скор релевантности FTS
             })
             
         return results
