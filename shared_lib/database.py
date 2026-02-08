@@ -20,6 +20,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 if DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+    
 # Global Engine & SessionMaker
 async_engine = None
 async_session_factory = None
@@ -75,21 +76,11 @@ DEFAULT_SETTINGS = {
     'admin_summary_days': [0, 1, 2, 3, 4],
 }
 
-# --- Logic Functions (Rewritten to ORM) ---
 
 async def log_user_action(user_id: int, username: str | None, full_name: str | None, avatar_pic_url: str | None, action_type: str, action_details: str | None):
     async with get_session() as session:
         async with session.begin():
-            # 1. Insert Action
-            new_action = UserAction(
-                user_id=user_id,
-                action_type=action_type,
-                action_details=action_details
-            )
-            session.add(new_action)
-            await session.flush() # Чтобы получить ID и Timestamp
-
-            # 2. Upsert User
+            # 1. СНАЧАЛА создаем или обновляем пользователя (Parent table)
             if full_name and full_name not in ["Admin", "System"]:
                 stmt = pg_insert(User).values(
                     user_id=user_id,
@@ -105,14 +96,26 @@ async def log_user_action(user_id: int, username: str | None, full_name: str | N
                     )
                 )
             else:
+                # Если это просто ID без данных (например, из callback), убедимся, что запись есть
                 stmt = pg_insert(User).values(
                     user_id=user_id,
                     full_name='Unknown User'
                 ).on_conflict_do_nothing()
             
             await session.execute(stmt)
-            
-            # Prepare payload for Redis (before commit)
+            # Важно: flush не обязателен здесь, так как мы используем execute, 
+            # но пользователь должен существовать до вставки action.
+
+            # 2. ТЕПЕРЬ вставляем действие (Child table)
+            new_action = UserAction(
+                user_id=user_id,
+                action_type=action_type,
+                action_details=action_details
+            )
+            session.add(new_action)
+            await session.flush() # Получаем ID и Timestamp
+
+            # Prepare payload for Redis
             payload = {
                 "id": new_action.id,
                 "action_type": action_type,
