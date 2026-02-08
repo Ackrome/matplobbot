@@ -17,7 +17,7 @@ from shared_lib.services.schedule_service import format_schedule, generate_ical_
 from bot.keyboards import get_schedule_type_keyboard, build_search_results_keyboard, code_path_cache, build_calendar_keyboard, InlineKeyboardButton
 from shared_lib.i18n import translator
 from bot import database
-from shared_lib.database import get_cached_schedule
+from shared_lib.database import get_cached_schedule, upsert_cached_schedule
 from shared_lib.redis_client import redis_client
 import asyncio
 

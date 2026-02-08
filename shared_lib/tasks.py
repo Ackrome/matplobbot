@@ -41,6 +41,14 @@ if os.path.exists(PANDOC_HEADER_PATH):
 
 @app.task(bind=True, soft_time_limit=45, name='shared_lib.tasks.render_latex')
 def render_latex(self, latex_string: str, padding: int, dpi: int, is_display: bool):
+    forbidden_commands = [
+    r'\write18', r'\input', r'\include', r'\openout', r'\newwrite', 
+    r'\immediate', r'\usepackage', r'\documentclass' # Блокируем изменение структуры
+]
+
+    for cmd in forbidden_commands:
+        if cmd in latex_string:
+            return {"status": "error", "error": f"Security violation: command {cmd} is forbidden."}
     try:
         processed_latex = latex_string.strip()
         processed_latex = re.sub(r'(\\end\{([a-zA-Z\*]+)\})(\s*\\tag\{.*?\})', r'\3 \1', processed_latex, flags=re.DOTALL)
@@ -68,7 +76,7 @@ def render_latex(self, latex_string: str, padding: int, dpi: int, is_display: bo
                 f.write(full_latex_code)
 
             proc = subprocess.run(
-                ['latex', '-interaction=nonstopmode', '-output-directory', temp_dir, tex_path],
+                ['latex', '-no-shell-escape', '-interaction=nonstopmode', '-output-directory', temp_dir, tex_path],
                 capture_output=True, timeout=30
             )
             

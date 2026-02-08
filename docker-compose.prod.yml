@@ -52,6 +52,8 @@ services:
     ports:
       - "9584:9584"
     env_file: ./.env
+    environment:
+      - TZ=Europe/Moscow
     volumes:
       - bot_logs:/app/logs
     depends_on:

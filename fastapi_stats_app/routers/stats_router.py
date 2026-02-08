@@ -1,5 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query, status
-import asyncpg
+from fastapi import APIRouter, HTTPException, Query, status, Depends
 import math
 import logging
 import os
@@ -7,11 +6,15 @@ import aiohttp
 import json
 from typing import Any
 
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
+
 from shared_lib.database import (
-    get_db_connection_obj,
+    get_db_session_dependency, 
     get_user_profile_data_from_db,
     get_users_for_action,
-    get_all_user_actions
+    get_all_user_actions,
+    log_user_action
 )
 from shared_lib.redis_client import redis_client
 from shared_lib.schemas import (
@@ -37,13 +40,13 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
     response_model=dict[str, str],
     status_code=status.HTTP_200_OK
 )
-async def health_check() -> dict[str, str]:
+async def health_check(db: AsyncSession = Depends(get_db_session_dependency)) -> dict[str, str]:
     """
     Легковесная проверка здоровья сервиса.
     """
     try:
-        async with get_db_connection_obj() as db:
-            await db.fetchval("SELECT 1")
+        # Используем SQLAlchemy text() для выполнения сырого SQL запроса проверки
+        await db.execute(text("SELECT 1"))
         return {"status": "ok", "database": "connected"}
     except Exception as e:
         logger.error(f"Health check failed: {e}", exc_info=True)
@@ -63,7 +66,8 @@ async def get_user_profile(
     page: int = Query(1, ge=1, description="Номер страницы"),
     page_size: int = Query(50, ge=1, le=200, description="Размер страницы"),
     sort_by: str = Query('timestamp', description="Поле сортировки"),
-    sort_order: str = Query('desc', description="Порядок сортировки")
+    sort_order: str = Query('desc', description="Порядок сортировки"),
+    db: AsyncSession = Depends(get_db_session_dependency)
 ) -> Any:
     # 1. Проверяем кэш (только если не первая страница, чтобы видеть свежие логи сразу)
     cache_key = f"user_profile:{user_id}:p{page}:s{page_size}:{sort_by}:{sort_order}"
@@ -77,39 +81,39 @@ async def get_user_profile(
 
     # 2. Запрашиваем БД
     try:
-        async with get_db_connection_obj() as db:
-            profile_data = await get_user_profile_data_from_db(
-                db, user_id, page, page_size, sort_by, sort_order
-            )
-            
-            if profile_data is None:
-                raise HTTPException(status_code=404, detail="Пользователь не найден.")
+        # Передаем сессию db, полученную через Depends
+        profile_data = await get_user_profile_data_from_db(
+            db, user_id, page, page_size, sort_by, sort_order
+        )
+        
+        if profile_data is None:
+            raise HTTPException(status_code=404, detail="Пользователь не найден.")
 
-            total_actions = profile_data["total_actions"]
-            total_pages = math.ceil(total_actions / page_size) if page_size > 0 else 0
+        total_actions = profile_data["total_actions"]
+        total_pages = math.ceil(total_actions / page_size) if page_size > 0 else 0
 
-            response_data = {
-                "user_details": profile_data["user_details"],
-                "actions": profile_data["actions"],
-                "total_actions": total_actions,
-                "pagination": {
-                    "current_page": page,
-                    "total_pages": total_pages,
-                    "page_size": page_size,
-                    "sort_by": sort_by,
-                    "sort_order": sort_order
-                }
+        response_data = {
+            "user_details": profile_data["user_details"],
+            "actions": profile_data["actions"],
+            "total_actions": total_actions,
+            "pagination": {
+                "current_page": page,
+                "total_pages": total_pages,
+                "page_size": page_size,
+                "sort_by": sort_by,
+                "sort_order": sort_order
             }
+        }
 
-            # 3. Сохраняем в кэш (недолго)
-            try:
-                await redis_client.set_cache(cache_key, response_data, ttl=60) # 1 минута TTL для профиля
-            except Exception as e:
-                logger.error(f"Failed to set cache: {e}")
+        # 3. Сохраняем в кэш (недолго)
+        try:
+            await redis_client.set_cache(cache_key, response_data, ttl=60) # 1 минута TTL для профиля
+        except Exception as e:
+            logger.error(f"Failed to set cache: {e}")
 
-            return response_data
+        return response_data
 
-    except asyncpg.PostgresError as e:
+    except Exception as e:
         logger.error(f"Database error fetching user profile {user_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Database Error")
 
@@ -125,7 +129,8 @@ async def get_action_users(
     page: int = Query(1, ge=1, description="Номер страницы"),
     page_size: int = Query(15, ge=1, le=100, description="Размер страницы"),
     sort_by: str = Query('full_name', description="Поле сортировки"),
-    sort_order: str = Query('asc', description="Порядок сортировки")
+    sort_order: str = Query('asc', description="Порядок сортировки"),
+    db: AsyncSession = Depends(get_db_session_dependency)
 ) -> Any:
     cache_key = f"action_users:{action_type}:{action_details}:p{page}:s{page_size}:{sort_by}:{sort_order}"
     try:
@@ -136,33 +141,32 @@ async def get_action_users(
         logger.warning(f"Redis cache error: {e}")
 
     try:
-        async with get_db_connection_obj() as db:
-            data = await get_users_for_action(
-                db, action_type, action_details, page, page_size, sort_by, sort_order
-            )
-            
-            total_users = data["total_users"]
-            total_pages = math.ceil(total_users / page_size) if page_size > 0 else 0
+        data = await get_users_for_action(
+            db, action_type, action_details, page, page_size, sort_by, sort_order
+        )
+        
+        total_users = data["total_users"]
+        total_pages = math.ceil(total_users / page_size) if page_size > 0 else 0
 
-            response_data = {
-                "users": data["users"],
-                "pagination": {
-                    "current_page": page,
-                    "total_pages": total_pages,
-                    "page_size": page_size,
-                    "sort_by": sort_by,
-                    "sort_order": sort_order
-                }
+        response_data = {
+            "users": data["users"],
+            "pagination": {
+                "current_page": page,
+                "total_pages": total_pages,
+                "page_size": page_size,
+                "sort_by": sort_by,
+                "sort_order": sort_order
             }
+        }
 
-            try:
-                await redis_client.set_cache(cache_key, response_data, ttl=CACHE_TTL)
-            except Exception as e:
-                logger.error(f"Failed to set cache: {e}")
+        try:
+            await redis_client.set_cache(cache_key, response_data, ttl=CACHE_TTL)
+        except Exception as e:
+            logger.error(f"Failed to set cache: {e}")
 
-            return response_data
+        return response_data
 
-    except asyncpg.PostgresError as e:
+    except Exception as e:
         logger.error(f"Database error fetching action users: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Database Error")
 
@@ -172,12 +176,14 @@ async def get_action_users(
     description="Выгружает полную историю действий пользователя.",
     response_model=ExportActionsResponse
 )
-async def export_user_actions(user_id: int) -> Any:
+async def export_user_actions(
+    user_id: int,
+    db: AsyncSession = Depends(get_db_session_dependency)
+) -> Any:
     try:
-        async with get_db_connection_obj() as db:
-            actions = await get_all_user_actions(db, user_id)
-            return {"actions": actions}
-    except asyncpg.PostgresError as e:
+        actions = await get_all_user_actions(db, user_id)
+        return {"actions": actions}
+    except Exception as e:
         logger.error(f"Database error exporting actions for user {user_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Database Error")
 
@@ -211,34 +217,24 @@ async def send_message_to_user(user_id: int, message_data: SendMessageRequest):
                     logger.error(f"Failed to send message to {user_id}: {error_text}")
                     raise HTTPException(status_code=400, detail=f"Telegram API Error: {error_text}")
                 
-                # Сообщение успешно отправлено
-                # tg_result = await response.json()
     except aiohttp.ClientError as e:
         logger.error(f"Network error sending message to {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Ошибка сети при отправке в Telegram")
 
-    # 2. Сохранение сообщения в БД
-    # Мы пишем напрямую в таблицу user_actions, минуя обновление таблицы users,
-    # чтобы не перезаписать имя пользователя на "Admin".
+    # 2. Сохранение сообщения в БД и публикация в Redis
+    # Мы используем обновленную функцию log_user_action, которая сама управляет сессией и Redis
     try:
-        async with get_db_connection_obj() as db:
-            row = await db.fetchrow("""
-                INSERT INTO user_actions (user_id, action_type, action_details, timestamp)
-                VALUES ($1, 'admin_message', $2, NOW())
-                RETURNING id, timestamp
-            """, user_id, text)
-            
-            # --- PUBLISH TO REDIS ---
-            payload = {
-                "id": row['id'],
-                "action_type": 'admin_message',
-                "action_details": text,
-                "timestamp": row['timestamp'].isoformat()
-            }
-            await redis_client.client.publish(f"user_updates:{user_id}", json.dumps(payload))
-            
+        await log_user_action(
+            user_id=user_id,
+            username=None,
+            full_name="System", # Помечаем как системное сообщение
+            avatar_pic_url=None,
+            action_type='admin_message',
+            action_details=text
+        )
     except Exception as e:
         logger.error(f"Error logging admin message to DB for user {user_id}: {e}", exc_info=True)
-        # Не возвращаем ошибку клиенту, так как сообщение в Телеграм уже ушло
+        # Не возвращаем ошибку клиенту (500), так как сообщение в Телеграм уже успешно ушло.
+        # Логируем и возвращаем успех.
     
     return {"status": "success"}

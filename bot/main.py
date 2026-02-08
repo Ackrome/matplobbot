@@ -10,7 +10,7 @@ from .handlers import setup_handlers
 from .middleware import GroupMentionCommandMiddleware
 from shared_lib.i18n import translator
 from .logger import UserLoggingMiddleware
-from shared_lib.database import init_db, init_db_pool
+from shared_lib.database import init_db_pool
 from shared_lib.services.university_api import create_ruz_api_client
 from .services.search_utils import index_matplobblib_library
 from shared_lib.services.semantic_search import search_engine
@@ -93,7 +93,6 @@ async def main():
         await bot.session.close()
 
     await init_db_pool()
-    await init_db()
 
     # Создаем отдельную сессию для RUZ API клиента
     timeout_client = aiohttp.ClientTimeout(total=60)

@@ -16,7 +16,7 @@ from shared_lib.database import (
     get_subscriptions_for_notification, update_subscription_hash, 
     delete_old_inactive_subscriptions, get_all_active_subscriptions, 
     get_all_short_names, get_user_settings, get_admin_daily_summary,
-    get_db_connection_obj, get_unique_active_subscription_entities,
+    get_session, get_unique_active_subscription_entities,
     upsert_cached_schedule
 )
 from shared_lib.redis_client import redis_client
@@ -33,10 +33,6 @@ async def send_telegram_message(session: aiohttp.ClientSession, chat_id: int, te
     """
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
-    # If text is too long and we have markup, we can't easily split it without losing markup on parts.
-    # For admin summaries, text usually fits. For schedules, we might split.
-    # If splitting is needed, reply_markup is usually only attached to the last part or handled differently.
-    
     if len(text) <= TELEGRAM_MESSAGE_LIMIT:
         payload = {'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML'}
         if message_thread_id:
@@ -95,15 +91,12 @@ async def send_daily_schedules(http_session: aiohttp.ClientSession, ruz_api_clie
     end_date_str = end_date.strftime("%Y.%m.%d")
     current_time_str = now_in_moscow.strftime("%H:%M")
     
-    # Only log periodically or if subscriptions exist to reduce spam
-    # logger.info(f"Scheduler job running for time: {current_time_str}")
-
     try:
+        # В новом database.py эта функция сама открывает сессию
         subscriptions = await get_subscriptions_for_notification(current_time_str)
         if not subscriptions:
             return
 
-        # --- OPTIMIZATION: Group subscriptions by entity to avoid redundant API calls ---
         grouped_subscriptions = collections.defaultdict(list)
         for sub in subscriptions:
             entity_key = (sub['entity_type'], sub['entity_id'])
@@ -116,13 +109,11 @@ async def send_daily_schedules(http_session: aiohttp.ClientSession, ruz_api_clie
             entity_name_for_log = subs_for_entity[0].get('entity_name', 'Unknown')
             
             try:
-                # --- Fetch schedule data ONCE per unique entity ---
                 logger.info(f"Fetching schedule for entity '{entity_name_for_log}' ({entity_type}:{entity_id}) for {len(subs_for_entity)} subscribers.")
                 schedule_data = await ruz_api_client.get_schedule(
                     entity_type, entity_id, start=start_date_str, finish=end_date_str
                 )
 
-                # --- Process and send to all subscribers for this entity ---
                 for sub in subs_for_entity:
                     try:
                         lang = await translator.get_language(sub['user_id'], sub['chat_id'])
@@ -167,6 +158,7 @@ async def check_for_schedule_updates(http_session: aiohttp.ClientSession, ruz_ap
     end_date_str = end_date.strftime("%Y.%m.%d")
 
     try:
+        # В новом database.py эта функция сама открывает сессию
         all_subscriptions = await get_all_active_subscriptions()
         if not all_subscriptions:
             return
@@ -353,7 +345,8 @@ async def send_admin_summary(http_session: aiohttp.ClientSession):
                 # --- 1. Build the Main Summary Text ---
                 summary_parts = []
                 try:
-                    async with get_db_connection_obj() as db:
+                    # ВАЖНО: Используем get_session() для получения SQLAlchemy сессии
+                    async with get_session() as db:
                         summary_data = await get_admin_daily_summary(db)
                     summary_parts.append(translator.gettext(lang, "admin_daily_summary_text", **summary_data))
                 except Exception as e:

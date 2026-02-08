@@ -10,7 +10,7 @@ load_dotenv()
 
 from scheduler_app.config import LOG_DIR, SCHEDULER_LOG_FILE, BOT_TOKEN
 from scheduler_app.jobs import send_daily_schedules, check_for_schedule_updates, prune_inactive_subscriptions, send_admin_summary, cleanup_old_log_files, update_schedule_cache
-from shared_lib.database import init_db_pool, close_db_pool, init_db, get_db_connection_obj
+from shared_lib.database import init_db_pool, close_db_pool, get_db_connection_obj
 
 # We need to import this from the bot's services
 from shared_lib.services.university_api import create_ruz_api_client
@@ -37,7 +37,6 @@ async def main():
 
     await init_db_pool()
     # Ensure the database schema is created before starting the scheduler
-    await init_db()
     logger.info("Database schema initialized by scheduler.")
 
     # Increase timeout for the scheduler, as pre-fetching all entities can be very slow.

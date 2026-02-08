@@ -4,16 +4,18 @@ from starlette.websockets import WebSocketState
 import logging
 import asyncio
 import aiofiles
-import asyncpg
 import datetime
 import json
 import os
 from typing import Set, Dict, Any
 
-from shared_lib.redis_client import redis_client # Импортируем клиент
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+
+from shared_lib.redis_client import redis_client
 
 from shared_lib.database import (
-    get_db_connection_obj,
+    get_session, # Используем получение сессии SQLAlchemy
     get_leaderboard_data_from_db,
     get_popular_commands_data_from_db,
     get_popular_messages_data_from_db,
@@ -63,8 +65,6 @@ class ConnectionManager:
                 await websocket.send_text(message)
                 return True
             except Exception as e:
-                # Логируем ошибку только один раз при разрыве, чтобы не спамить
-                # logger.error(f"WS Manager '{self.name}': Error sending text: {e}")
                 await self.disconnect(websocket)
                 return False
         return False
@@ -74,7 +74,6 @@ class ConnectionManager:
         if not self.active_connections:
             return
         
-        # Создаем копию списка, чтобы избежать ошибки изменения размера множества во время итерации
         connections = list(self.active_connections)
         for connection in connections:
             await self.send_personal_json(data, connection)
@@ -109,9 +108,10 @@ async def periodic_stats_updater():
                 await asyncio.sleep(5)
                 continue
 
-            async with get_db_connection_obj() as db:
+            async with get_session() as db:
                 # Быстрая проверка: изменилось ли количество действий?
-                current_actions = await db.fetchval("SELECT COUNT(*) FROM user_actions") or 0
+                result = await db.execute(text("SELECT COUNT(*) FROM user_actions"))
+                current_actions = result.scalar() or 0
 
                 if current_actions == last_checked_actions_count:
                     await asyncio.sleep(2)
@@ -120,8 +120,7 @@ async def periodic_stats_updater():
                 last_checked_actions_count = current_actions
                 logger.debug(f"Action count changed. Fetching full stats (Total: {current_actions}).")
 
-                # Параллельный сбор данных можно было бы сделать через asyncio.gather, 
-                # но для asyncpg один коннект - один запрос. Последовательно тоже ок.
+                # Сбор статистики через SQLAlchemy сессию (db)
                 leaderboard_data = await get_leaderboard_data_from_db(db)
                 popular_commands_data = await get_popular_commands_data_from_db(db)
                 popular_messages_data = await get_popular_messages_data_from_db(db)
@@ -153,7 +152,7 @@ async def periodic_stats_updater():
                 last_sent_stats_data_str = current_data_json_str
                 logger.info("Broadcasted updated stats.")
 
-        except asyncpg.PostgresError as e:
+        except SQLAlchemyError as e:
             logger.error(f"StatsUpdater DB Error: {e}")
             await stats_manager.broadcast_json({"error": "Database error fetching stats"})
             await asyncio.sleep(10)
@@ -224,7 +223,6 @@ async def stream_log_file_to_websocket(websocket: WebSocket, manager: Connection
             while websocket.client_state == WebSocketState.CONNECTED:
                 line = await f.readline()
                 if line:
-                    # ВАЖНОЕ ИСПРАВЛЕНИЕ: Проверяем результат отправки
                     success = await manager.send_personal_text(line.strip(), websocket)
                     if not success:
                         logger.info("Client disconnected during log stream. Stopping stream.")
@@ -233,7 +231,6 @@ async def stream_log_file_to_websocket(websocket: WebSocket, manager: Connection
                     await asyncio.sleep(0.5)
 
     except Exception as e:
-        # Игнорируем ошибку "Cannot call send...", так как мы её уже обработали выше
         if "Cannot call \"send\"" not in str(e):
             logger.error(f"Log Stream Error: {e}")
             await manager.send_personal_text(f"Error reading log: {str(e)}", websocket)
@@ -280,4 +277,3 @@ async def websocket_user_updates(websocket: WebSocket, user_id: int):
     finally:
         await pubsub.unsubscribe(channel_name)
         await pubsub.close()
-        # await websocket.close() # Обычно не нужно, если disconnect уже сработал

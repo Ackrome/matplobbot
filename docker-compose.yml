@@ -27,7 +27,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-  
 
   mpb-telegram-bot:
     build:
@@ -58,6 +57,8 @@ services:
     ports:
       - "9584:9584"
     env_file: ./.env # env_file is sufficient
+    environment:
+      - TZ=Europe/Moscow
     volumes:
       - bot_logs:/app/logs
     depends_on:

@@ -6,7 +6,6 @@ apscheduler==3.10.4
 matplobblib==0.3.21
 python-dotenv>=1.0.0
 dotenv==0.9.9
-asyncpg>=0.28.0
 matplobblib
 matplotlib
 Pillow>=9.0.0
@@ -25,6 +24,8 @@ ics
 markdown-it-py
 cachetools
 alembic
-sqlalchemy
+sqlalchemy[asyncio]
+greenlet
+asyncpg>=0.28.0
 celery==5.3.6
 mdit-py-plugins>=0.5.0

@@ -15,7 +15,7 @@ from shared_lib.database import (pool, init_db_pool, get_user_settings, update_u
                                   remove_favorite, get_favorites, clear_latex_cache, add_user_repo, get_user_repos,
                                   remove_user_repo, update_user_repo, is_onboarding_completed, set_onboarding_completed,
                                   add_schedule_subscription, get_subscriptions_for_notification, log_user_action,
-                                  init_db, get_user_subscriptions, update_subscription_hash)
+                                  get_user_subscriptions, update_subscription_hash)
 
 # --- User Settings Defaults ---
 # Эти настройки используются по умолчанию, если для пользователя нет записи в БД

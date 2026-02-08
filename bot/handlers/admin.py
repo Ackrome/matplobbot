@@ -132,7 +132,8 @@ class AdminManager:
 
         # 1. Fetch Daily Stats
         try:
-            async with database.get_db_connection_obj() as db:
+            # ИСПОЛЬЗУЕМ get_session() ВМЕСТО get_db_connection_obj()
+            async with database.get_session() as db:
                 summary_data = await database.get_admin_daily_summary(db)
             summary_parts.append(translator.gettext(lang, "admin_daily_summary_text", **summary_data))
         except Exception as e:

@@ -1,7 +1,7 @@
 # shared_lib/models.py
 from sqlalchemy import Column, Integer, BigInteger, String, Boolean, JSON, Time, DateTime, ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import declarative_base
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 
 Base = declarative_base()
 
@@ -103,3 +103,21 @@ class CachedSchedule(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (UniqueConstraint('entity_type', 'entity_id', name='uq_cached_schedule_entity'),)
+    
+
+class SearchDocument(Base):
+    __tablename__ = 'search_documents'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source_type = Column(String, nullable=False)
+    source_path = Column(String, nullable=False)
+    content = Column(String, nullable=False)
+    metadata_ = Column("metadata", JSONB, nullable=True) # "metadata" зарезервировано в SA, используем алиас
+    content_ts = Column(TSVECTOR) # SQLAlchemy пока плохо умеет создавать TSVECTOR колонки сама, оставим это миграциям, но мэппить можно так, если нужно читать.
+    # Для поиска мы будем использовать func.to_tsvector в запросе, так что поле в модели можно не описывать явно, если мы не читаем его напрямую.
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('source_type', 'source_path', name='uq_search_doc_path'),
+    )
