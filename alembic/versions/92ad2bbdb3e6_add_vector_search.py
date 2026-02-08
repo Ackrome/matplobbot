@@ -9,8 +9,10 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from pgvector.sqlalchemy import Vector
-
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    Vector = None
 
 # revision identifiers, used by Alembic.
 revision: str = '92ad2bbdb3e6'
@@ -32,7 +34,7 @@ def upgrade() -> None:
         sa.Column('content', sa.Text(), nullable=False),       # Что ищем
         sa.Column('metadata', sa.JSON(), nullable=True),       # Доп данные
         # 384 - это размерность модели all-MiniLM-L6-v2. Если сменишь модель, меняй и тут.
-        sa.Column('embedding', Vector(384), nullable=False),
+        sa.Column('embedding', Vector(384) if Vector else sa.NullType, nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         
         # Уникальность пути, чтобы не дублировать при перезапуске
