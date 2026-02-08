@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 # --- PostgreSQL Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+if DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 # Global Engine & SessionMaker
 async_engine = None
 async_session_factory = None

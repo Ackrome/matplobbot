@@ -10,7 +10,7 @@ load_dotenv()
 
 from scheduler_app.config import LOG_DIR, SCHEDULER_LOG_FILE, BOT_TOKEN
 from scheduler_app.jobs import send_daily_schedules, check_for_schedule_updates, prune_inactive_subscriptions, send_admin_summary, cleanup_old_log_files, update_schedule_cache
-from shared_lib.database import init_db_pool, close_db_pool, get_db_connection_obj
+from shared_lib.database import init_db_pool, close_db_pool,get_session 
 
 # We need to import this from the bot's services
 from shared_lib.services.university_api import create_ruz_api_client
@@ -93,8 +93,10 @@ async def main():
         async def health_check(request):
             try:
                 db_ok = False
-                async with get_db_connection_obj() as db:
-                    await db.fetchval("SELECT 1")
+                # Используем алхимию для проверки
+                async with get_session() as session:
+                    from sqlalchemy import text
+                    await session.execute(text("SELECT 1"))
                 db_ok = True
 
                 if scheduler.running and db_ok:
