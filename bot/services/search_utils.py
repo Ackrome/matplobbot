@@ -10,6 +10,7 @@ async def index_matplobblib_library():
     """
     Проходит по библиотеке и обновляет записи в БД.
     """
+    await asyncio.sleep(5) 
     logger.info("Starting background indexing of matplobblib...")
     count = 0
     

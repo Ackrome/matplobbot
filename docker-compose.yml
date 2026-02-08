@@ -47,6 +47,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
 
   mpb-scheduler:
     build:
@@ -104,6 +106,16 @@ services:
       - bot_logs:/app/logs
     depends_on:
       redis:
+        condition: service_healthy
+        
+  migrator:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    command: ["/bin/bash", "-c", "alembic upgrade head"]
+    env_file: ./.env
+    depends_on:
+      postgres:
         condition: service_healthy
 
 volumes:
