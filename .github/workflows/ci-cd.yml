@@ -9,6 +9,13 @@ env:
   IMAGE_OWNER: ackrome
 
 jobs:
+  cancel:
+    name: 'Cancel Other Workflow'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: styfle/cancel-workflow-action@0.9.0
+        with:
+          access_token: ${{ github.token }}
   # 1. Check what files changed
   check-changes:
     runs-on: ubuntu-latest
