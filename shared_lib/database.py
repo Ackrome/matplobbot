@@ -781,3 +781,38 @@ async def merge_cached_schedule(entity_type: str, entity_id: str, new_data: list
         
         await session.execute(stmt_insert)
         await session.commit()
+        
+async def get_subscription_modules(subscription_id: int) -> list[str]:
+    async with get_session() as session:
+        # Используем scalar(), если вернется None -> пустой список
+        result = await session.execute(
+            select(UserScheduleSubscription.selected_modules)
+            .where(UserScheduleSubscription.id == subscription_id)
+        )
+        data = result.scalar()
+        # Гарантируем возврат списка, даже если в БД NULL или JSON null
+        return data if isinstance(data, list) else []
+
+async def update_subscription_modules(subscription_id: int, modules: list[str]):
+    async with get_session() as session:
+        await session.execute(
+            update(UserScheduleSubscription)
+            .where(UserScheduleSubscription.id == subscription_id)
+            .values(selected_modules=modules)
+        )
+        await session.commit()
+
+async def get_subscription_by_id(subscription_id: int) -> dict | None:
+    """Получает базовую информацию о подписке для восстановления контекста."""
+    async with get_session() as session:
+        stmt = select(UserScheduleSubscription).where(UserScheduleSubscription.id == subscription_id)
+        result = await session.execute(stmt)
+        sub = result.scalar()
+        if sub:
+            return {
+                "id": sub.id,
+                "entity_type": sub.entity_type,
+                "entity_id": sub.entity_id,
+                "entity_name": sub.entity_name
+            }
+        return None

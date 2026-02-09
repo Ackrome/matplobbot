@@ -66,6 +66,8 @@ class UserScheduleSubscription(Base):
     deactivated_at = Column(DateTime(timezone=True), nullable=True)
     message_thread_id = Column(BigInteger, nullable=True)
     added_at = Column(DateTime(timezone=True), server_default=func.now())
+    selected_modules = Column(JSON, server_default='[]', nullable=False) 
+
 
     __table_args__ = (
         UniqueConstraint('chat_id', 'entity_type', 'entity_id', 'notification_time', name='uq_schedule_subs'),

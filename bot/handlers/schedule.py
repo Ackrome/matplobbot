@@ -13,20 +13,29 @@ import re
 import hashlib
 
 from shared_lib.services.university_api import RuzAPIClient # Import the class for type hinting
-from bot.keyboards import get_schedule_type_keyboard, build_search_results_keyboard, code_path_cache, build_calendar_keyboard, InlineKeyboardButton
+from bot.keyboards import get_schedule_type_keyboard, build_search_results_keyboard, code_path_cache, build_calendar_keyboard, InlineKeyboardButton, get_modules_keyboard
 from shared_lib.i18n import translator
 from bot import database
 from shared_lib.redis_client import redis_client
 import asyncio
 from shared_lib.database import (
-    get_cached_schedule, upsert_cached_schedule, merge_cached_schedule
+    get_cached_schedule,
+    upsert_cached_schedule,
+    merge_cached_schedule,
+    update_subscription_modules,
+    get_subscription_modules,
+    get_subscription_by_id
 )
 from shared_lib.services.schedule_service import (
-    format_schedule, generate_ical_from_schedule, get_semester_bounds
+    format_schedule, 
+    generate_ical_from_schedule,
+    get_semester_bounds,
+    get_unique_modules,
+    get_module_name
 )
 
-
 router = Router()
+module_name_cache = {} 
 
 class ScheduleStates(StatesGroup):
     awaiting_search_query = State()
@@ -54,6 +63,8 @@ class ScheduleManager:
         self.router.message(Command("myschedule"))(self.cmd_my_schedule)
         self.router.callback_query(F.data.startswith("sch_history:"))(self.handle_history_selection)
         self.router.callback_query(F.data == "sch_clear_history")(self.handle_clear_history)
+        self.router.callback_query(F.data.startswith("mod_toggle:"))(self.handle_module_toggle)
+        self.router.callback_query(F.data.startswith("mod_save:"))(self.handle_module_save)
 
     async def cmd_schedule(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
@@ -558,6 +569,27 @@ class ScheduleManager:
             
             # Redis кэш для diffs (можно оставить, он используется для быстрой проверки изменений)
             await redis_client.set_user_cache(user_id, f"schedule_data:{sub_id}", json.dumps(schedule_data_for_hash), ttl=None)
+            
+            if sub_data['sub_entity_type'] == 'group':
+                unique_modules = get_unique_modules(full_semester_schedule)
+                
+                if unique_modules:
+                    # По умолчанию делаем список ПУСТЫМ (ничего не выбрано)
+                    # Или, если хотите, чтобы по умолчанию все были ВКЛЮЧЕНЫ:
+                    # current_selected = unique_modules.copy()
+                    current_selected = [] 
+                    await update_subscription_modules(sub_id, current_selected)
+                    
+                    keyboard = get_modules_keyboard(unique_modules, current_selected, sub_id)
+                    
+                    # Отправляем сообщение об успехе + меню настройки
+                    await message.answer(
+                        translator.gettext(lang, "schedule_subscribe_success", entity_name=sub_data['sub_entity_name'], time_str=time_str) + 
+                        "\n\n👇 <b>Внимание:</b> Обнаружены учебные модули. Отметьте те, которые вы посещаете:",
+                        reply_markup=keyboard,
+                        parse_mode="HTML"
+                    )
+                    return # Прерываем, чтобы не отправлять стандартное сообщение ниже
 
             await message.answer(translator.gettext(lang, "schedule_subscribe_success", entity_name=sub_data['sub_entity_name'], time_str=time_str))
         except ValueError:
@@ -627,3 +659,88 @@ class ScheduleManager:
         if not sent_at_least_one:
             # This message is sent only if all subscriptions resulted in no lessons for today.
             await message.answer(translator.gettext(lang, "schedule_no_lessons_today"))
+            
+
+    async def handle_module_toggle(self, callback: CallbackQuery):
+        """
+        Обрабатывает нажатие на переключатель модуля.
+        Полностью восстанавливает контекст из БД, не полагаясь на RAM.
+        """
+        try:
+            _, sub_id_str, mod_hash = callback.data.split(":")
+            sub_id = int(sub_id_str)
+        except ValueError:
+            await callback.answer("Неверные данные кнопки.", show_alert=True)
+            return
+
+        # 1. Получаем данные о подписке, чтобы узнать entity_id
+        sub_info = await get_subscription_by_id(sub_id)
+        if not sub_info:
+            await callback.answer("Подписка не найдена.", show_alert=True)
+            await callback.message.delete()
+            return
+
+        # 2. Получаем расписание из кэша, чтобы восстановить список ВСЕХ модулей
+        # (Нам нужно найти полное имя модуля по его хэшу)
+        full_schedule = await get_cached_schedule(sub_info['entity_type'], sub_info['entity_id'])
+        if not full_schedule:
+            await callback.answer("Расписание устарело, попробуйте подписаться заново.", show_alert=True)
+            return
+
+        available_modules = get_unique_modules(full_schedule)
+        
+        # 3. Ищем, какому модулю соответствует хэш из кнопки
+        target_module_name = None
+        for mod in available_modules:
+            if hashlib.md5(mod.encode()).hexdigest()[:8] == mod_hash:
+                target_module_name = mod
+                break
+        
+        if not target_module_name:
+            await callback.answer("Модуль не найден (возможно, изменилось расписание).", show_alert=True)
+            return
+
+        # 4. Получаем текущий выбор пользователя из БД
+        selected_modules = await get_subscription_modules(sub_id)
+        
+        # 5. Переключаем состояние
+        if target_module_name in selected_modules:
+            selected_modules.remove(target_module_name)
+            action_text = "скрыт"
+        else:
+            selected_modules.append(target_module_name)
+            action_text = "выбран"
+
+        # 6. Сохраняем в БД
+        await update_subscription_modules(sub_id, selected_modules)
+
+        # 7. Обновляем клавиатуру
+        # Мы используем available_modules (полученные на шаге 2) и новый selected_modules
+        new_keyboard = get_modules_keyboard(available_modules, selected_modules, sub_id)
+        
+        # try-except нужен, так как Telegram ругается, если клавиатура визуально не изменилась
+        try:
+            await callback.message.edit_reply_markup(reply_markup=new_keyboard)
+        except Exception:
+            pass 
+            
+        await callback.answer(f"Модуль '{target_module_name}' {action_text}.")
+
+    async def handle_module_save(self, callback: CallbackQuery):
+        """Завершает настройку модулей."""
+        _, sub_id_str = callback.data.split(":")
+        sub_id = int(sub_id_str)
+        
+        # Можно получить итоговый список, чтобы показать пользователю
+        selected = await get_subscription_modules(sub_id)
+        count = len(selected)
+        
+        await callback.message.delete()
+        
+        if count == 0:
+            msg = "⚠️ Вы не выбрали ни одного модуля. Будут показываться только общие предметы."
+        else:
+            msg = f"✅ Настройки сохранены! Выбрано модулей: {count}. Расписание будет фильтроваться."
+            
+        await callback.message.answer(msg)
+        await callback.answer()

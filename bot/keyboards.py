@@ -276,3 +276,27 @@ def build_calendar_keyboard(year: int, month: int, entity_type: str, entity_id: 
 
 
     return builder.as_markup()
+
+def get_modules_keyboard(available_modules: list[str], selected_modules: list[str], sub_id: int) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    
+    # Сортируем модули, чтобы порядок кнопок не скакал
+    for mod in sorted(available_modules):
+        is_selected = mod in selected_modules
+        # Если список selected_modules пустой, значит пользователь еще не выбирал -> выбираем ВСЕ по умолчанию?
+        # Или наоборот: если он пуст, значит ничего не выбрано. 
+        # В моей логике: если список пуст в БД, значит фильтр выключен (показываем всё). 
+        # Но здесь для UI мы показываем галочки.
+        
+        icon = "✅" if is_selected else "❌"
+        
+        # Генерируем хэш для callback data (ограничение Telegram 64 байта)
+        mod_hash = hashlib.md5(mod.encode()).hexdigest()[:8]
+        
+        builder.row(InlineKeyboardButton(
+            text=f"{icon} {mod}", 
+            callback_data=f"mod_toggle:{sub_id}:{mod_hash}"
+        ))
+        
+    builder.row(InlineKeyboardButton(text="💾 Сохранить выбор", callback_data=f"mod_save:{sub_id}"))
+    return builder.as_markup()

@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from aiogram.utils.markdown import hcode
 from cachetools import TTLCache
 from datetime import date
+import re
 
 from shared_lib.i18n import translator
 from shared_lib.database import get_user_settings, get_all_short_names, get_disabled_short_names_for_user, get_all_short_names_with_ids
@@ -23,6 +24,30 @@ LESSON_STYLES = {
     'Консультации текущие': ('🟪', 'Консультация'),
     'Повторная промежуточная аттестация (экзамен)': ('🟥', 'Экзамен')
 }
+
+MODULE_REGEX = re.compile(r'Модуль\s+["«](.+?)["»]')
+
+def get_module_name(group_name: str | None) -> str | None:
+    """Извлекает название модуля из строки группы, если это модуль."""
+    if not group_name:
+        return None
+    match = MODULE_REGEX.search(group_name)
+    if match:
+        return match.group(1).strip()
+    return None
+
+def get_unique_modules(schedule_data: list[dict]) -> list[str]:
+    """Сканирует расписание и возвращает список уникальных названий модулей."""
+    modules = set()
+    for lesson in schedule_data:
+        # Иногда ключ может быть lecturer_title или еще что-то, проверяем group
+        group = lesson.get('group')
+        # У RUZ API иногда в group лежит список или строка. Обработаем безопасно.
+        if isinstance(group, str):
+            name = get_module_name(group)
+            if name:
+                modules.add(name)
+    return sorted(list(modules))
 
 def _get_lesson_visuals(kind: str) -> tuple[str, str]:
     return LESSON_STYLES.get(kind, ('🟦', kind))
@@ -50,12 +75,46 @@ def _format_lesson_details_sync(lesson: Dict[str, Any], lang: str, use_short_nam
     ]
     return "\n".join(details)
 
-async def format_schedule(schedule_data: List[Dict[str, Any]], lang: str, entity_name: str, entity_type: str, user_id: int, start_date: date, is_week_view: bool = False) -> str:
+async def format_schedule(
+    schedule_data: List[Dict[str, Any]],
+    lang: str,
+    entity_name: str,
+    entity_type: str,
+    user_id: int,
+    start_date: date,
+    is_week_view: bool = False,
+    subscription_id: int = None) -> str:
     """Formats a list of lessons into a readable daily schedule using Variant B (Subgroup Hierarchy)."""
     if not schedule_data:
         no_lessons_key = "schedule_no_lessons_week" if is_week_view else "schedule_no_lessons_day"
         return translator.gettext(lang, "schedule_header_for", entity_name=entity_name) + f"\n\n{translator.gettext(lang, no_lessons_key)}"
-
+    
+    # --- 0. Filtering Logic (NEW) ---
+    if subscription_id and entity_type == 'group':
+        from shared_lib.database import get_subscription_modules
+        selected_modules = await get_subscription_modules(subscription_id)
+        
+        # Если список выбранных модулей не пуст, фильтруем
+        # (Если пуст - показываем всё или предлагаем настройку, зависит от логики. 
+        #  Здесь: если есть настройка, фильтруем строго).
+        if selected_modules:
+            filtered_data = []
+            for lesson in schedule_data:
+                group_name = lesson.get('group')
+                module_name = get_module_name(group_name)
+                
+                # Логика:
+                # 1. Если это НЕ модуль (обычная пара) -> оставляем.
+                # 2. Если это модуль И он есть в списке выбранных -> оставляем.
+                # 3. Иначе -> скрываем.
+                
+                if module_name is None:
+                    filtered_data.append(lesson)
+                elif module_name in selected_modules:
+                    filtered_data.append(lesson)
+            
+            schedule_data = filtered_data
+            
     # --- 1. Fetch Settings ---
     user_settings = await get_user_settings(user_id)
     use_short_names = user_settings.get('use_short_names', True)
