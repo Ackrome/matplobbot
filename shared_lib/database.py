@@ -722,3 +722,62 @@ async def get_all_user_actions(session: AsyncSession, user_id: int):
         {"id": r.id, "action_type": r.action_type, "action_details": r.action_details, "timestamp": r.timestamp.strftime('%Y-%m-%d %H:%M:%S')}
         for r in result
     ]
+    
+    
+
+async def merge_cached_schedule(entity_type: str, entity_id: str, new_data: list, target_dates: list[str]):
+    """
+    Обновляет кэш для указанных дат.
+    1. Загружает текущий кэш.
+    2. Удаляет записи, совпадающие с target_dates.
+    3. Добавляет новые данные (new_data).
+    4. Сохраняет обратно.
+    """
+    async with get_session() as session:
+        # 1. Получаем текущий кэш
+        stmt_get = select(CachedSchedule.schedule_data).where(
+            and_(CachedSchedule.entity_type == entity_type, CachedSchedule.entity_id == str(entity_id))
+        )
+        current_data = (await session.execute(stmt_get)).scalar() or []
+        
+        # Превращаем в список, если вдруг пришло что-то другое
+        if not isinstance(current_data, list):
+            current_data = []
+
+        # 2. Фильтруем: оставляем только то, что НЕ входит в обновляемые даты
+        # target_dates - это список строк "YYYY-MM-DD" (или "YYYY.MM.DD", API Ruz возвращает YYYY.MM.DD)
+        # Приведем к одному формату для надежности, но обычно RUZ API отдает YYYY.MM.DD
+        
+        # Создаем set дат, которые мы обновляем
+        dates_to_replace = set(target_dates)
+        
+        filtered_data = [
+            lesson for lesson in current_data 
+            if lesson.get('date') not in dates_to_replace
+        ]
+        
+        # 3. Добавляем новые данные
+        # new_data - это список уроков от API
+        merged_data = filtered_data + new_data
+        
+        # Сортируем для порядка (опционально, но полезно)
+        # merged_data.sort(key=lambda x: (x.get('date', ''), x.get('beginLesson', '')))
+
+        json_data = json.loads(json.dumps(merged_data, default=str))
+
+        # 4. Upsert (вставка или обновление)
+        stmt_insert = pg_insert(CachedSchedule).values(
+            entity_type=entity_type,
+            entity_id=str(entity_id),
+            schedule_data=json_data,
+            updated_at=datetime.datetime.now()
+        ).on_conflict_do_update(
+            constraint='uq_cached_schedule_entity',
+            set_=dict(
+                schedule_data=json_data,
+                updated_at=datetime.datetime.now()
+            )
+        )
+        
+        await session.execute(stmt_insert)
+        await session.commit()

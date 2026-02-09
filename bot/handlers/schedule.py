@@ -13,13 +13,17 @@ import re
 import hashlib
 
 from shared_lib.services.university_api import RuzAPIClient # Import the class for type hinting
-from shared_lib.services.schedule_service import format_schedule, generate_ical_from_schedule
 from bot.keyboards import get_schedule_type_keyboard, build_search_results_keyboard, code_path_cache, build_calendar_keyboard, InlineKeyboardButton
 from shared_lib.i18n import translator
 from bot import database
-from shared_lib.database import get_cached_schedule, upsert_cached_schedule
 from shared_lib.redis_client import redis_client
 import asyncio
+from shared_lib.database import (
+    get_cached_schedule, upsert_cached_schedule, merge_cached_schedule
+)
+from shared_lib.services.schedule_service import (
+    format_schedule, generate_ical_from_schedule, get_semester_bounds
+)
 
 
 router = Router()
@@ -135,23 +139,30 @@ class ScheduleManager:
             cached_search = await redis_client.get_user_cache(user_id, 'schedule_search')
             entity_name = "Unknown"
             if cached_search and cached_search.get('results'):
-                # Find the selected entity in the cached results to get its name
                 selected_entity = next((item for item in cached_search['results'] if str(item['id']) == entity_id), None)
                 if selected_entity:
                     entity_name = selected_entity['label']
 
-            # --- NEW: Check local DB cache first ---
+            # --- ЛОГИКА КЭШИРОВАНИЯ ---
             schedule_data = []
             cached_full_schedule = await get_cached_schedule(entity_type, entity_id)
             
+            # Проверяем, есть ли данные в кэше ИМЕННО на сегодня
+            lessons_today_in_cache = []
             if cached_full_schedule:
-                # Filter cached data for today
-                schedule_data = [l for l in cached_full_schedule if l['date'] == api_date_str]
-                logging.info(f"Using cached schedule for {entity_type}:{entity_id}")
+                lessons_today_in_cache = [l for l in cached_full_schedule if l['date'] == api_date_str]
+            
+            if lessons_today_in_cache:
+                logging.info(f"Using cached schedule for {entity_type}:{entity_id} (Date: {api_date_str})")
+                schedule_data = lessons_today_in_cache
             else:
-                # Fallback to API if not cached
                 logging.info(f"Cache miss for {entity_type}:{entity_id}, fetching from API")
+                # 1. Запрашиваем из API (только на сегодня, как требовалось)
                 schedule_data = await self.api_client.get_schedule(entity_type, entity_id, start=api_date_str, finish=api_date_str)
+                
+                # 2. Сохраняем в кэш (merge, чтобы не стереть другие дни, если они там есть)
+                # schedule_data может быть пустым списком, если пар нет, но мы всё равно обновляем кэш, чтобы знать, что пар нет.
+                await merge_cached_schedule(entity_type, entity_id, schedule_data, target_dates=[api_date_str])
 
             # --- NEW: Store successful search in history ---
             if entity_name != "Unknown":
@@ -517,20 +528,36 @@ class ScheduleManager:
             )
             # 2. Immediately fetch schedule, hash it, and store it.
             # This "primes" the subscription so the first check doesn't see a change.
+            sem_start, sem_end = get_semester_bounds()
+            
+            logging.info(f"Fetching full semester schedule for subscription: {sub_data['sub_entity_name']} ({sem_start} - {sem_end})")
+            
+            # Запрашиваем полное расписание
+            full_semester_schedule = await self.api_client.get_schedule(
+                sub_data['sub_entity_type'], 
+                sub_data['sub_entity_id'], 
+                start=sem_start, 
+                finish=sem_end
+            )
+            
+            # Полностью обновляем кэш (upsert), так как данные семестра самые полные и приоритетные
+            await upsert_cached_schedule(sub_data['sub_entity_type'], sub_data['sub_entity_id'], full_semester_schedule)
+            
+            # 3. Для хеша подписки (чтобы не спамить уведомлениями сразу) берем срез на ближайшие 3 недели, как и было
             start_date = datetime.now()
             end_date = start_date + timedelta(weeks=3)
             
-            # Use cached data if available for initial hash generation
-            cached_full = await get_cached_schedule(sub_data['sub_entity_type'], sub_data['sub_entity_id'])
-            if cached_full:
-                # Use first few weeks of data for the hash
-                schedule_data = [l for l in cached_full if start_date.strftime("%Y-%m-%d") <= l['date'] <= end_date.strftime("%Y-%m-%d")]
-            else:
-                schedule_data = await self.api_client.get_schedule(sub_data['sub_entity_type'], sub_data['sub_entity_id'], start=start_date.strftime("%Y.%m.%d"), finish=end_date.strftime("%Y.%m.%d"))
+            # Фильтруем из только что полученных полных данных
+            schedule_data_for_hash = [
+                l for l in full_semester_schedule 
+                if start_date.strftime("%Y.%m.%d") <= l['date'] <= end_date.strftime("%Y.%m.%d")
+            ]
             
-            new_hash = hashlib.sha256(json.dumps(schedule_data, sort_keys=True).encode()).hexdigest()
+            new_hash = hashlib.sha256(json.dumps(schedule_data_for_hash, sort_keys=True).encode()).hexdigest()
             await database.update_subscription_hash(sub_id, new_hash)
-            await redis_client.set_user_cache(user_id, f"schedule_data:{sub_id}", json.dumps(schedule_data), ttl=None)
+            
+            # Redis кэш для diffs (можно оставить, он используется для быстрой проверки изменений)
+            await redis_client.set_user_cache(user_id, f"schedule_data:{sub_id}", json.dumps(schedule_data_for_hash), ttl=None)
 
             await message.answer(translator.gettext(lang, "schedule_subscribe_success", entity_name=sub_data['sub_entity_name'], time_str=time_str))
         except ValueError:

@@ -8,6 +8,7 @@ from ics import Calendar, Event
 from zoneinfo import ZoneInfo
 from aiogram.utils.markdown import hcode
 from cachetools import TTLCache
+from datetime import date
 
 from shared_lib.i18n import translator
 from shared_lib.database import get_user_settings, get_all_short_names, get_disabled_short_names_for_user, get_all_short_names_with_ids
@@ -282,3 +283,31 @@ def generate_ical_from_schedule(schedule_data: List[Dict[str, Any]], entity_name
             continue
             
     return cal.serialize()
+
+
+def get_semester_bounds() -> tuple[str, str]:
+    """
+    Возвращает даты начала и конца текущего/предстоящего семестра
+    в формате ('YYYY.MM.DD', 'YYYY.MM.DD').
+    """
+    today = date.today()
+    year = today.year
+
+    # Весенний семестр (Февраль - Июль)
+    if 1 < today.month < 7:
+        start_date = date(year, 2, 1)
+        end_date = date(year, 7, 15)
+    # Летние каникулы (переход к осеннему)
+    elif today.month == 7 and today.day >= 15:
+        start_date = date(year, 8, 25)
+        end_date = date(year + 1, 1, 31)
+    # Осенний семестр (Сентябрь - Январь)
+    elif today.month >= 8:
+        start_date = date(year, 8, 25)
+        end_date = date(year + 1, 1, 31)
+    # Январь (конец осеннего)
+    else: # today.month == 1
+        start_date = date(year - 1, 8, 25)
+        end_date = date(year, 1, 31)
+
+    return start_date.strftime("%Y.%m.%d"), end_date.strftime("%Y.%m.%d")
