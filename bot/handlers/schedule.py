@@ -133,7 +133,7 @@ class ScheduleManager:
 
         try:
             today = datetime.now()
-            api_date_str = today.strftime("%Y.%m.%d")
+            api_date_str = today.strftime("%Y-%m-%d")
 
             # --- FIX: Get entity name from cached search results ---
             cached_search = await redis_client.get_user_cache(user_id, 'schedule_search')
@@ -342,7 +342,7 @@ class ScheduleManager:
                 original_entity_id = code_path_cache.get(entity_id, entity_id)
 
             selected_date = datetime.strptime(date_str, "%Y-%m-%d")
-            api_date_str = selected_date.strftime("%Y.%m.%d")
+            api_date_str = selected_date.strftime("%Y-%m-%d")
 
             # --- FIX: Get entity name from cached search results ---
             cached_search = await redis_client.get_user_cache(user_id, 'schedule_search')
@@ -395,7 +395,7 @@ class ScheduleManager:
                 original_entity_id = code_path_cache.get(entity_id, entity_id)
 
             end_date = start_date + timedelta(days=6)
-            api_start_str, api_end_str = start_date.strftime("%Y.%m.%d"), end_date.strftime("%Y.%m.%d")
+            api_start_str, api_end_str = start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
 
             # --- FIX: Get entity name from cached search results ---
             cached_search = await redis_client.get_user_cache(user_id, 'schedule_search')
@@ -442,7 +442,7 @@ class ScheduleManager:
         """Fetches schedule, generates iCal string, and returns file bytes and metadata."""
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
         end_date = start_date + timedelta(days=6)
-        api_start_str, api_end_str = start_date.strftime("%Y.%m.%d"), end_date.strftime("%Y.%m.%d")
+        api_start_str, api_end_str = start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
         
         # --- FIX for BUTTON_DATA_INVALID ---
         original_entity_id = entity_id
@@ -550,7 +550,7 @@ class ScheduleManager:
             # Фильтруем из только что полученных полных данных
             schedule_data_for_hash = [
                 l for l in full_semester_schedule 
-                if start_date.strftime("%Y.%m.%d") <= l['date'] <= end_date.strftime("%Y.%m.%d")
+                if start_date.strftime("%Y-%m-%d") <= l['date'] <= end_date.strftime("%Y-%m-%d")
             ]
             
             new_hash = hashlib.sha256(json.dumps(schedule_data_for_hash, sort_keys=True).encode()).hexdigest()
@@ -571,7 +571,7 @@ class ScheduleManager:
     async def _send_single_schedule_update(self, message: Message, lang: str, sub: dict, today_dt: datetime):
         """Fetches and sends the schedule for a single subscription."""
         user_id = message.from_user.id
-        today_str = today_dt.strftime("%Y.%m.%d")
+        today_str = today_dt.strftime("%Y-%m-%d")
         try:
             # --- NEW: Check local DB cache first ---
             schedule_data = []

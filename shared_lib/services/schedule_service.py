@@ -310,4 +310,4 @@ def get_semester_bounds() -> tuple[str, str]:
         start_date = date(year - 1, 8, 25)
         end_date = date(year, 1, 31)
 
-    return start_date.strftime("%Y.%m.%d"), end_date.strftime("%Y.%m.%d")
+    return start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")

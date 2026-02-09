@@ -87,8 +87,8 @@ async def send_daily_schedules(http_session: aiohttp.ClientSession, ruz_api_clie
     # The schedule should be for the next day
     target_date = now_in_moscow.date() + timedelta(days=1)
     start_date, end_date = target_date, target_date # Fetch for a single day
-    start_date_str = start_date.strftime("%Y.%m.%d")
-    end_date_str = end_date.strftime("%Y.%m.%d")
+    start_date_str = start_date.strftime("%Y-%m-%d")
+    end_date_str = end_date.strftime("%Y-%m-%d")
     current_time_str = now_in_moscow.strftime("%H:%M")
     
     try:
@@ -154,8 +154,8 @@ async def check_for_schedule_updates(http_session: aiohttp.ClientSession, ruz_ap
             start_date = date(current_year, 7, 15)
             end_date = date(current_year + 1, 1, 31)
 
-    start_date_str = start_date.strftime("%Y.%m.%d")
-    end_date_str = end_date.strftime("%Y.%m.%d")
+    start_date_str = start_date.strftime("%Y-%m-%d")
+    end_date_str = end_date.strftime("%Y-%m-%d")
 
     try:
         # В новом database.py эта функция сама открывает сессию
@@ -239,8 +239,8 @@ async def update_schedule_cache(http_session: aiohttp.ClientSession, ruz_api_cli
             start_date = date(current_year, 7, 15)
             end_date = date(current_year + 1, 1, 31)
 
-    start_date_str = start_date.strftime("%Y.%m.%d")
-    end_date_str = end_date.strftime("%Y.%m.%d")
+    start_date_str = start_date.strftime("%Y-%m-%d")
+    end_date_str = end_date.strftime("%Y-%m-%d")
 
     try:
         unique_entities = await get_unique_active_subscription_entities()
