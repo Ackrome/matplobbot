@@ -11,6 +11,8 @@ from typing import List, Dict, Any
 from . import database # Import database to check for user repos
 from .config import ADMIN_USER_IDS
 from shared_lib.i18n import translator
+import calendar
+
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +209,6 @@ def build_search_results_keyboard(results: List[Dict[str, Any]], search_type: st
 
 def build_calendar_keyboard(year: int, month: int, entity_type: str, entity_id: str, lang: str, selected_date: date | None = None) -> InlineKeyboardMarkup:
     """Builds an inline calendar keyboard for a given month and year."""
-    import calendar
     builder = InlineKeyboardBuilder()
 
     # Month and year navigation
@@ -299,4 +300,84 @@ def get_modules_keyboard(available_modules: list[str], selected_modules: list[st
         ))
         
     builder.row(InlineKeyboardButton(text="💾 Сохранить выбор", callback_data=f"mod_save:{sub_id}"))
+    return builder.as_markup()
+
+# Константы для фильтров
+FILTER_TYPES_MAP = {
+    'Lecture': 'Лекции',
+    'Seminar': 'Семинары',
+    'Exam': 'Экзамены/Зачеты'
+}
+
+def get_myschedule_calendar_keyboard(year: int, month: int, lang: str, busy_days: dict) -> InlineKeyboardMarkup:
+    """
+    busy_days: dict { day_int: 'marker_char' } 
+    marker_char: '•' (обычно), '❗️' (экзамен)
+    """
+    builder = InlineKeyboardBuilder()
+    
+    # 1. Навигация
+    month_names = translator.gettext(lang, "calendar_months").split(',')
+    month_name = month_names[month - 1]
+    
+    builder.row(
+        InlineKeyboardButton(text="⚙️ Фильтры", callback_data="mysch_filters:main"),
+        InlineKeyboardButton(text=f"{month_name} {year}", callback_data="noop")
+    )
+    
+    # Стрелки
+    builder.row(
+        InlineKeyboardButton(text="<<", callback_data=f"mysch_nav:prev:{year}:{month}"),
+        InlineKeyboardButton(text="Сегодня", callback_data=f"mysch_nav:today:0:0"),
+        InlineKeyboardButton(text=">>", callback_data=f"mysch_nav:next:{year}:{month}")
+    )
+
+    # Дни недели
+    day_names = translator.gettext(lang, "calendar_days_short").split(',')
+    builder.row(*[InlineKeyboardButton(text=day, callback_data="noop") for day in day_names])
+
+    # Сетка
+    month_calendar = calendar.monthcalendar(year, month)
+    for week in month_calendar:
+        row_buttons = []
+        for day in week:
+            if day == 0:
+                row_buttons.append(InlineKeyboardButton(text=" ", callback_data="noop"))
+            else:
+                marker = busy_days.get(day, "")
+                text = f"{day}{marker}"
+                # callback: action : year : month : day
+                row_buttons.append(InlineKeyboardButton(text=text, callback_data=f"mysch_day:{year}:{month}:{day}"))
+        builder.row(*row_buttons)
+
+    return builder.as_markup()
+
+def get_myschedule_filters_keyboard(filter_config: dict, subscriptions: list) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    
+    excluded_subs = filter_config.get('excluded_subs', [])
+    excluded_types = filter_config.get('excluded_types', [])
+
+    # 1. Фильтры по Типам
+    builder.row(InlineKeyboardButton(text="--- Типы занятий ---", callback_data="noop"))
+    for f_code, f_name in FILTER_TYPES_MAP.items():
+        state = "❌" if f_code in excluded_types else "✅"
+        builder.row(InlineKeyboardButton(
+            text=f"{state} {f_name}", 
+            callback_data=f"mysch_tog_type:{f_code}"
+        ))
+
+    # 2. Фильтры по Источникам
+    if len(subscriptions) > 1: # Показываем, только если есть из чего выбирать
+        builder.row(InlineKeyboardButton(text="--- Источники ---", callback_data="noop"))
+        for sub in subscriptions:
+            state = "❌" if sub['id'] in excluded_subs else "✅"
+            # Обрезаем имя, если слишком длинное
+            name = sub['entity_name'][:20] + "..." if len(sub['entity_name']) > 20 else sub['entity_name']
+            builder.row(InlineKeyboardButton(
+                text=f"{state} {name}", 
+                callback_data=f"mysch_tog_sub:{sub['id']}"
+            ))
+
+    builder.row(InlineKeyboardButton(text="⬅️ Назад к календарю", callback_data="mysch_back_cal"))
     return builder.as_markup()

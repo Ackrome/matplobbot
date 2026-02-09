@@ -10,9 +10,11 @@ from aiogram.utils.markdown import hcode
 from cachetools import TTLCache
 from datetime import date
 import re
+# shared_lib/services/schedule_service.py
+
 
 from shared_lib.i18n import translator
-from shared_lib.database import get_user_settings, get_all_short_names, get_disabled_short_names_for_user, get_all_short_names_with_ids, get_discipline_modules_map
+from shared_lib.database import get_user_settings, get_all_short_names, get_disabled_short_names_for_user, get_all_short_names_with_ids, get_discipline_modules_map, get_subscription_modules
 
 # Cache for short names to avoid frequent DB calls
 short_name_cache = TTLCache(maxsize=1, ttl=300) # Cache for 5 minutes
@@ -401,3 +403,89 @@ async def get_unique_modules_hybrid(schedule_data: list[dict]) -> list[str]:
             modules.add(discipline_to_module[disc])
             
     return sorted(list(modules))
+
+
+
+async def get_aggregated_schedule(
+    user_id: int,
+    subscriptions: list[dict],
+    start_date: date,
+    end_date: date,
+    filter_config: dict = None
+) -> list[dict]:
+    """
+    Собирает расписание со всех подписок, применяет фильтры и возвращает плоский список пар.
+    filter_config: {
+        'excluded_subs': [sub_id, ...],
+        'excluded_types': ['Лекции', 'Seminars', ...],
+        # Модули фильтруются на основе настроек каждой подписки в БД
+    }
+    """
+    if not filter_config:
+        filter_config = {}
+
+    aggregated_lessons = []
+    
+    # 1. Загружаем глобальный маппинг дисциплин (для гибридной фильтрации модулей)
+    discipline_to_module = await get_discipline_modules_map()
+
+    from shared_lib.database import get_cached_schedule # Импорт внутри во избежание циклов
+
+    for sub in subscriptions:
+        # --- Фильтр по Источнику ---
+        if sub['id'] in filter_config.get('excluded_subs', []):
+            continue
+
+        # Получаем кэш
+        cached_data = await get_cached_schedule(sub['entity_type'], sub['entity_id'])
+        if not cached_data:
+            continue
+
+        # Получаем настройки модулей для ЭТОЙ подписки
+        selected_modules = await get_subscription_modules(sub['id'])
+
+        for lesson in cached_data:
+            # Проверка даты
+            try:
+                l_date = datetime.strptime(lesson['date'], "%Y-%m-%d").date()
+                if not (start_date <= l_date <= end_date):
+                    continue
+            except ValueError:
+                continue
+
+            # --- Фильтр по Типу занятия ---
+            # Упрощаем типы для фильтрации: 'Lecture', 'Seminar', 'Exam', 'Other'
+            kind = lesson.get('kindOfWork', '')
+            simple_type = 'Other'
+            if 'Лекци' in kind: simple_type = 'Lecture'
+            elif 'Практич' in kind or 'Семинар' in kind or 'Лаборат' in kind: simple_type = 'Seminar'
+            elif 'экзамен' in kind.lower() or 'аттестация' in kind.lower() or 'зачет' in kind.lower(): simple_type = 'Exam'
+
+            if simple_type in filter_config.get('excluded_types', []):
+                continue
+
+            # --- Фильтр по Модулям (Гибридный) ---
+            if sub['entity_type'] == 'group' and selected_modules:
+                # (Копируем логику из format_schedule)
+                group_val = lesson.get('group')
+                explicit_module = get_module_name(group_val) if isinstance(group_val, str) else None
+                discipline_name = lesson.get('discipline', '')
+                mapped_module = discipline_to_module.get(discipline_name)
+
+                # Если это модуль, и он НЕ выбран -> пропускаем
+                is_module = (explicit_module is not None) or (mapped_module is not None)
+                is_selected = False
+                if explicit_module and explicit_module in selected_modules: is_selected = True
+                if mapped_module and mapped_module in selected_modules: is_selected = True
+                
+                if is_module and not is_selected:
+                    continue
+
+            # Добавляем метку источника, чтобы в общем списке понимать, чья пара
+            lesson_copy = lesson.copy()
+            lesson_copy['source_entity'] = sub['entity_name']
+            aggregated_lessons.append(lesson_copy)
+
+    # Сортируем по времени
+    aggregated_lessons.sort(key=lambda x: (x['date'], x['beginLesson']))
+    return aggregated_lessons

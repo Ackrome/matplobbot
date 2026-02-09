@@ -13,7 +13,7 @@ import re
 import hashlib
 
 from shared_lib.services.university_api import RuzAPIClient # Import the class for type hinting
-from bot.keyboards import get_schedule_type_keyboard, build_search_results_keyboard, code_path_cache, build_calendar_keyboard, InlineKeyboardButton, get_modules_keyboard
+from bot.keyboards import get_schedule_type_keyboard, build_search_results_keyboard, code_path_cache, get_myschedule_calendar_keyboard, get_myschedule_filters_keyboard, build_calendar_keyboard, InlineKeyboardButton, get_modules_keyboard
 from shared_lib.i18n import translator
 from bot import database
 from shared_lib.redis_client import redis_client
@@ -31,8 +31,11 @@ from shared_lib.services.schedule_service import (
     generate_ical_from_schedule,
     get_semester_bounds,
     get_unique_modules_hybrid,
-    get_module_name
+    get_module_name,
+    get_aggregated_schedule
 )
+
+import calendar
 
 router = Router()
 module_name_cache = {} 
@@ -65,6 +68,12 @@ class ScheduleManager:
         self.router.callback_query(F.data == "sch_clear_history")(self.handle_clear_history)
         self.router.callback_query(F.data.startswith("mod_toggle:"))(self.handle_module_toggle)
         self.router.callback_query(F.data.startswith("mod_save:"))(self.handle_module_save)
+        self.router.callback_query(F.data == "mysch_open_cal")(self.handle_myschedule_open)
+        self.router.callback_query(F.data.startswith("mysch_nav:"))(self.handle_myschedule_nav)
+        self.router.callback_query(F.data.startswith("mysch_day:"))(self.handle_myschedule_day)
+        self.router.callback_query(F.data == "mysch_filters:main")(self.handle_myschedule_filters_menu)
+        self.router.callback_query(F.data.startswith("mysch_tog_"))(self.handle_myschedule_toggle_filter)
+        self.router.callback_query(F.data == "mysch_back_cal")(self.handle_myschedule_back_to_cal)
 
     async def cmd_schedule(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
@@ -659,6 +668,11 @@ class ScheduleManager:
         if not sent_at_least_one:
             # This message is sent only if all subscriptions resulted in no lessons for today.
             await message.answer(translator.gettext(lang, "schedule_no_lessons_today"))
+        
+        user_id = message.from_user.id
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text="🗓 Открыть полный календарь", callback_data="mysch_open_cal"))
+        await message.answer("Для просмотра расписания на месяц нажмите кнопку ниже:", reply_markup=builder.as_markup())
             
 
     async def handle_module_toggle(self, callback: CallbackQuery):
@@ -744,3 +758,189 @@ class ScheduleManager:
             
         await callback.message.answer(msg)
         await callback.answer()
+        
+    async def _get_user_filters(self, user_id: int) -> dict:
+        """Получает фильтры из Redis. Если нет - возвращает пустые (показывать всё)."""
+        raw = await redis_client.get_user_cache(user_id, "mysch_filters")
+        if raw:
+            return raw
+        return {'excluded_subs': [], 'excluded_types': []}
+    
+    async def _save_user_filters(self, user_id: int, filters: dict):
+        await redis_client.set_user_cache(user_id, "mysch_filters", filters, ttl=3600)
+    
+    async def _render_calendar(self, callback: CallbackQuery, year: int, month: int):
+        """Рендерит календарь с учетом данных."""
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        
+        # 1. Получаем подписки и фильтры
+        subs, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
+        active_subs = [s for s in subs if s['is_active']]
+        filters = await self._get_user_filters(user_id)
+
+        # 2. Определяем диапазон дат (весь месяц)
+        num_days = calendar.monthrange(year, month)[1]
+        start_date = date(year, month, 1)
+        end_date = date(year, month, num_days)
+
+        # 3. Агрегируем данные
+        schedule = await get_aggregated_schedule(user_id, active_subs, start_date, end_date, filters)
+
+        # 4. Вычисляем маркеры занятости
+        busy_days = {}
+        for lesson in schedule:
+            try:
+                l_date = datetime.strptime(lesson['date'], "%Y-%m-%d").date()
+                day = l_date.day
+                
+                # Приоритет маркеров: Экзамен (!) > Обычная пара (•)
+                kind = lesson.get('kindOfWork', '').lower()
+                is_exam = 'экзамен' in kind or 'аттестация' in kind or 'зачет' in kind
+                
+                if is_exam:
+                    busy_days[day] = "❗️"
+                elif day not in busy_days:
+                    busy_days[day] = "•"
+            except:
+                pass
+
+        keyboard = get_myschedule_calendar_keyboard(year, month, lang, busy_days)
+        
+        # Сохраняем текущий "просматриваемый месяц" в Redis, чтобы кнопка "Назад" из фильтров знала куда вернуться
+        await redis_client.set_user_cache(user_id, "mysch_current_view", {'year': year, 'month': month})
+
+        try:
+            await callback.message.edit_text(f"📅 Календарь на {start_date.strftime('%B %Y')}", reply_markup=keyboard)
+        except:
+            pass # ignore 'message not modified'
+        
+    async def handle_myschedule_open(self, callback: CallbackQuery):
+        now = datetime.now()
+        await self._render_calendar(callback, now.year, now.month)
+        await callback.answer()
+        
+
+    async def handle_myschedule_nav(self, callback: CallbackQuery):
+        _, action, y_str, m_str = callback.data.split(":")
+        year, month = int(y_str), int(m_str)
+        
+        if action == 'prev':
+            month -= 1
+            if month < 1: month = 12; year -= 1
+        elif action == 'next':
+            month += 1
+            if month > 12: month = 1; year += 1
+        elif action == 'today':
+            now = datetime.now()
+            year, month = now.year, now.month
+
+        await self._render_calendar(callback, year, month)
+        await callback.answer()
+        
+
+    async def handle_myschedule_day(self, callback: CallbackQuery):
+        _, y_str, m_str, d_str = callback.data.split(":")
+        target_date = date(int(y_str), int(m_str), int(d_str))
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+
+        # Получаем данные только за этот день
+        subs, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
+        active_subs = [s for s in subs if s['is_active']]
+        filters = await self._get_user_filters(user_id)
+        
+        schedule = await get_aggregated_schedule(user_id, active_subs, target_date, target_date, filters)
+
+        if not schedule:
+            await callback.answer("На этот день занятий нет (с учетом фильтров).", show_alert=True)
+            return
+
+        # Форматируем. Т.к. format_schedule рассчитан на одну сущность, нам нужно 
+        # немного схитрить или написать упрощенный форматтер для сводного вида.
+        # Для простоты используем format_schedule, но "обманем" его, передав фиктивное имя,
+        # а в самих уроках добавим источник в название дисциплины.
+        
+        for l in schedule:
+            # Добавляем источник к названию дисциплины для наглядности
+            src = l.get('source_entity', '?')
+            # l['discipline'] = f"[{src}] {l['discipline']}" 
+            # ^ Лучше не менять оригинал, а сделать кастомный вывод, 
+            # но format_schedule слишком сложен, чтобы его дублировать. 
+            # Передадим entity_name как "Сводное расписание"
+            pass
+
+        # Группируем по источнику для красивого вывода? 
+        # Или просто списком по времени?
+        # format_schedule сортирует по времени, это то что нужно.
+        
+        # Чтобы format_schedule показал "от кого" пара, нам нужно подправить lecturer_title или auditorium
+        # Вариант: Впихнуть название группы в поле lecturer_title (костыль, но рабочий)
+        formatted_lessons = []
+        for l in schedule:
+            l_copy = l.copy()
+            # Добавляем инфо о группе
+            l_copy['lecturer_title'] = f"{l_copy.get('lecturer_title','')} ({l.get('source_entity')})"
+            formatted_lessons.append(l_copy)
+
+        text = await format_schedule(formatted_lessons, lang, f"Сводка на {target_date.strftime('%d.%m')}", "mixed", user_id, target_date)
+        
+        # Добавляем кнопку "Назад к календарю"
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text="⬅️ Назад к календарю", callback_data="mysch_back_cal"))
+        
+        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+        await callback.answer()
+        
+
+    async def handle_myschedule_filters_menu(self, callback: CallbackQuery):
+        user_id = callback.from_user.id
+        filters = await self._get_user_filters(user_id)
+        subs, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
+        active_subs = [s for s in subs if s['is_active']]
+        
+        kb = get_myschedule_filters_keyboard(filters, active_subs)
+        await callback.message.edit_text("⚙️ Настройка отображения:", reply_markup=kb)
+        await callback.answer()
+
+    async def handle_myschedule_toggle_filter(self, callback: CallbackQuery):
+        user_id = callback.from_user.id
+        filters = await self._get_user_filters(user_id)
+        data_parts = callback.data.split(":")
+        action_type = data_parts[0] # mysch_tog_type или mysch_tog_sub
+        value = data_parts[1]
+
+        if action_type == "mysch_tog_type":
+            target_list = filters['excluded_types']
+            if value in target_list: target_list.remove(value)
+            else: target_list.append(value)
+        
+        elif action_type == "mysch_tog_sub":
+            sub_id = int(value)
+            target_list = filters['excluded_subs']
+            if sub_id in target_list: target_list.remove(sub_id)
+            else: target_list.append(sub_id)
+
+        await self._save_user_filters(user_id, filters)
+        
+        # Обновляем меню
+        subs, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
+        active_subs = [s for s in subs if s['is_active']]
+        kb = get_myschedule_filters_keyboard(filters, active_subs)
+        
+        try:
+            await callback.message.edit_reply_markup(reply_markup=kb)
+        except: pass
+        await callback.answer()
+
+    async def handle_myschedule_back_to_cal(self, callback: CallbackQuery):
+        user_id = callback.from_user.id
+        # Восстанавливаем состояние (год/месяц)
+        state = await redis_client.get_user_cache(user_id, "mysch_current_view")
+        if state:
+            year, month = state['year'], state['month']
+        else:
+            now = datetime.now()
+            year, month = now.year, now.month
+            
+        await self._render_calendar(callback, year, month)
