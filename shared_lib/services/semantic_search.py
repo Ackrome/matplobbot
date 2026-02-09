@@ -30,7 +30,7 @@ class TextSearchEngine:
                 constraint='uq_search_doc_path',
                 set_=dict(
                     content=content,
-                    metadata_=metadata,
+                    metadata=metadata,
                     created_at=func.now()
                 )
             )
