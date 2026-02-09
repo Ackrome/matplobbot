@@ -12,7 +12,7 @@ from datetime import date
 import re
 
 from shared_lib.i18n import translator
-from shared_lib.database import get_user_settings, get_all_short_names, get_disabled_short_names_for_user, get_all_short_names_with_ids
+from shared_lib.database import get_user_settings, get_all_short_names, get_disabled_short_names_for_user, get_all_short_names_with_ids, get_discipline_modules_map
 
 # Cache for short names to avoid frequent DB calls
 short_name_cache = TTLCache(maxsize=1, ttl=300) # Cache for 5 minutes
@@ -36,18 +36,6 @@ def get_module_name(group_name: str | None) -> str | None:
         return match.group(1).strip()
     return None
 
-def get_unique_modules(schedule_data: list[dict]) -> list[str]:
-    """Сканирует расписание и возвращает список уникальных названий модулей."""
-    modules = set()
-    for lesson in schedule_data:
-        # Иногда ключ может быть lecturer_title или еще что-то, проверяем group
-        group = lesson.get('group')
-        # У RUZ API иногда в group лежит список или строка. Обработаем безопасно.
-        if isinstance(group, str):
-            name = get_module_name(group)
-            if name:
-                modules.add(name)
-    return sorted(list(modules))
 
 def _get_lesson_visuals(kind: str) -> tuple[str, str]:
     return LESSON_STYLES.get(kind, ('🟦', kind))
@@ -92,26 +80,44 @@ async def format_schedule(
     # --- 0. Filtering Logic (NEW) ---
     if subscription_id and entity_type == 'group':
         from shared_lib.database import get_subscription_modules
+        
+        # 1. Получаем настройки пользователя (что он выбрал)
         selected_modules = await get_subscription_modules(subscription_id)
         
-        # Если список выбранных модулей не пуст, фильтруем
-        # (Если пуст - показываем всё или предлагаем настройку, зависит от логики. 
-        #  Здесь: если есть настройка, фильтруем строго).
+        # 2. Получаем глобальный словарь маппинга из БД
+        # (Оптимизация: можно закэшировать этот вызов в redis или LRUCache, если будет тормозить)
+        discipline_to_module = await get_discipline_modules_map()
+
         if selected_modules:
             filtered_data = []
             for lesson in schedule_data:
-                group_name = lesson.get('group')
-                module_name = get_module_name(group_name)
+                # А. Проверяем явный модуль из группы (автоматика)
+                group_val = lesson.get('group')
+                explicit_module = get_module_name(group_val) if isinstance(group_val, str) else None
                 
-                # Логика:
-                # 1. Если это НЕ модуль (обычная пара) -> оставляем.
-                # 2. Если это модуль И он есть в списке выбранных -> оставляем.
-                # 3. Иначе -> скрываем.
+                # Б. Проверяем маппинг по дисциплине (ручная настройка)
+                discipline_name = lesson.get('discipline', '')
+                mapped_module = discipline_to_module.get(discipline_name)
+
+                # ЛОГИКА РЕШЕНИЯ:
                 
-                if module_name is None:
+                # 1. Если у пары вообще нет признаков модуля (ни явного, ни в базе) -> Это общая пара (Физ-ра, История) -> ПОКАЗЫВАЕМ
+                if explicit_module is None and mapped_module is None:
                     filtered_data.append(lesson)
-                elif module_name in selected_modules:
+                    continue
+
+                # 2. Если есть явный модуль, и он выбран пользователем -> ПОКАЗЫВАЕМ
+                if explicit_module and explicit_module in selected_modules:
                     filtered_data.append(lesson)
+                    continue
+                
+                # 3. Если есть маппинг в базе, и этот модуль выбран -> ПОКАЗЫВАЕМ
+                # (Это спасает лекции, у которых group="ПМ23-1", но discipline="Матан" -> "Модуль Анализ")
+                if mapped_module and mapped_module in selected_modules:
+                    filtered_data.append(lesson)
+                    continue
+                
+                # Иначе скрываем (это модуль, который пользователь отключил)
             
             schedule_data = filtered_data
             
@@ -370,3 +376,28 @@ def get_semester_bounds() -> tuple[str, str]:
         end_date = date(year, 1, 31)
 
     return start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
+
+async def get_unique_modules_hybrid(schedule_data: list[dict]) -> list[str]:
+    """
+    Возвращает список всех модулей, найденных в расписании (Regex) + через маппинг.
+    Async, так как лезет в базу за маппингом.
+    """
+    modules = set()
+    
+    # 1. Загружаем маппинг
+    discipline_to_module = await get_discipline_modules_map()
+    
+    for lesson in schedule_data:
+        # Check explicit group name
+        group = lesson.get('group')
+        if isinstance(group, str):
+            name = get_module_name(group)
+            if name:
+                modules.add(name)
+        
+        # Check mapped discipline
+        disc = lesson.get('discipline')
+        if disc and disc in discipline_to_module:
+            modules.add(discipline_to_module[disc])
+            
+    return sorted(list(modules))

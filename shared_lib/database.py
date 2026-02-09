@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from .models import (
     User, UserAction, UserFavorite, LatexCache, UserGithubRepo, 
     UserScheduleSubscription, ChatSettings, DisciplineShortName, 
-    UserDisabledShortName, CachedSchedule, SearchDocument
+    UserDisabledShortName, CachedSchedule, SearchDocument, DisciplineModule
 )
 from .redis_client import redis_client
 
@@ -816,3 +816,24 @@ async def get_subscription_by_id(subscription_id: int) -> dict | None:
                 "entity_name": sub.entity_name
             }
         return None
+
+
+
+async def upsert_discipline_module(discipline: str, module: str):
+    async with get_session() as session:
+        stmt = pg_insert(DisciplineModule).values(
+            discipline_name=discipline, 
+            module_name=module
+        ).on_conflict_do_update(
+            index_elements=['discipline_name'],
+            set_=dict(module_name=module)
+        )
+        await session.execute(stmt)
+        await session.commit()
+
+async def get_discipline_modules_map() -> dict[str, str]:
+    """Возвращает словарь {дисциплина: модуль}."""
+    async with get_session() as session:
+        result = await session.execute(select(DisciplineModule))
+        rows = result.scalars().all()
+        return {row.discipline_name: row.module_name for row in rows}

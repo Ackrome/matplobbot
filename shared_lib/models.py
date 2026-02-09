@@ -123,3 +123,13 @@ class SearchDocument(Base):
     __table_args__ = (
         UniqueConstraint('source_type', 'source_path', name='uq_search_doc_path'),
     )
+    
+class DisciplineModule(Base):
+    """
+    Ручной маппинг: Какая дисциплина относится к какому модулю.
+    Пример: "Математический анализ" -> "Анализ данных"
+    """
+    __tablename__ = 'discipline_modules'
+
+    discipline_name = Column(String, primary_key=True) # Имя дисциплины точь-в-точь как в RUZ
+    module_name = Column(String, nullable=False)       # "Чистое" название модуля

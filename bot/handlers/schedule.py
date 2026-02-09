@@ -30,7 +30,7 @@ from shared_lib.services.schedule_service import (
     format_schedule, 
     generate_ical_from_schedule,
     get_semester_bounds,
-    get_unique_modules,
+    get_unique_modules_hybrid,
     get_module_name
 )
 
@@ -571,7 +571,7 @@ class ScheduleManager:
             await redis_client.set_user_cache(user_id, f"schedule_data:{sub_id}", json.dumps(schedule_data_for_hash), ttl=None)
             
             if sub_data['sub_entity_type'] == 'group':
-                unique_modules = get_unique_modules(full_semester_schedule)
+                unique_modules = get_unique_modules_hybrid(full_semester_schedule)
                 
                 if unique_modules:
                     # По умолчанию делаем список ПУСТЫМ (ничего не выбрано)
@@ -687,7 +687,7 @@ class ScheduleManager:
             await callback.answer("Расписание устарело, попробуйте подписаться заново.", show_alert=True)
             return
 
-        available_modules = get_unique_modules(full_schedule)
+        available_modules = get_unique_modules_hybrid(full_schedule)
         
         # 3. Ищем, какому модулю соответствует хэш из кнопки
         target_module_name = None
