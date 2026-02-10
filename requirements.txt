@@ -16,8 +16,8 @@ aiohttp
 setuptools
 aiosqlite # Added for migration script
 httpx
-weasyprint
 redis
+weasyprint
 certifi
 ics
 beautifulsoup4
