@@ -209,6 +209,7 @@ jobs:
   trigger-deployment:
     name: Trigger Jenkins Deployment
     needs: [build-services]
+    if: ${{ always() }}
     runs-on: self-hosted
     steps:
       - name: Trigger Jenkins Job via cURL
