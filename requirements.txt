@@ -19,8 +19,8 @@ httpx
 weasyprint
 redis
 certifi
-beautifulsoup4
 ics
+beautifulsoup4
 markdown-it-py
 cachetools
 alembic
