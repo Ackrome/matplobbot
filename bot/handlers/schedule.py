@@ -580,7 +580,7 @@ class ScheduleManager:
             await redis_client.set_user_cache(user_id, f"schedule_data:{sub_id}", json.dumps(schedule_data_for_hash), ttl=None)
             
             if sub_data['sub_entity_type'] == 'group':
-                unique_modules = get_unique_modules_hybrid(full_semester_schedule)
+                unique_modules = await get_unique_modules_hybrid(full_semester_schedule)
                 
                 if unique_modules:
                     # По умолчанию делаем список ПУСТЫМ (ничего не выбрано)
