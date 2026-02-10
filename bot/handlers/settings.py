@@ -35,7 +35,7 @@ from shared_lib.database import (
     update_subscription_modules,
     get_cached_schedule,
     get_subscription_modules
-    )
+        )
 from shared_lib.i18n import translator
 from shared_lib.services.schedule_service import get_unique_modules_hybrid
 from .admin import AdminOrCreatorFilter
@@ -653,13 +653,19 @@ class SettingsManager:
                 # Create a mock object that mimics a CallbackQuery to refresh the menu.
                 # This is necessary because the target handlers expect a CallbackQuery object, not a Message.
                 mock_callback = SimpleNamespace(
-                    message=types.Message(chat=types.Chat(id=original_chat_id, type='private'), message_id=original_message_id, date=datetime.datetime.now()), # Reference the bot's message
+                    message=types.Message(chat=types.Chat(id=original_chat_id, type='private'), message_id=original_message_id, date=datetime.datetime.now()),
                     from_user=message.from_user,
-                    bot=bot, # Pass the bot instance
-                    data=f"psub_page:{page}" if not is_chat_admin else f"csub_page:{page}"
+                    bot=bot,
+                    # Вместо psub_page используем sub_open
+                    data=f"sub_open:{sub_id}"
                 )
-                if is_chat_admin: await self.cq_manage_chat_subscriptions(mock_callback, state)
-                else: await self.cq_manage_personal_subscriptions(mock_callback, state) # This will refresh the menu
+                
+                if is_chat_admin:
+                    # Для групповых чатов пока можно оставить старую логику или адаптировать позже
+                    await self.cq_manage_chat_subscriptions(mock_callback, state)
+                else:
+                    # Для личных подписок идем в карточку
+                    await self.cq_sub_card(mock_callback) 
             else:
                 await message.answer(translator.gettext(lang, "subscription_update_failed_general")) # Use answer instead of reply
         except SubscriptionConflictError:
@@ -913,7 +919,7 @@ class SettingsManager:
             parse_mode="HTML"
         )
         
-async def cq_subs_list(self, callback: CallbackQuery):
+    async def cq_subs_list(self, callback: CallbackQuery):
         """
         Отображает список подписок пользователя (только названия).
         При клике открывается карточка подписки.
@@ -970,3 +976,101 @@ async def cq_subs_list(self, callback: CallbackQuery):
         # Редактируем сообщение
         await callback.message.edit_text(text, reply_markup=builder.as_markup())
         await callback.answer()
+        
+    async def cq_sub_toggle(self, callback: CallbackQuery):
+        """Переключает состояние подписки (Вкл/Выкл) и обновляет карточку."""
+        user_id = callback.from_user.id
+        try:
+            sub_id = int(callback.data.split(":")[1])
+            
+            # Выполняем переключение в БД
+            result = await toggle_subscription_status(sub_id, user_id, is_chat_admin=False)
+            
+            if result:
+                # Если успешно, просто обновляем текущую карточку (она перерисуется с новым статусом)
+                # Вызываем уже существующий метод cq_sub_card
+                # Важно: подменяем data, так как cq_sub_card ожидает "sub_open:ID"
+                callback.data = f"sub_open:{sub_id}" 
+                await self.cq_sub_card(callback)
+            else:
+                await callback.answer("Ошибка: подписка не найдена или нет прав.", show_alert=True)
+                
+        except (ValueError, IndexError):
+            await callback.answer("Некорректные данные.", show_alert=True)
+
+    async def cq_sub_delete_ask(self, callback: CallbackQuery):
+        """Спрашивает подтверждение перед удалением."""
+        try:
+            sub_id = int(callback.data.split(":")[1])
+            sub = await get_subscription_by_id(sub_id)
+            
+            if not sub:
+                await callback.answer("Подписка не найдена", show_alert=True)
+                return
+
+            builder = InlineKeyboardBuilder()
+            builder.row(
+                InlineKeyboardButton(text="🗑 Да, удалить", callback_data=f"sub_del_confirm:{sub_id}"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data=f"sub_open:{sub_id}") # Возврат в карточку
+            )
+            
+            await callback.message.edit_text(
+                f"Вы уверены, что хотите удалить подписку на <b>{sub['entity_name']}</b>?", 
+                reply_markup=builder.as_markup(),
+                parse_mode="HTML"
+            )
+            await callback.answer()
+        except ValueError:
+            await callback.answer("Ошибка данных.", show_alert=True)
+
+    async def cq_sub_delete_confirm(self, callback: CallbackQuery):
+        """Удаляет подписку и возвращает в общий список."""
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        try:
+            sub_id = int(callback.data.split(":")[1])
+            deleted_name = await remove_schedule_subscription(sub_id, user_id, is_chat_admin=False)
+            
+            if deleted_name:
+                await callback.answer(f"Подписка '{deleted_name}' удалена.")
+                # Возвращаемся в список подписок
+                await self.cq_subs_list(callback)
+            else:
+                await callback.answer(translator.gettext(lang, "subscription_info_outdated"), show_alert=True)
+                
+        except ValueError:
+            await callback.answer("Ошибка данных.", show_alert=True)
+
+    async def cq_sub_time(self, callback: CallbackQuery, state: FSMContext):
+        """Запрашивает новое время для уведомлений."""
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        try:
+            sub_id = int(callback.data.split(":")[1])
+            
+            # Устанавливаем состояние ожидания ввода
+            await state.set_state(SettingsStates.awaiting_new_sub_time)
+            
+            # Сохраняем контекст, чтобы обработчик текста знал, что обновлять
+            # Добавляем original_chat_id, чтобы потом можно было вернуться
+            await state.update_data(
+                sub_id=sub_id, 
+                is_chat_admin=False,
+                original_chat_id=callback.message.chat.id,
+                original_message_id=callback.message.message_id,
+                # page нужен для совместимости со старым кодом, ставим 0
+                page=0 
+            )
+            
+            # Кнопка отмены, которая возвращает обратно в карточку подписки
+            builder = InlineKeyboardBuilder()
+            builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data=f"sub_open:{sub_id}"))
+            
+            await callback.message.edit_text(
+                translator.gettext(lang, "subscription_change_time_prompt"),
+                reply_markup=builder.as_markup()
+            )
+            await callback.answer()
+            
+        except ValueError:
+            await callback.answer("Ошибка данных.", show_alert=True)
