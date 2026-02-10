@@ -710,7 +710,7 @@ class ScheduleManager:
             await callback.answer("Расписание устарело, попробуйте подписаться заново.", show_alert=True)
             return
 
-        available_modules = get_unique_modules_hybrid(full_schedule)
+        available_modules = await get_unique_modules_hybrid(full_schedule)
         
         # 3. Ищем, какому модулю соответствует хэш из кнопки
         target_module_name = None
