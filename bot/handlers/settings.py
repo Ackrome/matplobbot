@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton, Message, CallbackQuery
+from aiogram.exceptions import TelegramBadRequest
 from types import SimpleNamespace
 import re, datetime
 import asyncpg
@@ -13,10 +14,33 @@ if TYPE_CHECKING:
     from .schedule import ScheduleManager
     from .admin import AdminManager
 from aiogram import Bot, F
-from shared_lib.database import get_user_settings, get_user_repos, update_user_settings_db, get_user_subscriptions, remove_schedule_subscription, get_chat_subscriptions, toggle_subscription_status, update_subscription_notification_time, get_chat_settings, update_chat_settings_db, SubscriptionConflictError, delete_all_user_data, get_all_short_names_with_ids, delete_short_name_by_id, get_disabled_short_names_for_user, toggle_short_name_for_user
+from shared_lib.database import (
+    get_user_settings,
+    get_user_repos,
+    update_user_settings_db,
+    get_user_subscriptions,
+    remove_schedule_subscription,
+    get_chat_subscriptions,
+    toggle_subscription_status,
+    update_subscription_notification_time,
+    get_chat_settings,
+    update_chat_settings_db,
+    SubscriptionConflictError,
+    delete_all_user_data,
+    get_all_short_names_with_ids,
+    delete_short_name_by_id,
+    get_disabled_short_names_for_user,
+    toggle_short_name_for_user,
+    get_subscription_by_id, 
+    update_subscription_modules,
+    get_cached_schedule,
+    get_subscription_modules
+    )
 from shared_lib.i18n import translator
+from shared_lib.services.schedule_service import get_unique_modules_hybrid
 from .admin import AdminOrCreatorFilter
 from ..config import ADMIN_USER_IDS
+from bot.keyboards import get_modules_keyboard
 
 import logging
 logger = logging.getLogger(__name__)
@@ -67,14 +91,21 @@ class SettingsManager:
         self.router.callback_query(F.data.startswith("latex_dpi_"))(self.cq_change_latex_dpi)
 
         # Subscription management
-        # Personal subscriptions
-        self.router.callback_query(F.data == "manage_personal_subscriptions")(self.cq_manage_personal_subscriptions)
-        self.router.callback_query(F.data.startswith("psub_page:"))(self.cq_manage_personal_subscriptions)
-        self.router.callback_query(F.data.startswith("psub_toggle:"))(self.cq_toggle_personal_subscription)
-        self.router.callback_query(F.data.startswith("psub_del:"))(self.cq_delete_personal_subscription_prompt)
-        self.router.callback_query(F.data.startswith("psub_del_confirm:"))(self.cq_confirm_delete_personal_subscription)
-        self.router.callback_query(F.data.startswith("psub_time:"))(self.cq_change_personal_subscription_time_prompt)
-
+        self.router.callback_query(F.data == "manage_personal_subscriptions")(self.cq_subs_list)
+        self.router.callback_query(F.data.startswith("subs_page:"))(self.cq_subs_list)
+        
+        # Открытие карточки
+        self.router.callback_query(F.data.startswith("sub_open:"))(self.cq_sub_card)
+        
+        # Действия внутри карточки
+        self.router.callback_query(F.data.startswith("sub_toggle:"))(self.cq_sub_toggle)
+        self.router.callback_query(F.data.startswith("sub_del_ask:"))(self.cq_sub_delete_ask)
+        self.router.callback_query(F.data.startswith("sub_del_confirm:"))(self.cq_sub_delete_confirm)
+        self.router.callback_query(F.data.startswith("sub_time:"))(self.cq_sub_time)
+        
+        # МОДУЛИ
+        self.router.callback_query(F.data.startswith("sub_mods:"))(self.cq_sub_modules_menu)
+        
         # Group subscriptions (for admins)
         self.router.callback_query(F.data == "manage_chat_subscriptions")(self.cq_manage_chat_subscriptions)
         self.router.callback_query(F.data.startswith("csub_page:"))(self.cq_manage_chat_subscriptions)
@@ -807,3 +838,135 @@ class SettingsManager:
         await toggle_short_name_for_user(user_id, int(short_name_id_str))
         await callback.answer()
         await self.cq_manage_short_names(callback, state) # Refresh the menu
+        
+    async def cq_sub_card(self, callback: CallbackQuery):
+        sub_id = int(callback.data.split(":")[1])
+        sub = await get_subscription_by_id(sub_id) # Нужно добавить этот метод в db, чтобы возвращал полный объект
+        
+        if not sub:
+            await callback.answer("Подписка не найдена", show_alert=True)
+            return await self.cq_subs_list(callback) # Вернуть в список
+
+        # Формируем текст
+        status_text = "Активна ✅" if sub['is_active'] else "Отключена ❌"
+        time_str = sub['notification_time'].strftime("%H:%M")
+        
+        text = (
+            f"📂 <b>Подписка: {sub['entity_name']}</b>\n\n"
+            f"Статус: {status_text}\n"
+            f"Уведомления: в {time_str}\n"
+        )
+        
+        builder = InlineKeyboardBuilder()
+        
+        # Ряд 1: Вкл/Выкл | Время
+        toggle_txt = "Выключить" if sub['is_active'] else "Включить"
+        builder.row(
+            InlineKeyboardButton(text=toggle_txt, callback_data=f"sub_toggle:{sub_id}"),
+            InlineKeyboardButton(text="⏰ Время", callback_data=f"sub_time:{sub_id}")
+        )
+        
+        # Ряд 2: Модули (Только для групп)
+        if sub['entity_type'] == 'group':
+            builder.row(InlineKeyboardButton(text="📚 Настроить модули", callback_data=f"sub_mods:{sub_id}"))
+            
+        # Ряд 3: Удалить
+        builder.row(InlineKeyboardButton(text="🗑 Удалить", callback_data=f"sub_del_ask:{sub_id}"))
+        
+        # Ряд 4: Назад
+        builder.row(InlineKeyboardButton(text="⬅️ К списку", callback_data="manage_personal_subscriptions"))
+        
+        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+
+    # 3. МЕНЮ МОДУЛЕЙ
+    async def cq_sub_modules_menu(self, callback: CallbackQuery):
+        sub_id = int(callback.data.split(":")[1])
+        sub = await get_subscription_by_id(sub_id)
+        
+        await callback.answer("Загружаю список модулей...")
+        
+        # 1. Достаем расписание из кэша (или API если пусто)
+        full_schedule = await get_cached_schedule(sub['entity_type'], sub['entity_id'])
+        if not full_schedule:
+            # TODO: Сделать fallback запрос к API здесь
+            await callback.message.answer("Кэш пуст. Попробуйте обновить расписание через /schedule.")
+            return
+
+        # 2. Гибридный поиск модулей (Regex + Admin DB)
+        available_modules = await get_unique_modules_hybrid(full_schedule)
+        
+        if not available_modules:
+            await callback.answer("В этом расписании модули не найдены.", show_alert=True)
+            return
+
+        # 3. Текущие настройки
+        selected = await get_subscription_modules(sub_id)
+        if selected is None: selected = [] # None = пустой список для UI
+
+        # 4. Клавиатура (используем ту же функцию из bot/keyboards.py)
+        kb = get_modules_keyboard(available_modules, selected, sub_id)
+        
+        await callback.message.edit_text(
+            f"Настройка модулей для <b>{sub['entity_name']}</b>:\n"
+            "Отметьте галочками ✅ те модули, которые вы посещаете.",
+            reply_markup=kb,
+            parse_mode="HTML"
+        )
+        
+async def cq_subs_list(self, callback: CallbackQuery):
+        """
+        Отображает список подписок пользователя (только названия).
+        При клике открывается карточка подписки.
+        """
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        
+        # Получаем номер страницы из callback_data (если есть)
+        page = 0
+        if callback.data and "subs_page:" in callback.data:
+            try:
+                page = int(callback.data.split(":")[1])
+            except (IndexError, ValueError):
+                page = 0
+
+        # Размер страницы - 5 подписок
+        page_size = 5
+        subs, total_count = await get_user_subscriptions(user_id, page=page, page_size=page_size)
+        
+        builder = InlineKeyboardBuilder()
+        
+        if not subs:
+            text = translator.gettext(lang, "subscriptions_empty")
+        else:
+            text = translator.gettext(lang, "subscriptions_header")
+            
+            for sub in subs:
+                # Формируем кнопку для перехода в карточку
+                status_icon = "✅" if sub['is_active'] else "💤"
+                # Обрезаем имя, если слишком длинное
+                name = sub['entity_name'][:25] + "..." if len(sub['entity_name']) > 25 else sub['entity_name']
+                button_text = f"{status_icon} {name}"
+                
+                # sub_open:{id} вызывает карточку подписки
+                builder.row(InlineKeyboardButton(text=button_text, callback_data=f"sub_open:{sub['id']}"))
+
+        # --- Пагинация ---
+        total_pages = (total_count + page_size - 1) // page_size
+        if total_pages > 1:
+            pagination_buttons = []
+            if page > 0:
+                pagination_buttons.append(InlineKeyboardButton(text="⬅️", callback_data=f"subs_page:{page - 1}"))
+            
+            pagination_buttons.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop"))
+            
+            if page < total_pages - 1:
+                pagination_buttons.append(InlineKeyboardButton(text="➡️", callback_data=f"subs_page:{page + 1}"))
+            
+            builder.row(*pagination_buttons)
+
+        # Кнопка назад в главное меню настроек
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "back_to_settings"), callback_data="back_to_settings"))
+        
+        # Редактируем сообщение
+        await callback.message.edit_text(text, reply_markup=builder.as_markup())
+        await callback.answer()

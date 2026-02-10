@@ -66,6 +66,8 @@ class AdminManager:
         self.router.message(Command('clear_cache'), AdminFilter())(self.clear_cache_command)
         self.router.message(Command('send_admin_summary'), AdminFilter())(self.send_admin_summary_command)
         self.router.message(Command('set_module'), AdminFilter())(self.set_module_command)
+        self.router.message(Command('set_module'), AdminFilter())(self.set_module_command)
+
 
 
     async def _update_library_async(self, library_name: str, lang: str):
@@ -186,27 +188,17 @@ class AdminManager:
         await message.answer("\n".join(summary_parts), parse_mode="Markdown")
         
     async def set_module_command(self, message: Message):
-        # Ожидаем: /set_module Теория вероятностей | Анализ данных
+        """
+        Связывает дисциплину с модулем.
+        Пример: /set_module Теория игр | Доп. главы математики
+        """
         try:
             args = message.text.split(maxsplit=1)[1]
-            if "|" not in args:
-                raise ValueError
+            if "|" not in args: raise ValueError
             
             discipline, module = map(str.strip, args.split("|", 1))
             
             await database.upsert_discipline_module(discipline, module)
-            
-            await message.answer(
-                f"✅ Успешно связано:\n"
-                f"📚 Дисциплина: `{discipline}`\n"
-                f"📦 Модуль: `{module}`\n\n"
-                f"Теперь лекции по этому предмету будут считаться частью этого модуля."
-            )
-            # Очистка кэша, если он используется для маппинга
-            # (если вы добавите кэширование в get_discipline_modules_map)
-            
-        except (IndexError, ValueError):
-            await message.answer(
-                "❌ Неверный формат.\n"
-                "Используйте: `/set_module <Дисциплина> | <Модуль>`"
-            )
+            await message.answer(f"✅ Связь создана:\n`{discipline}` -> `{module}`\n\nТеперь эта дисциплина будет считаться частью этого модуля при фильтрации.")
+        except:
+            await message.answer("Ошибка. Формат: `/set_module Дисциплина | Модуль`")

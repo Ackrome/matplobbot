@@ -622,7 +622,16 @@ class ScheduleManager:
             else:
                 schedule_data = await self.api_client.get_schedule(sub['entity_type'], sub['entity_id'], start=today_str, finish=today_str)
 
-            formatted_text = await format_schedule(schedule_data, lang, sub['entity_name'], sub['entity_type'], user_id, start_date=today_dt.date())
+            formatted_text = await format_schedule(
+                schedule_data=schedule_data, 
+                lang=lang, 
+                entity_name=sub['entity_name'], 
+                entity_type=sub['entity_type'], 
+                user_id=user_id, 
+                start_date=today_dt.date(),
+                subscription_id=sub['id']
+            )
+            
             await message.answer(formatted_text, parse_mode="HTML")
         except TelegramForbiddenError:
             logging.warning(f"Bot is blocked by user {user_id}. Cannot send schedule.")

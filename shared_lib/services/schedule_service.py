@@ -29,14 +29,11 @@ LESSON_STYLES = {
 
 MODULE_REGEX = re.compile(r'Модуль\s+["«](.+?)["»]')
 
+
 def get_module_name(group_name: str | None) -> str | None:
-    """Извлекает название модуля из строки группы, если это модуль."""
-    if not group_name:
-        return None
+    if not group_name: return None
     match = MODULE_REGEX.search(group_name)
-    if match:
-        return match.group(1).strip()
-    return None
+    return match.group(1).strip() if match else None
 
 
 def _get_lesson_visuals(kind: str) -> tuple[str, str]:
@@ -81,48 +78,47 @@ async def format_schedule(
     
     # --- 0. Filtering Logic (NEW) ---
     if subscription_id and entity_type == 'group':
-        from shared_lib.database import get_subscription_modules
-        
-        # 1. Получаем настройки пользователя (что он выбрал)
+        # 1. Загружаем настройки пользователя (какие модули он хочет видеть)
         selected_modules = await get_subscription_modules(subscription_id)
         
-        # 2. Получаем глобальный словарь маппинга из БД
-        # (Оптимизация: можно закэшировать этот вызов в redis или LRUCache, если будет тормозить)
-        discipline_to_module = await get_discipline_modules_map()
-
-        if selected_modules:
+        # Если список selected_modules пуст, считаем, что пользователь 
+        # еще не настроил фильтры -> показываем всё (или ничего, зависит от политики).
+        # Обычно, если список пуст в БД, это значит "фильтрация выключена". 
+        # Но если мы хотим строгую фильтрацию: "не выбрал - не увидел".
+        # Давайте сделаем так: если selected_modules не None, фильтруем.
+        
+        if selected_modules is not None: 
+            # 2. Загружаем маппинг от админа
+            discipline_to_module = await get_discipline_modules_map()
+            
             filtered_data = []
             for lesson in schedule_data:
-                # А. Проверяем явный модуль из группы (автоматика)
+                # Определяем, относится ли урок к модулю (Явно или через Маппинг)
                 group_val = lesson.get('group')
-                explicit_module = get_module_name(group_val) if isinstance(group_val, str) else None
+                explicit_mod = get_module_name(group_val) if isinstance(group_val, str) else None
                 
-                # Б. Проверяем маппинг по дисциплине (ручная настройка)
-                discipline_name = lesson.get('discipline', '')
-                mapped_module = discipline_to_module.get(discipline_name)
-
-                # ЛОГИКА РЕШЕНИЯ:
+                disc_name = lesson.get('discipline', '')
+                mapped_mod = discipline_to_module.get(disc_name)
                 
-                # 1. Если у пары вообще нет признаков модуля (ни явного, ни в базе) -> Это общая пара (Физ-ра, История) -> ПОКАЗЫВАЕМ
-                if explicit_module is None and mapped_module is None:
-                    filtered_data.append(lesson)
-                    continue
-
-                # 2. Если есть явный модуль, и он выбран пользователем -> ПОКАЗЫВАЕМ
-                if explicit_module and explicit_module in selected_modules:
+                # Логика:
+                # Это модуль, если найден explicit_mod ИЛИ mapped_mod.
+                is_module_lesson = (explicit_mod is not None) or (mapped_mod is not None)
+                
+                if not is_module_lesson:
+                    # Это общая дисциплина -> ПОКАЗЫВАЕМ
                     filtered_data.append(lesson)
                     continue
                 
-                # 3. Если есть маппинг в базе, и этот модуль выбран -> ПОКАЗЫВАЕМ
-                # (Это спасает лекции, у которых group="ПМ23-1", но discipline="Матан" -> "Модуль Анализ")
-                if mapped_module and mapped_module in selected_modules:
-                    filtered_data.append(lesson)
-                    continue
+                # Если это модуль, проверяем, выбран ли он пользователем
+                is_selected = False
+                if explicit_mod and explicit_mod in selected_modules: is_selected = True
+                if mapped_mod and mapped_mod in selected_modules: is_selected = True
                 
-                # Иначе скрываем (это модуль, который пользователь отключил)
+                if is_selected:
+                    filtered_data.append(lesson)
             
             schedule_data = filtered_data
-            
+                    
     # --- 1. Fetch Settings ---
     user_settings = await get_user_settings(user_id)
     use_short_names = user_settings.get('use_short_names', True)
@@ -381,29 +377,28 @@ def get_semester_bounds() -> tuple[str, str]:
 
 async def get_unique_modules_hybrid(schedule_data: list[dict]) -> list[str]:
     """
-    Возвращает список всех модулей, найденных в расписании (Regex) + через маппинг.
-    Async, так как лезет в базу за маппингом.
+    Возвращает список доступных модулей, учитывая и Regex из group, 
+    и ручные маппинги (дисциплина -> модуль) из БД.
     """
     modules = set()
     
-    # 1. Загружаем маппинг
+    # 1. Получаем маппинг от админа
     discipline_to_module = await get_discipline_modules_map()
     
     for lesson in schedule_data:
-        # Check explicit group name
+        # А. Проверяем явный модуль в названии группы
         group = lesson.get('group')
         if isinstance(group, str):
             name = get_module_name(group)
             if name:
                 modules.add(name)
         
-        # Check mapped discipline
+        # Б. Проверяем маппинг по названию дисциплины
         disc = lesson.get('discipline')
         if disc and disc in discipline_to_module:
             modules.add(discipline_to_module[disc])
             
     return sorted(list(modules))
-
 
 
 async def get_aggregated_schedule(
