@@ -652,20 +652,26 @@ class SettingsManager:
 
                 # Create a mock object that mimics a CallbackQuery to refresh the menu.
                 # This is necessary because the target handlers expect a CallbackQuery object, not a Message.
+                # Создаем объект сообщения вручную
+                mock_msg = types.Message(
+                    chat=types.Chat(id=original_chat_id, type='private'),
+                    message_id=original_message_id,
+                    date=datetime.datetime.now()
+                )
+                # ВАЖНО: Привязываем бота к сообщению, чтобы работали методы .edit_text()
+                mock_msg = mock_msg.as_(bot)
+
                 mock_callback = SimpleNamespace(
-                    message=types.Message(chat=types.Chat(id=original_chat_id, type='private'), message_id=original_message_id, date=datetime.datetime.now()),
+                    message=mock_msg,
                     from_user=message.from_user,
-                    bot=bot,
-                    # Вместо psub_page используем sub_open
+                    # bot=bot, # Это поле в SimpleNamespace не помогает методам внутри message
                     data=f"sub_open:{sub_id}"
                 )
                 
                 if is_chat_admin:
-                    # Для групповых чатов пока можно оставить старую логику или адаптировать позже
                     await self.cq_manage_chat_subscriptions(mock_callback, state)
                 else:
-                    # Для личных подписок идем в карточку
-                    await self.cq_sub_card(mock_callback) 
+                    await self.cq_sub_card(mock_callback)
             else:
                 await message.answer(translator.gettext(lang, "subscription_update_failed_general")) # Use answer instead of reply
         except SubscriptionConflictError:
