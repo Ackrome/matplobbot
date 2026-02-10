@@ -803,7 +803,7 @@ async def update_subscription_modules(subscription_id: int, modules: list[str]):
         await session.commit()
 
 async def get_subscription_by_id(subscription_id: int) -> dict | None:
-    """Получает базовую информацию о подписке для восстановления контекста."""
+    """Получает полную информацию о подписке."""
     async with get_session() as session:
         stmt = select(UserScheduleSubscription).where(UserScheduleSubscription.id == subscription_id)
         result = await session.execute(stmt)
@@ -811,9 +811,13 @@ async def get_subscription_by_id(subscription_id: int) -> dict | None:
         if sub:
             return {
                 "id": sub.id,
+                "user_id": sub.user_id,
+                "chat_id": sub.chat_id,
                 "entity_type": sub.entity_type,
                 "entity_id": sub.entity_id,
-                "entity_name": sub.entity_name
+                "entity_name": sub.entity_name,
+                "is_active": sub.is_active,
+                "notification_time": sub.notification_time
             }
         return None
 
