@@ -120,7 +120,7 @@ async def send_daily_schedules(http_session: aiohttp.ClientSession, ruz_api_clie
                         recipient_chat_id = sub['chat_id']
                         thread_id = sub.get('message_thread_id')
 
-                        formatted_text = await format_schedule(schedule_data, lang, sub['entity_name'], sub['entity_type'], sub['user_id'], start_date=target_date, is_week_view=False)
+                        formatted_text = await format_schedule(schedule_data, lang, sub['entity_name'], sub['entity_type'], sub['user_id'], start_date=target_date, is_week_view=False,subscription_id=sub['id'])
                         await send_telegram_message(http_session, recipient_chat_id, formatted_text, thread_id)
                         await asyncio.sleep(0.1)
                     except Exception as e:

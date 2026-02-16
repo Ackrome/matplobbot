@@ -457,9 +457,9 @@ graph TD
 
 ## 🗺️ Roadmap
 
-- [ ] **SQLAlchemy Core**: Integrate SQLAlchemy instead of raw SQL
-- [ ] **Semantic Search via Embeddings**: Add semantic Search for all the materials in Bot
-- [ ] **AI Analysis**: Integrate OpenAI/Gemini to generate summaries of lecture notes.
+- [x] **SQLAlchemy Core**: Integrate SQLAlchemy instead of raw SQL
+- [x] **Semantic Search via Embeddings**: Add semantic Search for all the materials in Bot
+- ~~[x] **AI Analysis**: Integrate OpenAI/Gemini to generate summaries of lecture notes.~~ due to server incompitence
 - [ ] **Multi-University Support**: Abstract the schedule parser to support other universities via plugins.
 - [ ] **Voice Commands**: Allow users to ask for schedules via voice messages.
 
