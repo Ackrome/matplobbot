@@ -441,6 +441,26 @@ async def update_subscription_hash(subscription_id: int, new_hash: str):
             update(UserScheduleSubscription).where(UserScheduleSubscription.id == subscription_id).values(last_schedule_hash=new_hash)
         )
         await session.commit()
+        
+async def batch_update_subscription_hashes(entity_type: str, entity_id: str, new_hash: str):
+    """
+    Массово обновляет хэш расписания для всех подписок на конкретную сущность.
+    Это предотвращает повторные уведомления и снижает нагрузку на БД (1 запрос вместо N).
+    """
+    async with get_session() as session:
+        stmt = (
+            update(UserScheduleSubscription)
+            .where(
+                and_(
+                    UserScheduleSubscription.entity_type == entity_type,
+                    UserScheduleSubscription.entity_id == entity_id,
+                    UserScheduleSubscription.is_active == True
+                )
+            )
+            .values(last_schedule_hash=new_hash)
+        )
+        await session.execute(stmt)
+        await session.commit()
 
 # --- Cached Schedules ---
 async def upsert_cached_schedule(entity_type: str, entity_id: str, data: list | dict):

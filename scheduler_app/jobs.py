@@ -17,7 +17,8 @@ from shared_lib.database import (
     delete_old_inactive_subscriptions, get_all_active_subscriptions, 
     get_all_short_names, get_user_settings, get_admin_daily_summary,
     get_session, get_unique_active_subscription_entities,
-    upsert_cached_schedule
+    upsert_cached_schedule,
+    batch_update_subscription_hashes
 )
 from shared_lib.redis_client import redis_client
 
@@ -133,9 +134,22 @@ async def send_daily_schedules(http_session: aiohttp.ClientSession, ruz_api_clie
         logger.error(f"Critical error in send_daily_schedules job: {e}", exc_info=True)
 
 
+# ... existing imports
+from shared_lib.database import (
+    get_subscriptions_for_notification, update_subscription_hash, 
+    delete_old_inactive_subscriptions, get_all_active_subscriptions, 
+    get_all_short_names, get_user_settings, get_admin_daily_summary,
+    get_session, get_unique_active_subscription_entities,
+    upsert_cached_schedule, get_cached_schedule, batch_update_subscription_hashes # <--- Добавлен импорт
+)
+# ... existing imports
+
+# ... (функция send_telegram_message и send_daily_schedules без изменений) ...
+
 async def check_for_schedule_updates(http_session: aiohttp.ClientSession, ruz_api_client: RuzAPIClient):
     """
     Periodically checks all active subscriptions for changes.
+    Optimized to prevent duplicate notifications by updating DB state immediately.
     """
     logger.info("Starting schedule change detection job...")
     
@@ -143,6 +157,7 @@ async def check_for_schedule_updates(http_session: aiohttp.ClientSession, ruz_ap
     today = datetime.now(moscow_tz).date()
     current_year = today.year
 
+    # Определяем границы семестра для проверки изменений
     if 2 <= today.month <= 6 or (today.month == 7 and today.day < 15):
         start_date = date(current_year, 2, 1)
         end_date = date(current_year, 7, 14)
@@ -158,11 +173,11 @@ async def check_for_schedule_updates(http_session: aiohttp.ClientSession, ruz_ap
     end_date_str = end_date.strftime("%Y-%m-%d")
 
     try:
-        # В новом database.py эта функция сама открывает сессию
         all_subscriptions = await get_all_active_subscriptions()
         if not all_subscriptions:
             return
 
+        # Группируем подписки по сущностям (Group/Teacher/Auditorium)
         grouped_subscriptions = collections.defaultdict(list)
         for sub in all_subscriptions:
             entity_key = (sub['entity_type'], sub['entity_id'])
@@ -175,44 +190,78 @@ async def check_for_schedule_updates(http_session: aiohttp.ClientSession, ruz_ap
             entity_name = subs_for_entity[0]['entity_name']
 
             try:
+                # 1. Получаем новое расписание из API
                 new_schedule_data = await ruz_api_client.get_schedule(
                     entity_type, entity_id, start=start_date_str, finish=end_date_str
                 )
+                
+                # Считаем хэш
                 new_hash = hashlib.sha256(json.dumps(new_schedule_data, sort_keys=True).encode()).hexdigest()
 
+                # Берем хэш любого подписчика этой группы (они должны быть одинаковы, если синхронизированы)
+                # Если у кого-то рассинхрон, это исправится при массовом обновлении
                 reference_hash = subs_for_entity[0].get('last_schedule_hash')
 
                 if reference_hash and new_hash != reference_hash:
-                    logger.info(f"Change detected for entity '{entity_name}'.")
-                    ref_sub = subs_for_entity[0]
-                    redis_key = f"schedule_data:{ref_sub['id']}"
-                    old_schedule_data_raw = await redis_client.get_user_cache(ref_sub['user_id'], redis_key)
-                    old_schedule_data = json.loads(old_schedule_data_raw) if old_schedule_data_raw else None
+                    logger.info(f"Change detected for entity '{entity_name}' ({entity_type}:{entity_id}).")
+                    
+                    # 2. Получаем СТАРЫЕ данные из БД (CachedSchedule) для сравнения
+                    # Важно сделать это ДО обновления кэша
+                    old_schedule_data = await get_cached_schedule(entity_type, entity_id)
+                    
+                    # 3. КРИТИЧЕСКИ ВАЖНО: Сразу обновляем БД (Кэш и Хэши подписок)
+                    # Это предотвращает повторную обработку этой сущности, если отправка сообщений упадет.
+                    await upsert_cached_schedule(entity_type, entity_id, new_schedule_data)
+                    await batch_update_subscription_hashes(entity_type, entity_id, new_hash)
+                    
+                    # Также обновляем Redis для совместимости (необязательно, но полезно)
+                    # Обновляем для одного "референсного" пользователя, чтобы не спамить Redis запросами в цикле
+                    # (В будущем логику redis_client.set_user_cache можно убрать, если перешли на CachedSchedule)
+                    # await redis_client.set_cache(f"schedule_data:{entity_type}:{entity_id}", json.dumps(new_schedule_data))
 
-                    diffs_by_lang = {}
+                    # 4. Генерируем Diff и отправляем уведомления
+                    if old_schedule_data:
+                        # Diff генерируется один раз на язык, чтобы не пересчитывать N раз
+                        diffs_by_lang = {}
 
-                    for sub in subs_for_entity:
-                        lang = await translator.get_language(sub['user_id'], sub['chat_id'])
-                        if lang not in diffs_by_lang:
-                            if old_schedule_data:
-                                diffs_by_lang[lang] = diff_schedules(old_schedule_data, new_schedule_data, lang, use_short_names=True, short_names_map=short_names_map)
-                            else:
-                                diffs_by_lang[lang] = None
-                        
-                        if diffs_by_lang[lang]:
-                            header = translator.gettext(lang, "schedule_change_notification", entity_name=sub['entity_name'])
-                            await send_telegram_message(http_session, sub['chat_id'], f"{header}\n\n{diffs_by_lang[lang]}", sub.get('message_thread_id'))
+                        for sub in subs_for_entity:
+                            try:
+                                lang = await translator.get_language(sub['user_id'], sub['chat_id'])
+                                if lang not in diffs_by_lang:
+                                    diff_text = diff_schedules(
+                                        old_schedule_data, 
+                                        new_schedule_data, 
+                                        lang, 
+                                        use_short_names=True, 
+                                        short_names_map=short_names_map
+                                    )
+                                    diffs_by_lang[lang] = diff_text
+                                
+                                if diffs_by_lang[lang]:
+                                    header = translator.gettext(lang, "schedule_change_notification", entity_name=sub['entity_name'])
+                                    await send_telegram_message(
+                                        http_session, 
+                                        sub['chat_id'], 
+                                        f"{header}\n\n{diffs_by_lang[lang]}", 
+                                        sub.get('message_thread_id')
+                                    )
+                            except Exception as inner_e:
+                                logger.error(f"Failed to send update notification to chat {sub['chat_id']}: {inner_e}")
+                    else:
+                        logger.info(f"Old schedule not found in cache for '{entity_name}'. Skipping diff notification, but updating hash.")
 
-                for sub in subs_for_entity:
-                    await update_subscription_hash(sub['id'], new_hash)
-                    await redis_client.set_user_cache(sub['user_id'], f"schedule_data:{sub['id']}", json.dumps(new_schedule_data), ttl=None)
+                elif not reference_hash:
+                    # Если хэша нет (первый запуск для этой подписки), просто сохраняем текущий
+                    await batch_update_subscription_hashes(entity_type, entity_id, new_hash)
+                    await upsert_cached_schedule(entity_type, entity_id, new_schedule_data)
 
-                await asyncio.sleep(1 + random.uniform(0.5, 1.5))
+                # Небольшая пауза между сущностями, чтобы не грузить API/БД пиками
+                await asyncio.sleep(0.5)
 
             except RuzAPIError as e:
                 logger.warning(f"Change detection: RUZ API error for entity '{entity_name}': {e}")
             except Exception as e:
-                logger.error(f"Change detection: Failed to process entity '{entity_name}': {e}", exc_info=True)
+                logger.error(f"Change detection: Failed to process entity '{entity_name}': {e}", exc_info=True)   
     except Exception as e:
         logger.error(f"Critical error in check_for_schedule_updates job: {e}", exc_info=True)
 
