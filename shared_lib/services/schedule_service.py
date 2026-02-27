@@ -1,5 +1,4 @@
-# bot/services/schedule_service.py
-
+# shared_lib/services/schedule_service.py
 import logging
 from typing import List, Dict, Any
 from datetime import datetime, date, time, timedelta
@@ -10,7 +9,6 @@ from aiogram.utils.markdown import hcode
 from cachetools import TTLCache
 from datetime import date
 import re
-# shared_lib/services/schedule_service.py
 
 
 from shared_lib.i18n import translator
@@ -347,6 +345,53 @@ def generate_ical_from_schedule(schedule_data: List[Dict[str, Any]], entity_name
             
     return cal.serialize()
 
+def generate_ical_from_aggregated_schedule(schedule_data: List[Dict[str, Any]]) -> str:
+    """
+    Генерирует iCal файл для агрегированного расписания (/myschedule).
+    Отличается тем, что добавляет источник (source_entity) в заголовок события.
+    """
+    cal = Calendar()
+    moscow_tz = ZoneInfo("Europe/Moscow")
+
+    if not schedule_data:
+        return cal.serialize()
+
+    for lesson in schedule_data:
+        try:
+            event = Event()
+            emoji, type_name = _get_lesson_visuals(lesson['kindOfWork'])
+            
+            # Добавляем источник (например, название группы) в название события
+            source = lesson.get('source_entity', '')
+            source_prefix = f"[{source}] " if source else ""
+            
+            event.name = f"{source_prefix}{emoji} {lesson['discipline']} ({type_name})"
+            
+            lesson_date = datetime.strptime(lesson['date'], "%Y-%m-%d").date()
+            start_time = time.fromisoformat(lesson['beginLesson'])
+            end_time = time.fromisoformat(lesson['endLesson'])
+
+            event.begin = datetime.combine(lesson_date, start_time, tzinfo=moscow_tz)
+            event.end = datetime.combine(lesson_date, end_time, tzinfo=moscow_tz)
+
+            event.location = f"{lesson['auditorium']}, {lesson['building']}"
+            
+            description_parts = []
+            if source:
+                description_parts.append(f"Источник: {source}")
+            description_parts.append(f"Преподаватель: {lesson.get('lecturer_title', '').replace('_',' ')}")
+            
+            if 'group' in lesson: 
+                description_parts.append(f"Группы: {lesson['group']}")
+                
+            event.description = "\n".join(description_parts)
+            
+            cal.events.add(event)
+        except (ValueError, KeyError) as e:
+            logging.warning(f"Skipping aggregated lesson due to parsing error: {e}")
+            continue
+            
+    return cal.serialize()
 
 def get_semester_bounds() -> tuple[str, str]:
     """

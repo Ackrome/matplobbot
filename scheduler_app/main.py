@@ -26,6 +26,11 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+aps_logger = logging.getLogger('apscheduler')
+aps_logger.propagate = True
+if aps_logger.handlers:
+    aps_logger.handlers.clear()
+
 logger = logging.getLogger(__name__)
 
 async def main():

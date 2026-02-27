@@ -31,6 +31,7 @@ from shared_lib.services.schedule_service import (
     generate_ical_from_schedule,
     get_semester_bounds,
     get_unique_modules_hybrid,
+    generate_ical_from_aggregated_schedule,
     get_module_name,
     get_aggregated_schedule
 )
@@ -74,6 +75,9 @@ class ScheduleManager:
         self.router.callback_query(F.data == "mysch_filters:main")(self.handle_myschedule_filters_menu)
         self.router.callback_query(F.data.startswith("mysch_tog_"))(self.handle_myschedule_toggle_filter)
         self.router.callback_query(F.data == "mysch_back_cal")(self.handle_myschedule_back_to_cal)
+        
+        self.router.callback_query(F.data.startswith("mysch_week:"))(self.handle_myschedule_week)
+        self.router.callback_query(F.data.startswith("mysch_ical:"))(self.handle_myschedule_export_ical)
 
     async def cmd_schedule(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
@@ -333,10 +337,20 @@ class ScheduleManager:
         # Context-specific buttons
         if view_type == 'daily_initial': # After initial search result
             open_calendar_callback = f"sch_open_calendar:{entity_type}:{entity_id}"
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            ical_callback = f"sch_export_ical:{entity_type}:{entity_id}:{today_str}"
+            
+            builder.row(InlineKeyboardButton(text=translator.gettext(lang, "schedule_export_ical"), callback_data=ical_callback))
             builder.row(InlineKeyboardButton(text=translator.gettext(lang, "schedule_view_calendar"), callback_data=open_calendar_callback))
+            
         elif view_type == 'daily_from_calendar' and date_info: # After picking a date from calendar
             back_to_cal_callback = f"cal_back:{date_info['year']}:{date_info['month']}:{entity_type}:{entity_id}:{date_info['date_str']}"
+            
+            ical_callback = f"sch_export_ical:{entity_type}:{entity_id}:{date_info['date_str']}"
+            builder.row(InlineKeyboardButton(text=translator.gettext(lang, "schedule_export_ical"), callback_data=ical_callback))
+            
             builder.row(InlineKeyboardButton(text=translator.gettext(lang, "schedule_back_to_calendar"), callback_data=back_to_cal_callback))
+            
         elif view_type == 'weekly' and date_info: # After picking a week
             ical_callback = f"sch_export_ical:{entity_type}:{entity_id}:{date_info['date_str']}"
             builder.row(InlineKeyboardButton(text=translator.gettext(lang, "schedule_export_ical"), callback_data=ical_callback))
@@ -461,15 +475,23 @@ class ScheduleManager:
     async def _prepare_ical_file(self, user_id: int, entity_type: str, entity_id: str, start_date_str: str) -> tuple[bytes, str, date, date]:
         """Fetches schedule, generates iCal string, and returns file bytes and metadata."""
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        
+        # --- MODIFIED LOGIC: If exporting "Today" (single day context), usually users want 
+        # either just that day or the week. The existing handler logic was tied to "Week View".
+        # Let's keep it consistent: export 1 week starting from the date provided. 
+        # This covers both "Week View" and "Day View" (contextually useful).
+        
         end_date = start_date + timedelta(days=6)
         api_start_str, api_end_str = start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
+        
+        # ... existing logic for fetching data ...
+        # (Original code retained here)
         
         # --- FIX for BUTTON_DATA_INVALID ---
         original_entity_id = entity_id
         if len(entity_id) == 16 and not entity_id.isdigit():
             original_entity_id = code_path_cache.get(entity_id, entity_id)
 
-        # --- NEW: Check local DB cache first ---
         schedule_data = []
         cached_full_schedule = await get_cached_schedule(entity_type, original_entity_id)
         if cached_full_schedule:
@@ -480,9 +502,8 @@ class ScheduleManager:
         else:
             schedule_data = await self.api_client.get_schedule(entity_type, original_entity_id, start=api_start_str, finish=api_end_str)
         
-        # --- FIX: Always get entity name from cached search results for reliability ---
         cached_search = await redis_client.get_user_cache(user_id, 'schedule_search')
-        entity_name = "Unknown" # Default value
+        entity_name = "Unknown"
         if cached_search and cached_search.get('results'):
             selected_entity = next((item for item in cached_search['results'] if str(item['id']) == original_entity_id), None)
             if selected_entity:
@@ -493,7 +514,7 @@ class ScheduleManager:
         filename = f"schedule_{entity_name.replace(' ', '_')}_{start_date_str}.ics"
         
         return file_bytes, filename, start_date, end_date
-
+    
     async def handle_ical_export(self, callback: CallbackQuery):
         await callback.answer()
         _, entity_type, entity_id, start_date_str = callback.data.split(":")
@@ -643,7 +664,6 @@ class ScheduleManager:
         user_id = message.from_user.id
         lang = await translator.get_language(user_id, message.chat.id)
         
-        # Fetch only active subscriptions
         all_subscriptions, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
         active_subscriptions = [sub for sub in all_subscriptions if sub['is_active']]
 
@@ -654,8 +674,6 @@ class ScheduleManager:
         status_msg = await message.answer(translator.gettext(lang, "myschedule_loading"))
         today_dt = datetime.now()
 
-        # --- NEW: De-duplication logic ---
-        # Use a set to track entities we've already processed for this command
         processed_entities = set()
         sent_at_least_one = False
 
@@ -663,25 +681,27 @@ class ScheduleManager:
 
         for sub in active_subscriptions:
             entity_key = (sub['entity_type'], sub['entity_id'])
-            if entity_key in processed_entities:
-                continue # Skip if we've already sent the schedule for this entity
-
+            if entity_key in processed_entities: continue
             try:
                 await self._send_single_schedule_update(message, lang, sub, today_dt)
                 processed_entities.add(entity_key)
                 sent_at_least_one = True
-                await asyncio.sleep(0.2)  # Small delay to avoid hitting rate limits
+                await asyncio.sleep(0.2)
             except TelegramForbiddenError:
-                break  # Stop trying to send messages to this user
+                break
 
         if not sent_at_least_one:
-            # This message is sent only if all subscriptions resulted in no lessons for today.
             await message.answer(translator.gettext(lang, "schedule_no_lessons_today"))
         
-        user_id = message.from_user.id
         builder = InlineKeyboardBuilder()
+        today_str = today_dt.strftime("%Y-%m-%d")
+        
+        # mysch_ical:{start_date}:{duration_days}
+        # Экспортируем только сегодня (1 день), так как команда "на сегодня"
+        builder.row(InlineKeyboardButton(text="📲 Экспорт iCal (Сегодня)", callback_data=f"mysch_ical:{today_str}:1"))
         builder.row(InlineKeyboardButton(text="🗓 Открыть полный календарь", callback_data="mysch_open_cal"))
-        await message.answer("Для просмотра расписания на месяц нажмите кнопку ниже:", reply_markup=builder.as_markup())
+        
+        await message.answer("Действия:", reply_markup=builder.as_markup())
             
 
     async def handle_module_toggle(self, callback: CallbackQuery):
@@ -854,7 +874,6 @@ class ScheduleManager:
         user_id = callback.from_user.id
         lang = await translator.get_language(user_id)
 
-        # Получаем данные только за этот день
         subs, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
         active_subs = [s for s in subs if s['is_active']]
         filters = await self._get_user_filters(user_id)
@@ -863,44 +882,27 @@ class ScheduleManager:
 
         if not schedule:
             await callback.answer("На этот день занятий нет (с учетом фильтров).", show_alert=True)
-            return
 
-        # Форматируем. Т.к. format_schedule рассчитан на одну сущность, нам нужно 
-        # немного схитрить или написать упрощенный форматтер для сводного вида.
-        # Для простоты используем format_schedule, но "обманем" его, передав фиктивное имя,
-        # а в самих уроках добавим источник в название дисциплины.
-        
-        for l in schedule:
-            # Добавляем источник к названию дисциплины для наглядности
-            src = l.get('source_entity', '?')
-            # l['discipline'] = f"[{src}] {l['discipline']}" 
-            # ^ Лучше не менять оригинал, а сделать кастомный вывод, 
-            # но format_schedule слишком сложен, чтобы его дублировать. 
-            # Передадим entity_name как "Сводное расписание"
-            pass
-
-        # Группируем по источнику для красивого вывода? 
-        # Или просто списком по времени?
-        # format_schedule сортирует по времени, это то что нужно.
-        
-        # Чтобы format_schedule показал "от кого" пара, нам нужно подправить lecturer_title или auditorium
-        # Вариант: Впихнуть название группы в поле lecturer_title (костыль, но рабочий)
         formatted_lessons = []
         for l in schedule:
             l_copy = l.copy()
-            # Добавляем инфо о группе
             l_copy['lecturer_title'] = f"{l_copy.get('lecturer_title','')} ({l.get('source_entity')})"
             formatted_lessons.append(l_copy)
 
-        text = await format_schedule(formatted_lessons, lang, f"Сводка на {target_date.strftime('%d.%m')}", "mixed", user_id, target_date)
+        if not schedule:
+            text = f"Сводка на {target_date.strftime('%d.%m')}:\n\nЗанятий нет."
+        else:
+            text = await format_schedule(formatted_lessons, lang, f"Сводка на {target_date.strftime('%d.%m')}", "mixed", user_id, target_date)
         
-        # Добавляем кнопку "Назад к календарю"
         builder = InlineKeyboardBuilder()
+        
+        date_str = target_date.strftime("%Y-%m-%d")
+        builder.row(InlineKeyboardButton(text="📲 Экспорт iCal", callback_data=f"mysch_ical:{date_str}:1"))
+        
         builder.row(InlineKeyboardButton(text="⬅️ Назад к календарю", callback_data="mysch_back_cal"))
         
         await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
         await callback.answer()
-        
 
     async def handle_myschedule_filters_menu(self, callback: CallbackQuery):
         user_id = callback.from_user.id
@@ -953,3 +955,95 @@ class ScheduleManager:
             year, month = now.year, now.month
             
         await self._render_calendar(callback, year, month)
+        
+    async def handle_myschedule_week(self, callback: CallbackQuery):
+        _, start_date_str = callback.data.split(":")
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        end_date = start_date + timedelta(days=6)
+        
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        
+        await callback.message.edit_text("⏳ Формирую сводку на неделю...")
+
+        subs, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
+        active_subs = [s for s in subs if s['is_active']]
+        filters = await self._get_user_filters(user_id)
+        
+        schedule = await get_aggregated_schedule(user_id, active_subs, start_date, end_date, filters)
+        
+        # Форматирование
+        formatted_lessons = []
+        for l in schedule:
+            l_copy = l.copy()
+            # Добавляем источник в преподавателя (или можно в аудиторию), чтобы видеть откуда пара
+            l_copy['lecturer_title'] = f"{l_copy.get('lecturer_title','')} ({l.get('source_entity')})"
+            formatted_lessons.append(l_copy)
+            
+        header = f"Сводка: {start_date.strftime('%d.%m')} - {end_date.strftime('%d.%m')}"
+        
+        # Используем format_schedule с is_week_view=True
+        text = await format_schedule(formatted_lessons, lang, header, "mixed", user_id, start_date, is_week_view=True)
+        
+        # Если текст слишком длинный, format_schedule вернет длинную строку. Aiogram сам разобьет при отправке? 
+        # Нет, edit_text упадет если > 4096.
+        # Для простоты, если очень длинно, обрезаем или предупреждаем.
+        if len(text) > 4000:
+            text = text[:4000] + "\n\n...(сообщение обрезано, слишком много пар)..."
+
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text="📲 Экспорт iCal (Неделя)", callback_data=f"mysch_ical:{start_date_str}:7"))
+        builder.row(InlineKeyboardButton(text="⬅️ Назад к календарю", callback_data="mysch_back_cal"))
+        
+        try:
+            await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+        except Exception as e:
+            # Fallback if text is problematic
+            await callback.message.answer_document(
+                BufferedInputFile(text.encode('utf-8'), filename="schedule.txt"),
+                caption="Текст расписания слишком длинный для одного сообщения.",
+                reply_markup=builder.as_markup()
+            )
+        await callback.answer()
+
+    async def handle_myschedule_export_ical(self, callback: CallbackQuery):
+        """
+        Generates and sends an iCal file for aggregated schedule.
+        Data format: mysch_ical:YYYY-MM-DD:days_count
+        """
+        try:
+            _, start_date_str, days_count_str = callback.data.split(":")
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+            days_count = int(days_count_str)
+            end_date = start_date + timedelta(days=days_count - 1) # if 1 day, end = start
+        except ValueError:
+            await callback.answer("Ошибка данных.", show_alert=True)
+            return
+
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        
+        await callback.answer("Генерация файла...")
+        
+        # 1. Get Data
+        subs, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
+        active_subs = [s for s in subs if s['is_active']]
+        filters = await self._get_user_filters(user_id)
+        
+        schedule = await get_aggregated_schedule(user_id, active_subs, start_date, end_date, filters)
+        
+        if not schedule:
+            await callback.message.answer("Нет занятий для экспорта.")
+            return
+
+        # 2. Generate ICS
+        ical_data = generate_ical_from_aggregated_schedule(schedule)
+        
+        # 3. Send
+        filename = f"myschedule_{start_date_str}_{days_count}days.ics"
+        caption = translator.gettext(lang, "schedule_export_ical_caption", start=start_date.strftime('%d.%m'), end=end_date.strftime('%d.%m'))
+        
+        await callback.message.answer_document(
+            document=BufferedInputFile(ical_data.encode('utf-8'), filename=filename),
+            caption=caption
+        )

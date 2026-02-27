@@ -336,7 +336,7 @@ def get_myschedule_calendar_keyboard(year: int, month: int, lang: str, busy_days
     day_names = translator.gettext(lang, "calendar_days_short").split(',')
     builder.row(*[InlineKeyboardButton(text=day, callback_data="noop") for day in day_names])
 
-    # Сетка
+    # Сетка дней
     month_calendar = calendar.monthcalendar(year, month)
     for week in month_calendar:
         row_buttons = []
@@ -349,6 +349,32 @@ def get_myschedule_calendar_keyboard(year: int, month: int, lang: str, busy_days
                 # callback: action : year : month : day
                 row_buttons.append(InlineKeyboardButton(text=text, callback_data=f"mysch_day:{year}:{month}:{day}"))
         builder.row(*row_buttons)
+
+    first_day_of_month = date(year, month, 1)
+    # Находим понедельник первой недели, в которую входит 1-е число
+    start_of_first_week = first_day_of_month - timedelta(days=first_day_of_month.weekday())
+    
+    current_week_start = start_of_first_week
+    
+    # Генерируем строки недель, пока неделя начинается в этом месяце или перекрывает его
+    # (Упрощение: просто 5-6 недель, покрывающих месяц)
+    while True:
+        # Если начало недели ушло в следующий месяц, прерываемся, 
+        # но только если это не первая неделя следующего месяца, которая может содержать конец текущего.
+        # Более надежно: проверяем, что week_start <= последнего дня месяца
+        last_day_of_month = date(year, month, calendar.monthrange(year, month)[1])
+        if current_week_start > last_day_of_month:
+            break
+            
+        week_end = current_week_start + timedelta(days=6)
+        
+        # Формируем кнопку
+        label = translator.gettext(lang, "schedule_view_week", start=current_week_start.strftime('%d.%m'), end=week_end.strftime('%d.%m'))
+        # mysch_week:YYYY-MM-DD
+        callback_data = f"mysch_week:{current_week_start.strftime('%Y-%m-%d')}"
+        builder.row(InlineKeyboardButton(text=label, callback_data=callback_data))
+        
+        current_week_start += timedelta(weeks=1)
 
     return builder.as_markup()
 
