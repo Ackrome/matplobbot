@@ -24,7 +24,8 @@ from shared_lib.database import (
     merge_cached_schedule,
     update_subscription_modules,
     get_subscription_modules,
-    get_subscription_by_id
+    get_subscription_by_id,
+    get_user_subscriptions
 )
 from shared_lib.services.schedule_service import (
     format_schedule, 
@@ -159,19 +160,10 @@ class ScheduleManager:
             today = datetime.now()
             api_date_str = today.strftime("%Y-%m-%d")
 
-            # --- FIX: Get entity name from cached search results ---
-            cached_search = await redis_client.get_user_cache(user_id, 'schedule_search')
-            entity_name = "Unknown"
-            if cached_search and cached_search.get('results'):
-                selected_entity = next((item for item in cached_search['results'] if str(item['id']) == entity_id), None)
-                if selected_entity:
-                    entity_name = selected_entity['label']
-
             # --- ЛОГИКА КЭШИРОВАНИЯ ---
             schedule_data = []
             cached_full_schedule = await get_cached_schedule(entity_type, entity_id)
             
-            # Проверяем, есть ли данные в кэше ИМЕННО на сегодня
             lessons_today_in_cache = []
             if cached_full_schedule:
                 lessons_today_in_cache = [l for l in cached_full_schedule if l['date'] == api_date_str]
@@ -181,14 +173,13 @@ class ScheduleManager:
                 schedule_data = lessons_today_in_cache
             else:
                 logging.info(f"Cache miss for {entity_type}:{entity_id}, fetching from API")
-                # 1. Запрашиваем из API (только на сегодня, как требовалось)
                 schedule_data = await self.api_client.get_schedule(entity_type, entity_id, start=api_date_str, finish=api_date_str)
-                
-                # 2. Сохраняем в кэш (merge, чтобы не стереть другие дни, если они там есть)
-                # schedule_data может быть пустым списком, если пар нет, но мы всё равно обновляем кэш, чтобы знать, что пар нет.
                 await merge_cached_schedule(entity_type, entity_id, schedule_data, target_dates=[api_date_str])
 
-            # --- NEW: Store successful search in history ---
+            # --- ИСПОЛЬЗУЕМ НОВЫЙ МЕТОД ВОССТАНОВЛЕНИЯ ИМЕНИ ---
+            entity_name = await self._resolve_entity_name(user_id, entity_type, entity_id, schedule_data)
+            
+            # Если имя нашлось, сохраняем в историю (даже если не из поиска пришло)
             if entity_name != "Unknown":
                 history_key = f"schedule_history:{user_id}"
                 history_item = json.dumps({
@@ -196,10 +187,9 @@ class ScheduleManager:
                     "entity_id": entity_id,
                     "entity_name": entity_name
                 })
-                # Remove any existing identical items to avoid duplicates and move it to the top
                 await redis_client.client.lrem(history_key, 0, history_item)
                 await redis_client.client.lpush(history_key, history_item)
-                await redis_client.client.ltrim(history_key, 0, 4) # Keep last 5
+                await redis_client.client.ltrim(history_key, 0, 4)
 
             formatted_text = await format_schedule(schedule_data, lang, entity_name, entity_type, user_id, start_date=today.date())
 
@@ -208,7 +198,7 @@ class ScheduleManager:
         except Exception as e:
             logging.error(f"Failed to get today's schedule for {entity_type}:{entity_id}. Error: {e}", exc_info=True)
             await callback.message.edit_text(translator.gettext(lang, "schedule_api_error"))
-
+            
     async def handle_history_selection(self, callback: CallbackQuery, state: FSMContext):
         """Handles clicks on the new history buttons."""
         # The data format is sch_history:{entity_type}:{entity_id}.
@@ -369,8 +359,6 @@ class ScheduleManager:
         lang = await translator.get_language(user_id, callback.message.chat.id)
         await callback.message.edit_text(translator.gettext(lang, "schedule_loading"))
         try:
-            # --- FIX for BUTTON_DATA_INVALID ---
-            # If the ID is a hash, get the real ID from cache for the API call.
             original_entity_id = entity_id
             if len(entity_id) == 16 and not entity_id.isdigit():
                 original_entity_id = code_path_cache.get(entity_id, entity_id)
@@ -378,15 +366,7 @@ class ScheduleManager:
             selected_date = datetime.strptime(date_str, "%Y-%m-%d")
             api_date_str = selected_date.strftime("%Y-%m-%d")
 
-            # --- FIX: Get entity name from cached search results ---
-            cached_search = await redis_client.get_user_cache(user_id, 'schedule_search')
-            entity_name = "Unknown"
-            if cached_search and cached_search.get('results'):
-                selected_entity = next((item for item in cached_search['results'] if str(item['id']) == original_entity_id), None)
-                if selected_entity:
-                    entity_name = selected_entity['label']
-
-            # --- NEW: Check local DB cache first ---
+            # --- Fetch Data ---
             schedule_data = []
             cached_full_schedule = await get_cached_schedule(entity_type, original_entity_id)
             if cached_full_schedule:
@@ -394,7 +374,9 @@ class ScheduleManager:
             else:
                 schedule_data = await self.api_client.get_schedule(entity_type, original_entity_id, start=api_date_str, finish=api_date_str)
 
-            # --- FIX: Use keyword arguments for clarity and correctness ---
+            # --- Resolve Name ---
+            entity_name = await self._resolve_entity_name(user_id, entity_type, original_entity_id, schedule_data)
+
             formatted_text = await format_schedule(
                 schedule_data=schedule_data,
                 lang=lang,
@@ -409,11 +391,12 @@ class ScheduleManager:
                 'month': selected_date.month,
                 'date_str': date_str
             }
+            # Передаем entity_id (возможно хэш), чтобы кнопки работали
             await self._send_actions_menu(callback.message, lang, entity_type, entity_id, entity_name, 'daily_from_calendar', date_info)
         except Exception as e:
             logging.error(f"Failed to get schedule for {entity_type}:{entity_id}. Error: {e}", exc_info=True)
             await callback.message.edit_text(translator.gettext(lang, "schedule_api_error"))
-
+            
     async def handle_week_selection(self, callback: CallbackQuery):
         await callback.answer()
         _, entity_type, entity_id, start_date_str = callback.data.split(":")
@@ -422,28 +405,17 @@ class ScheduleManager:
         await callback.message.edit_text(translator.gettext(lang, "schedule_loading"))
         try:
             start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+            end_date = start_date + timedelta(days=6)
+            api_start_str, api_end_str = start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
 
-            # --- FIX for BUTTON_DATA_INVALID ---
             original_entity_id = entity_id
             if len(entity_id) == 16 and not entity_id.isdigit():
                 original_entity_id = code_path_cache.get(entity_id, entity_id)
 
-            end_date = start_date + timedelta(days=6)
-            api_start_str, api_end_str = start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
-
-            # --- FIX: Get entity name from cached search results ---
-            cached_search = await redis_client.get_user_cache(user_id, 'schedule_search')
-            entity_name = "Unknown"
-            if cached_search and cached_search.get('results'):
-                selected_entity = next((item for item in cached_search['results'] if str(item['id']) == original_entity_id), None)
-                if selected_entity:
-                    entity_name = selected_entity['label']
-
-            # --- NEW: Check local DB cache first ---
+            # --- Fetch Data ---
             schedule_data = []
             cached_full_schedule = await get_cached_schedule(entity_type, original_entity_id)
             if cached_full_schedule:
-                # Filter locally for the week range
                 schedule_data = [
                     l for l in cached_full_schedule 
                     if start_date <= datetime.strptime(l['date'], "%Y-%m-%d").date() <= end_date
@@ -451,7 +423,9 @@ class ScheduleManager:
             else:
                 schedule_data = await self.api_client.get_schedule(entity_type, original_entity_id, start=api_start_str, finish=api_end_str)
 
-            # --- FIX: Use keyword arguments for clarity and correctness ---
+            # --- Resolve Name ---
+            entity_name = await self._resolve_entity_name(user_id, entity_type, original_entity_id, schedule_data)
+
             formatted_text = await format_schedule(
                 schedule_data=schedule_data,
                 lang=lang,
@@ -471,23 +445,13 @@ class ScheduleManager:
         except Exception as e:
             logging.error(f"Failed to get weekly schedule for {entity_type}:{entity_id}. Error: {e}", exc_info=True)
             await callback.message.edit_text(translator.gettext(lang, "schedule_api_error"))
-
+            
     async def _prepare_ical_file(self, user_id: int, entity_type: str, entity_id: str, start_date_str: str) -> tuple[bytes, str, date, date]:
         """Fetches schedule, generates iCal string, and returns file bytes and metadata."""
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-        
-        # --- MODIFIED LOGIC: If exporting "Today" (single day context), usually users want 
-        # either just that day or the week. The existing handler logic was tied to "Week View".
-        # Let's keep it consistent: export 1 week starting from the date provided. 
-        # This covers both "Week View" and "Day View" (contextually useful).
-        
         end_date = start_date + timedelta(days=6)
         api_start_str, api_end_str = start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
         
-        # ... existing logic for fetching data ...
-        # (Original code retained here)
-        
-        # --- FIX for BUTTON_DATA_INVALID ---
         original_entity_id = entity_id
         if len(entity_id) == 16 and not entity_id.isdigit():
             original_entity_id = code_path_cache.get(entity_id, entity_id)
@@ -502,12 +466,8 @@ class ScheduleManager:
         else:
             schedule_data = await self.api_client.get_schedule(entity_type, original_entity_id, start=api_start_str, finish=api_end_str)
         
-        cached_search = await redis_client.get_user_cache(user_id, 'schedule_search')
-        entity_name = "Unknown"
-        if cached_search and cached_search.get('results'):
-            selected_entity = next((item for item in cached_search['results'] if str(item['id']) == original_entity_id), None)
-            if selected_entity:
-                entity_name = selected_entity['label']
+        # --- Resolve Name ---
+        entity_name = await self._resolve_entity_name(user_id, entity_type, original_entity_id, schedule_data)
         
         ical_string = generate_ical_from_schedule(schedule_data, entity_name)
         file_bytes = ical_string.encode('utf-8')
@@ -1047,3 +1007,45 @@ class ScheduleManager:
             document=BufferedInputFile(ical_data.encode('utf-8'), filename=filename),
             caption=caption
         )
+        
+    async def _resolve_entity_name(self, user_id: int, entity_type: str, entity_id: str, schedule_data: list = None) -> str:
+        """
+        Пытается найти человекочитаемое название (напр. 'ПМ23-1') по ID.
+        Порядок поиска:
+        1. Кэш текущего поиска (Redis)
+        2. История поиска (Redis)
+        3. Подписки пользователя (DB)
+        4. Данные самого расписания (из первого урока)
+        """
+        # 1. Проверяем кэш текущего поиска
+        cached_search = await redis_client.get_user_cache(user_id, 'schedule_search')
+        if cached_search and cached_search.get('results'):
+            item = next((i for i in cached_search['results'] if str(i['id']) == str(entity_id)), None)
+            if item: return item['label']
+
+        # 2. Проверяем историю поиска
+        history_key = f"schedule_history:{user_id}"
+        history_raw = await redis_client.client.lrange(history_key, 0, -1)
+        for item_json in history_raw:
+            try:
+                item = json.loads(item_json)
+                if str(item.get('entity_id')) == str(entity_id) and item.get('entity_type') == entity_type:
+                    return item['entity_name']
+            except: continue
+
+        # 3. Проверяем подписки
+        subs, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
+        sub = next((s for s in subs if str(s['entity_id']) == str(entity_id) and s['entity_type'] == entity_type), None)
+        if sub: return sub['entity_name']
+
+        # 4. Пытаемся извлечь из данных расписания (если переданы)
+        if schedule_data and len(schedule_data) > 0:
+            lesson = schedule_data[0]
+            if entity_type == 'group':
+                return lesson.get('group', 'Unknown')
+            elif entity_type == 'person':
+                return lesson.get('lecturer_title', 'Unknown')
+            elif entity_type == 'auditorium':
+                return lesson.get('auditorium', 'Unknown')
+
+        return "Unknown"
