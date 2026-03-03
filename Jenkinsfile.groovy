@@ -16,6 +16,8 @@ pipeline {
         PROD_POSTGRES_USER  = credentials('PROD_POSTGRES_USER')
         PROD_POSTGRES_PASSWORD = credentials('PROD_POSTGRES_PASSWORD')
         PROD_POSTGRES_DB    = credentials('PROD_POSTGRES_DB')
+        PROD_STATS_PASS    = credentials('PROD_STATS_PASS')
+        PROD_STATS_USER    = credentials('PROD_STATS_USER')
         PROD_DATABASE_URL   = "postgresql://${PROD_POSTGRES_USER}:${PROD_POSTGRES_PASSWORD}@postgres:5432/${PROD_POSTGRES_DB}"
         // Redis URL might be needed if you connect externally, but usually internal docker network handles it.
         // If needed: PROD_REDIS_URL = "redis://redis:6379/0" 
@@ -44,6 +46,8 @@ POSTGRES_USER=${PROD_POSTGRES_USER}
 POSTGRES_PASSWORD=${PROD_POSTGRES_PASSWORD}
 POSTGRES_DB=${PROD_POSTGRES_DB}
 DATABASE_URL=${PROD_DATABASE_URL}
+STATS_USER=${PROD_STATS_USER}
+STATS_PASS=${PROD_STATS_PASS}
 REDIS_URL=redis://redis:6379/0
 EOF
                         """
