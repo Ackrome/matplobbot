@@ -1,5 +1,5 @@
 # fastapi_stats_app/routers/ws_router.py
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from starlette.websockets import WebSocketState
 import logging
 import asyncio
@@ -24,6 +24,7 @@ from shared_lib.database import (
     get_new_users_per_day_from_db
 )
 from ..config import LOG_DIR, BOT_LOG_FILE_NAME
+from ..auth import verify_credentials
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -164,7 +165,7 @@ async def periodic_stats_updater():
         await asyncio.sleep(2)
 
 @router.websocket("/ws/stats/total_actions")
-async def websocket_total_actions_endpoint(websocket: WebSocket):
+async def websocket_total_actions_endpoint(websocket: WebSocket, username: str = Depends(verify_credentials)):
     """Эндпоинт WebSocket для живой статистики."""
     global stats_update_task
     
@@ -236,7 +237,7 @@ async def stream_log_file_to_websocket(websocket: WebSocket, manager: Connection
             await manager.send_personal_text(f"Error reading log: {str(e)}", websocket)
 
 @router.websocket("/ws/bot_log")
-async def websocket_bot_log_endpoint(websocket: WebSocket):
+async def websocket_bot_log_endpoint(websocket: WebSocket, username: str = Depends(verify_credentials)):
     """Эндпоинт WebSocket для стриминга логов."""
     await log_manager.connect(websocket)
     try:
@@ -249,7 +250,7 @@ async def websocket_bot_log_endpoint(websocket: WebSocket):
         
 
 @router.websocket("/ws/users/{user_id}")
-async def websocket_user_updates(websocket: WebSocket, user_id: int):
+async def websocket_user_updates(websocket: WebSocket, user_id: int, username: str = Depends(verify_credentials)):
     """
     WebSocket для получения обновлений конкретного пользователя в реальном времени.
     Использует Redis Pub/Sub.

@@ -24,12 +24,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__) # Получаем логгер после базовой конфигурации
 
 # --- Теперь можно безопасно импортировать остальные части приложения ---
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from .routers import stats_router, ws_router
 from shared_lib.database import init_db_pool, close_db_pool
+from .auth import verify_credentials  # Импортируем нашу функцию
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -60,11 +62,23 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 # Изменяем корневой эндпоинт для отображения HTML страницы
-@app.get("/", response_class=HTMLResponse, summary="Главная страница статистики", description="Отображает HTML страницу со статистикой бота.")
+@app.get(
+    "/",
+    response_class=HTMLResponse,
+    summary="Главная страница статистики",
+    description="Отображает HTML страницу со статистикой бота.",
+    dependencies=[Depends(verify_credentials)]
+    )
 async def read_root_html(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
-@app.get("/users/{user_id}", response_class=HTMLResponse, summary="Страница профиля пользователя", description="Отображает страницу с детальной информацией о действиях пользователя.")
+@app.get(
+    "/users/{user_id}",
+    response_class=HTMLResponse,
+    summary="Страница профиля пользователя",
+    description="Отображает страницу с детальной информацией о действиях пользователя.",
+    dependencies=[Depends(verify_credentials)]
+    )
 async def read_user_details_html(request: Request, user_id: int):
     # user_id передается в шаблон, но мы будем загружать данные через JS/API
     return templates.TemplateResponse("user_details.html", {"request": request, "user_id": user_id})

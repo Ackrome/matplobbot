@@ -324,28 +324,36 @@ class ScheduleManager:
         )
         builder.row(subscribe_button_data.inline_keyboard[0][0])
 
+        # --- FIX: Hash entity_id if it's too long to avoid BUTTON_DATA_INVALID ---
+        safe_entity_id = entity_id
+        if len(entity_id) > 20: # UUIDs are 36 chars, hashing reduces to 16
+            id_hash = hashlib.sha1(entity_id.encode()).hexdigest()[:16]
+            code_path_cache[id_hash] = entity_id
+            safe_entity_id = id_hash
+        # --- END FIX ---
+
         # Context-specific buttons
         if view_type == 'daily_initial': # After initial search result
-            open_calendar_callback = f"sch_open_calendar:{entity_type}:{entity_id}"
+            open_calendar_callback = f"sch_open_calendar:{entity_type}:{safe_entity_id}"
             today_str = datetime.now().strftime("%Y-%m-%d")
-            ical_callback = f"sch_export_ical:{entity_type}:{entity_id}:{today_str}"
+            ical_callback = f"sch_export_ical:{entity_type}:{safe_entity_id}:{today_str}"
             
             builder.row(InlineKeyboardButton(text=translator.gettext(lang, "schedule_export_ical"), callback_data=ical_callback))
             builder.row(InlineKeyboardButton(text=translator.gettext(lang, "schedule_view_calendar"), callback_data=open_calendar_callback))
             
         elif view_type == 'daily_from_calendar' and date_info: # After picking a date from calendar
-            back_to_cal_callback = f"cal_back:{date_info['year']}:{date_info['month']}:{entity_type}:{entity_id}:{date_info['date_str']}"
+            back_to_cal_callback = f"cal_back:{date_info['year']}:{date_info['month']}:{entity_type}:{safe_entity_id}:{date_info['date_str']}"
             
-            ical_callback = f"sch_export_ical:{entity_type}:{entity_id}:{date_info['date_str']}"
+            ical_callback = f"sch_export_ical:{entity_type}:{safe_entity_id}:{date_info['date_str']}"
             builder.row(InlineKeyboardButton(text=translator.gettext(lang, "schedule_export_ical"), callback_data=ical_callback))
             
             builder.row(InlineKeyboardButton(text=translator.gettext(lang, "schedule_back_to_calendar"), callback_data=back_to_cal_callback))
             
         elif view_type == 'weekly' and date_info: # After picking a week
-            ical_callback = f"sch_export_ical:{entity_type}:{entity_id}:{date_info['date_str']}"
+            ical_callback = f"sch_export_ical:{entity_type}:{safe_entity_id}:{date_info['date_str']}"
             builder.row(InlineKeyboardButton(text=translator.gettext(lang, "schedule_export_ical"), callback_data=ical_callback))
             # Also add a button to go back to the calendar view for that month
-            back_to_cal_callback = f"cal_back:{date_info['year']}:{date_info['month']}:{entity_type}:{entity_id}:{date_info['date_str']}"
+            back_to_cal_callback = f"cal_back:{date_info['year']}:{date_info['month']}:{entity_type}:{safe_entity_id}:{date_info['date_str']}"
             builder.row(InlineKeyboardButton(text=translator.gettext(lang, "schedule_back_to_calendar"), callback_data=back_to_cal_callback))
 
         # Back to search results (always relevant)
