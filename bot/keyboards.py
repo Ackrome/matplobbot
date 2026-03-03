@@ -319,6 +319,10 @@ def get_myschedule_calendar_keyboard(year: int, month: int, lang: str, busy_days
     # 1. Навигация
     month_names = translator.gettext(lang, "calendar_months").split(',')
     month_name = month_names[month - 1]
+
+    builder.row(
+        InlineKeyboardButton(text="🔗 Подписка для календарей (iOS/Google)", callback_data="mysch_cal_link")
+    )
     
     builder.row(
         InlineKeyboardButton(text="⚙️ Фильтры", callback_data="mysch_filters:main"),

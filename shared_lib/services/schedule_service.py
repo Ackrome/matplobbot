@@ -9,8 +9,7 @@ from aiogram.utils.markdown import hcode
 from cachetools import TTLCache
 from datetime import date
 import re
-
-
+import hashlib
 from shared_lib.i18n import translator
 from shared_lib.database import get_user_settings, get_all_short_names, get_disabled_short_names_for_user, get_all_short_names_with_ids, get_discipline_modules_map, get_subscription_modules
 
@@ -347,11 +346,12 @@ def generate_ical_from_schedule(schedule_data: List[Dict[str, Any]], entity_name
 
 def generate_ical_from_aggregated_schedule(schedule_data: List[Dict[str, Any]]) -> str:
     """
-    Генерирует iCal файл для агрегированного расписания (/myschedule).
-    Отличается тем, что добавляет источник (source_entity) в заголовок события.
+    Генерирует iCal файл для агрегированного расписания.
+    Использует постоянные UID для корректной работы с подписками (WebCal).
     """
     cal = Calendar()
     moscow_tz = ZoneInfo("Europe/Moscow")
+    now_str = datetime.now(moscow_tz).strftime("%d.%m.%Y %H:%M:%S")
 
     if not schedule_data:
         return cal.serialize()
@@ -361,7 +361,6 @@ def generate_ical_from_aggregated_schedule(schedule_data: List[Dict[str, Any]]) 
             event = Event()
             emoji, type_name = _get_lesson_visuals(lesson['kindOfWork'])
             
-            # Добавляем источник (например, название группы) в название события
             source = lesson.get('source_entity', '')
             source_prefix = f"[{source}] " if source else ""
             
@@ -373,9 +372,17 @@ def generate_ical_from_aggregated_schedule(schedule_data: List[Dict[str, Any]]) 
 
             event.begin = datetime.combine(lesson_date, start_time, tzinfo=moscow_tz)
             event.end = datetime.combine(lesson_date, end_time, tzinfo=moscow_tz)
-
             event.location = f"{lesson['auditorium']}, {lesson['building']}"
             
+            # --- ВАЖНО ДЛЯ WEBCAL: Устанавливаем жесткий уникальный ID ---
+            oid = lesson.get('lessonOid')
+            if oid:
+                event.uid = f"lesson-{oid}@matplobbot.ru"
+            else:
+                # Фолбэк, если OID нет: хэшируем неизменные параметры
+                unique_str = f"{lesson['date']}_{lesson['beginLesson']}_{lesson['discipline']}_{lesson.get('group', '')}"
+                event.uid = f"lesson-hash-{hashlib.md5(unique_str.encode()).hexdigest()}@matplobbot.ru"
+
             description_parts = []
             if source:
                 description_parts.append(f"Источник: {source}")
@@ -383,7 +390,8 @@ def generate_ical_from_aggregated_schedule(schedule_data: List[Dict[str, Any]]) 
             
             if 'group' in lesson: 
                 description_parts.append(f"Группы: {lesson['group']}")
-                
+            
+            description_parts.append(f"\nОбновлено: {now_str}")
             event.description = "\n".join(description_parts)
             
             cal.events.add(event)
@@ -391,7 +399,13 @@ def generate_ical_from_aggregated_schedule(schedule_data: List[Dict[str, Any]]) 
             logging.warning(f"Skipping aggregated lesson due to parsing error: {e}")
             continue
             
-    return cal.serialize()
+    ical_str = cal.serialize()
+    
+    # Добавляем метатеги для автообновления календаря (Apple Calendar)
+    refresh_tags = "\nX-PUBLISHED-TTL:PT1H\nREFRESH-INTERVAL;VALUE=DURATION:PT1H"
+    ical_str = ical_str.replace("VERSION:2.0", f"VERSION:2.0{refresh_tags}")
+    
+    return ical_str
 
 def get_semester_bounds() -> tuple[str, str]:
     """

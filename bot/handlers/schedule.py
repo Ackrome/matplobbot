@@ -79,6 +79,10 @@ class ScheduleManager:
         
         self.router.callback_query(F.data.startswith("mysch_week:"))(self.handle_myschedule_week)
         self.router.callback_query(F.data.startswith("mysch_ical:"))(self.handle_myschedule_export_ical)
+        
+        self.router.callback_query(F.data == "mysch_cal_link")(self.handle_cal_link)
+        self.router.callback_query(F.data == "mysch_cal_revoke")(self.handle_cal_revoke)
+
 
     async def cmd_schedule(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
@@ -1057,3 +1061,40 @@ class ScheduleManager:
                 return lesson.get('auditorium', 'Unknown')
 
         return "Unknown"
+    
+    async def _send_cal_link_message(self, message: Message, user_id: int, is_edit: bool = False):
+        """Отправляет или редактирует сообщение с инструкцией и ссылкой на WebCal."""
+        secret = await database.get_or_create_calendar_secret(user_id)
+        
+        from bot.config import PUBLIC_API_URL
+        base_url = PUBLIC_API_URL.rstrip('/')
+        http_link = f"{base_url}/api/cal/{secret}.ics"
+        webcal_link = http_link.replace("https://", "webcal://").replace("http://", "webcal://")
+
+        text = (
+            "🔗 <b>Ваша персональная ссылка на расписание</b>\n\n"
+            f"<code>{http_link}</code>\n\n"
+            "<b>Как добавить, чтобы оно обновлялось само:</b>\n"
+            "• <b>iOS (iPhone/Mac):</b> Нажмите кнопку ниже. Если не сработает, то Настройки -> Календарь -> Учетные записи -> Добавить -> Другое -> Календарь по подписке.\n"
+            "• <b>Google Calendar:</b> Откройте <u>веб-версию (на ПК)</u>, нажмите «+» рядом с «Другие календари» -> «Добавить по URL» и вставьте ссылку выше.\n\n"
+            "<i>Расписание выгружается на 3 месяца вперед и обновляется автоматически.</i>"
+        )
+
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text="📱 Добавить на iOS / Mac", url=webcal_link))
+        builder.row(InlineKeyboardButton(text="🔄 Сбросить ссылку", callback_data="mysch_cal_revoke"))
+        builder.row(InlineKeyboardButton(text="⬅️ Назад в календарь", callback_data="mysch_back_cal"))
+
+        if is_edit:
+            await message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+        else:
+            await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+
+    async def handle_cal_link(self, callback: CallbackQuery):
+        await self._send_cal_link_message(callback.message, callback.from_user.id, is_edit=True)
+        await callback.answer()
+
+    async def handle_cal_revoke(self, callback: CallbackQuery):
+        await database.regenerate_calendar_secret(callback.from_user.id)
+        await callback.answer("Ссылка обновлена. Старая больше не работает и отключена.", show_alert=True)
+        await self._send_cal_link_message(callback.message, callback.from_user.id, is_edit=True)

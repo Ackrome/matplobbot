@@ -1,6 +1,7 @@
 import logging
 import json
 import os
+import uuid
 import datetime
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy import select, update, delete, insert, func, text, and_
@@ -861,3 +862,31 @@ async def get_discipline_modules_map() -> dict[str, str]:
         result = await session.execute(select(DisciplineModule))
         rows = result.scalars().all()
         return {row.discipline_name: row.module_name for row in rows}
+
+
+async def get_or_create_calendar_secret(user_id: int) -> str:
+    """Получает существующий или генерирует новый секретный токен для календаря."""
+    async with get_session() as session:
+        result = await session.execute(select(User.calendar_secret).where(User.user_id == user_id))
+        secret = result.scalar()
+        
+        if not secret:
+            secret = uuid.uuid4().hex
+            await session.execute(update(User).where(User.user_id == user_id).values(calendar_secret=secret))
+            await session.commit()
+            
+        return secret
+
+async def regenerate_calendar_secret(user_id: int) -> str:
+    """Сбрасывает старый токен и генерирует новый (Revoke)."""
+    new_secret = uuid.uuid4().hex
+    async with get_session() as session:
+        await session.execute(update(User).where(User.user_id == user_id).values(calendar_secret=new_secret))
+        await session.commit()
+    return new_secret
+
+async def get_user_id_by_calendar_secret(secret: str) -> int | None:
+    """Ищет пользователя по секретному токену из URL."""
+    async with get_session() as session:
+        result = await session.execute(select(User.user_id).where(User.calendar_secret == secret))
+        return result.scalar()

@@ -14,6 +14,7 @@ class User(Base):
     avatar_pic_url = Column(String, nullable=True)
     settings = Column(JSON, server_default='{}')
     onboarding_completed = Column(Boolean, server_default='false')
+    calendar_secret = Column(String, unique=True, nullable=True)
 
 class UserAction(Base):
     __tablename__ = 'user_actions'

@@ -31,3 +31,4 @@ with open(PANDOC_HEADER_PATH, 'r', encoding='utf-8') as f:
 with open(LATEX_PREAMBLE_PATH, 'r', encoding='utf-8') as f:
     LATEX_PREAMBLE = f.read()
     
+PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "http://localhost:9583")
