@@ -29,11 +29,11 @@ async def get_webcal_schedule(secret_token: str):
         schedule = await get_aggregated_schedule(user_id, active_subs, start_date, end_date, filters)
         
         # Генерация строки (с правильными \r\n внутри)
-        ical_string = generate_ical_from_aggregated_schedule(schedule)
+        # Теперь эта функция возвращает bytes
+        ical_bytes = generate_ical_from_aggregated_schedule(schedule)
 
-        # Возврат БАЙТОВ, чтобы FastAPI/Starlette не пытался менять переносы строк
         return Response(
-            content=ical_string.encode('utf-8'), 
+            content=ical_bytes, 
             media_type="text/calendar; charset=utf-8",
             headers={
                 "Content-Disposition": "inline; filename=schedule.ics",
