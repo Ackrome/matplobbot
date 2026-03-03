@@ -8,7 +8,7 @@ from shared_lib.services.schedule_service import get_aggregated_schedule, genera
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-@router.get("/cal/{secret_token}.ics", summary="Публичная подписка на расписание (WebCal)")
+@router.get("/cal/{secret_token}/basic.ics", summary="Публичная подписка на расписание (WebCal)")
 async def get_webcal_schedule(secret_token: str):
     user_id = await get_user_id_by_calendar_secret(secret_token)
     if not user_id:
