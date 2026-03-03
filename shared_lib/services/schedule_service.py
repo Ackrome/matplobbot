@@ -346,65 +346,88 @@ def generate_ical_from_schedule(schedule_data: List[Dict[str, Any]], entity_name
 
 def generate_ical_from_aggregated_schedule(schedule_data: List[Dict[str, Any]]) -> str:
     """
-    Генерирует iCal файл для агрегированного расписания.
-    Использует постоянные UID для корректной работы с подписками (WebCal).
+    Генерирует iCal файл. 
+    Strict mode: использует \r\n и обязательные поля.
     """
+    from ics import Calendar, Event # Убедитесь, что импорт есть
+    
     cal = Calendar()
+    # У библиотеки ics creator по умолчанию - ics.py.
+    # Google любит, когда prodid уникален. Но библиотека ics сама управляет этим полем в старых версиях.
+    # Мы добавим кастомные свойства после сериализации.
+
     moscow_tz = ZoneInfo("Europe/Moscow")
-    now_str = datetime.now(moscow_tz).strftime("%d.%m.%Y %H:%M:%S")
+    now_dt = datetime.now(moscow_tz)
+    
+    if schedule_data:
+        for lesson in schedule_data:
+            try:
+                event = Event()
+                emoji, type_name = _get_lesson_visuals(lesson['kindOfWork'])
+                
+                source = lesson.get('source_entity', '')
+                source_prefix = f"[{source}] " if source else ""
+                
+                event.name = f"{source_prefix}{emoji} {lesson['discipline']} ({type_name})"
+                
+                lesson_date = datetime.strptime(lesson['date'], "%Y-%m-%d").date()
+                start_time = time.fromisoformat(lesson['beginLesson'])
+                end_time = time.fromisoformat(lesson['endLesson'])
 
-    if not schedule_data:
-        return cal.serialize()
+                event.begin = datetime.combine(lesson_date, start_time, tzinfo=moscow_tz)
+                event.end = datetime.combine(lesson_date, end_time, tzinfo=moscow_tz)
+                event.location = f"{lesson['auditorium']}, {lesson['building']}"
+                
+                # UID - критически важен для обновлений
+                oid = lesson.get('lessonOid')
+                if oid:
+                    event.uid = f"lesson-{oid}@matplobbot.ru"
+                else:
+                    unique_str = f"{lesson['date']}_{lesson['beginLesson']}_{lesson['discipline']}_{lesson.get('group', '')}"
+                    event.uid = f"hash-{hashlib.md5(unique_str.encode()).hexdigest()}@matplobbot.ru"
 
-    for lesson in schedule_data:
-        try:
-            event = Event()
-            emoji, type_name = _get_lesson_visuals(lesson['kindOfWork'])
-            
-            source = lesson.get('source_entity', '')
-            source_prefix = f"[{source}] " if source else ""
-            
-            event.name = f"{source_prefix}{emoji} {lesson['discipline']} ({type_name})"
-            
-            lesson_date = datetime.strptime(lesson['date'], "%Y-%m-%d").date()
-            start_time = time.fromisoformat(lesson['beginLesson'])
-            end_time = time.fromisoformat(lesson['endLesson'])
+                # DTSTAMP - время генерации этого объекта
+                event.dtstamp = now_dt
 
-            event.begin = datetime.combine(lesson_date, start_time, tzinfo=moscow_tz)
-            event.end = datetime.combine(lesson_date, end_time, tzinfo=moscow_tz)
-            event.location = f"{lesson['auditorium']}, {lesson['building']}"
-            
-            # --- ВАЖНО ДЛЯ WEBCAL: Устанавливаем жесткий уникальный ID ---
-            oid = lesson.get('lessonOid')
-            if oid:
-                event.uid = f"lesson-{oid}@matplobbot.ru"
-            else:
-                # Фолбэк, если OID нет: хэшируем неизменные параметры
-                unique_str = f"{lesson['date']}_{lesson['beginLesson']}_{lesson['discipline']}_{lesson.get('group', '')}"
-                event.uid = f"lesson-hash-{hashlib.md5(unique_str.encode()).hexdigest()}@matplobbot.ru"
+                desc_lines = []
+                if source: desc_lines.append(f"Источник: {source}")
+                desc_lines.append(f"Преподаватель: {lesson.get('lecturer_title', '').replace('_',' ')}")
+                if 'group' in lesson: desc_lines.append(f"Группы: {lesson['group']}")
+                desc_lines.append(f"Обновлено: {now_dt.strftime('%H:%M %d.%m')}")
+                
+                event.description = "\n".join(desc_lines)
+                
+                cal.events.add(event)
+            except Exception as e:
+                logging.warning(f"iCal Gen Error: {e}")
+                continue
 
-            description_parts = []
-            if source:
-                description_parts.append(f"Источник: {source}")
-            description_parts.append(f"Преподаватель: {lesson.get('lecturer_title', '').replace('_',' ')}")
-            
-            if 'group' in lesson: 
-                description_parts.append(f"Группы: {lesson['group']}")
-            
-            description_parts.append(f"\nОбновлено: {now_str}")
-            event.description = "\n".join(description_parts)
-            
-            cal.events.add(event)
-        except (ValueError, KeyError) as e:
-            logging.warning(f"Skipping aggregated lesson due to parsing error: {e}")
-            continue
-            
+    # Сериализация библиотекой
     ical_str = cal.serialize()
+
+    # --- POST-PROCESSING FOR GOOGLE/APPLE COMPATIBILITY ---
     
-    # Добавляем метатеги для автообновления календаря (Apple Calendar)
-    refresh_tags = "\nX-PUBLISHED-TTL:PT1H\nREFRESH-INTERVAL;VALUE=DURATION:PT1H"
-    ical_str = ical_str.replace("VERSION:2.0", f"VERSION:2.0{refresh_tags}")
+    # 1. Заменяем PRODID на свой (библиотека ставит свой)
+    # Используем RegEx для надежности, так как библиотека может менять формат
+    import re
+    ical_str = re.sub(r'PRODID:.*', 'PRODID:-//Matplobbot//Schedule//RU', ical_str)
+
+    # 2. Добавляем имя календаря (отображается в Google/Apple при подписке)
+    # Вставляем после VERSION:2.0
+    # Используем \r\n (CRLF) строго по RFC 5545
+    name_prop = "X-WR-CALNAME:Расписание (Bot)\r\n"
+    refresh_prop = "REFRESH-INTERVAL;VALUE=DURATION:PT1H\r\n" # Для Outlook/Apple
+    ttl_prop = "X-PUBLISHED-TTL:PT1H\r\n" # Для Google
     
+    # Вставка заголовков. Ищем VERSION:2.0 (оно всегда есть)
+    if "VERSION:2.0" in ical_str:
+        ical_str = ical_str.replace("VERSION:2.0", f"VERSION:2.0\r\n{name_prop}{refresh_prop}{ttl_prop}")
+    
+    # 3. Гарантируем CRLF (библиотека ics обычно выдает \r\n, но на Linux может быть \n)
+    # Если файл смешанный, Google его отвергнет.
+    if '\r\n' not in ical_str and '\n' in ical_str:
+        ical_str = ical_str.replace('\n', '\r\n')
+        
     return ical_str
 
 def get_semester_bounds() -> tuple[str, str]:
