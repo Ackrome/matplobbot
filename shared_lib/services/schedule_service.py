@@ -1,7 +1,7 @@
 # shared_lib/services/schedule_service.py
 import logging
 from typing import List, Dict, Any
-from datetime import datetime, date, time, timedelta
+from datetime import datetime, date, time, timedelta, timezone
 from collections import defaultdict
 from ics import Calendar, Event
 from zoneinfo import ZoneInfo
@@ -347,20 +347,22 @@ def generate_ical_from_schedule(schedule_data: List[Dict[str, Any]], entity_name
 
 def _enforce_rfc5545_folding(ical_content: str) -> bytes:
     """
-    Принудительно форматирует iCal строку по стандарту RFC 5545:
-    1. Разворачивает все строки (Unfolding).
-    2. Заново сворачивает их с учетом лимита 75 БАЙТ (а не символов).
-    3. Гарантирует CRLF (\r\n) в конце каждой строки.
+    1. Разворачивает строки (Unfolding).
+    2. Вставляет обязательное поле DTSTAMP, если библиотека его пропустила.
+    3. Сворачивает строки (Folding) по лимиту 75 байт.
+    4. Гарантирует CRLF.
     """
-    # 1. Нормализуем переносы и разбиваем на строки
+    # Генерация текущего времени в UTC для DTSTAMP
+    dtstamp_val = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    dtstamp_line = f"DTSTAMP:{dtstamp_val}"
+
+    # 1. Нормализация и Unfolding
     lines = ical_content.replace('\r\n', '\n').split('\n')
-    
-    # 2. Unfolding: Собираем разорванные строки обратно (если библиотека ics сделала это криво)
     unfolded_lines = []
     current_line = ""
+    
     for line in lines:
         if not line: continue
-        # Если строка начинается с пробела/таба, это продолжение предыдущей
         if line.startswith(" ") or line.startswith("\t"):
             current_line += line[1:]
         else:
@@ -370,33 +372,39 @@ def _enforce_rfc5545_folding(ical_content: str) -> bytes:
     if current_line:
         unfolded_lines.append(current_line)
 
-    # 3. Refolding: Жесткое разбиение по 75 октетов (байтов)
+    # 2. Инъекция DTSTAMP и Refolding
     final_lines = []
+    
     for line in unfolded_lines:
-        # Кодируем в байты, чтобы считать длину
+        # Если встретили начало события, добавляем его, а следом принудительно DTSTAMP
+        if line.strip() == "BEGIN:VEVENT":
+            final_lines.append(b"BEGIN:VEVENT")
+            final_lines.append(dtstamp_line.encode('utf-8'))
+            continue
+        
+        # Если библиотека вдруг сама добавила DTSTAMP, пропускаем его (чтобы не было дублей),
+        # так как мы уже добавили свой "свежий" сразу после BEGIN:VEVENT.
+        if line.startswith("DTSTAMP:"):
+            continue
+
+        # Логика сворачивания строк (Refolding) с учетом UTF-8
         line_bytes = line.encode('utf-8')
         
         if len(line_bytes) <= 75:
             final_lines.append(line_bytes)
         else:
-            # Первая строка: до 75 байт
-            # Нужно аккуратно резать, не разрывая мультибайтовые символы (UTF-8)
-            # Но для простоты используем итеративный подход по символам
-            
-            # Более надежный способ: перебор по символам
+            # Разбиваем длинные строки
             current_chunk = bytearray()
             is_first_chunk = True
             
+            # Посимвольный перебор для безопасного разделения мультибайтовых символов
             for char in line:
                 char_bytes = char.encode('utf-8')
-                # Лимит: 75 для первой строки, 74 для последующих (т.к. добавляется пробел)
-                limit = 75 if is_first_chunk else 74
+                limit = 75 if is_first_chunk else 74 # 74, т.к. будет добавлен пробел
                 
                 if len(current_chunk) + len(char_bytes) > limit:
-                    # Сбрасываем текущий чанк
                     final_lines.append(current_chunk)
-                    # Начинаем новый с пробела (RFC requirement)
-                    current_chunk = bytearray(b' ')
+                    current_chunk = bytearray(b' ') # Пробел в начале новой строки (RFC 5545)
                     is_first_chunk = False
                 
                 current_chunk.extend(char_bytes)
@@ -404,13 +412,16 @@ def _enforce_rfc5545_folding(ical_content: str) -> bytes:
             if current_chunk:
                 final_lines.append(current_chunk)
 
-    # 4. Сборка с CRLF
+    # 3. Сборка с CRLF
     return b'\r\n'.join(final_lines) + b'\r\n'
 
-def generate_ical_from_aggregated_schedule(schedule_data: list[dict]) -> bytes:
+
+def generate_ical_from_aggregated_schedule(schedule_data: List[Dict[str, Any]]) -> bytes:
     """
-    Генерирует iCal файл и возвращает БАЙТЫ (bytes), готовые к отправке.
+    Генерирует iCal файл и возвращает байты.
     """
+    from ics import Calendar, Event
+    
     cal = Calendar()
     moscow_tz = ZoneInfo("Europe/Moscow")
     now_dt = datetime.now(moscow_tz)
@@ -424,10 +435,8 @@ def generate_ical_from_aggregated_schedule(schedule_data: list[dict]) -> bytes:
                 source = lesson.get('source_entity', '')
                 source_prefix = f"[{source}] " if source else ""
                 
-                # Заголовок
                 event.name = f"{source_prefix}{emoji} {lesson['discipline']} ({type_name})"
                 
-                # Даты
                 lesson_date = datetime.strptime(lesson['date'], "%Y-%m-%d").date()
                 start_time = time.fromisoformat(lesson['beginLesson'])
                 end_time = time.fromisoformat(lesson['endLesson'])
@@ -436,8 +445,7 @@ def generate_ical_from_aggregated_schedule(schedule_data: list[dict]) -> bytes:
                 event.end = datetime.combine(lesson_date, end_time, tzinfo=moscow_tz)
                 event.location = f"{lesson['auditorium']}, {lesson['building']}"
                 
-                # DTSTAMP и UID
-                event.dtstamp = now_dt
+                # UID
                 oid = lesson.get('lessonOid')
                 if oid:
                     event.uid = f"lesson-{oid}@matplobbot.ru"
@@ -452,7 +460,7 @@ def generate_ical_from_aggregated_schedule(schedule_data: list[dict]) -> bytes:
                 if 'group' in lesson: desc_lines.append(f"Группы: {lesson['group']}")
                 desc_lines.append(f"Обновлено: {now_dt.strftime('%H:%M %d.%m')}")
                 
-                # ВАЖНО: Экранируем переносы строк для iCal внутри поля Description
+                # Экранируем переносы для библиотеки
                 event.description = "\\n".join(desc_lines)
                 
                 cal.events.add(event)
@@ -460,11 +468,10 @@ def generate_ical_from_aggregated_schedule(schedule_data: list[dict]) -> bytes:
                 logging.warning(f"iCal Gen Error: {e}")
                 continue
 
-    # Получаем строку от библиотеки
+    # Получаем сырую строку
     raw_ics_str = cal.serialize()
 
-    # --- Хак для добавления заголовков (имя календаря) ---
-    # Вставляем их сразу после VERSION:2.0
+    # Вставляем кастомные заголовки календаря
     headers_to_inject = [
         "X-WR-CALNAME:Расписание (Bot)",
         "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
@@ -472,15 +479,15 @@ def generate_ical_from_aggregated_schedule(schedule_data: list[dict]) -> bytes:
         "PRODID:-//Matplobbot//Schedule//RU"
     ]
     
-    # Удаляем дефолтный PRODID от библиотеки, если есть
+    # Чистим старый PRODID
     raw_ics_str = re.sub(r'PRODID:.*?\n', '', raw_ics_str)
     
-    # Вставляем наши заголовки
+    # Вставляем новые заголовки после VERSION
     injection_point = "VERSION:2.0"
-    headers_block = "\n".join(headers_to_inject)
-    raw_ics_str = raw_ics_str.replace(injection_point, f"{injection_point}\n{headers_block}")
-
-    # --- Применяем "Лечение" формата (Folding + CRLF) ---
+    if injection_point in raw_ics_str:
+        raw_ics_str = raw_ics_str.replace(injection_point, f"{injection_point}\n" + "\n".join(headers_to_inject))
+    
+    # Прогоняем через санитайзер (он добавит DTSTAMP и исправит переносы)
     final_bytes = _enforce_rfc5545_folding(raw_ics_str)
     
     return final_bytes
