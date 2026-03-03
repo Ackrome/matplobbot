@@ -8,11 +8,21 @@ from shared_lib.services.schedule_service import get_aggregated_schedule, genera
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-@router.get("/cal/{secret_token}/basic.ics", summary="Публичная подписка на расписание (WebCal)")
+@router.api_route(
+    "/cal/{secret_token}/basic.ics", 
+    methods=["GET", "HEAD"], 
+    summary="Публичная подписка на расписание (WebCal)"
+)
+@router.api_route(
+    "/cal/{secret_token}.ics", 
+    methods=["GET", "HEAD"], 
+    summary="WebCal через расширение"
+)
 async def get_webcal_schedule(secret_token: str):
-    user_id = await get_user_id_by_calendar_secret(secret_token)
+    clean_token = secret_token.replace(".ics", "")
+    
+    user_id = await get_user_id_by_calendar_secret(clean_token)
     if not user_id:
-        # Google Calendar может кэшировать 404, поэтому лучше отвечать 404, если токен невалиден
         raise HTTPException(status_code=404, detail="Calendar not found")
 
     try:
