@@ -28,15 +28,15 @@ async def get_webcal_schedule(secret_token: str):
 
         schedule = await get_aggregated_schedule(user_id, active_subs, start_date, end_date, filters)
         
-        ical_data = generate_ical_from_aggregated_schedule(schedule)
+        # Генерация строки (с правильными \r\n внутри)
+        ical_string = generate_ical_from_aggregated_schedule(schedule)
 
+        # Возврат БАЙТОВ, чтобы FastAPI/Starlette не пытался менять переносы строк
         return Response(
-            content=ical_data, 
+            content=ical_string.encode('utf-8'), 
             media_type="text/calendar; charset=utf-8",
             headers={
-                # inline = "не скачивай, а показывай/обрабатывай"
                 "Content-Disposition": "inline; filename=schedule.ics",
-                # Запрет кэширования, чтобы календарь забирал свежее
                 "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache"
             }

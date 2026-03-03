@@ -344,18 +344,15 @@ def generate_ical_from_schedule(schedule_data: List[Dict[str, Any]], entity_name
             
     return cal.serialize()
 
+
 def generate_ical_from_aggregated_schedule(schedule_data: List[Dict[str, Any]]) -> str:
     """
-    Генерирует iCal файл. 
-    Strict mode: использует \r\n и обязательные поля.
+    Генерирует iCal файл, строго соответствующий RFC 5545.
+    Исправляет ошибки CRLF, DTSTAMP и Line Folding.
     """
-    from ics import Calendar, Event # Убедитесь, что импорт есть
+    from ics import Calendar, Event
     
     cal = Calendar()
-    # У библиотеки ics creator по умолчанию - ics.py.
-    # Google любит, когда prodid уникален. Но библиотека ics сама управляет этим полем в старых версиях.
-    # Мы добавим кастомные свойства после сериализации.
-
     moscow_tz = ZoneInfo("Europe/Moscow")
     now_dt = datetime.now(moscow_tz)
     
@@ -368,17 +365,24 @@ def generate_ical_from_aggregated_schedule(schedule_data: List[Dict[str, Any]]) 
                 source = lesson.get('source_entity', '')
                 source_prefix = f"[{source}] " if source else ""
                 
+                # Summary (Название события)
                 event.name = f"{source_prefix}{emoji} {lesson['discipline']} ({type_name})"
                 
+                # Dates
                 lesson_date = datetime.strptime(lesson['date'], "%Y-%m-%d").date()
                 start_time = time.fromisoformat(lesson['beginLesson'])
                 end_time = time.fromisoformat(lesson['endLesson'])
 
                 event.begin = datetime.combine(lesson_date, start_time, tzinfo=moscow_tz)
                 event.end = datetime.combine(lesson_date, end_time, tzinfo=moscow_tz)
+                
+                # Location
                 event.location = f"{lesson['auditorium']}, {lesson['building']}"
                 
-                # UID - критически важен для обновлений
+                # --- CRITICAL FIELDS FOR VALIDATION ---
+                event.dtstamp = now_dt  # Время генерации (обязательно!)
+                
+                # UID (Уникальный ID)
                 oid = lesson.get('lessonOid')
                 if oid:
                     event.uid = f"lesson-{oid}@matplobbot.ru"
@@ -386,9 +390,7 @@ def generate_ical_from_aggregated_schedule(schedule_data: List[Dict[str, Any]]) 
                     unique_str = f"{lesson['date']}_{lesson['beginLesson']}_{lesson['discipline']}_{lesson.get('group', '')}"
                     event.uid = f"hash-{hashlib.md5(unique_str.encode()).hexdigest()}@matplobbot.ru"
 
-                # DTSTAMP - время генерации этого объекта
-                event.dtstamp = now_dt
-
+                # Description
                 desc_lines = []
                 if source: desc_lines.append(f"Источник: {source}")
                 desc_lines.append(f"Преподаватель: {lesson.get('lecturer_title', '').replace('_',' ')}")
@@ -402,33 +404,47 @@ def generate_ical_from_aggregated_schedule(schedule_data: List[Dict[str, Any]]) 
                 logging.warning(f"iCal Gen Error: {e}")
                 continue
 
-    # Сериализация библиотекой
-    ical_str = cal.serialize()
+    # 1. Получаем "сырой" iCal от библиотеки (она делает Line Folding)
+    raw_ics = cal.serialize()
 
-    # --- POST-PROCESSING FOR GOOGLE/APPLE COMPATIBILITY ---
-    
-    # 1. Заменяем PRODID на свой (библиотека ставит свой)
-    # Используем RegEx для надежности, так как библиотека может менять формат
-    import re
-    ical_str = re.sub(r'PRODID:.*', 'PRODID:-//Matplobbot//Schedule//RU', ical_str)
+    # 2. Построчная обработка (Самая важная часть)
+    # Разбиваем по любым переносам, чистим пустые строки
+    lines = [line.strip('\r\n') for line in raw_ics.splitlines() if line.strip()]
 
-    # 2. Добавляем имя календаря (отображается в Google/Apple при подписке)
-    # Вставляем после VERSION:2.0
-    # Используем \r\n (CRLF) строго по RFC 5545
-    name_prop = "X-WR-CALNAME:Расписание (Bot)\r\n"
-    refresh_prop = "REFRESH-INTERVAL;VALUE=DURATION:PT1H\r\n" # Для Outlook/Apple
-    ttl_prop = "X-PUBLISHED-TTL:PT1H\r\n" # Для Google
-    
-    # Вставка заголовков. Ищем VERSION:2.0 (оно всегда есть)
-    if "VERSION:2.0" in ical_str:
-        ical_str = ical_str.replace("VERSION:2.0", f"VERSION:2.0\r\n{name_prop}{refresh_prop}{ttl_prop}")
-    
-    # 3. Гарантируем CRLF (библиотека ics обычно выдает \r\n, но на Linux может быть \n)
-    # Если файл смешанный, Google его отвергнет.
-    if '\r\n' not in ical_str and '\n' in ical_str:
-        ical_str = ical_str.replace('\n', '\r\n')
+    # 3. Подготовка кастомных заголовков
+    # X-WR-CALNAME: Имя календаря в Google/Apple
+    # REFRESH-INTERVAL: Частота обновления для Outlook/Apple (1 час)
+    # X-PUBLISHED-TTL: Частота обновления для Google (1 час)
+    custom_headers = [
+        "X-WR-CALNAME:Расписание (Bot)",
+        "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
+        "X-PUBLISHED-TTL:PT1H"
+    ]
+
+    # 4. Собираем финальный список строк
+    final_lines = []
+    prodid_set = False
+
+    for line in lines:
+        # Заменяем PRODID на свой (для красоты и уникальности)
+        if line.startswith("PRODID:"):
+            final_lines.append("PRODID:-//Matplobbot//Schedule//RU")
+            prodid_set = True
+            continue
         
-    return ical_str
+        final_lines.append(line)
+        
+        # Вставляем кастомные заголовки сразу после VERSION
+        if line.startswith("VERSION:"):
+            final_lines.extend(custom_headers)
+
+    # Если PRODID не нашелся (редко, но бывает), добавим в начало
+    if not prodid_set:
+        final_lines.insert(1, "PRODID:-//Matplobbot//Schedule//RU")
+
+    # 5. Собираем файл с правильными CRLF (\r\n)
+    # RFC 5545 требует, чтобы КАЖДАЯ строка заканчивалась \r\n
+    return "\r\n".join(final_lines) + "\r\n"
 
 def get_semester_bounds() -> tuple[str, str]:
     """
