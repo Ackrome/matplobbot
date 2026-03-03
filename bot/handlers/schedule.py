@@ -1069,8 +1069,11 @@ class ScheduleManager:
         from bot.config import PUBLIC_API_URL
         base_url = PUBLIC_API_URL.rstrip('/')
         http_link = f"{base_url}/api/cal/{secret}.ics"
-        webcal_link = http_link.replace("https://", "webcal://").replace("http://", "webcal://")
-
+        
+        # Telegram не поддерживает протокол webcal:// в кнопках.
+        # Однако iOS/macOS отлично понимают https ссылку на .ics файл
+        # и предлагают подписаться, если Content-Type верный.
+        
         text = (
             "🔗 <b>Ваша персональная ссылка на расписание</b>\n\n"
             f"<code>{http_link}</code>\n\n"
@@ -1081,7 +1084,8 @@ class ScheduleManager:
         )
 
         builder = InlineKeyboardBuilder()
-        builder.row(InlineKeyboardButton(text="📱 Добавить на iOS / Mac", url=webcal_link))
+        # ИСПРАВЛЕНИЕ ЗДЕСЬ: используем http_link вместо webcal_link
+        builder.row(InlineKeyboardButton(text="📱 Добавить на iOS / Mac", url=http_link))
         builder.row(InlineKeyboardButton(text="🔄 Сбросить ссылку", callback_data="mysch_cal_revoke"))
         builder.row(InlineKeyboardButton(text="⬅️ Назад в календарь", callback_data="mysch_back_cal"))
 
