@@ -271,5 +271,8 @@
     "settings_show_schedule_emojis": "Schedule Emojis: {status}", 
     "settings_schedule_emojis_updated": "Schedule emojis setting updated.",
     "settings_show_lecturer_emails": "Lecturer Emails: {status}",
-    "settings_lecturer_emails_updated": "Lecturer emails setting updated."
+    "settings_lecturer_emails_updated": "Lecturer emails setting updated.",
+    "settings_show_module_details": "Module Details (Lecturers): {status}",
+    "settings_module_details_updated": "Module details setting updated.",
+    "module_details_header": "\n📋 <b>Module/Subgroup Details:</b>\n"
 }

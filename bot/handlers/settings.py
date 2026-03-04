@@ -37,7 +37,7 @@ from shared_lib.database import (
     get_subscription_modules
         )
 from shared_lib.i18n import translator
-from shared_lib.services.schedule_service import get_unique_modules_hybrid
+from shared_lib.services.schedule_service import get_unique_modules_hybrid, generate_module_details_text
 from .admin import AdminOrCreatorFilter
 from ..config import ADMIN_USER_IDS
 from bot.keyboards import get_modules_keyboard
@@ -105,6 +105,8 @@ class SettingsManager:
         
         # МОДУЛИ
         self.router.callback_query(F.data.startswith("sub_mods:"))(self.cq_sub_modules_menu)
+        self.router.callback_query(F.data == "settings_toggle_module_details")(self.cq_toggle_module_details)
+
         
         # Group subscriptions (for admins)
         self.router.callback_query(F.data == "manage_chat_subscriptions")(self.cq_manage_chat_subscriptions)
@@ -138,6 +140,7 @@ class SettingsManager:
         self.router.callback_query(F.data.startswith("sname_del:"))(self.cq_delete_short_name)
         self.router.callback_query(F.data.startswith("sname_del_confirm:"))(self.cq_confirm_delete_short_name)
         self.router.callback_query(F.data.startswith("sname_toggle:"))(self.cq_toggle_user_short_name)
+
 
 
     async def cq_restart_onboarding_prompt(self, callback: CallbackQuery):
@@ -218,6 +221,12 @@ class SettingsManager:
         builder.row(InlineKeyboardButton(
             text=translator.gettext(lang, "settings_md_display_mode", mode_text=md_mode_text),
             callback_data="settings_cycle_md_mode"
+        ))
+        # Кнопка детализации модулей
+        details_status_key = "settings_docstring_on" if settings.get('show_module_details', True) else "settings_docstring_off"
+        builder.row(InlineKeyboardButton(
+            text=translator.gettext(lang, "settings_show_module_details", status=translator.gettext(lang, details_status_key)),
+            callback_data="settings_toggle_module_details"
         ))
 
     async def _build_latex_settings(self, builder: InlineKeyboardBuilder, settings: dict, lang: str):
@@ -894,33 +903,38 @@ class SettingsManager:
     async def cq_sub_modules_menu(self, callback: CallbackQuery):
         sub_id = int(callback.data.split(":")[1])
         sub = await get_subscription_by_id(sub_id)
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id) # Получаем язык
         
         await callback.answer("Загружаю список модулей...")
         
-        # 1. Достаем расписание из кэша (или API если пусто)
         full_schedule = await get_cached_schedule(sub['entity_type'], sub['entity_id'])
         if not full_schedule:
             # TODO: Сделать fallback запрос к API здесь
             await callback.message.answer("Кэш пуст. Попробуйте обновить расписание через /schedule.")
             return
 
-        # 2. Гибридный поиск модулей (Regex + Admin DB)
         available_modules = await get_unique_modules_hybrid(full_schedule)
         
         if not available_modules:
             await callback.answer("В этом расписании модули не найдены.", show_alert=True)
             return
 
-        # 3. Текущие настройки
         selected = await get_subscription_modules(sub_id)
-        if selected is None: selected = [] # None = пустой список для UI
+        if selected is None: selected = []
 
-        # 4. Клавиатура (используем ту же функцию из bot/keyboards.py)
         kb = get_modules_keyboard(available_modules, selected, sub_id)
+        
+        # --- НОВАЯ ЛОГИКА ---
+        settings = await get_user_settings(user_id)
+        details_text = ""
+        if settings.get('show_module_details', True):
+            details_text = generate_module_details_text(full_schedule, lang)
         
         await callback.message.edit_text(
             f"Настройка модулей для <b>{sub['entity_name']}</b>:\n"
-            "Отметьте галочками ✅ те модули, которые вы посещаете.",
+            "Отметьте галочками ✅ те модули, которые вы посещаете.\n"
+            f"{details_text}", # Вставляем текст сюда
             reply_markup=kb,
             parse_mode="HTML"
         )
@@ -1080,3 +1094,13 @@ class SettingsManager:
             
         except ValueError:
             await callback.answer("Ошибка данных.", show_alert=True)
+            
+    async def cq_toggle_module_details(self, callback: CallbackQuery):
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        settings = await get_user_settings(user_id)
+        settings['show_module_details'] = not settings.get('show_module_details', True)
+        await update_user_settings_db(user_id, settings)
+        keyboard = await self.get_settings_keyboard(user_id)
+        await callback.message.edit_reply_markup(reply_markup=keyboard.as_markup())
+        await callback.answer(translator.gettext(lang, "settings_module_details_updated"))

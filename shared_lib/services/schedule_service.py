@@ -27,10 +27,28 @@ LESSON_STYLES = {
 MODULE_REGEX = re.compile(r'Модуль\s+["«](.+?)["»]')
 
 
+SUBGROUP_REGEX = re.compile(r'(\([А-Яа-яA-Za-z0-9_]+\)-\d+(?: \(\d+\))?)')
+
 def get_module_name(group_name: str | None) -> str | None:
-    if not group_name: return None
-    match = MODULE_REGEX.search(group_name)
-    return match.group(1).strip() if match else None
+    """
+    Извлекает название модуля или подгруппы из названия группы в расписании.
+    Используется для фильтрации (пользователь выбирает только свою подгруппу).
+    """
+    if not group_name: 
+        return None
+    
+    # 1. Проверяем, является ли это "Модулем" (Майнор и т.д.)
+    match_mod = MODULE_REGEX.search(group_name)
+    if match_mod:
+        return match_mod.group(1).strip()
+        
+    # 2. Проверяем, является ли это подгруппой (Иностр. язык, Физ-ра)
+    # Пример group_name: "003860_3 Иностранный язык ... (КАЯиПК)-1"
+    match_sub = SUBGROUP_REGEX.search(group_name)
+    if match_sub:
+        return match_sub.group(1).strip() # Вернет "(КАЯиПК)-1"
+        
+    return None
 
 
 def _get_lesson_visuals(kind: str) -> tuple[str, str]:
@@ -628,3 +646,39 @@ async def get_aggregated_schedule(
     # Сортируем по времени
     aggregated_lessons.sort(key=lambda x: (x['date'], x['beginLesson']))
     return aggregated_lessons
+
+def generate_module_details_text(schedule_data: list[dict], lang: str) -> str:
+    """
+    Генерирует текстовую сводку: какой предмет и преподаватель относятся к какому модулю.
+    Пример:
+    (КАЯиПК)-1:
+      - Иностр. язык: Иванова И.И.
+    """
+    # Структура: module -> discipline -> set(lecturers)
+    # Используем set для преподавателей, чтобы убрать дубли (один препод ведет много пар)
+    grouped = defaultdict(lambda: defaultdict(set))
+    
+    for lesson in schedule_data:
+        mod_name = get_module_name(lesson.get('group'))
+        if mod_name:
+            disc = lesson.get('discipline', 'Unknown')
+            # Очищаем имя преподавателя от лишних символов, если нужно
+            lecturer = lesson.get('lecturer_title', '').replace('_', ' ').strip()
+            if lecturer:
+                grouped[mod_name][disc].add(lecturer)
+
+    if not grouped:
+        return ""
+
+    lines = [translator.gettext(lang, "module_details_header")]
+    
+    # Сортируем модули по алфавиту
+    for mod in sorted(grouped.keys()):
+        lines.append(f"🔸 <b>{mod}</b>")
+        # Сортируем дисциплины
+        for disc, lecturers in sorted(grouped[mod].items()):
+            lecturers_str = ", ".join(sorted(list(lecturers)))
+            lines.append(f"   🔹 {disc}: <i>{lecturers_str}</i>")
+        lines.append("") # Пустая строка между модулями
+
+    return "\n".join(lines)

@@ -75,8 +75,8 @@ DEFAULT_SETTINGS = {
     'use_short_names': True,
     'admin_daily_summary_time': '09:00',
     'admin_summary_days': [0, 1, 2, 3, 4],
+    'show_module_details': True, 
 }
-
 
 async def log_user_action(user_id: int, username: str | None, full_name: str | None, avatar_pic_url: str | None, action_type: str, action_details: str | None):
     async with get_session() as session:

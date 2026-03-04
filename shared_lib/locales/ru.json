@@ -271,5 +271,8 @@
     "settings_show_schedule_emojis": "Эмодзи в расписании: {status}",
     "settings_schedule_emojis_updated": "Настройка эмодзи в расписании обновлена.",
     "settings_show_lecturer_emails": "Email преподавателей: {status}",
-    "settings_lecturer_emails_updated": "Настройка отображения Email обновлена."
+    "settings_lecturer_emails_updated": "Настройка отображения Email обновлена.",
+    "settings_show_module_details": "Детали модулей (преподаватели): {status}",
+    "settings_module_details_updated": "Настройка отображения деталей модулей обновлена.",
+    "module_details_header": "\n📋 <b>Состав модулей/подгрупп:</b>\n"
 }

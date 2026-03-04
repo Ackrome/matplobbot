@@ -25,7 +25,8 @@ from shared_lib.database import (
     update_subscription_modules,
     get_subscription_modules,
     get_subscription_by_id,
-    get_user_subscriptions
+    get_user_subscriptions,
+    get_user_settings
 )
 from shared_lib.services.schedule_service import (
     format_schedule, 
@@ -34,7 +35,8 @@ from shared_lib.services.schedule_service import (
     get_unique_modules_hybrid,
     generate_ical_from_aggregated_schedule,
     get_module_name,
-    get_aggregated_schedule
+    get_aggregated_schedule,
+    generate_module_details_text 
 )
 
 import calendar
@@ -584,14 +586,21 @@ class ScheduleManager:
                     
                     keyboard = get_modules_keyboard(unique_modules, current_selected, sub_id)
                     
+                    
+                    settings = await get_user_settings(user_id)
+                    details_text = ""
+                    if settings.get('show_module_details', True):
+                        details_text = generate_module_details_text(full_semester_schedule, lang)
+                        
                     # Отправляем сообщение об успехе + меню настройки
                     await message.answer(
                         translator.gettext(lang, "schedule_subscribe_success", entity_name=sub_data['sub_entity_name'], time_str=time_str) + 
-                        "\n\n👇 <b>Внимание:</b> Обнаружены учебные модули. Отметьте те, которые вы посещаете:",
+                        "\n\n👇 <b>Внимание:</b> Обнаружены учебные модули. Отметьте те, которые вы посещаете:\n" + 
+                        details_text, # Вставляем текст
                         reply_markup=keyboard,
                         parse_mode="HTML"
                     )
-                    return # Прерываем, чтобы не отправлять стандартное сообщение ниже
+                    return 
 
             await message.answer(translator.gettext(lang, "schedule_subscribe_success", entity_name=sub_data['sub_entity_name'], time_str=time_str))
         except ValueError:
