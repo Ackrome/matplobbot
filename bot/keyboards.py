@@ -172,7 +172,7 @@ async def get_schedule_type_keyboard(lang: str, history_items: list = None) -> I
 
     # --- NEW: Add history buttons if they exist ---
     if history_items:
-        builder.row(InlineKeyboardButton(text="---", callback_data="noop")) # Separator
+        builder.row(InlineKeyboardButton(text="---", callback_data="noop"))
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "schedule_previous_searches"), callback_data="noop"))
         for item in history_items:
             builder.row(InlineKeyboardButton(
@@ -278,7 +278,7 @@ def build_calendar_keyboard(year: int, month: int, entity_type: str, entity_id: 
 
     return builder.as_markup()
 
-def get_modules_keyboard(available_modules: list[str], selected_modules: list[str], sub_id: int) -> InlineKeyboardMarkup:
+async def get_modules_keyboard(available_modules: list[str], selected_modules: list[str], sub_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     
     # Сортируем модули, чтобы порядок кнопок не скакал
@@ -298,8 +298,11 @@ def get_modules_keyboard(available_modules: list[str], selected_modules: list[st
             text=f"{icon} {mod}", 
             callback_data=f"mod_toggle:{sub_id}:{mod_hash}"
         ))
-        
-    builder.row(InlineKeyboardButton(text="💾 Сохранить выбор", callback_data=f"mod_save:{sub_id}"))
+    
+    sub = await database.get_subscription_by_id(sub_id)
+    lang = await translator.get_language(sub["user_id"])
+    # <<< ИЗМЕНЕНИЕ >>>
+    builder.row(InlineKeyboardButton(text=translator.gettext(lang, "module_setup_save_button"), callback_data=f"mod_save:{sub_id}"))
     return builder.as_markup()
 
 # Константы для фильтров
@@ -320,19 +323,19 @@ def get_myschedule_calendar_keyboard(year: int, month: int, lang: str, busy_days
     month_names = translator.gettext(lang, "calendar_months").split(',')
     month_name = month_names[month - 1]
 
+    # <<< ИЗМЕНЕНИЯ >>>
     builder.row(
-        InlineKeyboardButton(text="🔗 Подписка для календарей (iOS/Google)", callback_data="mysch_cal_link")
+        InlineKeyboardButton(text=translator.gettext(lang, "kb_cal_webcal_button"), callback_data="mysch_cal_link")
     )
     
     builder.row(
-        InlineKeyboardButton(text="⚙️ Фильтры", callback_data="mysch_filters:main"),
+        InlineKeyboardButton(text=translator.gettext(lang, "kb_cal_filters_button"), callback_data="mysch_filters:main"),
         InlineKeyboardButton(text=f"{month_name} {year}", callback_data="noop")
     )
     
-    # Стрелки
     builder.row(
         InlineKeyboardButton(text="<<", callback_data=f"mysch_nav:prev:{year}:{month}"),
-        InlineKeyboardButton(text="Сегодня", callback_data=f"mysch_nav:today:0:0"),
+        InlineKeyboardButton(text=translator.gettext(lang, "schedule_date_today"), callback_data=f"mysch_nav:today:0:0"),
         InlineKeyboardButton(text=">>", callback_data=f"mysch_nav:next:{year}:{month}")
     )
 
@@ -382,14 +385,15 @@ def get_myschedule_calendar_keyboard(year: int, month: int, lang: str, busy_days
 
     return builder.as_markup()
 
-def get_myschedule_filters_keyboard(filter_config: dict, subscriptions: list) -> InlineKeyboardMarkup:
+async def get_myschedule_filters_keyboard(filter_config: dict, subscriptions: list, user_id) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     
     excluded_subs = filter_config.get('excluded_subs', [])
     excluded_types = filter_config.get('excluded_types', [])
 
+    lang = await translator.get_language(user_id)
     # 1. Фильтры по Типам
-    builder.row(InlineKeyboardButton(text="--- Типы занятий ---", callback_data="noop"))
+    builder.row(InlineKeyboardButton(text=translator.gettext(lang, "kb_header_lesson_types"), callback_data="noop"))
     for f_code, f_name in FILTER_TYPES_MAP.items():
         state = "❌" if f_code in excluded_types else "✅"
         builder.row(InlineKeyboardButton(
@@ -398,8 +402,8 @@ def get_myschedule_filters_keyboard(filter_config: dict, subscriptions: list) ->
         ))
 
     # 2. Фильтры по Источникам
-    if len(subscriptions) > 1: # Показываем, только если есть из чего выбирать
-        builder.row(InlineKeyboardButton(text="--- Источники ---", callback_data="noop"))
+    if len(subscriptions) > 1:
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "kb_header_sources"), callback_data="noop"))
         for sub in subscriptions:
             state = "❌" if sub['id'] in excluded_subs else "✅"
             # Обрезаем имя, если слишком длинное
@@ -409,5 +413,5 @@ def get_myschedule_filters_keyboard(filter_config: dict, subscriptions: list) ->
                 callback_data=f"mysch_tog_sub:{sub['id']}"
             ))
 
-    builder.row(InlineKeyboardButton(text="⬅️ Назад к календарю", callback_data="mysch_back_cal"))
+    builder.row(InlineKeyboardButton(text=translator.gettext(lang, "kb_back_to_calendar_button"), callback_data="mysch_back_cal"))
     return builder.as_markup()

@@ -111,7 +111,7 @@ class SuggestionsManager:
 
             if not cached_payload:
                 # This can happen if another admin already actioned it, or if the cache expired.
-                await callback.message.edit_text("<i>Это решение уже было принято или данные устарели.</i>")
+                await callback.message.edit_text(f"<i>{translator.gettext(lang, 'admin_decision_already_made')}</i>")
                 await callback.answer()
                 return
 
@@ -133,18 +133,18 @@ class SuggestionsManager:
                 from shared_lib.services.schedule_service import short_name_cache
                 short_name_cache.clear()
                 
-                final_text = f"{callback.message.text}\n\n**✅ Одобрено администратором {callback.from_user.full_name}.**"
+                final_text = f"{callback.message.text}\n\n**{translator.gettext(lang, 'shorter_name_suggestion_approved', short_name=short_name)}**"
                 await self.bot.send_message(
                     user_id,
                     translator.gettext(user_lang, "shorter_name_suggestion_approved", short_name=short_name)
                 )
             else: # Decline
-                final_text = f"{callback.message.text}\n\n**❌ Отклонено администратором {callback.from_user.full_name}.**"
+                # <<< ИЗМЕНЕНИЕ >>>
+                final_text = f"{callback.message.text}\n\n**{translator.gettext(lang, 'shorter_name_suggestion_declined')}**"
                 await self.bot.send_message(
                     user_id,
                     translator.gettext(user_lang, "shorter_name_suggestion_declined")
                 )
-            
             # --- NEW: Update the message for ALL admins ---
             for msg_info in messages_to_update:
                 # Only edit the message that this specific admin clicked on.
@@ -161,4 +161,4 @@ class SuggestionsManager:
 
         except Exception as e:
             logger.error(f"Error handling admin decision for shorter name: {e}", exc_info=True)
-            await callback.answer("Произошла ошибка при обработке решения.", show_alert=True)
+            await callback.answer(translator.gettext(lang, "admin_decision_error"), show_alert=True)

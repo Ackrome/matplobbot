@@ -558,7 +558,7 @@ class ScheduleManager:
             # Полностью обновляем кэш (upsert), так как данные семестра самые полные и приоритетные
             await upsert_cached_schedule(sub_data['sub_entity_type'], sub_data['sub_entity_id'], full_semester_schedule)
             
-            # 3. Для хеша подписки (чтобы не спамить уведомлениями сразу) берем срез на ближайшие 3 недели, как и было
+            # 3. Для хеша пописки (чтобы не спамить уведомлениями сразу) берем срез на ближайшие 3 недели, как и было
             start_date = datetime.now()
             end_date = start_date + timedelta(weeks=3)
             
@@ -574,18 +574,23 @@ class ScheduleManager:
             # Redis кэш для diffs (можно оставить, он используется для быстрой проверки изменений)
             await redis_client.set_user_cache(user_id, f"schedule_data:{sub_id}", json.dumps(schedule_data_for_hash), ttl=None)
             
+            # <<< НОВОЕ: Создаем кнопку WebCal заранее >>>
+            webcal_btn = InlineKeyboardButton(text=translator.gettext(lang, "kb_cal_webcal_button"), callback_data="mysch_cal_link")
+            
             if sub_data['sub_entity_type'] == 'group':
                 unique_modules = await get_unique_modules_hybrid(full_semester_schedule)
                 
                 if unique_modules:
                     # По умолчанию делаем список ПУСТЫМ (ничего не выбрано)
-                    # Или, если хотите, чтобы по умолчанию все были ВКЛЮЧЕНЫ:
-                    # current_selected = unique_modules.copy()
-                    current_selected = [] 
+                    current_selected =[] 
                     await update_subscription_modules(sub_id, current_selected)
                     
-                    keyboard = get_modules_keyboard(unique_modules, current_selected, sub_id)
+                    # Пытаемся вызвать с lang, если вы уже применили предыдущий фикс к get_modules_keyboard
+                    base_keyboard = await get_modules_keyboard(unique_modules, current_selected, sub_id)
                     
+                    # <<< ИЗМЕНЕНИЕ: Добавляем кнопку WebCal к клавиатуре модулей >>>
+                    builder = InlineKeyboardBuilder.from_markup(base_keyboard)
+                    builder.row(webcal_btn)
                     
                     settings = await get_user_settings(user_id)
                     details_text = ""
@@ -596,13 +601,19 @@ class ScheduleManager:
                     await message.answer(
                         translator.gettext(lang, "schedule_subscribe_success", entity_name=sub_data['sub_entity_name'], time_str=time_str) + 
                         "\n\n👇 <b>Внимание:</b> Обнаружены учебные модули. Отметьте те, которые вы посещаете:\n" + 
-                        details_text, # Вставляем текст
-                        reply_markup=keyboard,
+                        details_text, 
+                        reply_markup=builder.as_markup(),
                         parse_mode="HTML"
                     )
                     return 
 
-            await message.answer(translator.gettext(lang, "schedule_subscribe_success", entity_name=sub_data['sub_entity_name'], time_str=time_str))
+            # <<< ИЗМЕНЕНИЕ: Ответ по умолчанию (без модулей) теперь тоже с кнопкой WebCal >>>
+            builder = InlineKeyboardBuilder()
+            builder.row(webcal_btn)
+            await message.answer(
+                translator.gettext(lang, "schedule_subscribe_success", entity_name=sub_data['sub_entity_name'], time_str=time_str),
+                reply_markup=builder.as_markup()
+            )
         except ValueError:
             await message.reply(translator.gettext(lang, "schedule_invalid_time_value"))
         except Exception as e:
@@ -678,11 +689,13 @@ class ScheduleManager:
         today_str = today_dt.strftime("%Y-%m-%d")
         
         # mysch_ical:{start_date}:{duration_days}
-        # Экспортируем только сегодня (1 день), так как команда "на сегодня"
-        builder.row(InlineKeyboardButton(text="📲 Экспорт iCal (Сегодня)", callback_data=f"mysch_ical:{today_str}:1"))
-        builder.row(InlineKeyboardButton(text="🗓 Открыть полный календарь", callback_data="mysch_open_cal"))
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "myschedule_ical_today_button"), callback_data=f"mysch_ical:{today_str}:1"))
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "myschedule_full_calendar_button"), callback_data="mysch_open_cal"))
         
-        await message.answer("Действия:", reply_markup=builder.as_markup())
+        # <<< НОВОЕ: Кнопка подписки на WebCal >>>
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "kb_cal_webcal_button"), callback_data="mysch_cal_link"))
+        
+        await message.answer(translator.gettext(lang, "myschedule_actions_header"), reply_markup=builder.as_markup())
             
 
     async def handle_module_toggle(self, callback: CallbackQuery):
@@ -740,7 +753,7 @@ class ScheduleManager:
 
         # 7. Обновляем клавиатуру
         # Мы используем available_modules (полученные на шаге 2) и новый selected_modules
-        new_keyboard = get_modules_keyboard(available_modules, selected_modules, sub_id)
+        new_keyboard = await get_modules_keyboard(available_modules, selected_modules, sub_id)
         
         # try-except нужен, так как Telegram ругается, если клавиатура визуально не изменилась
         try:
@@ -760,11 +773,12 @@ class ScheduleManager:
         count = len(selected)
         
         await callback.message.delete()
-        
+        lang = await translator.get_language(callback.from_user.id) # <<< Добавлено
+
         if count == 0:
-            msg = "⚠️ Вы не выбрали ни одного модуля. Будут показываться только общие предметы."
+            msg = translator.gettext(lang, "module_save_no_modules") # <<< Изменение
         else:
-            msg = f"✅ Настройки сохранены! Выбрано модулей: {count}. Расписание будет фильтроваться."
+            msg = translator.gettext(lang, "module_save_success", count=count) #
             
         await callback.message.answer(msg)
         await callback.answer()
@@ -891,7 +905,7 @@ class ScheduleManager:
         subs, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
         active_subs = [s for s in subs if s['is_active']]
         
-        kb = get_myschedule_filters_keyboard(filters, active_subs)
+        kb = await get_myschedule_filters_keyboard(filters, active_subs, user_id)
         await callback.message.edit_text("⚙️ Настройка отображения:", reply_markup=kb)
         await callback.answer()
 
@@ -918,7 +932,7 @@ class ScheduleManager:
         # Обновляем меню
         subs, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
         active_subs = [s for s in subs if s['is_active']]
-        kb = get_myschedule_filters_keyboard(filters, active_subs)
+        kb = await get_myschedule_filters_keyboard(filters, active_subs, user_id)
         
         try:
             await callback.message.edit_reply_markup(reply_markup=kb)

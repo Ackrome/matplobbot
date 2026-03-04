@@ -27,9 +27,9 @@ class RenderingManager:
         self.router.message(MermaidRender.code)(self.process_mermaid_code)
 
     async def latex_command(self, message: Message, state: FSMContext):
-        # Prevent this command from being used in group chats
+        lang = await translator.get_language(message.from_user.id) # <<< ДОБАВЛЕНО
         if message.chat.type != 'private':
-            await message.reply("Эта команда работает только в личных сообщениях.")
+            await message.reply(translator.gettext(lang, "rendering_private_only"))
             return
 
         lang = await translator.get_language(message.from_user.id)

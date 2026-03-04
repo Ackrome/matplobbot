@@ -862,40 +862,33 @@ class SettingsManager:
         
     async def cq_sub_card(self, callback: CallbackQuery):
         sub_id = int(callback.data.split(":")[1])
-        sub = await get_subscription_by_id(sub_id) # Нужно добавить этот метод в db, чтобы возвращал полный объект
+        sub = await get_subscription_by_id(sub_id)
+        lang = await translator.get_language(callback.from_user.id)
         
         if not sub:
-            await callback.answer("Подписка не найдена", show_alert=True)
-            return await self.cq_subs_list(callback) # Вернуть в список
+            await callback.answer(translator.gettext(lang, "subscription_info_outdated"), show_alert=True)
+            return
 
-        # Формируем текст
-        status_text = "Активна ✅" if sub['is_active'] else "Отключена ❌"
+        status_key = "sub_card_active" if sub['is_active'] else "sub_card_inactive"
+        status_text = translator.gettext(lang, status_key)
         time_str = sub['notification_time'].strftime("%H:%M")
         
         text = (
-            f"📂 <b>Подписка: {sub['entity_name']}</b>\n\n"
-            f"Статус: {status_text}\n"
-            f"Уведомления: в {time_str}\n"
+            translator.gettext(lang, "sub_card_title", entity_name=sub['entity_name']) + "\n\n" +
+            translator.gettext(lang, "sub_card_status_line", status=status_text) + "\n" +
+            translator.gettext(lang, "sub_card_time_line", time_str=time_str)
         )
         
         builder = InlineKeyboardBuilder()
-        
-        # Ряд 1: Вкл/Выкл | Время
-        toggle_txt = "Выключить" if sub['is_active'] else "Включить"
+        toggle_txt = translator.gettext(lang, "btn_disable") if sub['is_active'] else translator.gettext(lang, "btn_enable")
         builder.row(
             InlineKeyboardButton(text=toggle_txt, callback_data=f"sub_toggle:{sub_id}"),
-            InlineKeyboardButton(text="⏰ Время", callback_data=f"sub_time:{sub_id}")
+            InlineKeyboardButton(text=translator.gettext(lang, "sub_btn_time"), callback_data=f"sub_time:{sub_id}")
         )
-        
-        # Ряд 2: Модули (Только для групп)
         if sub['entity_type'] == 'group':
-            builder.row(InlineKeyboardButton(text="📚 Настроить модули", callback_data=f"sub_mods:{sub_id}"))
-            
-        # Ряд 3: Удалить
-        builder.row(InlineKeyboardButton(text="🗑 Удалить", callback_data=f"sub_del_ask:{sub_id}"))
-        
-        # Ряд 4: Назад
-        builder.row(InlineKeyboardButton(text="⬅️ К списку", callback_data="manage_personal_subscriptions"))
+            builder.row(InlineKeyboardButton(text=translator.gettext(lang, "sub_btn_modules"), callback_data=f"sub_mods:{sub_id}"))
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "btn_delete"), callback_data=f"sub_del_ask:{sub_id}"))
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "sub_list_back_button"), callback_data="manage_personal_subscriptions"))
         
         await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
@@ -923,7 +916,7 @@ class SettingsManager:
         selected = await get_subscription_modules(sub_id)
         if selected is None: selected = []
 
-        kb = get_modules_keyboard(available_modules, selected, sub_id)
+        kb = await get_modules_keyboard(available_modules, selected, sub_id)
         
         # --- НОВАЯ ЛОГИКА ---
         settings = await get_user_settings(user_id)

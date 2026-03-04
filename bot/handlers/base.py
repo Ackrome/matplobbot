@@ -71,7 +71,11 @@ class BaseManager:
 
     def _register_handlers(self):
         # Onboarding
-        self.router.message(CommandStart(), Onboarding())(self.onboarding_welcome)
+        self.router.message(CommandStart(), Onboarding())(self.onboarding_language_choice)
+        self.router.callback_query(F.data.startswith("set_lang_init:"))(self.handle_initial_language_selection)
+
+        # <<< ИЗМЕНЕНИЕ: Старый onboarding_welcome теперь просто шаг после выбора языка >>>
+        self.router.callback_query(F.data == "start_onboarding_tour", StateFilter("onboarding:welcome"))(self.onboarding_github)
         self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:welcome"))(self.onboarding_github)
         self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:github"))(self.onboarding_library)
         self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:library"))(self.onboarding_rendering)
@@ -103,38 +107,52 @@ class BaseManager:
 
 
     async def onboarding_welcome(self, event: Message | CallbackQuery, state: FSMContext):
-        """Handles the very first step of the onboarding tour."""
+        """Handles the very first step of the onboarding tour AFTER language selection."""
         if isinstance(event, CallbackQuery):
-            user = event.from_user
+            user_id = event.from_user.id
             message = event.message
         else: # It's a Message
-            user = event.from_user
+            user_id = event.from_user.id
             message = event
-        user_id = user.id
-
-        # --- Automatic Language Detection for New Users ---
-        # This logic runs only once when a new user starts the bot.
-        settings = await database.get_user_settings(user_id)
-        # The default language is 'en'. If the user's client language is different and supported, we switch to it.
-        if settings.get('language') == 'en': # Only override the default
-            client_lang_code = user.language_code.split('-')[0] if user.language_code else 'en' # e.g., 'ru-RU' -> 'ru'
-            if client_lang_code in self.settings_manager.AVAILABLE_LANGUAGES:
-                settings['language'] = client_lang_code
-                await database.update_user_settings_db(user_id, settings)
-                logging.info(f"Automatically set language to '{client_lang_code}' for new user {user_id}.")
         
-        # Proceed with onboarding using the detected (or default) language
         lang = await translator.get_language(user_id, message.chat.id)
-        await state.set_state("onboarding:welcome") # Ensure state is set for the first step
+        await state.set_state("onboarding:welcome")
+        
         builder = InlineKeyboardBuilder()
-        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="onboarding_next"))
+        # <<< ИЗМЕНЕНИЕ: Старая кнопка 'onboarding_next' заменена на новую, чтобы избежать конфликта >>>
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="start_onboarding_tour"))
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_skip"), callback_data="onboarding_skip"))
         
-        # Edit the message if it's a callback, otherwise send a new one.
         if isinstance(event, CallbackQuery):
             await message.edit_text(translator.gettext(lang, "start_onboarding_1"), reply_markup=builder.as_markup())
         else:
             await message.answer(translator.gettext(lang, "start_onboarding_1"), reply_markup=builder.as_markup())
+
+    async def onboarding_language_choice(self, message: Message, state: FSMContext):
+        """Step 0: User chooses the language."""
+        await state.clear() # На случай, если пользователь перезапускает бота
+        builder = InlineKeyboardBuilder()
+        # Кнопки не зависят от языка, т.к. пользователь его еще не выбрал
+        builder.row(InlineKeyboardButton(text="English 🇬🇧", callback_data="set_lang_init:en"))
+        builder.row(InlineKeyboardButton(text="Русский 🇷🇺", callback_data="set_lang_init:ru"))
+        
+        await message.answer(translator.gettext('ru', 'start_choose_language'), reply_markup=builder.as_markup())
+
+
+    async def handle_initial_language_selection(self, callback: CallbackQuery, state: FSMContext):
+        """Step 0.5: Save language and show the first real onboarding step."""
+        lang_code = callback.data.split(":")[1]
+        user_id = callback.from_user.id
+        
+        # Сохраняем язык
+        settings = await database.get_user_settings(user_id)
+        settings['language'] = lang_code
+        await database.update_user_settings_db(user_id, settings)
+
+        await callback.answer(translator.gettext(lang_code, "language_chosen"))
+        
+        # Теперь показываем первый шаг онбординга
+        await self.onboarding_welcome(callback, state)
 
     async def onboarding_github(self, callback: CallbackQuery, state: FSMContext):
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
