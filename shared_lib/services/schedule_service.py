@@ -479,7 +479,7 @@ def generate_ical_from_aggregated_schedule(schedule_data: List[Dict[str, Any]]) 
                 desc_lines.append(f"Обновлено: {now_dt.strftime('%H:%M %d.%m')}")
                 
                 # Экранируем переносы для библиотеки
-                event.description = "\\n".join(desc_lines)
+                event.description = "\n".join(desc_lines)
                 
                 cal.events.add(event)
             except Exception as e:
