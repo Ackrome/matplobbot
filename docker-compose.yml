@@ -122,11 +122,14 @@ services:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
     command: tunnel run
+    environment:
+      # Заставляем работать через TCP вместо проблемного UDP(QUIC)
+      - TUNNEL_TRANSPORT_PROTOCOL=http2
     volumes:
-      # Пробрасываем папку с сертификатами и конфигом внутрь контейнера
       - ~/.cloudflared:/etc/cloudflared
     depends_on:
       - mpb-fastapi-stats
+
 
 volumes:
   bot_logs:
