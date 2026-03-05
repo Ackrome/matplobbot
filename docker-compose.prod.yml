@@ -113,6 +113,16 @@ services:
       redis:
         condition: service_healthy
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel run
+    volumes:
+      # Пробрасываем папку с сертификатами и конфигом внутрь контейнера
+      - ~/.cloudflared:/etc/cloudflared
+    depends_on:
+      - mpb-fastapi-stats
+
 volumes:
   bot_logs:
   redis_data:
