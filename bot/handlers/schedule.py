@@ -1039,7 +1039,7 @@ class ScheduleManager:
         caption = translator.gettext(lang, "schedule_export_ical_caption", start=start_date.strftime('%d.%m'), end=end_date.strftime('%d.%m'))
         
         await callback.message.answer_document(
-            document=BufferedInputFile(ical_data.encode('utf-8'), filename=filename),
+            document=BufferedInputFile(ical_data, filename=filename),
             caption=caption
         )
         
