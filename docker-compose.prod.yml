@@ -113,15 +113,17 @@ services:
       redis:
         condition: service_healthy
 
-  cloudflared:
-    image: cloudflare/cloudflared:latest
+  caddy:
+    image: caddy:alpine
     restart: unless-stopped
-    command: tunnel run
-    environment:
-      # Заставляем работать через TCP вместо проблемного UDP(QUIC)
-      - TUNNEL_TRANSPORT_PROTOCOL=http2
+    ports:
+      - "80:80"
+      - "443:443"
+    # Caddy сам поймет, что нужно выпустить сертификат для этого домена
+    command: caddy reverse-proxy --from api.ivantishchenko.ru --to mpb-fastapi-stats:9583
     volumes:
-      - ~/.cloudflared:/etc/cloudflared
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       - mpb-fastapi-stats
 
@@ -129,4 +131,5 @@ volumes:
   bot_logs:
   redis_data:
   postgres_data:
-  ollama_data:
+  caddy_data:
+  caddy_config:
