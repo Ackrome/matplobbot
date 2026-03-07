@@ -71,25 +71,6 @@ services:
       timeout: 10s
       retries: 3
 
-  mpb-fastapi-stats:
-    image: ghcr.io/ackrome/matplobbot-api:${API_TAG:-latest} 
-    restart: unless-stopped
-    stop_grace_period: 30s
-    env_file: ./.env
-    ports:
-      - "9583:9583"
-    volumes:
-      - bot_logs:/app/logs # All services write to the same log volume
-    depends_on:
-      mpb-telegram-bot:
-        condition: service_started
-      migrator:
-        condition: service_completed_successfully
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9583/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   migrator:
     image: ghcr.io/ackrome/matplobbot-bot:${BOT_TAG:-latest}
@@ -113,26 +94,51 @@ services:
       redis:
         condition: service_healthy
         
+  mpb-fastapi-stats:
+    image: ghcr.io/ackrome/matplobbot-api:${API_TAG:-latest} 
+    restart: unless-stopped
+    stop_grace_period: 30s
+    env_file: ./.env
+    ports:
+      - "9583:9583"
+    volumes:
+      - bot_logs:/app/logs # All services write to the same log volume
+      - ./fastapi_stats_app:/fastapi_stats_app
+      - ./shared_lib:/shared_lib
+    depends_on:
+      mpb-telegram-bot:
+        condition: service_started
+      migrator:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9583/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  
+
   main-site-frontend:
     image: nginx:alpine
     restart: unless-stopped
-    volumes:
-      # Пробрасываем папку с нашим HTML внутрь Nginx
-      - ./main_site_frontend:/usr/share/nginx/html:ro
-    # Порт 8080 внутри Docker, Caddy будет перекидывать сюда трафик
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./main_site_frontend:/usr/share/nginx/html:ro
+      # ДОБАВЬ ЭТУ СТРОКУ:
+      - ./main_site_frontend/default.conf:/etc/nginx/conf.d/default.conf:ro
 
   caddy:
     image: caddy:alpine
     restart: unless-stopped
-    network_mode: host # Используем сеть хоста, чтобы Caddy видел порты напрямую
+    network_mode: host # Оставляем host, чтобы не мучиться с портами 80/443
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile # Пробрасываем файл конфига
+      - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
-    # Команда запуска теперь короче
-    command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    depends_on:
+      - mpb-fastapi-stats
+      - main-site-frontend
 
 volumes:
   bot_logs:

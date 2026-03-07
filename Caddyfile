@@ -1,28 +1,17 @@
-# Основной сайт
+# Основной домен
 ivantishchenko.ru {
-    # Перенаправляем на сервис Nginx (так как Caddy в режиме host, стучимся в порт 8080)
     reverse_proxy localhost:8080
 }
 
-# API поддомен
+# API и подписки
 api.ivantishchenko.ru {
-    # 1. Публичные эндпоинты (Календари) - открыты для всех
+    # Публичный доступ к календарям
     handle_path /api/cal/* {
-        reverse_proxy localhost:9583
+        reverse_proxy 127.0.0.1:9583
     }
 
-    # 2. Все остальное (статистика и т.д.)
+    # Всё остальное (статистика, дашборд)
     handle {
-        # Если нужно ограничить доступ только с основного сайта (CORS):
-        @not_from_main {
-            not header Origin https://ivantishchenko.ru
-            not header Referer https://ivantishchenko.ru*
-        }
-        
-        # Если запрос не с нашего сайта, можно просто проксировать, 
-        # но FastAPI благодаря CORS middleware (которое мы добавили ранее) 
-        # сам заблокирует попытки загрузить данные скриптами с чужих доменов.
-        # abort @not_from_main
-        reverse_proxy localhost:9583
+        reverse_proxy 127.0.0.1:9583
     }
 }

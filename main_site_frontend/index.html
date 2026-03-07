@@ -1,21 +1,464 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ivan Tishchenko | Personal Site</title>
+    <title>Иван Тищенко | Portfolio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f0f2f5; }
-        .card { background: white; padding: 2rem; border-radius: 15px; shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; }
-        h1 { color: #1a73e8; }
-        a { color: #5f6368; text-decoration: none; border-bottom: 1px solid #ccc; }
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .hero-bg {
+            background-image: url('https://image.qwenlm.ai/public_source/5ce42e79-3a6d-43e2-aa70-b846219e4f49/111ec843e-513b-471b-8be2-c1c61645d894.png');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+
+        .fade-in {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Schedule Card Hover Effect */
+        .schedule-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Navbar hide/show animation */
+        .nav-hidden {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+
+        .nav-visible {
+            transform: translateY(0);
+            opacity: 1;
+        }
     </style>
 </head>
-<body>
-    <div class="card">
-        <h1>Иван Тищенко</h1>
-        <p>Разработчик и создатель Matplobbot.</p>
-        <p><a href="https://t.me/IvanTishchenko">Telegram</a> | <a href="https://github.com/Ackrome">GitHub</a></p>
-    </div>
+<body class="bg-slate-50 text-slate-900 antialiased selection:bg-blue-100 selection:text-blue-900">
+
+    <!-- NAVIGATION BAR -->
+    <nav class="glass fixed top-0 w-full z-50 transition-all duration-300 nav-visible" id="navbar">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-20">
+                <!-- Logo -->
+                <a href="#" class="flex-shrink-0 flex items-center space-x-2 group">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-500/30 group-hover:scale-105 transition-transform">
+                        IT
+                    </div>
+                    <span class="text-lg font-bold text-slate-800">Ivan Tishchenko</span>
+                </a>
+
+                <!-- Desktop Menu -->
+                <div class="hidden md:flex space-x-8 items-center">
+                    <a href="/#projects" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Проекты</a>
+                    <a href="/schedule" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Расписание</a>
+                    <a href="/login" class="group relative px-6 py-2.5 bg-slate-900 text-white rounded-full font-medium overflow-hidden shadow-lg shadow-slate-900/20 hover:shadow-slate-900/40 transition-all">
+                        <span class="relative z-10 flex items-center gap-2">Авторизация</span>
+                        <div class="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    </a>
+                </div>
+
+                <!-- Mobile menu button -->
+                <div class="md:hidden flex items-center">
+                    <button id="mobile-menu-button" class="text-slate-600 hover:text-blue-600 focus:outline-none p-2 rounded-lg hover:bg-slate-100 transition-colors">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-slate-100 absolute w-full shadow-xl">
+            <div class="px-4 pt-2 pb-6 space-y-1">
+                <a href="#projects" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Проекты</a>
+                <a href="#schedule" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Расписание</a>
+                <a href="https://api.ivantishchenko.ru" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">Авторизация</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT START -->
+    <main class="relative">
+        
+        <!-- Hero Section -->
+        <section class="relative min-h-screen flex items-center justify-center hero-bg overflow-hidden">
+            <!-- Overlay -->
+            <div class="absolute inset-0 bg-gradient-to-b from-slate-50/80 via-slate-50/60 to-slate-50"></div>
+            
+            <div class="relative max-w-5xl mx-auto px-4 text-center z-10 pt-20 fade-in">
+                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 backdrop-blur-sm border border-slate-200 shadow-sm mb-8 animate-bounce-slow">
+                    <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                    <span class="text-sm font-medium text-slate-600">Открыт для проектов</span>
+                </div>
+                
+                <h1 class="text-5xl md:text-7xl lg:text-8xl font-extrabold mb-8 tracking-tight text-slate-900 leading-[1.1]">
+                    Создаю цифровые <br>
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">инструменты</span>
+                </h1>
+                
+                <p class="text-xl md:text-2xl text-slate-600 max-w-3xl mx-auto mb-12 leading-relaxed">
+                    Персональный хаб разработчика. Проекты, автоматизация и полезные сервисы для студентов и бизнеса.
+                </p>
+                
+                <div class="flex flex-col sm:flex-row justify-center gap-4">
+                    <a href="#projects" class="inline-flex items-center justify-center px-8 py-4 text-base font-bold text-white transition-all duration-200 bg-slate-900 rounded-full hover:bg-slate-800 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 shadow-xl shadow-slate-900/20">
+                        Смотреть проекты
+                    </a>
+                    <a href="#schedule" class="inline-flex items-center justify-center px-8 py-4 text-base font-bold text-slate-700 transition-all duration-200 bg-white border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-200 shadow-lg shadow-slate-200/50">
+                        Расписание
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Scroll Indicator -->
+            <div class="absolute bottom-10 left-1/2 transform -translate-x-1/2 animate-bounce">
+                <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+            </div>
+        </section>
+
+        <!-- Projects Section -->
+        <section id="projects" class="py-24 bg-white relative">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-16 fade-in">
+                    <h2 class="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Избранные проекты</h2>
+                    <p class="text-lg text-slate-500 max-w-2xl mx-auto">
+                        Коллекция инструментов, которые я разработал для решения реальных задач.
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <!-- Project Card 1 -->
+                    <div class="group bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-blue-900/5 transition-all duration-300 fade-in">
+                        <div class="relative h-64 overflow-hidden">
+                            <img src="https://image.qwenlm.ai/public_source/5ce42e79-3a6d-43e2-aa70-b846219e4f49/1daba1615-31a8-4e57-b558-6919144a1b3d.png" alt="Matplobbot" class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500">
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-6">
+                                <span class="text-white font-medium">Telegram Bot</span>
+                            </div>
+                        </div>
+                        <div class="p-6">
+                            <div class="flex items-center gap-2 mb-3">
+                                <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Python</span>
+                                <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Telegram API</span>
+                            </div>
+                            <h3 class="text-xl font-bold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors">Matplobbot</h3>
+                            <p class="text-slate-600 mb-6 line-clamp-2">
+                                Умный помощник для студентов. Автоматизация расписания, уведомления и статистика успеваемости прямо в мессенджере.
+                            </p>
+                            <a href="#" class="inline-flex items-center text-blue-600 font-semibold hover:text-blue-700 transition-colors">
+                                Подробнее <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Project Card 2 -->
+                    <div class="group bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-blue-900/5 transition-all duration-300 fade-in" style="transition-delay: 100ms;">
+                        <div class="relative h-64 overflow-hidden">
+                            <img src="https://image.qwenlm.ai/public_source/5ce42e79-3a6d-43e2-aa70-b846219e4f49/109d473a9-e835-48ed-b06d-c629030b13d6.png" alt="Analytics Dashboard" class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500">
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-6">
+                                <span class="text-white font-medium">Web App</span>
+                            </div>
+                        </div>
+                        <div class="p-6">
+                            <div class="flex items-center gap-2 mb-3">
+                                <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">React</span>
+                                <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Recharts</span>
+                            </div>
+                            <h3 class="text-xl font-bold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors">Analytics Hub</h3>
+                            <p class="text-slate-600 mb-6 line-clamp-2">
+                                Панель управления данными с интерактивными графиками. Визуализация статистики в реальном времени.
+                            </p>
+                            <a href="#" class="inline-flex items-center text-blue-600 font-semibold hover:text-blue-700 transition-colors">
+                                Подробнее <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Project Card 3 -->
+                    <div class="group bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-blue-900/5 transition-all duration-300 fade-in" style="transition-delay: 200ms;">
+                        <div class="relative h-64 overflow-hidden">
+                            <img src="https://image.qwenlm.ai/public_source/5ce42e79-3a6d-43e2-aa70-b846219e4f49/163d0d9c8-0e47-4b64-a2c6-27981b4225a3.png" alt="NextGen Dashboard" class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500">
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-6">
+                                <span class="text-white font-medium">SaaS</span>
+                            </div>
+                        </div>
+                        <div class="p-6">
+                            <div class="flex items-center gap-2 mb-3">
+                                <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Next.js</span>
+                                <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Tailwind</span>
+                            </div>
+                            <h3 class="text-xl font-bold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors">NextGen Platform</h3>
+                            <p class="text-slate-600 mb-6 line-clamp-2">
+                                Современная веб-платформа для управления задачами. Минималистичный дизайн и высокая производительность.
+                            </p>
+                            <a href="#" class="inline-flex items-center text-blue-600 font-semibold hover:text-blue-700 transition-colors">
+                                Подробнее <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Schedule Section -->
+        <section id="schedule" class="py-24 bg-slate-50 relative overflow-hidden">
+            <!-- Decorative blob -->
+            <div class="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-blue-100 rounded-full mix-blend-multiply filter blur-3xl opacity-70"></div>
+            <div class="absolute bottom-0 left-0 -ml-20 -mb-20 w-96 h-96 bg-indigo-100 rounded-full mix-blend-multiply filter blur-3xl opacity-70"></div>
+
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+                <div class="flex flex-col md:flex-row justify-between items-end mb-12 fade-in">
+                    <div>
+                        <h2 class="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Расписание</h2>
+                        <p class="text-lg text-slate-500">Мой текущий план на неделю</p>
+                    </div>
+                    <div class="mt-4 md:mt-0 flex gap-2">
+                        <button class="p-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                        </button>
+                        <button class="p-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 fade-in">
+                    <!-- Monday -->
+                    <div class="schedule-card bg-white rounded-2xl p-6 border border-slate-100 shadow-sm transition-all duration-300">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-lg font-bold text-slate-900">Понедельник</h3>
+                            <span class="text-xs font-semibold px-2 py-1 bg-blue-50 text-blue-600 rounded-md">Сегодня</span>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="flex gap-4">
+                                <div class="flex flex-col items-center">
+                                    <span class="text-xs font-bold text-slate-400">09:00</span>
+                                    <div class="w-0.5 h-full bg-slate-100 my-1"></div>
+                                </div>
+                                <div class="pb-4">
+                                    <h4 class="text-sm font-bold text-slate-800">Разработка API</h4>
+                                    <p class="text-xs text-slate-500 mt-1">Backend, Node.js</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-4">
+                                <div class="flex flex-col items-center">
+                                    <span class="text-xs font-bold text-slate-400">14:00</span>
+                                    <div class="w-0.5 h-full bg-slate-100 my-1"></div>
+                                </div>
+                                <div class="pb-4">
+                                    <h4 class="text-sm font-bold text-slate-800">Встреча команды</h4>
+                                    <p class="text-xs text-slate-500 mt-1">Zoom, Обсуждение спринта</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-4">
+                                <div class="flex flex-col items-center">
+                                    <span class="text-xs font-bold text-slate-400">18:00</span>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold text-slate-800">Code Review</h4>
+                                    <p class="text-xs text-slate-500 mt-1">GitHub Pull Requests</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tuesday -->
+                    <div class="schedule-card bg-white rounded-2xl p-6 border border-slate-100 shadow-sm transition-all duration-300">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-lg font-bold text-slate-900">Вторник</h3>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="flex gap-4">
+                                <div class="flex flex-col items-center">
+                                    <span class="text-xs font-bold text-slate-400">10:00</span>
+                                    <div class="w-0.5 h-full bg-slate-100 my-1"></div>
+                                </div>
+                                <div class="pb-4">
+                                    <h4 class="text-sm font-bold text-slate-800">Frontend Dev</h4>
+                                    <p class="text-xs text-slate-500 mt-1">React Components</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-4">
+                                <div class="flex flex-col items-center">
+                                    <span class="text-xs font-bold text-slate-400">16:00</span>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold text-slate-800">Обучение</h4>
+                                    <p class="text-xs text-slate-500 mt-1">Новые фичи CSS</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Wednesday -->
+                    <div class="schedule-card bg-white rounded-2xl p-6 border border-slate-100 shadow-sm transition-all duration-300">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-lg font-bold text-slate-900">Среда</h3>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="flex gap-4">
+                                <div class="flex flex-col items-center">
+                                    <span class="text-xs font-bold text-slate-400">11:00</span>
+                                    <div class="w-0.5 h-full bg-slate-100 my-1"></div>
+                                </div>
+                                <div class="pb-4">
+                                    <h4 class="text-sm font-bold text-slate-800">Дизайн системы</h4>
+                                    <p class="text-xs text-slate-500 mt-1">Figma, UI Kit</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-4">
+                                <div class="flex flex-col items-center">
+                                    <span class="text-xs font-bold text-slate-400">15:00</span>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold text-slate-800">Тестирование</h4>
+                                    <p class="text-xs text-slate-500 mt-1">Jest, Unit Tests</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="bg-white border-t border-slate-200 pt-16 pb-8">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-8">
+                    <div class="flex items-center space-x-2 mb-4 md:mb-0">
+                        <div class="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white font-bold text-sm">
+                            IT
+                        </div>
+                        <span class="text-lg font-bold text-slate-800">Ivan Tishchenko</span>
+                    </div>
+                    <div class="flex space-x-6">
+                        <a href="#" class="text-slate-400 hover:text-slate-600 transition-colors">
+                            <span class="sr-only">GitHub</span>
+                            <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"></path></svg>
+                        </a>
+                        <a href="#" class="text-slate-400 hover:text-blue-500 transition-colors">
+                            <span class="sr-only">Telegram</span>
+                            <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                        </a>
+                    </div>
+                </div>
+                <div class="border-t border-slate-100 pt-8 flex flex-col md:flex-row justify-between items-center">
+                    <p class="text-sm text-slate-500">&copy; 2023 Ivan Tishchenko. All rights reserved.</p>
+                    <div class="flex space-x-4 mt-4 md:mt-0">
+                        <a href="#" class="text-sm text-slate-500 hover:text-slate-900">Privacy Policy</a>
+                        <a href="#" class="text-sm text-slate-500 hover:text-slate-900">Terms of Service</a>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+    </main>
+
+    <script>
+        // Mobile Menu Logic
+        const btn = document.getElementById('mobile-menu-button');
+        const menu = document.getElementById('mobile-menu');
+
+        btn.addEventListener('click', () => {
+            menu.classList.toggle('hidden');
+        });
+
+        // Close mobile menu when clicking a link
+        document.querySelectorAll('#mobile-menu a').forEach(link => {
+            link.addEventListener('click', () => {
+                menu.classList.add('hidden');
+            });
+        });
+
+        // Navbar hide/show on scroll with gradual fade
+        let lastScrollY = window.scrollY;
+        let ticking = false;
+        const navbar = document.getElementById('navbar');
+        const scrollThreshold = 100; // Start hiding after scrolling this much
+
+        function updateNavbar() {
+            const currentScrollY = window.scrollY;
+            
+            // Only start hiding after scrolling past the hero section
+            if (currentScrollY > scrollThreshold) {
+                if (currentScrollY > lastScrollY && currentScrollY > 200) {
+                    // Scrolling down - hide navbar gradually
+                    navbar.classList.add('nav-hidden');
+                    navbar.classList.remove('nav-visible');
+                } else {
+                    // Scrolling up - show navbar
+                    navbar.classList.remove('nav-hidden');
+                    navbar.classList.add('nav-visible');
+                }
+            } else {
+                // At top of page - always show navbar
+                navbar.classList.remove('nav-hidden');
+                navbar.classList.add('nav-visible');
+            }
+            
+            // Add shadow when scrolled
+            if (currentScrollY > 20) {
+                navbar.classList.add('shadow-md');
+            } else {
+                navbar.classList.remove('shadow-md');
+            }
+            
+            lastScrollY = currentScrollY;
+            ticking = false;
+        }
+
+        window.addEventListener('scroll', () => {
+            if (!ticking) {
+                window.requestAnimationFrame(updateNavbar);
+                ticking = true;
+            }
+        }, { passive: true });
+
+        // Intersection Observer for Fade-in Animation
+        const observerOptions = {
+            root: null,
+            rootMargin: '0px',
+            threshold: 0.1
+        };
+
+        const observer = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.fade-in').forEach(el => {
+            observer.observe(el);
+        });
+    </script>
 </body>
 </html>
+
