@@ -11,12 +11,18 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-super-secret-key-change-me")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 1 день
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
-# Учетные данные админа (пока захардкодим или возьмем из .env)
+# Учетные данные админа
 ADMIN_USER = os.getenv("STATS_USER", "admin")
-ADMIN_PASS_HASH = pwd_context.hash(os.getenv("STATS_PASS", "admin"))
+raw_pass = os.getenv("STATS_PASS", "admin")
+
+# На всякий случай обрезаем, если пароль гигантский (для некоторых хэшеров это критично)
+if len(raw_pass) > 72:
+    raw_pass = raw_pass[:72]
+
+ADMIN_PASS_HASH = pwd_context.hash(raw_pass)
 
 def create_access_token(data: dict):
     to_encode = data.copy()
