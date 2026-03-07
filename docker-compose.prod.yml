@@ -112,6 +112,16 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+        
+  main-site-frontend:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      # Пробрасываем папку с нашим HTML внутрь Nginx
+      - ./main_site_frontend:/usr/share/nginx/html:ro
+    # Порт 8080 внутри Docker, Caddy будет перекидывать сюда трафик
+    ports:
+      - "8080:80"
 
   caddy:
     image: caddy:alpine
