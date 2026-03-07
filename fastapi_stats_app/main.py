@@ -3,6 +3,7 @@ import os
 from pathlib import Path # Добавляем импорт pathlib
 from contextlib import asynccontextmanager
 from fastapi_stats_app.config import LOG_DIR, FASTAPI_LOG_FILE_NAME # Импортируем константы для логгирования
+from fastapi.middleware.cors import CORSMiddleware
 
 
 # Определяем пути для логгирования FastAPI приложения
@@ -44,6 +45,14 @@ async def lifespan(app: FastAPI):
     await close_db_pool()
 
 app = FastAPI(title="Bot Stats API", version="0.1.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://ivantishchenko.ru"], # Разрешаем только вашему сайту
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
+)
 
 # Определяем базовую директорию приложения (где находится main.py)
 APP_BASE_DIR = Path(__file__).resolve().parent

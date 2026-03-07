@@ -1,0 +1,30 @@
+# Основной сайт
+ivantishchenko.ru {
+    # Если у вас будет папка с сайтом, укажите её здесь
+    # Пока просто выведем заглушку или прокси на фронтенд-контейнер
+    respond "Welcome to my main site!" 200
+}
+
+# API поддомен
+api.ivantishchenko.ru {
+    # 1. Публичные эндпоинты (Календари) - доступ открыт для всех
+    handle_path /api/cal/* {
+        reverse_proxy localhost:9583 # Обращаемся к FastAPI внутри host-сети
+    }
+
+    # 2. Все остальные эндпоинты
+    handle {
+        # Проверка: если запрос пришел НЕ с вашего основного сайта
+        # (Проверяем заголовок Origin или Referer)
+        @not_from_main {
+            not header Origin https://ivantishchenko.ru
+            not header Referer https://ivantishchenko.ru*
+        }
+        
+        # Если нужно СОВСЕМ запретить прямой вход в браузере (кроме календарей)
+        # раскомментируйте строку ниже (но тогда и вы сами не зайдете без VPN/Proxy)
+        # abort @not_from_main
+
+        reverse_proxy localhost:9583
+    }
+}
