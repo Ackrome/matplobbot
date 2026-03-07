@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Расписание | ITISHCHENKO</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 font-['Inter']">
+    <!-- Navbar (такой же как на главной) -->
+<!-- Внутри main в schedule.html -->
+<main class="pt-32 max-w-6xl mx-auto px-4 pb-20">
+    <div class="flex flex-col md:flex-row justify-between items-end mb-12 gap-6">
+        <div>
+            <h1 class="text-5xl font-extrabold text-slate-900 mb-2">Расписание</h1>
+            <p class="text-slate-500">Поиск по группам и фильтрация по учебным модулям</p>
+        </div>
+        
+        <!-- Поиск -->
+        <div class="relative w-full md:w-96">
+            <input type="text" id="groupSearch" 
+                class="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" 
+                placeholder="Начните вводить группу (ПМ23-1)...">
+            <div class="absolute left-4 top-4.5 text-slate-400">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            </div>
+            <!-- Выпадающий список результатов -->
+            <div id="searchResults" class="absolute w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl z-50 hidden overflow-hidden"></div>
+        </div>
+    </div>
+
+    <!-- Фильтры модулей (появятся после выбора группы) -->
+    <div id="moduleFilterSection" class="mb-10 hidden fade-in">
+        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Ваши модули / подгруппы:</h3>
+        <div id="moduleContainer" class="flex flex-wrap gap-3">
+            <!-- Сюда JS вставит кнопки-переключатели -->
+        </div>
+    </div>
+
+    <!-- Сетка расписания -->
+    <div id="scheduleGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Карточки появятся здесь -->
+    </div>
+</main>
+
+<script src="/js/schedule.js"></script>
+</body>
+</html>

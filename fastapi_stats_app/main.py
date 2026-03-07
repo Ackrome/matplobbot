@@ -29,7 +29,7 @@ from fastapi import FastAPI, Request, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from .routers import stats_router, ws_router, calendar_router
+from .routers import stats_router, ws_router, calendar_router, schedule_router, auth_router
 from shared_lib.database import init_db_pool, close_db_pool
 from .auth import verify_credentials  # Импортируем нашу функцию
 
@@ -46,12 +46,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Bot Stats API", version="0.1.0", lifespan=lifespan)
 
+# Настройка CORS для фронтенда
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://ivantishchenko.ru"], # Разрешаем только вашему сайту
+    allow_origins=["https://ivantishchenko.ru"], # Твой основной домен
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    allow_credentials=True,
 )
 
 # Определяем базовую директорию приложения (где находится main.py)
@@ -93,6 +94,8 @@ async def read_user_details_html(request: Request, user_id: int):
     return templates.TemplateResponse("user_details.html", {"request": request, "user_id": user_id})
 
 
-app.include_router(stats_router.router, prefix="/api", tags=["statistics"])
+app.include_router(auth_router.router, prefix="/api")
+app.include_router(schedule_router.router, prefix="/api")
+app.include_router(stats_router.router, prefix="/api")
 app.include_router(ws_router.router, tags=["websockets"])
 app.include_router(calendar_router.router, prefix="/api", tags=["calendar"])
