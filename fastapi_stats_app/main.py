@@ -49,12 +49,15 @@ app = FastAPI(title="Bot Stats API", version="0.1.0", lifespan=lifespan)
 # Настройка CORS для фронтенда
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://ivantishchenko.ru"], # Твой основной домен
+    allow_origins=[
+        "https://ivantishchenko.ru", 
+        "http://ivantishchenko.ru",
+        "https://api.ivantishchenko.ru"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 # Определяем базовую директорию приложения (где находится main.py)
 APP_BASE_DIR = Path(__file__).resolve().parent
 

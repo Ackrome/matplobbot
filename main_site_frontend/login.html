@@ -29,15 +29,6 @@
         </form>
         <div id="error" class="mt-4 text-red-500 text-center text-sm hidden"></div>
     </div>
-
-    <script>
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const errorEl = document.getElementById('error');
-            // Здесь будет твой fetch к api.ivantishchenko.ru/token
-            // После успеха: localStorage.setItem('token', data.access_token);
-            // window.location.href = '/';
-        });
-    </script>
+    <script src="/js/auth.js"></script>
 </body>
 </html>
