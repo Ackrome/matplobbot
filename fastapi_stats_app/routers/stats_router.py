@@ -23,7 +23,7 @@ from shared_lib.schemas import (
     ExportActionsResponse,
     SendMessageRequest 
 )
-from ..auth import verify_credentials
+from ..auth import get_current_user 
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -61,7 +61,7 @@ async def health_check(db: AsyncSession = Depends(get_db_session_dependency)) ->
     summary="Профиль пользователя",
     description="Возвращает детальную информацию о пользователе и историю его действий с пагинацией.",
     response_model=UserProfileResponse,
-    dependencies=[Depends(verify_credentials)]
+    dependencies=[Depends(get_current_user)]
 )
 async def get_user_profile(
     user_id: int,
@@ -124,7 +124,7 @@ async def get_user_profile(
     summary="Пользователи по действию",
     description="Возвращает список пользователей, совершивших конкретное действие.",
     response_model=ActionUsersResponse,
-    dependencies=[Depends(verify_credentials)]
+    dependencies=[Depends(get_current_user)]
 )
 async def get_action_users(
     action_type: str = Query(..., description="Тип действия"),
@@ -178,7 +178,7 @@ async def get_action_users(
     summary="Экспорт действий",
     description="Выгружает полную историю действий пользователя.",
     response_model=ExportActionsResponse,
-    dependencies=[Depends(verify_credentials)]
+    dependencies=[Depends(get_current_user)]
 )
 async def export_user_actions(
     user_id: int,
@@ -196,7 +196,7 @@ async def export_user_actions(
     summary="Отправить сообщение пользователю",
     description="Отправляет сообщение в Telegram и сохраняет его в БД как исходящее от админа.",
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(verify_credentials)]
+    dependencies=[Depends(get_current_user)]
 )
 async def send_message_to_user(user_id: int, message_data: SendMessageRequest):
     if not BOT_TOKEN:
