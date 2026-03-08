@@ -1,12 +1,68 @@
 <!DOCTYPE html>
 <html lang="ru">
-<script>
-if (!localStorage.getItem('jwt_token')) {
-    window.location.href = '/login';
-}
-</script>
-<body>
-    You're in
-</body>
+<head>
+    <meta charset="UTF-8">
+    <title>Статистика | ITISHCHENKO</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script>
+        // Защита страницы: если нет токена, отправляем на логин
+        if (!localStorage.getItem('jwt_token')) {
+            window.location.href = '/login';
+        }
+    </script>
+</head>
+<body class="bg-slate-50 font-['Inter'] text-slate-900">
 
+    <!-- Header -->
+    <header class="fixed top-0 w-full bg-white/80 backdrop-blur-md border-b border-slate-200 z-50">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white font-bold">IT</div>
+                <h1 class="text-xl font-bold">Matplobbot Dashboard</h1>
+            </div>
+            <button onclick="logout()" class="text-sm font-medium text-red-500 hover:text-red-600 transition-colors">Выйти</button>
+        </div>
+    </header>
+
+    <main class="pt-32 pb-20 max-w-7xl mx-auto px-6">
+        <!-- KPI Карточки -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10" id="kpi-container">
+            <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                <p class="text-slate-400 text-sm font-bold uppercase tracking-wider mb-2">Всего действий</p>
+                <h2 class="text-4xl font-black text-slate-900" id="totalActions">...</h2>
+            </div>
+            <!-- Сюда можно добавить еще карточки -->
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- График активности -->
+            <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                <h3 class="text-xl font-bold mb-6">Активность пользователей</h3>
+                <canvas id="activityChart"></canvas>
+            </div>
+
+            <!-- Таблица лидеров -->
+            <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                <h3 class="text-xl font-bold mb-6">🏆 Таблица лидеров</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="text-slate-400 text-xs uppercase font-bold border-b border-slate-100">
+                                <th class="pb-4">Пользователь</th>
+                                <th class="pb-4 text-right">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboardBody">
+                            <!-- JS вставит строки сюда -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/js/stats.js"></script>
+</body>
 </html>
