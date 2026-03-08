@@ -100,7 +100,7 @@ services:
     stop_grace_period: 30s
     env_file: ./.env
     ports:
-      - "9583:9583"
+      - "127.0.0.1:9583:9583"
     volumes:
       - bot_logs:/app/logs # All services write to the same log volume
       - ./fastapi_stats_app:/fastapi_stats_app

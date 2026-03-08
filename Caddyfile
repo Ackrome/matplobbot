@@ -1,17 +1,9 @@
-# Основной домен
+# Основной домен (Nginx сам разберется с путями)
 ivantishchenko.ru {
-    reverse_proxy localhost:8080
+    reverse_proxy 127.0.0.1:8080
 }
 
-# API и подписки
+# Поддомен API (для авторизации и статистики)
 api.ivantishchenko.ru {
-    # Публичный доступ к календарям
-    handle_path /api/cal/* {
-        reverse_proxy 127.0.0.1:9583
-    }
-
-    # Всё остальное (статистика, дашборд)
-    handle {
-        reverse_proxy 127.0.0.1:9583
-    }
+    reverse_proxy 127.0.0.1:9583
 }
