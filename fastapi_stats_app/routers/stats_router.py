@@ -14,7 +14,11 @@ from shared_lib.database import (
     get_user_profile_data_from_db,
     get_users_for_action,
     get_all_user_actions,
-    log_user_action
+    log_user_action,
+    get_session,
+    get_leaderboard_data_from_db,
+    get_activity_over_time_data_from_db
+
 )
 from shared_lib.redis_client import redis_client
 from shared_lib.schemas import (
@@ -25,7 +29,7 @@ from shared_lib.schemas import (
 )
 from ..auth import get_current_user 
 
-router = APIRouter()
+router = APIRouter(prefix="/stats", tags=["stats"])
 logger = logging.getLogger(__name__)
 
 # TTL кэша в секундах (5 минут)
@@ -243,3 +247,14 @@ async def send_message_to_user(user_id: int, message_data: SendMessageRequest):
         # Логируем и возвращаем успех.
     
     return {"status": "success"}
+
+@router.get("/leaderboard")
+async def get_leaderboard(current_user: str = Depends(get_current_user)):
+    async with get_session() as db:
+        return await get_leaderboard_data_from_db(db)
+
+@router.get("/activity")
+async def get_activity(current_user: str = Depends(get_current_user)):
+    async with get_session() as db:
+        # Получаем данные за последние 30 дней
+        return await get_activity_over_time_data_from_db(db, period='day')
