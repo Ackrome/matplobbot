@@ -31,7 +31,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from .routers import stats_router, ws_router, calendar_router, schedule_router, auth_router
 from shared_lib.database import init_db_pool, close_db_pool
-from .auth import verify_credentials  # Импортируем нашу функцию
+from .auth import get_current_user  # Импортируем нашу функцию
 
 
 @asynccontextmanager
@@ -77,7 +77,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     response_class=HTMLResponse,
     summary="Главная страница статистики",
     description="Отображает HTML страницу со статистикой бота.",
-    dependencies=[Depends(verify_credentials)]
+    dependencies=[Depends(get_current_user)]
     )
 async def read_root_html(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
@@ -87,7 +87,7 @@ async def read_root_html(request: Request):
     response_class=HTMLResponse,
     summary="Страница профиля пользователя",
     description="Отображает страницу с детальной информацией о действиях пользователя.",
-    dependencies=[Depends(verify_credentials)]
+    dependencies=[Depends(get_current_user)]
     )
 async def read_user_details_html(request: Request, user_id: int):
     # user_id передается в шаблон, но мы будем загружать данные через JS/API
