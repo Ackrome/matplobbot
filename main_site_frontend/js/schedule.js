@@ -321,7 +321,7 @@ function renderDesktopGrid(lessons) {
 function renderMobileFeed(lessons) {
     const container = document.getElementById('mobileSchedule');
     if (lessons.length === 0) {
-        container.innerHTML = `<div class="text-center py-10 bg-white rounded-3xl border border-slate-200"><p class="text-slate-500">Нет занятий на этой неделе.</p></div>`;
+        container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm">Нет занятий на этой неделе.</div>`;
         return;
     }
 
@@ -339,15 +339,15 @@ function renderMobileFeed(lessons) {
         const d = parseDate(dateStr);
         const isToday = isSameDay(d, new Date());
         
-        // НОВЫЙ ДИЗАЙН: Монолитный заголовок дня без прозрачности
+        // Ключевое изменение: Белый фон и высокая плотность
         html += `
-        <div class="mb-6 relative">
-            <div class="sticky top-[64px] z-20 bg-slate-50 py-3 mb-3 border-b border-slate-200 flex items-end justify-between shadow-[0_4px_6px_-1px_rgba(248,250,252,1)]">
-                <div class="font-black text-lg text-slate-800 capitalize leading-none">${d.toLocaleDateString('ru', {weekday: 'long'})}</div>
-                <div class="text-sm font-bold ${isToday ? 'text-white bg-blue-600 px-3 py-1 rounded-full' : 'text-slate-500'}">${d.toLocaleDateString('ru', {day: 'numeric', month: 'long'})}</div>
+        <div class="relative">
+            <div class="sticky top-[56px] md:top-[64px] z-20 bg-white px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                <div class="font-black text-slate-800 capitalize">${d.toLocaleDateString('ru', {weekday: 'long'})}</div>
+                <div class="text-xs font-bold ${isToday ? 'text-blue-600' : 'text-slate-400'}">${d.toLocaleDateString('ru', {day: 'numeric', month: 'long'})}</div>
             </div>
             
-            <div class="flex flex-col gap-4 px-1">
+            <div class="flex flex-col divide-y divide-slate-50">
                 ${byDate[dateStr].sort((a,b) => a.beginLesson.localeCompare(b.beginLesson)).map(l => renderCard(l, false)).join('')}
             </div>
         </div>`;
@@ -355,47 +355,99 @@ function renderMobileFeed(lessons) {
     container.innerHTML = html;
 }
 
+/**
+ * Рендерит карточку занятия.
+ * @param {Object} l - Объект занятия из API.
+ * @param {Boolean} isDesktop - Флаг: true для сетки ПК, false для ленты мобильных.
+ */
 function renderCard(l, isDesktop) {
     const color = getBadgeColor(l.kindOfWork);
+    
+    // 1. Логика интерактивных сокращений
     const useShort = document.getElementById('useShortNames').checked;
     const discName = useShort ? l.discipline_short : l.discipline_full;
     
-    // Для мобилки время пишем прямо внутри карточки сверху, для десктопа слева общая шкала
-    const timeBlock = !isDesktop ? `
-        <div class="flex items-center gap-2 mb-2 pb-2 border-b border-slate-100">
-            <span class="font-black text-slate-800 bg-white px-2 py-0.5 rounded shadow-sm border border-slate-100">${l.beginLesson}</span>
-            <span class="text-xs font-bold text-slate-400 line-through">${l.endLesson}</span>
-        </div>` : '';
+    // 2. Дизайн для ПК (Сетка)
+    if (isDesktop) {
+        // Сокращаем ФИО преподавателя только для ПК-версии (Фамилия И.И.)
+        const teacherTokens = (l.lecturer_title || '').split(' ');
+        const teacherShort = teacherTokens.length > 2 
+            ? `${teacherTokens[0]} ${teacherTokens[1][0]}.${teacherTokens[2][0]}.` 
+            : l.lecturer_title;
 
-    const textClass = isDesktop ? "text-[11px] leading-snug line-clamp-3" : "text-sm";
-    const iconSize = isDesktop ? "w-3 h-3" : "w-4 h-4";
-    const detailClass = isDesktop ? "text-[10px]" : "text-xs";
-    
-    const teacherTokens = (l.lecturer_title || '').split(' ');
-    const teacherShort = (isDesktop && teacherTokens.length > 2) 
-        ? `${teacherTokens[0]} ${teacherTokens[1][0]}.${teacherTokens[2][0]}.` 
-        : l.lecturer_title;
+        return `
+        <div class="p-2.5 sm:p-3 rounded-2xl border ${color.border} ${color.bg} shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md flex flex-col h-full min-h-[110px]">
+            <!-- Верхняя строка: Тип пары + Модуль -->
+            <div class="flex justify-between items-start gap-1 mb-1.5">
+                <div class="text-[9px] font-black uppercase tracking-wider ${color.text} truncate" title="${l.kindOfWork}">
+                    ${l.kindOfWork}
+                </div>
+                ${l.module ? `
+                    <span class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-white text-slate-600 truncate max-w-[60px] border border-slate-100 shadow-sm" title="${l.module}">
+                        ${l.module}
+                    </span>` : ''}
+            </div>
+            
+            <!-- Название дисциплины (Line-clamp ограничивает до 3 строк) -->
+            <div class="font-bold text-slate-800 text-[11px] leading-snug line-clamp-3 mb-2 flex-grow" title="${discName}">
+                ${discName}
+            </div>
+            
+            <!-- Инфо: Аудитория и Преподаватель -->
+            <div class="flex flex-col gap-1">
+                <div class="flex items-center gap-1 text-[10px] font-medium text-slate-600 hover:text-blue-600 cursor-pointer transition-colors" 
+                     onclick="copyToClipboard('${l.auditorium}', event)" title="Копировать аудиторию">
+                    <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    <span class="truncate">${l.auditorium}</span>
+                </div>
+                ${teacherShort ? `
+                <div class="flex items-center gap-1 text-[10px] font-medium text-slate-600 hover:text-blue-600 cursor-pointer transition-colors" 
+                     onclick="copyToClipboard('${l.lecturer_title}', event)" title="Копировать ФИО">
+                    <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                    <span class="truncate">${teacherShort}</span>
+                </div>` : ''}
+            </div>
+        </div>`;
+    }
+
+    // 3. Дизайн для МОБИЛЬНЫХ (Лента)
+    // Убираем прозрачность бейджей для лучшей читаемости на телефоне
+    const mobileBadgeBg = color.bg.includes('/') ? color.bg.split('/')[0] : color.bg;
 
     return `
-    <div class="p-2.5 sm:p-3 rounded-2xl border ${color.border} ${color.bg} shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md flex flex-col h-full">
-        ${timeBlock}
-        <div class="flex justify-between items-start gap-1 mb-1.5">
-            <div class="text-[9px] font-black uppercase tracking-wider ${color.text} truncate" title="${l.kindOfWork}">${l.kindOfWork}</div>
-            ${l.module ? `<span class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-white text-slate-600 truncate max-w-[60px] border border-slate-100" title="${l.module}">${l.module}</span>` : ''}
+    <div class="p-4 bg-white hover:bg-slate-50 transition-colors flex flex-col gap-2">
+        <!-- Верхняя строка: Время + Бейдж типа пары -->
+        <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+                <span class="font-black text-sm text-slate-900">${l.beginLesson}</span>
+                <span class="text-[10px] font-bold text-slate-300 line-through decoration-slate-200">${l.endLesson}</span>
+            </div>
+            <span class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${color.text} ${mobileBadgeBg} border ${color.border}">
+                ${l.kindOfWork}
+            </span>
         </div>
-        
-        <div class="font-bold text-slate-800 ${textClass} mb-2 flex-grow" title="${discName}">${discName}</div>
-        
-        <div class="flex flex-col gap-1">
-            <div class="flex items-center gap-1 ${detailClass} font-medium text-slate-600 hover:text-blue-600 cursor-pointer transition-colors" onclick="copyToClipboard('${l.auditorium}', event)" title="Копировать аудиторию">
-                <svg class="${iconSize} shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+
+        <!-- Тело: Название + Тег модуля -->
+        <div>
+            <div class="font-bold text-slate-900 text-sm leading-snug mb-1">${discName}</div>
+            ${l.module ? `
+                <span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                    ${l.module}
+                </span>` : ''}
+        </div>
+
+        <!-- Подвал: Аудитория и Преподаватель в две колонки -->
+        <div class="grid grid-cols-2 gap-2 mt-1">
+            <div class="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 truncate cursor-pointer active:text-blue-600" 
+                 onclick="copyToClipboard('${l.auditorium}', event)">
+                <svg class="w-3.5 h-3.5 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" stroke-width="2"></path></svg>
                 <span class="truncate">${l.auditorium}</span>
             </div>
-            ${teacherShort ? `
-            <div class="flex items-center gap-1 ${detailClass} font-medium text-slate-600 hover:text-blue-600 cursor-pointer transition-colors" onclick="copyToClipboard('${l.lecturer_title}', event)" title="Копировать ФИО">
-                <svg class="${iconSize} shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-                <span class="truncate">${teacherShort}</span>
-            </div>` : ''}
+            <div class="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 truncate cursor-pointer active:text-blue-600" 
+                 onclick="copyToClipboard('${l.lecturer_title}', event)">
+                <svg class="w-3.5 h-3.5 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" stroke-width="2"></path></svg>
+                <span class="truncate">${l.lecturer_title}</span>
+            </div>
         </div>
     </div>`;
 }
@@ -460,3 +512,18 @@ document.addEventListener('click', (e) => {
         closeOfflinePanel();
     }
 });
+
+// Добавляем функцию для мобильных фильтров
+function toggleFiltersMobile() {
+    const content = document.getElementById('filterContent');
+    const arrow = document.getElementById('filterArrow');
+    const isHidden = content.classList.contains('hidden');
+    
+    if (isHidden) {
+        content.classList.remove('hidden');
+        arrow.classList.add('rotate-180');
+    } else {
+        content.classList.add('hidden');
+        arrow.classList.remove('rotate-180');
+    }
+}
