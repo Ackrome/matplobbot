@@ -29,9 +29,9 @@
         </a>
     </nav>
 
-    <main class="pt-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
-        <!-- Шапка и Поиск -->
-        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-8 gap-6 relative z-40">
+    <main class="pt-24 max-w-[1400px] mx-auto px-2 sm:px-6 lg:px-8 pb-20">
+        <!-- Шапка и Поиск (как в предыдущей версии) -->
+        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-6 gap-6 relative z-40">
             <div>
                 <h1 class="text-4xl md:text-5xl font-black text-slate-900 tracking-tight mb-2">Расписание</h1>
                 <p class="text-slate-500 font-medium">Умный поиск по группам и преподавателям</p>
@@ -44,13 +44,12 @@
                 <div class="absolute left-4 top-3.5 text-slate-400">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 </div>
-                <!-- Результаты поиска -->
                 <div id="searchResults" class="absolute w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl overflow-hidden hidden max-h-80 overflow-y-auto custom-scrollbar"></div>
             </div>
         </div>
 
-        <!-- Секция фильтров (Скрыта до выбора группы) -->
-        <div id="moduleFilterSection" class="mb-6 hidden fade-in bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative z-30">
+        <!-- Секция фильтров -->
+        <div id="moduleFilterSection" class="mb-4 hidden fade-in bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm relative z-30">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
                 <h3 class="text-sm font-bold text-slate-500 uppercase tracking-wider">Ваши подгруппы и модули</h3>
                 <div class="flex gap-2">
@@ -63,17 +62,46 @@
 
         <!-- Контейнер для сетки расписания -->
         <div id="scheduleGrid" class="fade-in">
-            <!-- Состояние по умолчанию -->
-            <div class="text-center py-20 bg-white rounded-3xl border border-slate-200 border-dashed">
-                <div class="w-20 h-20 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            <!-- Навигация по неделям (скрыта по умолчанию) -->
+            <div id="weekNav" class="hidden flex items-center justify-between mb-4 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+                <button onclick="changeWeek(-1)" class="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                </button>
+                <div class="text-sm font-bold text-slate-800" id="weekRangeDisplay"></div>
+                <div class="flex gap-2">
+                    <button onclick="setTodayWeek()" class="px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-bold bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">Сегодня</button>
+                    <button onclick="changeWeek(1)" class="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </button>
                 </div>
-                <h3 class="text-xl font-bold text-slate-700 mb-1">Расписание не выбрано</h3>
-                <p class="text-slate-500">Воспользуйтесь поиском выше, чтобы найти свою группу.</p>
             </div>
+
+            <!-- Зона предупреждений об оффлайне -->
+            <div id="offlineWarning" class="hidden mb-4 p-4 bg-orange-50 border border-orange-200 rounded-2xl flex items-start sm:items-center gap-3 text-orange-800 shadow-sm fade-in">
+                <svg class="w-6 h-6 shrink-0 mt-0.5 sm:mt-0 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                <div>
+                    <strong class="block text-sm sm:text-base">ВУЗ недоступен. Показана сохраненная копия расписания.</strong>
+                    <span class="text-xs sm:text-sm opacity-90 block mt-0.5">Данные могут быть не самыми свежими. Как только сервера ВУЗа поднимутся, мы автоматически обновим информацию.</span>
+                </div>
+            </div>
+
+            <!-- Десктопная сетка (таблица, не скроллится вбок) -->
+            <div id="desktopSchedule" class="hidden lg:block w-full"></div>
+
+            <!-- Мобильная лента (список) -->
+            <div id="mobileSchedule" class="block lg:hidden flex flex-col gap-4">
+                <div class="text-center py-20 bg-white rounded-3xl border border-slate-200 border-dashed mx-2 sm:mx-0">
+                    <div class="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-700 mb-1">Расписание не выбрано</h3>
+                    <p class="text-sm text-slate-500 px-4">Воспользуйтесь поиском выше.</p>
+                </div>
+            </div>
+
         </div>
     </main>
 
-    <script src="/js/schedule.js?v=2"></script>
+    <script src="/js/schedule.js?v=3.0"></script>
 </body>
 </html>
