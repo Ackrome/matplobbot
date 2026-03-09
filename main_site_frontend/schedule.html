@@ -27,11 +27,14 @@
         </a>
     </nav>
 
+
     <main class="pt-24 max-w-[1600px] mx-auto px-2 sm:px-6 lg:px-8 pb-20">
         
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            <!-- ЛЕВАЯ КОЛОНКА (ОСНОВНАЯ) -->
-            <div class="lg:col-span-3">
+        <!-- МЕНЯЕМ GRID НА FLEX -->
+        <div class="flex flex-col lg:flex-row gap-6 xl:gap-8">
+            
+            <!-- ЛЕВАЯ КОЛОНКА (ОСНОВНАЯ) - Забирает всё свободное место -->
+            <div class="flex-1 min-w-0 w-full">
                 <!-- Шапка и Поиск -->
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4 relative z-40">
                     <div>
@@ -54,7 +57,6 @@
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 border-b border-slate-100 pb-3">
                         <h3 class="text-sm font-bold text-slate-500 uppercase tracking-wider">Подгруппы и модули</h3>
                         <div class="flex items-center gap-4">
-                            <!-- ИНТЕРАКТИВНЫЙ ФЛАЖОК -->
                             <label class="flex items-center cursor-pointer group">
                                 <div class="relative">
                                     <input type="checkbox" id="useShortNames" class="sr-only" checked onchange="filterAndRender()">
@@ -73,14 +75,12 @@
                 </div>
 
                 <style>
-                    /* Стили для свитчера */
                     input:checked ~ .block { background-color: #2563eb; }
                     input:checked ~ .dot { transform: translateX(100%); }
                 </style>
 
                 <!-- Контейнер для сетки расписания -->
                 <div id="scheduleGrid" class="fade-in relative min-h-[400px]">
-                    <!-- Навигация по неделям -->
                     <div id="weekNav" class="hidden flex flex-col sm:flex-row items-center justify-between mb-4 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm gap-2">
                         <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
                             <button onclick="changeWeek(-1)" class="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-600 transition-colors shadow-sm border border-slate-200">
@@ -94,7 +94,6 @@
                         <button onclick="setTodayWeek()" class="w-full sm:w-auto px-4 py-2 text-sm font-bold bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors border border-blue-100 shadow-sm">Текущая неделя</button>
                     </div>
 
-                    <!-- Зона предупреждений об оффлайне -->
                     <div id="offlineWarning" class="hidden mb-4 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start sm:items-center gap-3 text-amber-800 shadow-sm fade-in">
                         <svg class="w-6 h-6 shrink-0 mt-0.5 sm:mt-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                         <div>
@@ -103,11 +102,9 @@
                         </div>
                     </div>
 
-                    <!-- Таблица / Лента -->
                     <div id="desktopSchedule" class="hidden lg:block w-full relative"></div>
                     <div id="mobileSchedule" class="block lg:hidden flex flex-col gap-4"></div>
                     
-                    <!-- Дефолтное состояние -->
                     <div id="defaultState" class="text-center py-32 bg-white rounded-3xl border border-slate-200 border-dashed absolute inset-0 z-0">
                         <div class="w-20 h-20 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
                             <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
@@ -118,26 +115,25 @@
                 </div>
             </div>
 
-            <!-- ПРАВАЯ КОЛОНКА (ОФФЛАЙН КЭШ) -->
-            <div class="hidden lg:block lg:col-span-1">
+            <!-- ПРАВАЯ КОЛОНКА (ОФФЛАЙН КЭШ) - Фиксированная ширина -->
+            <div class="hidden lg:block w-64 xl:w-72 shrink-0">
                 <div class="sticky top-24 bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                    <div class="flex items-center gap-2 mb-4">
+                    <div class="flex items-center gap-2 mb-3">
                         <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
                         <h3 class="font-bold text-slate-800">Доступно оффлайн</h3>
                     </div>
-                    <p class="text-xs text-slate-500 mb-4 leading-relaxed">Эти расписания сохранены в нашей базе. Они откроются мгновенно, даже если ВУЗ лежит.</p>
+                    <p class="text-[11px] text-slate-500 mb-4 leading-relaxed">Эти расписания сохранены локально и откроются мгновенно.</p>
                     
                     <div id="cachedEntitiesList" class="flex flex-wrap gap-2">
-                        <!-- Сюда JS загрузит теги -->
-                        <div class="skeleton h-8 w-20 rounded-lg"></div>
-                        <div class="skeleton h-8 w-24 rounded-lg"></div>
-                        <div class="skeleton h-8 w-16 rounded-lg"></div>
+                        <div class="skeleton h-7 w-16 rounded-lg"></div>
+                        <div class="skeleton h-7 w-20 rounded-lg"></div>
+                        <div class="skeleton h-7 w-14 rounded-lg"></div>
                     </div>
                 </div>
             </div>
         </div>
     </main>
 
-    <script src="/js/schedule.js?v=4.0"></script>
+    <script src="/js/schedule.js?v=4.1"></script>
 </body>
 </html>

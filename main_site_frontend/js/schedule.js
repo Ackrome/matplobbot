@@ -275,9 +275,10 @@ function renderDesktopGrid(lessons) {
         const isToday = isSameDay(d, now);
         html += `<th class="p-3 border-r border-slate-200 last:border-r-0 ${isToday ? 'bg-blue-50/70' : ''} relative">
             ${isToday ? '<div class="absolute top-0 left-0 w-full h-1 bg-blue-500"></div>' : ''}
-            <div class="flex flex-col items-center">
-                <span class="text-[10px] uppercase tracking-widest ${isToday ? 'text-blue-600 font-bold' : 'text-slate-400'}">${d.toLocaleDateString('ru', {weekday: 'short'})}</span>
-                <span class="text-lg font-black ${isToday ? 'text-blue-700' : 'text-slate-800'}">${d.getDate()}</span>
+            <div class="flex flex-col items-center gap-0.5">
+                <!-- УВЕЛИЧЕН ШРИФТ И КОНТРАСТ ЗДЕСЬ -->
+                <span class="text-xs uppercase tracking-widest font-bold ${isToday ? 'text-blue-600' : 'text-slate-500'}">${d.toLocaleDateString('ru', {weekday: 'short'})}</span>
+                <span class="text-xl font-black ${isToday ? 'text-blue-700' : 'text-slate-800'}">${d.getDate()}</span>
             </div>
         </th>`;
     });
