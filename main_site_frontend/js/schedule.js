@@ -389,7 +389,7 @@ function renderCard(l, isDesktop) {
             </div>
             
             <!-- Название дисциплины (Line-clamp ограничивает до 3 строк) -->
-            <div class="font-bold text-slate-800 text-[11px] leading-snug line-clamp-3 mb-2 flex-grow" title="${discName}">
+            <div class="font-bold text-slate-800 text-[13px] leading-snug line-clamp-3 mb-2 flex-grow" title="${discName}">
                 ${discName}
             </div>
             
