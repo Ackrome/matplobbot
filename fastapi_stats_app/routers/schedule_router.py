@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from shared_lib.services.university_api import create_ruz_api_client
-from shared_lib.services.schedule_service import get_unique_modules_hybrid
+from shared_lib.services.schedule_service import get_unique_modules_hybrid, get_module_name
+from shared_lib.database import get_all_short_names
 import aiohttp
 from datetime import date, timedelta
 
@@ -22,7 +23,18 @@ async def get_schedule_data(type: str, id: str):
         client = create_ruz_api_client(session)
         schedule = await client.get_schedule(type, id, start, finish)
         
-        # Получаем модули для фронтенда
+        # 1. Получаем маппинг коротких имен из БД
+        short_names = await get_all_short_names()
+        
+        # 2. Обрабатываем каждое занятие перед отправкой
+        for lesson in schedule:
+            # Подставляем короткое имя, если оно есть
+            full_name = lesson.get('discipline', '')
+            lesson['discipline_display'] = short_names.get(full_name, full_name)
+            
+            # Сразу извлекаем модуль на бэкенде для надежности
+            lesson['module'] = get_module_name(lesson.get('group')) 
+
         modules = await get_unique_modules_hybrid(schedule)
         
         return {

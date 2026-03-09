@@ -2,6 +2,21 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <style>
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: 80px repeat(6, 1fr); /* 1 колонка время + 6 дней */
+            gap: 1px;
+            background-color: #e2e8f0; /* Цвет границ */
+            border: 1px solid #e2e8f0;
+        }
+        .time-cell { background: #f8fafc; }
+        .day-cell { background: white; min-height: 120px; }
+        .lesson-entry { 
+            font-size: 0.75rem; 
+            line-height: 1.2;
+        }
+    </style>
     <title>Расписание | ITISHCHENKO</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>

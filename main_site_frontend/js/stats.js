@@ -1,5 +1,6 @@
 // js/stats.js
-const API_URL = "https://api.ivantishchenko.ru/api";
+const API_BASE = "https://api.ivantishchenko.ru/api";
+// const API_BASE = "http://api.localhost/api";
 const token = localStorage.getItem('jwt_token');
 
 function logout() {
@@ -8,7 +9,7 @@ function logout() {
 }
 
 async function fetchWithAuth(endpoint) {
-    const response = await fetch(`${API_URL}${endpoint}`, {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
         headers: { 'Authorization': `Bearer ${token}` }
     });
     if (response.status === 401) logout();

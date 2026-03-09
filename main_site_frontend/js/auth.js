@@ -1,5 +1,5 @@
 const API_BASE = "https://api.ivantishchenko.ru/api";
-
+// const API_BASE = "http://api.localhost/api";
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     

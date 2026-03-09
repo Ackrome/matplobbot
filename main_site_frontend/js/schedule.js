@@ -73,51 +73,11 @@ function toggleModule(mod) {
     filterAndRender();
 }
 
-// 4. Фильтрация и рендер карточек
-function filterAndRender() {
-    const grid = document.getElementById('scheduleGrid');
-    
-    const filtered = fullSchedule.filter(lesson => {
-        const mod = getModuleName(lesson.group);
-        // Показываем если: это общая пара (нет модуля) ИЛИ модуль выбран
-        return !mod || selectedModules.has(mod);
-    });
-
-    grid.innerHTML = filtered.map(lesson => `
-        <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
-            <div class="flex justify-between items-start mb-4">
-                <span class="text-xs font-bold px-3 py-1 rounded-full ${getBadgeColor(lesson.kindOfWork)}">
-                    ${lesson.kindOfWork}
-                </span>
-                <span class="text-sm font-mono text-slate-400">${lesson.beginLesson} - ${lesson.endLesson}</span>
-            </div>
-            <h3 class="font-bold text-slate-900 mb-2 leading-tight">${lesson.discipline}</h3>
-            <p class="text-sm text-slate-500 mb-4 flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                ${lesson.auditorium}
-            </p>
-            <div class="pt-4 border-t border-slate-50 flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-400 uppercase">
-                    ${lesson.lecturer_title.split(' ').map(n => n[0]).join('')}
-                </div>
-                <span class="text-xs text-slate-600 font-medium">${lesson.lecturer_title}</span>
-            </div>
-        </div>
-    `).join('');
-}
-
 // Вспомогательные функции
 function getModuleName(groupStr) {
     if (!groupStr) return null;
     const match = groupStr.match(/Модуль\s+["«](.+?)["»]/) || groupStr.match(/(\([А-Яа-яA-Za-z0-9_]+\)-\d+)/);
     return match ? match[1] : null;
-}
-
-function getBadgeColor(kind) {
-    if (kind.includes('Лекц')) return 'bg-green-100 text-green-700';
-    if (kind.includes('Практ') || kind.includes('Семин')) return 'bg-yellow-100 text-yellow-700';
-    if (kind.includes('Экзамен')) return 'bg-red-100 text-red-700';
-    return 'bg-blue-100 text-blue-700';
 }
 
 function debounce(func, timeout = 300){
@@ -126,4 +86,97 @@ function debounce(func, timeout = 300){
         clearTimeout(timer);
         timer = setTimeout(() => { func.apply(this, args); }, timeout);
     };
+}
+
+
+const TIME_SLOTS = [
+    "08:30", "10:10", "11:50", "14:00", "15:40", "17:20", "18:55", "20:30"
+];
+
+function filterAndRender() {
+    const container = document.getElementById('scheduleGrid');
+    container.innerHTML = ''; // Очищаем
+
+    // 1. Группируем пары по дням и времени
+    const gridData = {}; // { '2024-03-10': { '09:00': [lessons] } }
+
+    fullSchedule.forEach(lesson => {
+        const mod = lesson.module;
+        // КОРРЕКТНАЯ ФИЛЬТРАЦИЯ: 
+        // Если у пары есть модуль, показываем её только если он ВЫБРАН.
+        // Если модуля нет - показываем ВСЕГДА.
+        if (mod && !selectedModules.has(mod)) return;
+
+        if (!gridData[lesson.date]) gridData[lesson.date] = {};
+        if (!gridData[lesson.date][lesson.beginLesson]) gridData[lesson.date][lesson.beginLesson] = [];
+        
+        gridData[lesson.date][lesson.beginLesson].push(lesson);
+    });
+
+    // 2. Получаем список уникальных дат из расписания (сортируем)
+    const sortedDates = Object.keys(gridData).sort();
+
+    // 3. Строим HTML Таблицы
+    let html = `
+        <div class="overflow-x-auto rounded-3xl border border-slate-200 shadow-xl bg-white">
+            <table class="w-full border-collapse min-w-[1000px]">
+                <thead>
+                    <tr class="bg-slate-50">
+                        <th class="p-4 border-b border-r text-slate-400 font-bold text-xs uppercase w-20">Время</th>
+                        ${sortedDates.map(dateStr => {
+                            const d = new Date(dateStr);
+                            return `
+                                <th class="p-4 border-b border-r last:border-r-0">
+                                    <div class="text-xs uppercase text-blue-600 font-black">${d.toLocaleDateString('ru', {weekday: 'short'})}</div>
+                                    <div class="text-lg font-bold text-slate-900">${d.getDate()} ${d.toLocaleDateString('ru', {month: 'short'})}</div>
+                                </th>
+                            `;
+                        }).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${TIME_SLOTS.map(time => `
+                        <tr>
+                            <td class="p-4 border-b border-r bg-slate-50/50 align-top">
+                                <span class="text-sm font-black text-slate-400">${time}</span>
+                            </td>
+                            ${sortedDates.map(dateStr => {
+                                const lessons = gridData[dateStr][time] || [];
+                                return `
+                                    <td class="p-2 border-b border-r last:border-r-0 align-top transition-colors hover:bg-slate-50/30">
+                                        ${lessons.map(l => renderLessonMiniCard(l)).join('')}
+                                    </td>
+                                `;
+                            }).join('')}
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+function renderLessonMiniCard(l) {
+    const color = getBadgeColor(l.kindOfWork);
+    return `
+        <div class="lesson-entry p-3 rounded-2xl mb-2 last:mb-0 shadow-sm border-l-4 ${color.border} ${color.bg} group cursor-default">
+            <div class="text-[10px] font-black uppercase opacity-50 mb-1">${l.kindOfWork}</div>
+            <div class="font-bold text-slate-800 mb-1 leading-tight">${l.discipline_display}</div>
+            <div class="flex items-center gap-1 text-[10px] text-slate-500">
+                <span>📍 ${l.auditorium}</span>
+                <span class="opacity-30">|</span>
+                <span class="truncate italic">${l.lecturer_title.split(' ')[0]}</span>
+            </div>
+        </div>
+    `;
+}
+
+// Расширенные цвета для таймлайна
+function getBadgeColor(kind) {
+    if (kind.includes('Лекц')) return { bg: 'bg-emerald-50', border: 'border-emerald-500', text: 'text-emerald-700' };
+    if (kind.includes('Практ') || kind.includes('Семин')) return { bg: 'bg-amber-50', border: 'border-amber-400', text: 'text-amber-700' };
+    if (kind.includes('Экзамен')) return { bg: 'bg-rose-50', border: 'border-rose-500', text: 'text-rose-700' };
+    return { bg: 'bg-blue-50', border: 'border-blue-400', text: 'text-blue-700' };
 }

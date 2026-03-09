@@ -12,3 +12,6 @@ dockerfile.txt
 .repomix
 repomix-output.xml
 .venv
+docker-compose.test.yml
+Caddyfile.test
+main_site_frontend/test.default.conf
