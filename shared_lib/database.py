@@ -890,3 +890,54 @@ async def get_user_id_by_calendar_secret(secret: str) -> int | None:
     async with get_session() as session:
         result = await session.execute(select(User.user_id).where(User.calendar_secret == secret))
         return result.scalar()
+    
+async def search_cached_entities(session: AsyncSession, term: str, entity_type: str = "group") -> list[dict]:
+    """
+    Выполняет поиск по локальному кэшу расписаний, если внешнее API ВУЗа лежит.
+    Использует JSONB функции PostgreSQL для поиска внутри сохраненных данных.
+    """
+    field_map = {
+        'group': 'group',
+        'person': 'lecturer_title',
+        'auditorium': 'auditorium'
+    }
+    json_field = field_map.get(entity_type)
+    if not json_field:
+        return[]
+
+    desc_map = {
+        'group': 'Группа (сохраненная копия)',
+        'person': 'Преподаватель (сохраненная копия)',
+        'auditorium': 'Аудитория (сохраненная копия)'
+    }
+    desc = desc_map[entity_type]
+
+    # SQL: Разворачиваем массив schedule_data, ищем совпадение в нужном поле, группируем, чтобы избежать дублей.
+    stmt = text(f"""
+        SELECT 
+            entity_id as id,
+            MAX(elem->>'{json_field}') as label
+        FROM cached_schedules,
+             jsonb_array_elements(schedule_data) as elem
+        WHERE entity_type = :etype
+          AND elem->>'{json_field}' ILIKE :term
+        GROUP BY entity_id
+        LIMIT 15
+    """)
+    
+    result = await session.execute(stmt, {
+        "etype": entity_type,
+        "term": f"%{term}%"
+    })
+    
+    # Возвращаем в формате, который ожидает фронтенд и бот
+    return[
+        {
+            "id": str(r.id),
+            "label": r.label,
+            "description": desc,
+            "type": entity_type,
+            "is_offline": True # Метка для UI
+        }
+        for r in result if r.label
+    ]

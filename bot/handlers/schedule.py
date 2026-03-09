@@ -23,7 +23,9 @@ from shared_lib.database import (
     get_subscription_modules,
     get_subscription_by_id,
     get_user_subscriptions,
-    get_user_settings
+    get_user_settings,
+    search_cached_entities,
+    get_session
 )
 from shared_lib.services.schedule_service import (
     format_schedule, 
@@ -116,21 +118,30 @@ class ScheduleManager:
         
         try:
             results = await self.api_client.search(term=query, search_type=search_type)
-
-            if not results:
-                await message.answer(translator.gettext(lang, "schedule_no_results", query=query))
-                return
-
-            await redis_client.set_user_cache(user_id, 'schedule_search', {'query': query, 'search_type': search_type, 'results': results})
-            keyboard = build_search_results_keyboard(results, search_type)
-            await message.answer(translator.gettext(lang, "schedule_results_found", count=len(results)), reply_markup=keyboard)
         except asyncio.TimeoutError:
-            await message.answer(translator.gettext(lang, "schedule_api_timeout_error"))
+            results = None # Перехватим ниже
         except Exception as e:
-            logging.error(f"Failed to query RUZ API in background task. Error: {e}", exc_info=True)
-            await message.answer(translator.gettext(lang, "schedule_api_error"))
-        finally:
+            logging.warning(f"RUZ API Search failed in bot: {e}. Trying fallback to cache.")
+            results = None
+            
+        # Если API не справилось, достаем данные из нашей базы
+        if not results:
+            async with get_session() as db:
+                results = await search_cached_entities(db, query, search_type)
+
+        if not results:
+            await message.answer(translator.gettext(lang, "schedule_no_results", query=query))
             await status_msg.delete()
+            return
+            
+        # Если это оффлайн результаты, предупреждаем пользователя сообщением
+        if any(r.get("is_offline") for r in results):
+            await message.answer("⚠️ <i>Нет связи с вузом. Показаны сохраненные копии из базы.</i>", parse_mode="HTML")
+
+        await redis_client.set_user_cache(user_id, 'schedule_search', {'query': query, 'search_type': search_type, 'results': results})
+        keyboard = build_search_results_keyboard(results, search_type)
+        await message.answer(translator.gettext(lang, "schedule_results_found", count=len(results)), reply_markup=keyboard)
+        await status_msg.delete()
 
     async def handle_search_query(self, message: Message, state: FSMContext):
         user_id = message.from_user.id

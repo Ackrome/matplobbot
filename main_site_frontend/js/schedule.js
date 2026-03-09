@@ -5,6 +5,7 @@ const API_BASE = "https://api.ivantishchenko.ru/api";
 let fullSchedule = [];
 let allAvailableModules =[]; // Храним оригинальный список от админа/бэкенда!
 let selectedModules = new Set();
+let isOfflineMode = false;
 
 // Элементы DOM
 const groupInput = document.getElementById('groupSearch');
@@ -56,13 +57,20 @@ function renderSearchResults(results) {
     if (results.length === 0) {
         resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-slate-500 text-center">Ничего не найдено</div>`;
     } else {
-        resultsBox.innerHTML = results.map(item => `
+        resultsBox.innerHTML = results.map(item => {
+            // Если пришел флаг оффлайна - рисуем яркий бейджик!
+            const offlineBadge = item.is_offline 
+                ? `<span class="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-600 border border-orange-200 shadow-sm">⚡ ОФФЛАЙН</span>` 
+                : '';
+                
+            return `
             <div class="px-6 py-3 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-none transition-colors" 
                  onclick="loadSchedule('${item.type || 'group'}', '${item.id}', '${item.label.replace(/'/g, "\\'")}')">
-                <div class="font-bold text-slate-800">${item.label}</div>
+                <div class="font-bold text-slate-800 flex items-center">${item.label} ${offlineBadge}</div>
                 <div class="text-xs text-slate-400 mt-0.5">${item.description || (item.type === 'person' ? 'Преподаватель' : 'Группа')}</div>
             </div>
-        `).join('');
+            `;
+        }).join('');
     }
     resultsBox.classList.remove('hidden');
 }
@@ -84,9 +92,10 @@ async function loadSchedule(type, id, name) {
         const data = await res.json();
         
         fullSchedule = data.schedule;
-        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: сохраняем модули из бэкенда навсегда
         allAvailableModules = data.available_modules ||[]; 
-        selectedModules = new Set(allAvailableModules); // По умолчанию включено всё
+        selectedModules = new Set(allAvailableModules);
+        
+        isOfflineMode = data.is_offline || false; 
         
         renderModuleFilters();
         filterAndRender();
@@ -144,26 +153,39 @@ function clearAllModules() {
 function filterAndRender() {
     const container = document.getElementById('scheduleGrid');
     
-    // Фильтруем данные
     const filteredLessons = fullSchedule.filter(lesson => {
         const mod = lesson.module;
         if (mod && !selectedModules.has(mod)) return false;
         return true;
     });
 
+    let html = ''; // Начинаем собирать HTML
+
+    // Плашка предупреждения, если расписание из кэша:
+    if (isOfflineMode) {
+        html += `
+        <div class="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-2xl flex items-start sm:items-center gap-3 text-orange-800 shadow-sm fade-in">
+            <svg class="w-6 h-6 shrink-0 mt-0.5 sm:mt-0 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            <div>
+                <strong class="block text-sm sm:text-base">ВУЗ недоступен. Показана сохраненная копия расписания.</strong>
+                <span class="text-xs sm:text-sm opacity-90 block mt-0.5">Данные могут быть не самыми свежими. Как только сервера ВУЗа поднимутся, мы автоматически обновим информацию.</span>
+            </div>
+        </div>`;
+    }
+
     if (filteredLessons.length === 0) {
-        container.innerHTML = `
+        html += `
             <div class="text-center py-20 bg-white rounded-3xl border border-slate-200 shadow-sm">
                 <p class="text-slate-500 font-medium">Нет занятий с выбранными фильтрами.</p>
             </div>`;
+        container.innerHTML = html;
         return;
     }
 
     // Собираем уникальные ДАТЫ и ВРЕМЕННЫЕ СЛОТЫ
     const datesSet = new Set();
     const timesSet = new Set();
-    
-    const gridData = {}; // { 'date': { 'time': [lessons] } }
+    const gridData = {};  // { 'date': { 'time': [lessons] } }
 
     filteredLessons.forEach(l => {
         datesSet.add(l.date);
@@ -182,7 +204,7 @@ function filterAndRender() {
     // RUZ API отдает yyyy.mm.dd, поэтому нужна адаптация (если у вас YYYY-MM-DD, оставляем как есть)
 
     // Строим HTML
-    let html = `
+    html += `
         <div class="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden custom-scrollbar overflow-x-auto relative">
             <table class="w-full border-collapse text-left min-w-[800px]">
                 <thead class="bg-slate-50/80 backdrop-blur-md sticky top-0 z-20 shadow-sm">
