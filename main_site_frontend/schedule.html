@@ -27,113 +27,124 @@
         </a>
     </nav>
 
-
-    <main class="pt-24 max-w-[1600px] mx-auto px-2 sm:px-6 lg:px-8 pb-20">
+<main class="pt-24 max-w-[1600px] mx-auto px-2 sm:px-6 lg:px-8 pb-20">
         
-        <!-- МЕНЯЕМ GRID НА FLEX -->
-        <div class="flex flex-col lg:flex-row gap-6 xl:gap-8">
+        <!-- ГЛАВНЫЙ КОНТЕЙНЕР ТЕПЕРЬ НА ВСЮ ШИРИНУ -->
+        <div class="w-full">
             
-            <!-- ЛЕВАЯ КОЛОНКА (ОСНОВНАЯ) - Забирает всё свободное место -->
-            <div class="flex-1 min-w-0 w-full">
-                <!-- Шапка и Поиск -->
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4 relative z-40">
-                    <div>
-                        <h1 class="text-4xl font-black text-slate-900 tracking-tight mb-1">Расписание</h1>
-                    </div>
+            <!-- Шапка: Заголовок + Выпадающая панель + Поиск -->
+            <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 relative z-40 w-full">
+                
+                <div class="flex items-center gap-4 sm:gap-6 shrink-0">
+                    <h1 class="text-4xl font-black text-slate-900 tracking-tight">Расписание</h1>
                     
-                    <div class="relative w-full md:w-96" id="searchContainer">
-                        <input type="text" id="groupSearch" autocomplete="off"
-                            class="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium placeholder-slate-400" 
-                            placeholder="ПМ23-1 или Иванов...">
-                        <div class="absolute left-4 top-3.5 text-slate-400">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    <!-- ВЫПАДАЮЩАЯ ПАНЕЛЬ ОФФЛАЙН КЭША -->
+                    <div class="relative" id="offlinePanelContainer">
+                        <button onclick="toggleOfflinePanel(event)" 
+                            class="group flex items-center gap-2.5 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-blue-400 hover:bg-blue-50 transition-all">
+                            <div class="relative flex h-2 w-2">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                            </div>
+                            <span class="text-sm font-bold text-slate-600 group-hover:text-blue-600 transition-colors">Доступно без обращений к API ВУЗа</span>
+                            <svg id="offlineArrow" class="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+
+                        <!-- САМ ВЫПАДАЮЩИЙ СПИСОК -->
+                        <div id="offlineDropdown" 
+                            class="absolute left-0 mt-2 w-72 bg-white border border-slate-100 rounded-[1.5rem] shadow-2xl overflow-hidden hidden opacity-0 translate-y-2 transition-all duration-200 z-50">
+                            <div class="p-4 border-b border-slate-50 bg-slate-50/50">
+                                <h3 class="font-black text-[10px] text-slate-400 uppercase tracking-[0.15em]">Доступно оффлайн</h3>
+                            </div>
+                            <div id="cachedEntitiesList" class="p-2 flex flex-col gap-1 max-h-80 overflow-y-auto custom-scrollbar">
+                                <!-- Сюда JS загрузит список -->
+                                <div class="p-4 text-center text-xs text-slate-400 italic">Загрузка истории...</div>
+                            </div>
                         </div>
-                        <div id="searchResults" class="absolute w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl overflow-hidden hidden max-h-80 overflow-y-auto custom-scrollbar z-50"></div>
                     </div>
                 </div>
+                
+                <!-- Поиск справа -->
+                <div class="relative w-full md:w-96" id="searchContainer">
+                    <input type="text" id="groupSearch" autocomplete="off"
+                        class="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-slate-700" 
+                        placeholder="ПМ23-1 или Иванов...">
+                    <div class="absolute left-4 top-4 text-slate-400">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    </div>
+                    <div id="searchResults" class="absolute w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl overflow-hidden hidden max-h-80 overflow-y-auto custom-scrollbar"></div>
+                </div>
+            </div>
 
-                <!-- Секция фильтров и настроек -->
-                <div id="moduleFilterSection" class="mb-4 hidden fade-in bg-white p-4 rounded-2xl border border-slate-200 shadow-sm relative z-30">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 border-b border-slate-100 pb-3">
-                        <h3 class="text-sm font-bold text-slate-500 uppercase tracking-wider">Подгруппы и модули</h3>
-                        <div class="flex items-center gap-4">
-                            <label class="flex items-center cursor-pointer group">
-                                <div class="relative">
-                                    <input type="checkbox" id="useShortNames" class="sr-only" checked onchange="filterAndRender()">
-                                    <div class="block bg-slate-200 w-10 h-6 rounded-full transition-colors group-hover:bg-slate-300"></div>
-                                    <div class="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform"></div>
+            <!-- ЕДИНЫЙ БЛОК РАСПИСАНИЯ (Теперь flex-1 убран, блок на всю ширину) -->
+                <div id="mainScheduleBlock" class="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                    
+                    <!-- Верхняя часть: Навигация и Фильтры (скрыто до выбора) -->
+                    <div id="scheduleControls" class="hidden border-b border-slate-100">
+                        
+                        <!-- 1. Навигация по неделям -->
+                        <div id="weekNav" class="flex flex-col sm:flex-row items-center justify-between p-4 gap-3 bg-slate-50/50 border-b border-slate-100">
+                            <div class="flex items-center gap-2">
+                                <button onclick="changeWeek(-1)" class="p-2 bg-white hover:bg-slate-50 rounded-xl text-slate-600 transition-colors shadow-sm border border-slate-200">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                                </button>
+                                <div class="text-sm font-bold text-slate-800 text-center min-w-[140px]" id="weekRangeDisplay"></div>
+                                <button onclick="changeWeek(1)" class="p-2 bg-white hover:bg-slate-50 rounded-xl text-slate-600 transition-colors shadow-sm border border-slate-200">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                </button>
+                            </div>
+                            <button onclick="setTodayWeek()" class="px-4 py-2 text-sm font-bold bg-white text-blue-600 rounded-xl hover:bg-blue-50 transition-colors border border-blue-100 shadow-sm">Текущая неделя</button>
+                        </div>
+
+                        <!-- 2. Модули и переключатель -->
+                        <div id="moduleFilterSection" class="p-5">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Подгруппы и модули</h3>
+                                <div class="flex items-center gap-4">
+                                    <label class="flex items-center cursor-pointer group">
+                                        <div class="relative">
+                                            <input type="checkbox" id="useShortNames" class="sr-only" checked onchange="filterAndRender()">
+                                            <div class="block bg-slate-200 w-10 h-6 rounded-full transition-colors group-hover:bg-slate-300"></div>
+                                            <div class="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform shadow-sm"></div>
+                                        </div>
+                                        <span class="ml-3 text-sm font-medium text-slate-500 group-hover:text-slate-700 transition-colors select-none">Короткие названия</span>
+                                    </label>
+                                    <div class="h-4 w-px bg-slate-200 hidden sm:block"></div>
+                                    <div class="flex gap-3">
+                                        <button onclick="selectAllModules()" class="text-xs font-bold text-blue-600 hover:text-blue-700">Выбрать всё</button>
+                                        <button onclick="clearAllModules()" class="text-xs font-bold text-slate-400 hover:text-slate-600">Сбросить</button>
+                                    </div>
                                 </div>
-                                <span class="ml-3 text-sm font-medium text-slate-600 select-none">Короткие названия</span>
-                            </label>
-                            
-                            <div class="h-4 w-px bg-slate-200 hidden sm:block"></div>
-                            <button onclick="selectAllModules()" class="text-xs font-semibold px-2 py-1 text-blue-600 hover:bg-blue-50 rounded transition-colors">Выбрать всё</button>
-                            <button onclick="clearAllModules()" class="text-xs font-semibold px-2 py-1 text-slate-500 hover:bg-slate-100 rounded transition-colors">Сбросить</button>
-                        </div>
-                    </div>
-                    <div id="moduleContainer" class="flex flex-wrap gap-2"></div>
-                </div>
-
-                <style>
-                    input:checked ~ .block { background-color: #2563eb; }
-                    input:checked ~ .dot { transform: translateX(100%); }
-                </style>
-
-                <!-- Контейнер для сетки расписания -->
-                <div id="scheduleGrid" class="fade-in relative min-h-[400px]">
-                    <div id="weekNav" class="hidden flex flex-col sm:flex-row items-center justify-between mb-4 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm gap-2">
-                        <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
-                            <button onclick="changeWeek(-1)" class="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-600 transition-colors shadow-sm border border-slate-200">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                            </button>
-                            <div class="text-sm font-bold text-slate-800 text-center min-w-[120px]" id="weekRangeDisplay"></div>
-                            <button onclick="changeWeek(1)" class="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-600 transition-colors shadow-sm border border-slate-200">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                            </button>
-                        </div>
-                        <button onclick="setTodayWeek()" class="w-full sm:w-auto px-4 py-2 text-sm font-bold bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors border border-blue-100 shadow-sm">Текущая неделя</button>
-                    </div>
-
-                    <div id="offlineWarning" class="hidden mb-4 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start sm:items-center gap-3 text-amber-800 shadow-sm fade-in">
-                        <svg class="w-6 h-6 shrink-0 mt-0.5 sm:mt-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                        <div>
-                            <strong class="block text-sm sm:text-base">ВУЗ недоступен. Показана сохраненная копия.</strong>
-                            <span class="text-xs sm:text-sm opacity-90 block mt-0.5">Данные могут быть не самыми свежими. Как только сервера ВУЗа поднимутся, мы всё обновим.</span>
+                            </div>
+                            <div id="moduleContainer" class="flex flex-wrap gap-2"></div>
                         </div>
                     </div>
 
-                    <div id="desktopSchedule" class="hidden lg:block w-full relative"></div>
-                    <div id="mobileSchedule" class="block lg:hidden flex flex-col gap-4"></div>
-                    
-                    <div id="defaultState" class="text-center py-32 bg-white rounded-3xl border border-slate-200 border-dashed absolute inset-0 z-0">
-                        <div class="w-20 h-20 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <!-- Нижняя часть: Сетка (desktopSchedule / mobileSchedule) -->
+                    <div id="scheduleGridContent" class="relative">
+                        <div id="offlineWarning" class="hidden m-4 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-center gap-3 text-amber-800 fade-in">
+                            <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            <span class="text-sm font-medium">ВУЗ недоступен. Показана сохраненная копия.</span>
                         </div>
-                        <h3 class="text-xl font-bold text-slate-700 mb-1">Расписание не выбрано</h3>
-                        <p class="text-slate-500">Воспользуйтесь поиском или выберите из сохраненных.</p>
+
+                        <div id="desktopSchedule" class="hidden lg:block w-full"></div>
+                        <div id="mobileSchedule" class="block lg:hidden flex flex-col gap-4 p-4"></div>
+                        
+                        <!-- Заглушка пока ничего не выбрано -->
+                        <div id="defaultState" class="text-center py-40">
+                            <div class="w-20 h-20 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
+                                <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            </div>
+                            <h3 class="text-lg font-bold text-slate-400">Выберите группу для просмотра</h3>
+                        </div>
                     </div>
                 </div>
-            </div>
-
-            <!-- ПРАВАЯ КОЛОНКА (ОФФЛАЙН КЭШ) - Фиксированная ширина -->
-            <div class="hidden lg:block w-64 xl:w-72 shrink-0">
-                <div class="sticky top-24 bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                    <div class="flex items-center gap-2 mb-3">
-                        <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                        <h3 class="font-bold text-slate-800">Доступно оффлайн</h3>
-                    </div>
-                    <p class="text-[11px] text-slate-500 mb-4 leading-relaxed">Эти расписания сохранены локально и откроются мгновенно.</p>
-                    
-                    <div id="cachedEntitiesList" class="flex flex-wrap gap-2">
-                        <div class="skeleton h-7 w-16 rounded-lg"></div>
-                        <div class="skeleton h-7 w-20 rounded-lg"></div>
-                        <div class="skeleton h-7 w-14 rounded-lg"></div>
-                    </div>
-                </div>
-            </div>
         </div>
     </main>
 
-    <script src="/js/schedule.js?v=4.1"></script>
+    <script src="/js/schedule.js?v=6.0"></script>
 </body>
 </html>
+

@@ -26,28 +26,39 @@ const groupInput = document.getElementById('groupSearch');
 const resultsBox = document.getElementById('searchResults');
 const searchContainer = document.getElementById('searchContainer');
 
-document.addEventListener('click', (e) => {
-    if (!searchContainer.contains(e.target)) resultsBox.classList.add('hidden');
-});
 
-// Загрузка оффлайн-списка при старте страницы
+
+// Обновляем загрузку списка (теперь кнопки внутри Dropdown)
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         const res = await fetch(`${API_BASE}/schedule/cached_list`);
         if (res.ok) {
             const list = await res.json();
             const container = document.getElementById('cachedEntitiesList');
+            
+            if (list.length === 0) {
+                container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400 italic">История пуста</div>`;
+                return;
+            }
+
             container.innerHTML = list.map(item => `
-                <button onclick="loadSchedule('${item.type}', '${item.id}', '${item.label}')" 
-                        class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors border border-slate-200">
-                    ${item.label}
+                <button onclick="loadSchedule('${item.type}', '${item.id}', '${item.label}'); closeOfflinePanel();" 
+                        class="group w-full text-left px-4 py-3 bg-white hover:bg-blue-50 rounded-xl transition-all flex items-center justify-between border border-transparent hover:border-blue-100">
+                    <div>
+                        <div class="text-xs font-black text-slate-700 group-hover:text-blue-700">${item.label}</div>
+                        <div class="text-[9px] text-slate-400 uppercase tracking-tighter mt-0.5">Сохранено локально</div>
+                    </div>
+                    <svg class="w-3 h-3 text-slate-300 group-hover:text-blue-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"></path>
+                    </svg>
                 </button>
             `).join('');
         }
     } catch (e) {
-        document.getElementById('cachedEntitiesList').innerHTML = `<span class="text-xs text-slate-400">Нет данных</span>`;
+        console.error("Failed to load cached list", e);
     }
 });
+
 
 // Утилиты
 function parseDate(dateStr) {
@@ -139,41 +150,29 @@ function renderSearchResults(results) {
     resultsBox.classList.remove('hidden');
 }
 
-// Загрузка
 async function loadSchedule(type, id, name, targetDate = null) {
     resultsBox.classList.add('hidden');
     groupInput.value = name;
-    groupInput.blur();
     currentEntity = { type, id, name };
     
     document.getElementById('defaultState').classList.add('hidden');
+    document.getElementById('scheduleControls').classList.remove('hidden'); // Показываем блок управления
     
-    // Показываем скелетоны
-    const skeletonHtml = `<div class="bg-white rounded-2xl border border-slate-200 p-4 h-96 flex flex-col gap-4">
-        <div class="skeleton h-12 w-full rounded-xl"></div>
-        <div class="skeleton h-full w-full rounded-xl"></div>
-    </div>`;
-    document.getElementById('desktopSchedule').innerHTML = skeletonHtml;
-    document.getElementById('mobileSchedule').innerHTML = skeletonHtml;
-    document.getElementById('desktopSchedule').classList.remove('hidden');
-    document.getElementById('mobileSchedule').classList.remove('hidden');
-    
-    document.getElementById('offlineWarning').classList.add('hidden');
-    document.getElementById('weekNav').classList.add('hidden');
+    // Скелетон на всю ширину внутри блока
+    document.getElementById('desktopSchedule').innerHTML = `<div class="p-8"><div class="skeleton h-64 w-full rounded-3xl"></div></div>`;
+    document.getElementById('mobileSchedule').innerHTML = `<div class="skeleton h-64 w-full rounded-3xl"></div>`;
 
     let url = `${API_BASE}/schedule/data/${type}/${id}`;
     if (targetDate) url += `?base_date=${targetDate}`;
 
     try {
         const res = await fetch(url);
-        if(!res.ok) throw new Error("Load Error");
         const data = await res.json();
         
         fullSchedule = data.schedule || [];
         allAvailableModules = data.available_modules ||[]; 
         loadedBounds = data.loaded_bounds || {start: "2000-01-01", end: "2099-01-01"};
         
-        // Модули обновляем только при первой загрузке (когда targetDate == null)
         if (!targetDate) {
             selectedModules = new Set(allAvailableModules);
             currentWeekStart = getMonday(new Date()); 
@@ -184,10 +183,10 @@ async function loadSchedule(type, id, name, targetDate = null) {
         renderModuleFilters();
         filterAndRender();
     } catch (err) {
-        document.getElementById('desktopSchedule').innerHTML = `<div class="text-center text-red-500 py-10 font-bold">Ошибка загрузки.</div>`;
-        document.getElementById('mobileSchedule').innerHTML = `<div class="text-center text-red-500 py-10 font-bold">Ошибка загрузки.</div>`;
+        document.getElementById('desktopSchedule').innerHTML = `<div class="p-10 text-center text-red-500 font-bold">Ошибка загрузки.</div>`;
     }
 }
+
 
 function renderModuleFilters() {
     const container = document.getElementById('moduleContainer');
@@ -265,9 +264,9 @@ function renderDesktopGrid(lessons) {
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
     let html = `
-    <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden relative">
+    <div class="overflow-hidden relative"> <!-- Убрали лишние скругления и бордеры здесь -->
         <table class="w-full table-fixed border-collapse text-left">
-            <thead class="bg-slate-50 border-b border-slate-200">
+            <thead class="bg-slate-50/50 border-b border-slate-100">
                 <tr>
                     <th class="w-16 sm:w-20 p-3 text-center text-xs font-bold text-slate-400 border-r border-slate-200">Время</th>`;
                     
@@ -418,3 +417,46 @@ function debounce(func, timeout = 300){
 function isSameDay(d1, d2) {
     return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 }
+
+// УПРАВЛЕНИЕ ПАНЕЛЬЮ ОФФЛАЙН
+function toggleOfflinePanel(event) {
+    if (event) event.stopPropagation();
+    const dropdown = document.getElementById('offlineDropdown');
+    const arrow = document.getElementById('offlineArrow');
+    const isHidden = dropdown.classList.contains('hidden');
+
+    if (isHidden) {
+        // Открываем
+        dropdown.classList.remove('hidden');
+        setTimeout(() => {
+            dropdown.classList.remove('opacity-0', 'translate-y-2');
+            dropdown.classList.add('opacity-100', 'translate-y-0');
+        }, 10);
+        arrow.classList.add('rotate-180');
+    } else {
+        // Закрываем
+        closeOfflinePanel();
+    }
+}
+
+function closeOfflinePanel() {
+    const dropdown = document.getElementById('offlineDropdown');
+    const arrow = document.getElementById('offlineArrow');
+    dropdown.classList.add('opacity-0', 'translate-y-2');
+    dropdown.classList.remove('opacity-100', 'translate-y-0');
+    arrow.classList.remove('rotate-180');
+    setTimeout(() => dropdown.classList.add('hidden'), 200);
+}
+
+
+// Добавляем закрытие при клике снаружи в общий обработчик
+document.addEventListener('click', (e) => {
+    // Для поиска (уже было)
+    if (!searchContainer.contains(e.target)) resultsBox.classList.add('hidden');
+    
+    // ДЛЯ ИСТОРИИ
+    const offlineContainer = document.getElementById('offlinePanelContainer');
+    if (offlineContainer && !offlineContainer.contains(e.target)) {
+        closeOfflinePanel();
+    }
+});
