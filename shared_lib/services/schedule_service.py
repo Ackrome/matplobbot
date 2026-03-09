@@ -682,3 +682,85 @@ def generate_module_details_text(schedule_data: list[dict], lang: str) -> str:
         lines.append("") # Пустая строка между модулями
 
     return "\n".join(lines)
+
+async def get_schedule_with_cache_fallback(
+    ruz_api_client, 
+    entity_type: str, 
+    entity_id: str, 
+    requested_start: str, 
+    requested_end: str,
+    max_cache_age_hours: int = 12
+) -> tuple[list[dict], bool]:
+    """
+    Умное получение расписания. 
+    Возвращает кортеж: (список_занятий, is_offline_mode)
+    """
+    from shared_lib.database import get_cached_schedule, upsert_cached_schedule, get_session
+    from shared_lib.models import CachedSchedule
+    from sqlalchemy import select
+
+    # 1. Проверяем свежесть текущего кэша
+    cache_is_fresh = False
+    cached_data = None
+    
+    async with get_session() as session:
+        result = await session.execute(
+            select(CachedSchedule.schedule_data, CachedSchedule.updated_at)
+            .where(CachedSchedule.entity_type == entity_type, CachedSchedule.entity_id == str(entity_id))
+        )
+        row = result.first()
+        if row:
+            cached_data = row.schedule_data
+            updated_at = row.updated_at
+            # Проверяем, не старше ли кэш, чем max_cache_age_hours
+            if updated_at and datetime.now(timezone.utc) - updated_at < timedelta(hours=max_cache_age_hours):
+                cache_is_fresh = True
+
+    # 2. Если кэш старый или его нет - идем в API за ВЕCЬМ семестром
+    api_error = False
+    if not cache_is_fresh:
+        try:
+            # Берем широкие рамки семестра, а не один день!
+            sem_start, sem_end = get_semester_bounds()
+            logging.info(f"Cache miss/stale for {entity_type}:{entity_id}. Fetching full semester from API...")
+            
+            api_data = await ruz_api_client.get_schedule(
+                entity_type, entity_id, start=sem_start, finish=sem_end
+            )
+            
+            # ТРЕБОВАНИЕ: Сохраняем в БД, только если пришло не пустое
+            if api_data and len(api_data) > 0:
+                await upsert_cached_schedule(entity_type, entity_id, api_data)
+                cached_data = api_data # Обновляем локальную переменную свежими данными
+                logging.info(f"Successfully cached {len(api_data)} lessons for {entity_type}:{entity_id}")
+            else:
+                logging.warning(f"API returned empty list for {entity_type}:{entity_id}. Keeping old cache if exists.")
+                # Если вернулся пустой список, мы не перезаписываем кэш (вдруг это баг API вуза)
+                
+        except Exception as e:
+            logging.error(f"API Error while fetching schedule for {entity_type}:{entity_id}: {e}")
+            api_error = True
+
+    # 3. Фатальная ошибка: кэша нет вообще, и API лежит
+    if not cached_data:
+        raise ConnectionError("Расписание недоступно. API ВУЗа не отвечает, а кэш пуст.")
+
+    # 4. Фильтруем данные (из кэша или свежие) под запрошенные даты
+    req_start_dt = datetime.strptime(requested_start, "%Y-%m-%d").date()
+    req_end_dt = datetime.strptime(requested_end, "%Y-%m-%d").date()
+    
+    filtered_schedule =[]
+    for lesson in cached_data:
+        # API ВУЗа отдает дату в формате YYYY.MM.DD или YYYY-MM-DD
+        lesson_date_str = lesson.get('date', '').replace('.', '-')
+        try:
+            lesson_date = datetime.strptime(lesson_date_str, "%Y-%m-%d").date()
+            if req_start_dt <= lesson_date <= req_end_dt:
+                filtered_schedule.append(lesson)
+        except ValueError:
+            continue
+
+    # Если была ошибка API, но мы отдали старый кэш -> is_offline_mode = True
+    is_offline = api_error or (not cache_is_fresh and not cached_data)
+    
+    return filtered_schedule, is_offline
