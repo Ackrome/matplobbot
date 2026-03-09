@@ -96,9 +96,9 @@
         <!-- Mobile Menu -->
         <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-slate-100 absolute w-full shadow-xl">
             <div class="px-4 pt-2 pb-6 space-y-1">
-                <a href="#projects" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Проекты</a>
-                <a href="#schedule" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Расписание</a>
-                <a href="https://api.ivantishchenko.ru" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">Авторизация</a>
+                <a href="/#projects" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Проекты</a>
+                <a href="/schedule" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Расписание</a>
+                <a href="/login" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">Авторизация</a>
             </div>
         </div>
     </nav>
@@ -129,9 +129,6 @@
                 <div class="flex flex-col sm:flex-row justify-center gap-4">
                     <a href="#projects" class="inline-flex items-center justify-center px-8 py-4 text-base font-bold text-white transition-all duration-200 bg-slate-900 rounded-full hover:bg-slate-800 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 shadow-xl shadow-slate-900/20">
                         Смотреть проекты
-                    </a>
-                    <a href="#schedule" class="inline-flex items-center justify-center px-8 py-4 text-base font-bold text-slate-700 transition-all duration-200 bg-white border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-200 shadow-lg shadow-slate-200/50">
-                        Расписание
                     </a>
                 </div>
             </div>
@@ -225,126 +222,7 @@
             </div>
         </section>
 
-        <!-- Schedule Section -->
-        <section id="schedule" class="py-24 bg-slate-50 relative overflow-hidden">
-            <!-- Decorative blob -->
-            <div class="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-blue-100 rounded-full mix-blend-multiply filter blur-3xl opacity-70"></div>
-            <div class="absolute bottom-0 left-0 -ml-20 -mb-20 w-96 h-96 bg-indigo-100 rounded-full mix-blend-multiply filter blur-3xl opacity-70"></div>
 
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-                <div class="flex flex-col md:flex-row justify-between items-end mb-12 fade-in">
-                    <div>
-                        <h2 class="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Расписание</h2>
-                        <p class="text-lg text-slate-500">Мой текущий план на неделю</p>
-                    </div>
-                    <div class="mt-4 md:mt-0 flex gap-2">
-                        <button class="p-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                        </button>
-                        <button class="p-2 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 fade-in">
-                    <!-- Monday -->
-                    <div class="schedule-card bg-white rounded-2xl p-6 border border-slate-100 shadow-sm transition-all duration-300">
-                        <div class="flex justify-between items-center mb-6">
-                            <h3 class="text-lg font-bold text-slate-900">Понедельник</h3>
-                            <span class="text-xs font-semibold px-2 py-1 bg-blue-50 text-blue-600 rounded-md">Сегодня</span>
-                        </div>
-                        <div class="space-y-4">
-                            <div class="flex gap-4">
-                                <div class="flex flex-col items-center">
-                                    <span class="text-xs font-bold text-slate-400">09:00</span>
-                                    <div class="w-0.5 h-full bg-slate-100 my-1"></div>
-                                </div>
-                                <div class="pb-4">
-                                    <h4 class="text-sm font-bold text-slate-800">Разработка API</h4>
-                                    <p class="text-xs text-slate-500 mt-1">Backend, Node.js</p>
-                                </div>
-                            </div>
-                            <div class="flex gap-4">
-                                <div class="flex flex-col items-center">
-                                    <span class="text-xs font-bold text-slate-400">14:00</span>
-                                    <div class="w-0.5 h-full bg-slate-100 my-1"></div>
-                                </div>
-                                <div class="pb-4">
-                                    <h4 class="text-sm font-bold text-slate-800">Встреча команды</h4>
-                                    <p class="text-xs text-slate-500 mt-1">Zoom, Обсуждение спринта</p>
-                                </div>
-                            </div>
-                            <div class="flex gap-4">
-                                <div class="flex flex-col items-center">
-                                    <span class="text-xs font-bold text-slate-400">18:00</span>
-                                </div>
-                                <div>
-                                    <h4 class="text-sm font-bold text-slate-800">Code Review</h4>
-                                    <p class="text-xs text-slate-500 mt-1">GitHub Pull Requests</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Tuesday -->
-                    <div class="schedule-card bg-white rounded-2xl p-6 border border-slate-100 shadow-sm transition-all duration-300">
-                        <div class="flex justify-between items-center mb-6">
-                            <h3 class="text-lg font-bold text-slate-900">Вторник</h3>
-                        </div>
-                        <div class="space-y-4">
-                            <div class="flex gap-4">
-                                <div class="flex flex-col items-center">
-                                    <span class="text-xs font-bold text-slate-400">10:00</span>
-                                    <div class="w-0.5 h-full bg-slate-100 my-1"></div>
-                                </div>
-                                <div class="pb-4">
-                                    <h4 class="text-sm font-bold text-slate-800">Frontend Dev</h4>
-                                    <p class="text-xs text-slate-500 mt-1">React Components</p>
-                                </div>
-                            </div>
-                            <div class="flex gap-4">
-                                <div class="flex flex-col items-center">
-                                    <span class="text-xs font-bold text-slate-400">16:00</span>
-                                </div>
-                                <div>
-                                    <h4 class="text-sm font-bold text-slate-800">Обучение</h4>
-                                    <p class="text-xs text-slate-500 mt-1">Новые фичи CSS</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Wednesday -->
-                    <div class="schedule-card bg-white rounded-2xl p-6 border border-slate-100 shadow-sm transition-all duration-300">
-                        <div class="flex justify-between items-center mb-6">
-                            <h3 class="text-lg font-bold text-slate-900">Среда</h3>
-                        </div>
-                        <div class="space-y-4">
-                            <div class="flex gap-4">
-                                <div class="flex flex-col items-center">
-                                    <span class="text-xs font-bold text-slate-400">11:00</span>
-                                    <div class="w-0.5 h-full bg-slate-100 my-1"></div>
-                                </div>
-                                <div class="pb-4">
-                                    <h4 class="text-sm font-bold text-slate-800">Дизайн системы</h4>
-                                    <p class="text-xs text-slate-500 mt-1">Figma, UI Kit</p>
-                                </div>
-                            </div>
-                            <div class="flex gap-4">
-                                <div class="flex flex-col items-center">
-                                    <span class="text-xs font-bold text-slate-400">15:00</span>
-                                </div>
-                                <div>
-                                    <h4 class="text-sm font-bold text-slate-800">Тестирование</h4>
-                                    <p class="text-xs text-slate-500 mt-1">Jest, Unit Tests</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
 
         <!-- Footer -->
         <footer class="bg-white border-t border-slate-200 pt-16 pb-8">
