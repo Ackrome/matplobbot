@@ -20,7 +20,6 @@ document.addEventListener('click', (e) => {
 });
 
 // 1. Поиск (Debounce)
-// 1. Поиск (Debounce)
 groupInput.addEventListener('input', debounce(async (e) => {
     const query = e.target.value.trim();
     if (query.length < 2) {
@@ -31,13 +30,15 @@ groupInput.addEventListener('input', debounce(async (e) => {
     try {
         const res = await fetch(`${API_BASE}/schedule/search?term=${encodeURIComponent(query)}`);
         
-        // Если сервер вернул 503 (ВУЗ лежит) или другую ошибку
+        // Перехват 500, 502, 503 ошибок
         if (!res.ok) {
-            let errorMsg = "Ошибка при поиске";
+            let errorMsg = "API ВУЗа временно недоступно";
             try {
                 const errData = await res.json();
                 if (errData.detail) errorMsg = errData.detail;
-            } catch (e) {} // Если сервер вернул не JSON
+            } catch (parseError) {
+                // Сервер вернул HTML-страницу с ошибкой (например, 502 Bad Gateway)
+            }
             
             resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-red-500 text-center font-medium">⚠️ ${errorMsg}</div>`;
             resultsBox.classList.remove('hidden');
@@ -46,9 +47,11 @@ groupInput.addEventListener('input', debounce(async (e) => {
 
         const data = await res.json();
         renderSearchResults(data);
+
     } catch (err) {
-        console.error("Search error", err);
-        resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-red-500 text-center font-medium">❌ Ошибка сети. Проверьте подключение.</div>`;
+        // Сюда мы попадаем, если пропал интернет или сервер вообще разорвал соединение
+        console.error("Search fetch error:", err);
+        resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-red-500 text-center font-medium">❌ Ошибка сети или сервер недоступен.</div>`;
         resultsBox.classList.remove('hidden');
     }
 }, 300));
