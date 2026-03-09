@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
-from shared_lib.services.university_api import create_ruz_api_client
+from shared_lib.services.university_api import create_ruz_api_client, RuzAPIError # Добавлен импорт RuzAPIError
 from shared_lib.services.schedule_service import get_unique_modules_hybrid, get_module_name, get_schedule_with_cache_fallback
 from shared_lib.database import get_all_short_names
 import aiohttp
 from datetime import date, timedelta
-import logging
+import logging # Убедись, что логгинг импортирован
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 logger = logging.getLogger(__name__)
@@ -13,7 +13,15 @@ logger = logging.getLogger(__name__)
 async def search_entity(term: str, type: str = "group"):
     async with aiohttp.ClientSession() as session:
         client = create_ruz_api_client(session)
-        return await client.search(term, type)
+        try:
+            return await client.search(term, type)
+        except RuzAPIError as e:
+            # Логируем аккуратно, без гигантского трейсбека
+            logger.warning(f"RUZ API Search failed for term '{term}': {e}")
+            raise HTTPException(status_code=503, detail="API ВУЗа временно недоступно")
+        except Exception as e:
+            logger.error(f"Unexpected error during search: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 @router.get("/data/{type}/{id}")
 async def get_schedule_data(type: str, id: str):
