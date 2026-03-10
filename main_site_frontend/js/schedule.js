@@ -1,5 +1,6 @@
 // js/schedule.js
 const API_BASE = "https://api.ivantishchenko.ru/api";
+const STORAGE_KEY = "mpb_user_preferences";
 
 // Фиксированная шкала времени для сетки ПК
 const FIXED_TIMES =[
@@ -30,35 +31,46 @@ const searchContainer = document.getElementById('searchContainer');
 
 // Обновляем загрузку списка (теперь кнопки внутри Dropdown)
 document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        const res = await fetch(`${API_BASE}/schedule/cached_list`);
-        if (res.ok) {
-            const list = await res.json();
-            const container = document.getElementById('cachedEntitiesList');
+    // 1. Сначала грузим список оффлайн-групп для истории (как было раньше)
+    loadCachedList(); 
+    
+    // 2. Проверяем, есть ли сохраненные настройки
+    const savedPrefs = localStorage.getItem(STORAGE_KEY);
+    if (savedPrefs) {
+        try {
+            const prefs = JSON.parse(savedPrefs);
+            console.log("Loading saved preferences:", prefs);
             
-            if (list.length === 0) {
-                container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400 italic">История пуста</div>`;
-                return;
+            // Восстанавливаем чекбокс коротких имен
+            if (prefs.useShortNames !== undefined) {
+                document.getElementById('useShortNames').checked = prefs.useShortNames;
             }
-
-            container.innerHTML = list.map(item => `
-                <button onclick="loadSchedule('${item.type}', '${item.id}', '${item.label}'); closeOfflinePanel();" 
-                        class="group w-full text-left px-4 py-3 bg-white hover:bg-blue-50 rounded-xl transition-all flex items-center justify-between border border-transparent hover:border-blue-100">
-                    <div>
-                        <div class="text-xs font-black text-slate-700 group-hover:text-blue-700">${item.label}</div>
-                        <div class="text-[9px] text-slate-400 uppercase tracking-tighter mt-0.5">Сохранено локально</div>
-                    </div>
-                    <svg class="w-3 h-3 text-slate-300 group-hover:text-blue-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"></path>
-                    </svg>
-                </button>
-            `).join('');
+            
+            // Если есть сохраненная сущность — загружаем её
+            if (prefs.entity && prefs.entity.id) {
+                // Восстанавливаем выбранные модули ПЕРЕД загрузкой, 
+                // чтобы fetch-логика их подхватила
+                if (prefs.modules) {
+                    selectedModules = new Set(prefs.modules);
+                }
+                
+                // Загружаем расписание
+                await loadSchedule(prefs.entity.type, prefs.entity.id, prefs.entity.name);
+            }
+        } catch (e) {
+            console.error("Failed to parse saved preferences", e);
         }
-    } catch (e) {
-        console.error("Failed to load cached list", e);
     }
 });
 
+function savePreferences() {
+    const prefs = {
+        entity: currentEntity,
+        modules: Array.from(selectedModules), // Set в Array для JSON
+        useShortNames: document.getElementById('useShortNames').checked
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+}
 
 // Утилиты
 function parseDate(dateStr) {
@@ -164,24 +176,30 @@ async function loadSchedule(type, id, name, targetDate = null) {
 
     let url = `${API_BASE}/schedule/data/${type}/${id}`;
     if (targetDate) url += `?base_date=${targetDate}`;
+    
+    // [SAVE] Сохраняем сущность при загрузке
+    savePreferences();
 
     try {
         const res = await fetch(url);
         const data = await res.json();
         
         fullSchedule = data.schedule || [];
-        allAvailableModules = data.available_modules ||[]; 
+        allAvailableModules = data.available_modules || []; 
         loadedBounds = data.loaded_bounds || {start: "2000-01-01", end: "2099-01-01"};
         
-        if (!targetDate) {
+        // [MODIFIED] Модули сбрасываем, только если их НЕТ в памяти (первый заход)
+        if (!targetDate && selectedModules.size === 0) {
             selectedModules = new Set(allAvailableModules);
-            currentWeekStart = getMonday(new Date()); 
         }
+        
+        if (!targetDate) currentWeekStart = getMonday(new Date()); 
         
         isOfflineMode = data.is_offline || false; 
         
         renderModuleFilters();
         filterAndRender();
+
     } catch (err) {
         document.getElementById('desktopSchedule').innerHTML = `<div class="p-10 text-center text-red-500 font-bold">Ошибка загрузки.</div>`;
     }
@@ -211,10 +229,22 @@ function toggleModule(mod) {
     else selectedModules.add(mod);
     renderModuleFilters();
     filterAndRender();
+    savePreferences(); // Сохраняем выбор модулей
 }
 
-function selectAllModules() { selectedModules = new Set(allAvailableModules); renderModuleFilters(); filterAndRender(); }
-function clearAllModules() { selectedModules.clear(); renderModuleFilters(); filterAndRender(); }
+function selectAllModules() { 
+    selectedModules = new Set(allAvailableModules); 
+    renderModuleFilters(); 
+    filterAndRender(); 
+    savePreferences(); // Сохраняем
+}
+
+function clearAllModules() { 
+    selectedModules.clear(); 
+    renderModuleFilters(); 
+    filterAndRender(); 
+    savePreferences(); // Сохраняем
+}
 
 // Главный рендер
 function filterAndRender() {
