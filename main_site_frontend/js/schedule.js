@@ -30,38 +30,65 @@ const searchContainer = document.getElementById('searchContainer');
 
 
 // Обновляем загрузку списка (теперь кнопки внутри Dropdown)
+// [INIT] Автозагрузка при старте страницы
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Сначала грузим список оффлайн-групп для истории (как было раньше)
-    loadCachedList(); 
+    // 1. Загружаем список "Истории" (Оффлайн кэш)
+    await initOfflineHistory(); 
     
-    // 2. Проверяем, есть ли сохраненные настройки
+    // 2. Восстанавливаем настройки из localStorage
     const savedPrefs = localStorage.getItem(STORAGE_KEY);
     if (savedPrefs) {
         try {
             const prefs = JSON.parse(savedPrefs);
-            console.log("Loading saved preferences:", prefs);
+            console.log("Восстановление настроек:", prefs);
             
-            // Восстанавливаем чекбокс коротких имен
+            // Восстанавливаем чекбокс
             if (prefs.useShortNames !== undefined) {
                 document.getElementById('useShortNames').checked = prefs.useShortNames;
             }
             
-            // Если есть сохраненная сущность — загружаем её
+            // Если была выбрана группа/препод — загружаем
             if (prefs.entity && prefs.entity.id) {
-                // Восстанавливаем выбранные модули ПЕРЕД загрузкой, 
-                // чтобы fetch-логика их подхватила
-                if (prefs.modules) {
+                // ПРЕДЗАГРУЗКА выбранных модулей из памяти
+                if (prefs.modules && prefs.modules.length > 0) {
                     selectedModules = new Set(prefs.modules);
                 }
                 
-                // Загружаем расписание
+                // Вызываем загрузку
                 await loadSchedule(prefs.entity.type, prefs.entity.id, prefs.entity.name);
             }
         } catch (e) {
-            console.error("Failed to parse saved preferences", e);
+            console.error("Ошибка при чтении localStorage:", e);
         }
     }
 });
+
+// Выносим загрузку истории в отдельную функцию, чтобы не ломать основной поток
+async function initOfflineHistory() {
+    try {
+        const res = await fetch(`${API_BASE}/schedule/cached_list`);
+        if (res.ok) {
+            const list = await res.json();
+            const container = document.getElementById('cachedEntitiesList');
+            if (list.length === 0) {
+                container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400 italic">История пуста</div>`;
+                return;
+            }
+            container.innerHTML = list.map(item => `
+                <button onclick="loadSchedule('${item.type}', '${item.id}', '${item.label}'); closeOfflinePanel();" 
+                        class="group w-full text-left px-4 py-3 bg-white hover:bg-blue-50 rounded-xl transition-all flex items-center justify-between border border-transparent hover:border-blue-100">
+                    <div>
+                        <div class="text-xs font-black text-slate-700 group-hover:text-blue-700">${item.label}</div>
+                        <div class="text-[9px] text-slate-400 uppercase tracking-tighter mt-0.5">Сохранено локально</div>
+                    </div>
+                    <svg class="w-3 h-3 text-slate-300 group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+            `).join('');
+        }
+    } catch (e) {
+        console.warn("Не удалось загрузить список кэша:", e);
+    }
+}
 
 function savePreferences() {
     const prefs = {
