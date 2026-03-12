@@ -20,6 +20,7 @@ pipeline {
         PROD_STATS_USER    = credentials('PROD_STATS_USER')
         PROD_PUBLIC_API_URL = credentials('PROD_PUBLIC_API_URL')
         PROD_DATABASE_URL   = "postgresql://${PROD_POSTGRES_USER}:${PROD_POSTGRES_PASSWORD}@postgres:5432/${PROD_POSTGRES_DB}"
+        PROD_JWT_SECRET_KEY = credentials('PROD_JWT_SECRET_KEY')
         // Redis URL might be needed if you connect externally, but usually internal docker network handles it.
         // If needed: PROD_REDIS_URL = "redis://redis:6379/0" 
     }
@@ -50,6 +51,7 @@ DATABASE_URL=${PROD_DATABASE_URL}
 STATS_USER=${PROD_STATS_USER}
 STATS_PASS=${PROD_STATS_PASS}
 PUBLIC_API_URL=${PROD_PUBLIC_API_URL}
+JWT_SECRET_KEY=${PROD_JWT_SECRET_KEY}
 REDIS_URL=redis://redis:6379/0
 EOF
                         """
