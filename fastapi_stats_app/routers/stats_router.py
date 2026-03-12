@@ -1,3 +1,4 @@
+# fastapi_stats_app/routers/stats_router.py
 from fastapi import APIRouter, HTTPException, Query, status, Depends
 import math
 import logging
@@ -27,15 +28,13 @@ from shared_lib.schemas import (
     ExportActionsResponse,
     SendMessageRequest 
 )
+from shared_lib.models import WebUser
 from ..auth import get_current_user 
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 logger = logging.getLogger(__name__)
 
-# TTL кэша в секундах (5 минут)
 CACHE_TTL = 300
-
-# Получаем токен из переменных окружения для отправки сообщений
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 @router.get(
@@ -46,11 +45,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
     status_code=status.HTTP_200_OK
 )
 async def health_check(db: AsyncSession = Depends(get_db_session_dependency)) -> dict[str, str]:
-    """
-    Легковесная проверка здоровья сервиса.
-    """
     try:
-        # Используем SQLAlchemy text() для выполнения сырого SQL запроса проверки
         await db.execute(text("SELECT 1"))
         return {"status": "ok", "database": "connected"}
     except Exception as e:
@@ -75,7 +70,6 @@ async def get_user_profile(
     sort_order: str = Query('desc', description="Порядок сортировки"),
     db: AsyncSession = Depends(get_db_session_dependency)
 ) -> Any:
-    # 1. Проверяем кэш (только если не первая страница, чтобы видеть свежие логи сразу)
     cache_key = f"user_profile:{user_id}:p{page}:s{page_size}:{sort_by}:{sort_order}"
     if page > 1:
         try:
@@ -85,9 +79,7 @@ async def get_user_profile(
         except Exception as e:
             logger.warning(f"Redis cache error: {e}")
 
-    # 2. Запрашиваем БД
     try:
-        # Передаем сессию db, полученную через Depends
         profile_data = await get_user_profile_data_from_db(
             db, user_id, page, page_size, sort_by, sort_order
         )
@@ -111,9 +103,8 @@ async def get_user_profile(
             }
         }
 
-        # 3. Сохраняем в кэш (недолго)
         try:
-            await redis_client.set_cache(cache_key, response_data, ttl=60) # 1 минута TTL для профиля
+            await redis_client.set_cache(cache_key, response_data, ttl=60)
         except Exception as e:
             logger.error(f"Failed to set cache: {e}")
 
@@ -210,7 +201,6 @@ async def send_message_to_user(user_id: int, message_data: SendMessageRequest):
     if not text:
         raise HTTPException(status_code=400, detail="Сообщение не может быть пустым")
     
-    # 1. Отправка в Telegram через Aiohttp (напрямую в API)
     tg_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": user_id,
@@ -230,31 +220,26 @@ async def send_message_to_user(user_id: int, message_data: SendMessageRequest):
         logger.error(f"Network error sending message to {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Ошибка сети при отправке в Telegram")
 
-    # 2. Сохранение сообщения в БД и публикация в Redis
-    # Мы используем обновленную функцию log_user_action, которая сама управляет сессией и Redis
     try:
         await log_user_action(
             user_id=user_id,
             username=None,
-            full_name="System", # Помечаем как системное сообщение
+            full_name="System",
             avatar_pic_url=None,
             action_type='admin_message',
             action_details=text
         )
     except Exception as e:
         logger.error(f"Error logging admin message to DB for user {user_id}: {e}", exc_info=True)
-        # Не возвращаем ошибку клиенту (500), так как сообщение в Телеграм уже успешно ушло.
-        # Логируем и возвращаем успех.
     
     return {"status": "success"}
 
 @router.get("/leaderboard")
-async def get_leaderboard(current_user: str = Depends(get_current_user)):
+async def get_leaderboard(current_user: WebUser = Depends(get_current_user)):
     async with get_session() as db:
         return await get_leaderboard_data_from_db(db)
 
 @router.get("/activity")
-async def get_activity(current_user: str = Depends(get_current_user)):
+async def get_activity(current_user: WebUser = Depends(get_current_user)):
     async with get_session() as db:
-        # Получаем данные за последние 30 дней
         return await get_activity_over_time_data_from_db(db, period='day')

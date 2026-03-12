@@ -144,7 +144,7 @@ async def get_repo_management_keyboard(user_id: int, state: FSMContext | None = 
     
     # Conditionally add the correct "back" button
     if current_state_str == "onboarding:github":
-        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_back_to_tour"), callback_data="onboarding_next"))
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_back_to_tour"), callback_data="go_to_onboarding_library"))
     else:
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "back_to_settings"), callback_data="back_to_settings"))
     return builder.as_markup()

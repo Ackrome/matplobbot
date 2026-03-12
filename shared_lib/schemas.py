@@ -108,3 +108,18 @@ class NewUserStatEntry(BaseModel):
     count: int
     
     model_config = BASE_CONFIG
+    
+    
+class WebUserCreate(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6)
+
+class WebUserResponse(BaseModel):
+    id: int
+    username: str
+    created_at: Any
+    model_config = BASE_CONFIG
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str

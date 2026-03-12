@@ -74,15 +74,14 @@ class BaseManager:
         self.router.message(CommandStart(), Onboarding())(self.onboarding_language_choice)
         self.router.callback_query(F.data.startswith("set_lang_init:"))(self.handle_initial_language_selection)
 
-        # <<< ИЗМЕНЕНИЕ: Старый onboarding_welcome теперь просто шаг после выбора языка >>>
-        self.router.callback_query(F.data == "start_onboarding_tour", StateFilter("onboarding:welcome"))(self.onboarding_github)
-        self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:welcome"))(self.onboarding_github)
-        self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:github"))(self.onboarding_library)
-        self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:library"))(self.onboarding_rendering)
-        self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:rendering"))(self.onboarding_schedule)
-        self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:schedule"))(self.onboarding_final)
-        self.router.callback_query(F.data == "onboarding_next", StateFilter("onboarding:final"))(self.onboarding_finish)
-        self.router.callback_query(F.data == "onboarding_skip", StateFilter("onboarding:welcome"))(self.onboarding_skip)
+        # ИЗМЕНЕНИЕ: Убираем StateFilter и привязываемся к уникальным callback_data
+        self.router.callback_query(F.data == "start_onboarding_tour")(self.onboarding_github)
+        self.router.callback_query(F.data == "go_to_onboarding_library")(self.onboarding_library)
+        self.router.callback_query(F.data == "go_to_onboarding_rendering")(self.onboarding_rendering)
+        self.router.callback_query(F.data == "go_to_onboarding_schedule")(self.onboarding_schedule)
+        self.router.callback_query(F.data == "go_to_onboarding_final")(self.onboarding_final)
+        self.router.callback_query(F.data == "onboarding_finish")(self.onboarding_finish)
+        self.router.callback_query(F.data == "onboarding_skip")(self.onboarding_skip)
         # Base Commands
         # Private chat handlers
         self.router.message(CommandStart(), F.chat.type == "private")(self.command_start_regular)
@@ -117,9 +116,7 @@ class BaseManager:
         
         lang = await translator.get_language(user_id, message.chat.id)
         await state.set_state("onboarding:welcome")
-        
         builder = InlineKeyboardBuilder()
-        # <<< ИЗМЕНЕНИЕ: Старая кнопка 'onboarding_next' заменена на новую, чтобы избежать конфликта >>>
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="start_onboarding_tour"))
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_skip"), callback_data="onboarding_skip"))
         
@@ -155,46 +152,46 @@ class BaseManager:
         await self.onboarding_welcome(callback, state)
 
     async def onboarding_github(self, callback: CallbackQuery, state: FSMContext):
-        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
+        lang = await translator.get_language(callback.from_user.id)
         await state.set_state("onboarding:github")
         builder = InlineKeyboardBuilder()
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_add_repo"), callback_data="manage_repos"))
-        # Add a "Next" button to allow skipping this step
-        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="onboarding_next"))
+        # Кнопка ведет на следующий шаг по имени
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="go_to_onboarding_library"))
         await callback.message.edit_text(translator.gettext(lang, "start_onboarding_2"), reply_markup=builder.as_markup())
         await callback.answer()
 
     async def onboarding_library(self, callback: CallbackQuery, state: FSMContext):
-        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
+        lang = await translator.get_language(callback.from_user.id)
         await state.set_state("onboarding:library")
         builder = InlineKeyboardBuilder()
         builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_browse_library"), callback_data="help_cmd_matp_all"))
-        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="onboarding_next"))
+        builder.row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="go_to_onboarding_rendering"))
         await callback.message.edit_text(translator.gettext(lang, "start_onboarding_3"), reply_markup=builder.as_markup())
         await callback.answer()
 
     async def onboarding_rendering(self, callback: CallbackQuery, state: FSMContext):
-        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
+        lang = await translator.get_language(callback.from_user.id)
         await state.set_state("onboarding:rendering")
         builder = InlineKeyboardBuilder()
         builder.add(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_try_latex"), callback_data="help_cmd_latex"))
-        builder.add(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="onboarding_next"))
+        builder.add(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="go_to_onboarding_schedule"))
         await callback.message.edit_text(translator.gettext(lang, "start_onboarding_4"), reply_markup=builder.as_markup())
         await callback.answer()
 
     async def onboarding_schedule(self, callback: CallbackQuery, state: FSMContext):
-        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
+        lang = await translator.get_language(callback.from_user.id)
         await state.set_state("onboarding:schedule")
         builder = InlineKeyboardBuilder()
         builder.add(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_try_schedule"), callback_data="help_cmd_schedule"))
-        builder.add(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="onboarding_next"))
+        builder.add(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_next"), callback_data="go_to_onboarding_final"))
         await callback.message.edit_text(translator.gettext(lang, "start_onboarding_schedule"), reply_markup=builder.as_markup())
         await callback.answer()
 
     async def onboarding_final(self, callback: CallbackQuery, state: FSMContext):
-        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
+        lang = await translator.get_language(callback.from_user.id)
         await state.set_state("onboarding:final")
-        builder = InlineKeyboardBuilder().row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_finish"), callback_data="onboarding_next"))
+        builder = InlineKeyboardBuilder().row(InlineKeyboardButton(text=translator.gettext(lang, "onboarding_btn_finish"), callback_data="onboarding_finish"))
         await callback.message.edit_text(translator.gettext(lang, "start_onboarding_5"), reply_markup=builder.as_markup())
         await callback.answer()
 
