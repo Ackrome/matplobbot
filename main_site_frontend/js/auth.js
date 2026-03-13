@@ -1,21 +1,54 @@
+// main_site_frontend/js/auth.js
 const API_BASE = "https://api.ivantishchenko.ru/api";
-// const API_BASE = "http://api.localhost/api";
 
 const loginForm = document.getElementById('loginForm');
 const registerForm = document.getElementById('registerForm');
 
-// Вспомогательная функция для извлечения понятного текста ошибки из FastAPI
 function getErrorMessage(errData, defaultMsg) {
     if (errData && Array.isArray(errData.detail)) {
-        // Ошибка валидации Pydantic (например, короткий пароль)
         return errData.detail[0].msg;
     } else if (errData && errData.detail) {
-        // Обычная HTTPException
         return errData.detail;
     }
     return defaultMsg;
 }
 
+// --- НОВАЯ ФУНКЦИЯ: Обработка входа через Telegram ---
+window.handleTelegramLogin = async function(telegramUser) {
+    const errorEl = document.getElementById('error');
+    if(errorEl) errorEl.classList.add('hidden');
+
+    try {
+        const response = await fetch(`${API_BASE}/auth/telegram`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(telegramUser)
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            localStorage.setItem('jwt_token', data.access_token);
+            // Если всё ок, кидаем на главную страницу (или на расписание)
+            window.location.href = '/schedule'; 
+        } else {
+            const errData = await response.json();
+            if(errorEl) {
+                errorEl.innerText = getErrorMessage(errData, "Ошибка авторизации через Telegram");
+                errorEl.classList.remove('hidden');
+            } else {
+                alert("Ошибка авторизации через Telegram");
+            }
+        }
+    } catch (err) {
+        console.error(err);
+        if(errorEl) {
+            errorEl.innerText = "Сервер API недоступен";
+            errorEl.classList.remove('hidden');
+        }
+    }
+};
+
+// --- СТАНДАРТНАЯ АВТОРИЗАЦИЯ ПО ПАРОЛЮ ---
 if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -25,12 +58,10 @@ if (loginForm) {
         const username = document.getElementById('username').value;
         const password = document.getElementById('password').value;
 
-        // Сброс ошибок и индикация загрузки
         errorEl.classList.add('hidden');
         btn.disabled = true;
         btn.innerText = "Вход...";
 
-        // Подготовка данных в формате Form Data (как требует FastAPI OAuth2)
         const formData = new URLSearchParams();
         formData.append('username', username);
         formData.append('password', password);
@@ -45,7 +76,7 @@ if (loginForm) {
             if (response.ok) {
                 const data = await response.json();
                 localStorage.setItem('jwt_token', data.access_token);
-                window.location.href = '/stats';
+                window.location.href = '/stats'; // Админов кидаем в статистику
             } else {
                 const errData = await response.json();
                 errorEl.innerText = getErrorMessage(errData, "Ошибка входа");
@@ -56,7 +87,7 @@ if (loginForm) {
             errorEl.classList.remove('hidden');
         } finally {
             btn.disabled = false;
-            btn.innerText = "Войти в систему";
+            btn.innerText = "Войти по паролю";
         }
     });
 }
@@ -85,7 +116,6 @@ if (registerForm) {
 
             if (response.ok) {
                 successEl.classList.remove('hidden');
-                // После успешной регистрации сразу логиним пользователя
                 const formData = new URLSearchParams();
                 formData.append('username', username);
                 formData.append('password', password);

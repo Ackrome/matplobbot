@@ -3,10 +3,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
 from shared_lib.database import get_db_session_dependency
-from shared_lib.models import WebUser
-from shared_lib.schemas import WebUserCreate, WebUserResponse, Token, WebUserPreferencesUpdate
-from ..auth import create_access_token, verify_password, get_password_hash, get_current_user
+from shared_lib.models import WebUser, User
+from shared_lib.schemas import WebUserCreate, WebUserResponse, Token, WebUserPreferencesUpdate, TelegramAuthData, CurrentUserResponse
+from ..auth import create_access_token, verify_password, get_password_hash, get_current_user, verify_telegram_authorization
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -40,22 +42,66 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    access_token = create_access_token(data={"sub": user.username})
+    # Добавляем роль в токен
+    access_token = create_access_token(data={"sub": user.username, "role": "admin"})
     return {"access_token": access_token, "token_type": "bearer"}
 
-@router.get("/me", response_model=WebUserResponse)
-async def get_me(current_user: WebUser = Depends(get_current_user)):
+@router.post("/telegram", response_model=Token)
+async def telegram_login(tg_data: TelegramAuthData, db: AsyncSession = Depends(get_db_session_dependency)):
+    # 1. Проверяем криптографическую подпись Telegram
+    if not verify_telegram_authorization(tg_data.model_dump()):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недействительная подпись Telegram"
+        )
+    
+    # 2. Сохраняем или обновляем пользователя в таблице бота (User)
+    full_name = tg_data.first_name
+    if tg_data.last_name:
+        full_name += f" {tg_data.last_name}"
+        
+    stmt = pg_insert(User).values(
+        user_id=tg_data.id,
+        username=tg_data.username,
+        full_name=full_name,
+        avatar_pic_url=tg_data.photo_url
+    ).on_conflict_do_update(
+        index_elements=['user_id'],
+        set_=dict(
+            username=tg_data.username,
+            full_name=full_name,
+            avatar_pic_url=tg_data.photo_url
+        )
+    )
+    await db.execute(stmt)
+    await db.commit()
+    
+    # 3. Генерируем токен для ТГ пользователя
+    access_token = create_access_token(data={"sub": f"tg_{tg_data.id}", "role": "telegram"})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@router.get("/me", response_model=CurrentUserResponse)
+async def get_me(current_user: dict = Depends(get_current_user)):
+    # Возвращаем подготовленный словарь (уже содержит нужные поля)
     return current_user
 
-@router.put("/preferences", response_model=WebUserResponse)
+@router.put("/preferences", response_model=CurrentUserResponse)
 async def update_preferences(
     prefs: WebUserPreferencesUpdate, 
-    current_user: WebUser = Depends(get_current_user), 
+    current_user: dict = Depends(get_current_user), 
     db: AsyncSession = Depends(get_db_session_dependency)
 ):
-    # Обновляем JSON колонку
-    current_user.preferences = prefs.preferences
-    db.add(current_user)
+    db_obj = current_user["db_obj"]
+    
+    if current_user["role"] == "admin":
+        db_obj.preferences = prefs.preferences
+    elif current_user["role"] == "telegram":
+        db_obj.settings = prefs.preferences
+        
+    db.add(db_obj)
     await db.commit()
-    await db.refresh(current_user)
+    await db.refresh(db_obj)
+    
+    # Обновляем текущий объект для ответа
+    current_user["preferences"] = prefs.preferences
     return current_user

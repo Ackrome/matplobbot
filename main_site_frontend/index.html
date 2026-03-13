@@ -183,8 +183,8 @@
 
     </main>
 
+    <!-- Изменяется только нижняя часть index.html со скриптами -->
     <script>
-        // АВТОРИЗАЦИЯ И ИЗМЕНЕНИЕ UI
         const API_BASE = "https://api.ivantishchenko.ru/api";
 
         function performLogout() {
@@ -206,11 +206,25 @@
                     const desktopContainer = document.getElementById('desktop-auth-container');
                     const mobileContainer = document.getElementById('mobile-auth-container');
 
-                    // Десктоп UI: Имя + Дашборд + Кнопка выхода
+                    // Определяем куда вести по клику
+                    const profileLink = user.role === "telegram" ? "/schedule" : "/stats";
+                    
+                    // Формируем Аватарку
+                    let avatarHtml = `<div class="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold shrink-0">${user.username[0].toUpperCase()}</div>`;
+                    if (user.avatar_url) {
+                        avatarHtml = `<img src="${user.avatar_url}" class="w-6 h-6 rounded-full object-cover shrink-0 border border-slate-200">`;
+                    }
+                    
+                    let mobileAvatarHtml = `<div class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold shrink-0">${user.username[0].toUpperCase()}</div>`;
+                    if (user.avatar_url) {
+                        mobileAvatarHtml = `<img src="${user.avatar_url}" class="w-8 h-8 rounded-full object-cover shrink-0 border border-slate-200">`;
+                    }
+
+                    // Десктоп UI
                     desktopContainer.innerHTML = `
-                        <a href="/stats" class="flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors">
-                            <div class="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">${user.username[0].toUpperCase()}</div>
-                            <span class="text-sm font-bold text-slate-700">${user.username}</span>
+                        <a href="${profileLink}" class="flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors max-w-[200px]">
+                            ${avatarHtml}
+                            <span class="text-sm font-bold text-slate-700 truncate">${user.username}</span>
                         </a>
                         <button onclick="performLogout()" class="text-sm font-medium text-slate-400 hover:text-red-500 transition-colors">Выйти</button>
                     `;
@@ -218,18 +232,17 @@
                     // Мобильный UI
                     mobileContainer.innerHTML = `
                         <div class="mt-4 pt-4 border-t border-slate-100">
-                            <a href="/stats" class="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-slate-50 transition-colors">
-                                <div class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">${user.username[0].toUpperCase()}</div>
-                                <div>
-                                    <div class="text-sm font-bold text-slate-900">${user.username}</div>
-                                    <div class="text-xs text-slate-500">Панель управления</div>
+                            <a href="${profileLink}" class="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-slate-50 transition-colors">
+                                ${mobileAvatarHtml}
+                                <div class="overflow-hidden">
+                                    <div class="text-sm font-bold text-slate-900 truncate">${user.username}</div>
+                                    <div class="text-xs text-slate-500">Личный кабинет</div>
                                 </div>
                             </a>
                             <button onclick="performLogout()" class="w-full text-left mt-2 px-3 py-3 rounded-lg text-red-500 font-medium hover:bg-red-50 transition-colors">Выйти из аккаунта</button>
                         </div>
                     `;
                 } else {
-                    // Токен протух или невалиден
                     localStorage.removeItem('jwt_token');
                 }
             } catch (e) {
@@ -237,11 +250,9 @@
             }
         }
 
-        // Вызываем сразу при загрузке
         checkAuthAndRender();
 
-        // ---------------------------
-        // Mobile Menu Logic
+        // ...[ОСТАЛЬНОЙ СКРИПТ (меню, анимации) БЕЗ ИЗМЕНЕНИЙ] ...
         const btn = document.getElementById('mobile-menu-button');
         const menu = document.getElementById('mobile-menu');
 
@@ -255,7 +266,6 @@
             });
         });
 
-        // Navbar hide/show on scroll
         let lastScrollY = window.scrollY;
         let ticking = false;
         const navbar = document.getElementById('navbar');
@@ -291,7 +301,6 @@
             }
         }, { passive: true });
 
-        // Fade in animation
         const observerOptions = { root: null, rootMargin: '0px', threshold: 0.1 };
         const observer = new IntersectionObserver((entries, observer) => {
             entries.forEach(entry => {

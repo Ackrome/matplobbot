@@ -127,3 +127,21 @@ class WebUserResponse(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    
+class TelegramAuthData(BaseModel):
+    id: int
+    first_name: str
+    last_name: Optional[str] = None
+    username: Optional[str] = None
+    photo_url: Optional[str] = None
+    auth_date: int
+    hash: str
+
+class CurrentUserResponse(BaseModel):
+    id: str | int
+    username: str
+    role: str # "admin" или "telegram"
+    avatar_url: Optional[str] = None
+    preferences: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    
+    model_config = BASE_CONFIG
