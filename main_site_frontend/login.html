@@ -39,15 +39,6 @@
                 </div>
             </div>
         </div>
-        <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-slate-100 absolute w-full shadow-xl">
-            <div class="px-4 pt-2 pb-6 space-y-1" id="mobile-nav-links">
-                <a href="/#projects" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Проекты</a>
-                <a href="/schedule" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Расписание</a>
-                <div id="mobile-auth-container">
-                    <a href="/login" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">Авторизация</a>
-                </div>
-            </div>
-        </div>
     </nav>
 
     <!-- ОТСТУП СВЕРХУ (pt-32), чтобы шапка не перекрывала контент -->
@@ -59,13 +50,20 @@
                 <p class="text-slate-500">Войдите для доступа к настройкам</p>
             </div>
             
-            <div class="flex justify-center mb-6">
+            <!-- TELEGRAM LOGIN WIDGET -->
+            <div class="flex flex-col items-center mb-6">
+                <!-- ВАЖНО: ЗАМЕНИТЕ matplobbot НА ИМЯ ВАШЕГО БОТА -->
                 <script async src="https://telegram.org/js/telegram-widget.js?22" 
                         data-telegram-login="matplobbot" 
                         data-size="large" 
                         data-radius="12" 
                         data-onauth="onTelegramAuth(user)" 
                         data-request-access="write"></script>
+                
+                <!-- НОВАЯ ПОДСКАЗКА -->
+                <p class="text-[10px] text-slate-400 mt-2 text-center max-w-xs leading-tight">
+                    Telegram запоминает вашу сессию. Чтобы сменить аккаунт, наведите курсор на синюю кнопку выше и нажмите «Log out».
+                </p>
             </div>
 
             <div class="relative flex py-5 items-center">
