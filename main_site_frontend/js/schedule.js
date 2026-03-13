@@ -1,8 +1,7 @@
-// js/schedule.js
+// main_site_frontend/js/schedule.js
 const API_BASE = "https://api.ivantishchenko.ru/api";
 const STORAGE_KEY = "mpb_user_preferences";
 
-// Фиксированная шкала времени для сетки ПК
 const FIXED_TIMES =[
     { start: '08:30', end: '10:00' },
     { start: '10:10', end: '11:40' },
@@ -28,42 +27,11 @@ const resultsBox = document.getElementById('searchResults');
 const searchContainer = document.getElementById('searchContainer');
 
 
-
-// Обновляем загрузку списка (теперь кнопки внутри Dropdown)
-// [INIT] Автозагрузка при старте страницы
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Загружаем список "Истории" (Оффлайн кэш)
     await initOfflineHistory(); 
-    
-    // 2. Восстанавливаем настройки из localStorage
-    const savedPrefs = localStorage.getItem(STORAGE_KEY);
-    if (savedPrefs) {
-        try {
-            const prefs = JSON.parse(savedPrefs);
-            console.log("Восстановление настроек:", prefs);
-            
-            // Восстанавливаем чекбокс
-            if (prefs.useShortNames !== undefined) {
-                document.getElementById('useShortNames').checked = prefs.useShortNames;
-            }
-            
-            // Если была выбрана группа/препод — загружаем
-            if (prefs.entity && prefs.entity.id) {
-                // ПРЕДЗАГРУЗКА выбранных модулей из памяти
-                if (prefs.modules && prefs.modules.length > 0) {
-                    selectedModules = new Set(prefs.modules);
-                }
-                
-                // Вызываем загрузку
-                await loadSchedule(prefs.entity.type, prefs.entity.id, prefs.entity.name);
-            }
-        } catch (e) {
-            console.error("Ошибка при чтении localStorage:", e);
-        }
-    }
+    await loadInitialPreferences(); // Загружаем настройки из API (если залогинен) или LocalStorage
 });
 
-// Выносим загрузку истории в отдельную функцию, чтобы не ломать основной поток
 async function initOfflineHistory() {
     try {
         const res = await fetch(`${API_BASE}/schedule/cached_list`);
@@ -90,16 +58,98 @@ async function initOfflineHistory() {
     }
 }
 
-function savePreferences() {
-    const prefs = {
-        entity: currentEntity,
-        modules: Array.from(selectedModules), // Set в Array для JSON
-        useShortNames: document.getElementById('useShortNames').checked
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+// === НОВАЯ ЛОГИКА СИНХРОНИЗАЦИИ НАСТРОЕК ===
+
+async function loadInitialPreferences() {
+    const token = localStorage.getItem('jwt_token');
+    let remotePrefs = null;
+    let localPrefs = null;
+
+    // Читаем из localStorage
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) localPrefs = JSON.parse(saved);
+    } catch (e) {}
+
+    // Читаем из API, если есть токен
+    if (token) {
+        try {
+            const res = await fetch(`${API_BASE}/auth/me`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const user = await res.json();
+                remotePrefs = user.preferences;
+            }
+        } catch (e) {
+            console.error("Ошибка загрузки настроек с сервера", e);
+        }
+    }
+
+    // Решаем, что применять
+    let prefsToApply = null;
+
+    if (remotePrefs && Object.keys(remotePrefs).length > 0) {
+        // Если в облаке есть данные, они приоритетнее
+        prefsToApply = remotePrefs;
+        // Заодно обновляем локальный сторадж, чтобы работал быстро в следующий раз
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(prefsToApply));
+    } else if (localPrefs) {
+        // Если облако пустое (новый аккаунт), но локально что-то есть - берем локальное
+        prefsToApply = localPrefs;
+        // И сразу пушим это в облако, чтобы сохранить
+        if (token) pushPreferencesToAPI(prefsToApply, token);
+    }
+
+    // Применяем настройки к интерфейсу
+    if (prefsToApply) {
+        if (prefsToApply.useShortNames !== undefined) {
+            document.getElementById('useShortNames').checked = prefsToApply.useShortNames;
+        }
+        
+        if (prefsToApply.entity && prefsToApply.entity.id) {
+            if (prefsToApply.modules && prefsToApply.modules.length > 0) {
+                selectedModules = new Set(prefsToApply.modules);
+            }
+            await loadSchedule(prefsToApply.entity.type, prefsToApply.entity.id, prefsToApply.entity.name);
+        }
+    }
 }
 
-// Утилиты
+async function savePreferences() {
+    const prefs = {
+        entity: currentEntity,
+        modules: Array.from(selectedModules), // Конвертируем Set в Array для JSON
+        useShortNames: document.getElementById('useShortNames').checked
+    };
+    
+    // Всегда сохраняем локально
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+
+    // Если есть токен, пушим в облако
+    const token = localStorage.getItem('jwt_token');
+    if (token) {
+        pushPreferencesToAPI(prefs, token);
+    }
+}
+
+async function pushPreferencesToAPI(prefs, token) {
+    try {
+        await fetch(`${API_BASE}/auth/preferences`, {
+            method: 'PUT',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ preferences: prefs })
+        });
+    } catch (e) {
+        console.error("Ошибка сохранения настроек в облако", e);
+    }
+}
+
+// === ОСТАЛЬНОЙ КОД БЕЗ ИЗМЕНЕНИЙ ===
+
 function parseDate(dateStr) {
     const [y, m, d] = dateStr.replace(/\./g, '-').split('-');
     return new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
@@ -121,11 +171,9 @@ function getMonday(d) {
     return date;
 }
 
-// Навигация с дозагрузкой!
 async function changeWeek(offset) {
     currentWeekStart.setDate(currentWeekStart.getDate() + offset * 7);
     
-    // Проверяем, вышли ли мы за пределы загруженных данных
     const weekEnd = new Date(currentWeekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
     
@@ -133,7 +181,6 @@ async function changeWeek(offset) {
     const loadedEnd = parseDate(loadedBounds.end);
 
     if (currentWeekStart < loadedStart || weekEnd > loadedEnd) {
-        // Делаем новый фетч на запрошенную дату
         const targetDateStr = getISODateStr(currentWeekStart);
         await loadSchedule(currentEntity.type, currentEntity.id, currentEntity.name, targetDateStr);
     } else {
@@ -143,10 +190,9 @@ async function changeWeek(offset) {
 
 async function setTodayWeek() {
     currentWeekStart = getMonday(new Date());
-    await changeWeek(0); // Используем логику проверки кэша
+    await changeWeek(0); 
 }
 
-// Копирование в буфер
 function copyToClipboard(text, event) {
     navigator.clipboard.writeText(text).then(() => {
         const el = event.currentTarget;
@@ -156,7 +202,6 @@ function copyToClipboard(text, event) {
     });
 }
 
-// Поиск
 groupInput.addEventListener('input', debounce(async (e) => {
     const query = e.target.value.trim();
     if (query.length < 2) { resultsBox.classList.add('hidden'); return; }
@@ -195,16 +240,14 @@ async function loadSchedule(type, id, name, targetDate = null) {
     currentEntity = { type, id, name };
     
     document.getElementById('defaultState').classList.add('hidden');
-    document.getElementById('scheduleControls').classList.remove('hidden'); // Показываем блок управления
+    document.getElementById('scheduleControls').classList.remove('hidden'); 
     
-    // Скелетон на всю ширину внутри блока
     document.getElementById('desktopSchedule').innerHTML = `<div class="p-8"><div class="skeleton h-64 w-full rounded-3xl"></div></div>`;
     document.getElementById('mobileSchedule').innerHTML = `<div class="skeleton h-64 w-full rounded-3xl"></div>`;
 
     let url = `${API_BASE}/schedule/data/${type}/${id}`;
     if (targetDate) url += `?base_date=${targetDate}`;
     
-    // [SAVE] Сохраняем сущность при загрузке
     savePreferences();
 
     try {
@@ -212,10 +255,9 @@ async function loadSchedule(type, id, name, targetDate = null) {
         const data = await res.json();
         
         fullSchedule = data.schedule || [];
-        allAvailableModules = data.available_modules || []; 
+        allAvailableModules = data.available_modules ||[]; 
         loadedBounds = data.loaded_bounds || {start: "2000-01-01", end: "2099-01-01"};
         
-        // [MODIFIED] Модули сбрасываем, только если их НЕТ в памяти (первый заход)
         if (!targetDate && selectedModules.size === 0) {
             selectedModules = new Set(allAvailableModules);
         }
@@ -231,7 +273,6 @@ async function loadSchedule(type, id, name, targetDate = null) {
         document.getElementById('desktopSchedule').innerHTML = `<div class="p-10 text-center text-red-500 font-bold">Ошибка загрузки.</div>`;
     }
 }
-
 
 function renderModuleFilters() {
     const container = document.getElementById('moduleContainer');
@@ -256,24 +297,23 @@ function toggleModule(mod) {
     else selectedModules.add(mod);
     renderModuleFilters();
     filterAndRender();
-    savePreferences(); // Сохраняем выбор модулей
+    savePreferences();
 }
 
 function selectAllModules() { 
     selectedModules = new Set(allAvailableModules); 
     renderModuleFilters(); 
     filterAndRender(); 
-    savePreferences(); // Сохраняем
+    savePreferences();
 }
 
 function clearAllModules() { 
     selectedModules.clear(); 
     renderModuleFilters(); 
     filterAndRender(); 
-    savePreferences(); // Сохраняем
+    savePreferences();
 }
 
-// Главный рендер
 function filterAndRender() {
     if (isOfflineMode) document.getElementById('offlineWarning').classList.remove('hidden');
     else document.getElementById('offlineWarning').classList.add('hidden');
@@ -300,7 +340,6 @@ function filterAndRender() {
 function renderDesktopGrid(lessons) {
     const container = document.getElementById('desktopSchedule');
     
-    // Массив из 7 дней недели
     const weekDates =[];
     for(let i=0; i<7; i++) {
         const d = new Date(currentWeekStart);
@@ -312,16 +351,15 @@ function renderDesktopGrid(lessons) {
     lessons.forEach(l => {
         const normDate = getISODateStr(parseDate(l.date));
         if (!gridData[normDate]) gridData[normDate] = {};
-        if (!gridData[normDate][l.beginLesson]) gridData[normDate][l.beginLesson] = [];
+        if (!gridData[normDate][l.beginLesson]) gridData[normDate][l.beginLesson] =[];
         gridData[normDate][l.beginLesson].push(l);
     });
 
-    // Индикатор текущего времени
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
     let html = `
-    <div class="overflow-hidden relative"> <!-- Убрали лишние скругления и бордеры здесь -->
+    <div class="overflow-hidden relative">
         <table class="w-full table-fixed border-collapse text-left">
             <thead class="bg-slate-50/50 border-b border-slate-100">
                 <tr>
@@ -332,7 +370,6 @@ function renderDesktopGrid(lessons) {
         html += `<th class="p-3 border-r border-slate-200 last:border-r-0 ${isToday ? 'bg-blue-50/70' : ''} relative">
             ${isToday ? '<div class="absolute top-0 left-0 w-full h-1 bg-blue-500"></div>' : ''}
             <div class="flex flex-col items-center gap-0.5">
-                <!-- УВЕЛИЧЕН ШРИФТ И КОНТРАСТ ЗДЕСЬ -->
                 <span class="text-xs uppercase tracking-widest font-bold ${isToday ? 'text-blue-600' : 'text-slate-500'}">${d.toLocaleDateString('ru', {weekday: 'short'})}</span>
                 <span class="text-xl font-black ${isToday ? 'text-blue-700' : 'text-slate-800'}">${d.getDate()}</span>
             </div>
@@ -340,11 +377,9 @@ function renderDesktopGrid(lessons) {
     });
     html += `</tr></thead><tbody class="divide-y divide-slate-100 relative">`;
 
-    // ИСПОЛЬЗУЕМ ФИКСИРОВАННОЕ ВРЕМЯ (FIXED_TIMES)
     FIXED_TIMES.forEach(timeSlot => {
         const timeStr = timeSlot.start;
         
-        // Линия текущего времени (упрощенная логика: если текущее время попадает в слот)
         const [hStart, mStart] = timeSlot.start.split(':').map(Number);
         const[hEnd, mEnd] = timeSlot.end.split(':').map(Number);
         const slotStartMins = hStart * 60 + mStart;
@@ -396,7 +431,6 @@ function renderMobileFeed(lessons) {
         const d = parseDate(dateStr);
         const isToday = isSameDay(d, new Date());
         
-        // Ключевое изменение: Белый фон и высокая плотность
         html += `
         <div class="relative">
             <div class="sticky top-[56px] md:top-[64px] z-20 bg-white px-4 py-3 border-b border-slate-100 flex items-center justify-between">
@@ -412,21 +446,12 @@ function renderMobileFeed(lessons) {
     container.innerHTML = html;
 }
 
-/**
- * Рендерит карточку занятия.
- * @param {Object} l - Объект занятия из API.
- * @param {Boolean} isDesktop - Флаг: true для сетки ПК, false для ленты мобильных.
- */
 function renderCard(l, isDesktop) {
     const color = getBadgeColor(l.kindOfWork);
-    
-    // 1. Логика интерактивных сокращений
     const useShort = document.getElementById('useShortNames').checked;
     const discName = useShort ? l.discipline_short : l.discipline_full;
     
-    // 2. Дизайн для ПК (Сетка)
     if (isDesktop) {
-        // Сокращаем ФИО преподавателя только для ПК-версии (Фамилия И.И.)
         const teacherTokens = (l.lecturer_title || '').split(' ');
         const teacherShort = teacherTokens.length > 2 
             ? `${teacherTokens[0]} ${teacherTokens[1][0]}.${teacherTokens[2][0]}.` 
@@ -434,7 +459,6 @@ function renderCard(l, isDesktop) {
 
         return `
         <div class="p-2.5 sm:p-3 rounded-2xl border ${color.border} ${color.bg} shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md flex flex-col h-full min-h-[110px]">
-            <!-- Верхняя строка: Тип пары + Модуль -->
             <div class="flex justify-between items-start gap-1 mb-1.5">
                 <div class="text-[9px] font-black uppercase tracking-wider ${color.text} truncate" title="${l.kindOfWork}">
                     ${l.kindOfWork}
@@ -445,12 +469,10 @@ function renderCard(l, isDesktop) {
                     </span>` : ''}
             </div>
             
-            <!-- Название дисциплины (Line-clamp ограничивает до 3 строк) -->
             <div class="font-bold text-slate-800 text-[13px] leading-snug line-clamp-3 mb-2 flex-grow" title="${discName}">
                 ${discName}
             </div>
             
-            <!-- Инфо: Аудитория и Преподаватель -->
             <div class="flex flex-col gap-1">
                 <div class="flex items-center gap-1 text-[10px] font-medium text-slate-600 hover:text-blue-600 cursor-pointer transition-colors" 
                      onclick="copyToClipboard('${l.auditorium}', event)" title="Копировать аудиторию">
@@ -467,13 +489,10 @@ function renderCard(l, isDesktop) {
         </div>`;
     }
 
-    // 3. Дизайн для МОБИЛЬНЫХ (Лента)
-    // Убираем прозрачность бейджей для лучшей читаемости на телефоне
     const mobileBadgeBg = color.bg.includes('/') ? color.bg.split('/')[0] : color.bg;
 
     return `
     <div class="p-4 bg-white hover:bg-slate-50 transition-colors flex flex-col gap-2">
-        <!-- Верхняя строка: Время + Бейдж типа пары -->
         <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-2">
                 <span class="font-black text-sm text-slate-900">${l.beginLesson}</span>
@@ -484,7 +503,6 @@ function renderCard(l, isDesktop) {
             </span>
         </div>
 
-        <!-- Тело: Название + Тег модуля -->
         <div>
             <div class="font-bold text-slate-900 text-sm leading-snug mb-1">${discName}</div>
             ${l.module ? `
@@ -493,7 +511,6 @@ function renderCard(l, isDesktop) {
                 </span>` : ''}
         </div>
 
-        <!-- Подвал: Аудитория и Преподаватель в две колонки -->
         <div class="grid grid-cols-2 gap-2 mt-1">
             <div class="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 truncate cursor-pointer active:text-blue-600" 
                  onclick="copyToClipboard('${l.auditorium}', event)">
@@ -527,7 +544,6 @@ function isSameDay(d1, d2) {
     return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 }
 
-// УПРАВЛЕНИЕ ПАНЕЛЬЮ ОФФЛАЙН
 function toggleOfflinePanel(event) {
     if (event) event.stopPropagation();
     const dropdown = document.getElementById('offlineDropdown');
@@ -535,7 +551,6 @@ function toggleOfflinePanel(event) {
     const isHidden = dropdown.classList.contains('hidden');
 
     if (isHidden) {
-        // Открываем
         dropdown.classList.remove('hidden');
         setTimeout(() => {
             dropdown.classList.remove('opacity-0', 'translate-y-2');
@@ -543,7 +558,6 @@ function toggleOfflinePanel(event) {
         }, 10);
         arrow.classList.add('rotate-180');
     } else {
-        // Закрываем
         closeOfflinePanel();
     }
 }
@@ -557,20 +571,14 @@ function closeOfflinePanel() {
     setTimeout(() => dropdown.classList.add('hidden'), 200);
 }
 
-
-// Добавляем закрытие при клике снаружи в общий обработчик
 document.addEventListener('click', (e) => {
-    // Для поиска (уже было)
     if (!searchContainer.contains(e.target)) resultsBox.classList.add('hidden');
-    
-    // ДЛЯ ИСТОРИИ
     const offlineContainer = document.getElementById('offlinePanelContainer');
     if (offlineContainer && !offlineContainer.contains(e.target)) {
         closeOfflinePanel();
     }
 });
 
-// Добавляем функцию для мобильных фильтров
 function toggleFiltersMobile() {
     const content = document.getElementById('filterContent');
     const arrow = document.getElementById('filterArrow');

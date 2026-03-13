@@ -1,6 +1,7 @@
 # shared_lib/schemas.py
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
+
 
 # --- Конфигурация Pydantic V2 ---
 # extra='ignore': Если база вернет лишние поля, Pydantic их просто проигнорирует, а не упадет с ошибкой.
@@ -109,14 +110,17 @@ class NewUserStatEntry(BaseModel):
     
     model_config = BASE_CONFIG
     
-    
 class WebUserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=6)
 
+class WebUserPreferencesUpdate(BaseModel):
+    preferences: Dict[str, Any] = Field(default_factory=dict, description="Любые настройки фронтенда")
+
 class WebUserResponse(BaseModel):
     id: int
     username: str
+    preferences: Dict[str, Any] = Field(default_factory=dict)
     created_at: Any
     model_config = BASE_CONFIG
 

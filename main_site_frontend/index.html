@@ -9,7 +9,6 @@
     <style>
         body { font-family: 'Inter', sans-serif; }
         
-        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #f1f5f9; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
@@ -34,33 +33,19 @@
             transform: translateY(20px);
             transition: opacity 0.6s ease-out, transform 0.6s ease-out;
         }
+        .fade-in.visible { opacity: 1; transform: translateY(0); }
 
-        .fade-in.visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        /* Schedule Card Hover Effect */
         .schedule-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
         }
 
-        /* Navbar hide/show animation */
-        .nav-hidden {
-            transform: translateY(-100%);
-            opacity: 0;
-        }
-
-        .nav-visible {
-            transform: translateY(0);
-            opacity: 1;
-        }
+        .nav-hidden { transform: translateY(-100%); opacity: 0; }
+        .nav-visible { transform: translateY(0); opacity: 1; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 antialiased selection:bg-blue-100 selection:text-blue-900">
 
-    <!-- NAVIGATION BAR -->
     <nav class="glass fixed top-0 w-full z-50 transition-all duration-300 nav-visible" id="navbar">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-20">
@@ -73,13 +58,17 @@
                 </a>
 
                 <!-- Desktop Menu -->
-                <div class="hidden md:flex space-x-8 items-center">
+                <div class="hidden md:flex space-x-8 items-center" id="desktop-nav-links">
                     <a href="/#projects" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Проекты</a>
                     <a href="/schedule" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Расписание</a>
-                    <a href="/login" class="group relative px-6 py-2.5 bg-slate-900 text-white rounded-full font-medium overflow-hidden shadow-lg shadow-slate-900/20 hover:shadow-slate-900/40 transition-all">
-                        <span class="relative z-10 flex items-center gap-2">Авторизация</span>
-                        <div class="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    </a>
+                    
+                    <!-- Этот блок заменится через JS, если юзер авторизован -->
+                    <div id="desktop-auth-container" class="flex items-center gap-4">
+                        <a href="/login" class="group relative px-6 py-2.5 bg-slate-900 text-white rounded-full font-medium overflow-hidden shadow-lg shadow-slate-900/20 hover:shadow-slate-900/40 transition-all">
+                            <span class="relative z-10 flex items-center gap-2">Авторизация</span>
+                            <div class="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                        </a>
+                    </div>
                 </div>
 
                 <!-- Mobile menu button -->
@@ -95,10 +84,13 @@
 
         <!-- Mobile Menu -->
         <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-slate-100 absolute w-full shadow-xl">
-            <div class="px-4 pt-2 pb-6 space-y-1">
+            <div class="px-4 pt-2 pb-6 space-y-1" id="mobile-nav-links">
                 <a href="/#projects" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Проекты</a>
                 <a href="/schedule" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Расписание</a>
-                <a href="/login" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">Авторизация</a>
+                
+                <div id="mobile-auth-container">
+                    <a href="/login" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">Авторизация</a>
+                </div>
             </div>
         </div>
     </nav>
@@ -108,7 +100,6 @@
         
         <!-- Hero Section -->
         <section class="relative min-h-screen flex items-center justify-center hero-bg overflow-hidden">
-            <!-- Overlay -->
             <div class="absolute inset-0 bg-gradient-to-b from-slate-50/80 via-slate-50/60 to-slate-50"></div>
             
             <div class="relative max-w-5xl mx-auto px-4 text-center z-10 pt-20 fade-in">
@@ -133,7 +124,6 @@
                 </div>
             </div>
             
-            <!-- Scroll Indicator -->
             <div class="absolute bottom-10 left-1/2 transform -translate-x-1/2 animate-bounce">
                 <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
             </div>
@@ -172,77 +162,17 @@
                             </a>
                         </div>
                     </div>
-
-                    <!-- Project Card 2 -->
-                    <div class="group bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-blue-900/5 transition-all duration-300 fade-in" style="transition-delay: 100ms;">
-                        <div class="relative h-64 overflow-hidden">
-                            <img src="https://image.qwenlm.ai/public_source/5ce42e79-3a6d-43e2-aa70-b846219e4f49/109d473a9-e835-48ed-b06d-c629030b13d6.png" alt="Analytics Dashboard" class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500">
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-6">
-                                <span class="text-white font-medium">Web App</span>
-                            </div>
-                        </div>
-                        <div class="p-6">
-                            <div class="flex items-center gap-2 mb-3">
-                                <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">React</span>
-                                <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Recharts</span>
-                            </div>
-                            <h3 class="text-xl font-bold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors">Analytics Hub</h3>
-                            <p class="text-slate-600 mb-6 line-clamp-2">
-                                Панель управления данными с интерактивными графиками. Визуализация статистики в реальном времени.
-                            </p>
-                            <a href="#" class="inline-flex items-center text-blue-600 font-semibold hover:text-blue-700 transition-colors">
-                                Подробнее <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
-                            </a>
-                        </div>
-                    </div>
-
-                    <!-- Project Card 3 -->
-                    <div class="group bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-blue-900/5 transition-all duration-300 fade-in" style="transition-delay: 200ms;">
-                        <div class="relative h-64 overflow-hidden">
-                            <img src="https://image.qwenlm.ai/public_source/5ce42e79-3a6d-43e2-aa70-b846219e4f49/163d0d9c8-0e47-4b64-a2c6-27981b4225a3.png" alt="NextGen Dashboard" class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500">
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-6">
-                                <span class="text-white font-medium">SaaS</span>
-                            </div>
-                        </div>
-                        <div class="p-6">
-                            <div class="flex items-center gap-2 mb-3">
-                                <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Next.js</span>
-                                <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Tailwind</span>
-                            </div>
-                            <h3 class="text-xl font-bold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors">NextGen Platform</h3>
-                            <p class="text-slate-600 mb-6 line-clamp-2">
-                                Современная веб-платформа для управления задачами. Минималистичный дизайн и высокая производительность.
-                            </p>
-                            <a href="#" class="inline-flex items-center text-blue-600 font-semibold hover:text-blue-700 transition-colors">
-                                Подробнее <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
-                            </a>
-                        </div>
-                    </div>
                 </div>
             </div>
         </section>
-
-
 
         <!-- Footer -->
         <footer class="bg-white border-t border-slate-200 pt-16 pb-8">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex flex-col md:flex-row justify-between items-center mb-8">
                     <div class="flex items-center space-x-2 mb-4 md:mb-0">
-                        <div class="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white font-bold text-sm">
-                            IT
-                        </div>
+                        <div class="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white font-bold text-sm">IT</div>
                         <span class="text-lg font-bold text-slate-800">Ivan Tishchenko</span>
-                    </div>
-                    <div class="flex space-x-6">
-                        <a href="https://github.com/Ackrome" class="text-slate-400 hover:text-slate-600 transition-colors">
-                            <span class="sr-only">GitHub</span>
-                            <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"></path></svg>
-                        </a>
-                        <a href="https://t.me/IvanTishchenko" class="text-slate-400 hover:text-blue-500 transition-colors">
-                            <span class="sr-only">Telegram</span>
-                            <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-                        </a>
                     </div>
                 </div>
                 <div class="border-t border-slate-100 pt-8 flex flex-col md:flex-row justify-between items-center">
@@ -254,6 +184,63 @@
     </main>
 
     <script>
+        // АВТОРИЗАЦИЯ И ИЗМЕНЕНИЕ UI
+        const API_BASE = "https://api.ivantishchenko.ru/api";
+
+        function performLogout() {
+            localStorage.removeItem('jwt_token');
+            window.location.reload();
+        }
+
+        async function checkAuthAndRender() {
+            const token = localStorage.getItem('jwt_token');
+            if (!token) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (res.ok) {
+                    const user = await res.json();
+                    const desktopContainer = document.getElementById('desktop-auth-container');
+                    const mobileContainer = document.getElementById('mobile-auth-container');
+
+                    // Десктоп UI: Имя + Дашборд + Кнопка выхода
+                    desktopContainer.innerHTML = `
+                        <a href="/stats" class="flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors">
+                            <div class="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">${user.username[0].toUpperCase()}</div>
+                            <span class="text-sm font-bold text-slate-700">${user.username}</span>
+                        </a>
+                        <button onclick="performLogout()" class="text-sm font-medium text-slate-400 hover:text-red-500 transition-colors">Выйти</button>
+                    `;
+
+                    // Мобильный UI
+                    mobileContainer.innerHTML = `
+                        <div class="mt-4 pt-4 border-t border-slate-100">
+                            <a href="/stats" class="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-slate-50 transition-colors">
+                                <div class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">${user.username[0].toUpperCase()}</div>
+                                <div>
+                                    <div class="text-sm font-bold text-slate-900">${user.username}</div>
+                                    <div class="text-xs text-slate-500">Панель управления</div>
+                                </div>
+                            </a>
+                            <button onclick="performLogout()" class="w-full text-left mt-2 px-3 py-3 rounded-lg text-red-500 font-medium hover:bg-red-50 transition-colors">Выйти из аккаунта</button>
+                        </div>
+                    `;
+                } else {
+                    // Токен протух или невалиден
+                    localStorage.removeItem('jwt_token');
+                }
+            } catch (e) {
+                console.error("Auth check failed", e);
+            }
+        }
+
+        // Вызываем сразу при загрузке
+        checkAuthAndRender();
+
+        // ---------------------------
         // Mobile Menu Logic
         const btn = document.getElementById('mobile-menu-button');
         const menu = document.getElementById('mobile-menu');
@@ -262,46 +249,37 @@
             menu.classList.toggle('hidden');
         });
 
-        // Close mobile menu when clicking a link
         document.querySelectorAll('#mobile-menu a').forEach(link => {
             link.addEventListener('click', () => {
                 menu.classList.add('hidden');
             });
         });
 
-        // Navbar hide/show on scroll with gradual fade
+        // Navbar hide/show on scroll
         let lastScrollY = window.scrollY;
         let ticking = false;
         const navbar = document.getElementById('navbar');
-        const scrollThreshold = 100; // Start hiding after scrolling this much
+        const scrollThreshold = 100;
 
         function updateNavbar() {
             const currentScrollY = window.scrollY;
-            
-            // Only start hiding after scrolling past the hero section
             if (currentScrollY > scrollThreshold) {
                 if (currentScrollY > lastScrollY && currentScrollY > 200) {
-                    // Scrolling down - hide navbar gradually
                     navbar.classList.add('nav-hidden');
                     navbar.classList.remove('nav-visible');
                 } else {
-                    // Scrolling up - show navbar
                     navbar.classList.remove('nav-hidden');
                     navbar.classList.add('nav-visible');
                 }
             } else {
-                // At top of page - always show navbar
                 navbar.classList.remove('nav-hidden');
                 navbar.classList.add('nav-visible');
             }
-            
-            // Add shadow when scrolled
             if (currentScrollY > 20) {
                 navbar.classList.add('shadow-md');
             } else {
                 navbar.classList.remove('shadow-md');
             }
-            
             lastScrollY = currentScrollY;
             ticking = false;
         }
@@ -313,13 +291,8 @@
             }
         }, { passive: true });
 
-        // Intersection Observer for Fade-in Animation
-        const observerOptions = {
-            root: null,
-            rootMargin: '0px',
-            threshold: 0.1
-        };
-
+        // Fade in animation
+        const observerOptions = { root: null, rootMargin: '0px', threshold: 0.1 };
         const observer = new IntersectionObserver((entries, observer) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
@@ -329,10 +302,7 @@
             });
         }, observerOptions);
 
-        document.querySelectorAll('.fade-in').forEach(el => {
-            observer.observe(el);
-        });
+        document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
     </script>
 </body>
 </html>
-

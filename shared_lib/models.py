@@ -115,9 +115,8 @@ class SearchDocument(Base):
     source_type = Column(String, nullable=False)
     source_path = Column(String, nullable=False)
     content = Column(String, nullable=False)
-    metadata_ = Column("metadata", JSONB, nullable=True) # "metadata" зарезервировано в SA, используем алиас
-    content_ts = Column(TSVECTOR) # SQLAlchemy пока плохо умеет создавать TSVECTOR колонки сама, оставим это миграциям, но мэппить можно так, если нужно читать.
-    # Для поиска мы будем использовать func.to_tsvector в запросе, так что поле в модели можно не описывать явно, если мы не читаем его напрямую.
+    metadata_ = Column("metadata", JSONB, nullable=True)
+    content_ts = Column(TSVECTOR)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -126,19 +125,17 @@ class SearchDocument(Base):
     )
     
 class DisciplineModule(Base):
-    """
-    Ручной маппинг: Какая дисциплина относится к какому модулю.
-    Пример: "Математический анализ" -> "Анализ данных"
-    """
     __tablename__ = 'discipline_modules'
 
-    discipline_name = Column(String, primary_key=True) # Имя дисциплины точь-в-точь как в RUZ
-    module_name = Column(String, nullable=False)       # "Чистое" название модуля
-    
+    discipline_name = Column(String, primary_key=True)
+    module_name = Column(String, nullable=False)
+
 class WebUser(Base):
     __tablename__ = 'web_users'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
+    # НОВОЕ ПОЛЕ: Хранение пользовательских настроек (расписание, интерфейс и т.д.)
+    preferences = Column(JSON, server_default='{}', nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
