@@ -1,34 +1,27 @@
 // js/stats.js
 const API_BASE = "https://api.ivantishchenko.ru/api";
-// const API_BASE = "http://api.localhost/api";
 const token = localStorage.getItem('jwt_token');
 
-function logout() {
-    localStorage.removeItem('jwt_token');
-    window.location.href = '/login';
-}
+// Функция logout удалена, так как она определена в navbar.js
 
 async function fetchWithAuth(endpoint) {
     const response = await fetch(`${API_BASE}${endpoint}`, {
         headers: { 'Authorization': `Bearer ${token}` }
     });
-    if (response.status === 401) logout();
+    if (response.status === 401) window.performLogout();
     return response.json();
 }
 
 async function loadDashboard() {
     try {
-        // Загружаем данные параллельно
         const [leaderboard, activity] = await Promise.all([
             fetchWithAuth("/stats/leaderboard"),
             fetchWithAuth("/stats/activity")
         ]);
 
-        // 1. KPI
         const total = leaderboard.reduce((sum, u) => sum + u.actions_count, 0);
         document.getElementById('totalActions').innerText = total.toLocaleString();
 
-        // 2. Таблица лидеров
         const tbody = document.getElementById('leaderboardBody');
         tbody.innerHTML = leaderboard.slice(0, 10).map((user, index) => `
             <tr class="border-b border-slate-50 last:border-none group hover:bg-slate-50 transition-colors">
@@ -46,13 +39,12 @@ async function loadDashboard() {
             </tr>
         `).join('');
 
-        // 3. График активности (Chart.js)
         const ctx = document.getElementById('activityChart').getContext('2d');
         new Chart(ctx, {
             type: 'line',
             data: {
                 labels: activity.map(d => d.period_start),
-                datasets: [{
+                datasets:[{
                     label: 'Действия',
                     data: activity.map(d => d.actions_count),
                     borderColor: '#2563eb',

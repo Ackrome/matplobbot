@@ -5,59 +5,102 @@
     <title>Вход | ITISHCHENKO</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255, 255, 255, 0.3); }
+        .nav-hidden { transform: translateY(-100%); opacity: 0; }
+        .nav-visible { transform: translateY(0); opacity: 1; }
+    </style>
 </head>
-<body class="bg-slate-50 flex items-center justify-center min-h-screen font-['Inter']">
-    <div class="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md border border-slate-100">
-        <div class="text-center mb-8">
-            <div class="w-16 h-16 bg-blue-600 rounded-2xl mx-auto flex items-center justify-center text-white text-2xl font-bold mb-4 shadow-lg shadow-blue-200">IT</div>
-            <h1 class="text-2xl font-bold text-slate-900">Добро пожаловать</h1>
-            <p class="text-slate-500">Войдите для доступа к настройкам</p>
-        </div>
-        
-        <!-- TELEGRAM LOGIN WIDGET -->
-        <div class="flex justify-center mb-6">
-            <!-- ВАЖНО: ЗАМЕНИТЕ matplobbot НА ИМЯ ВАШЕГО БОТА -->
-            <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                    data-telegram-login="matplobbot" 
-                    data-size="large" 
-                    data-radius="12" 
-                    data-onauth="onTelegramAuth(user)" 
-                    data-request-access="write"></script>
-        </div>
+<body class="bg-slate-50 text-slate-900 flex flex-col min-h-screen">
 
-        <div class="relative flex py-5 items-center">
-            <div class="flex-grow border-t border-slate-200"></div>
-            <span class="flex-shrink-0 mx-4 text-slate-400 text-sm font-medium">или по паролю (для админов)</span>
-            <div class="flex-grow border-t border-slate-200"></div>
-        </div>
-        
-        <form id="loginForm" class="space-y-4">
-            <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Логин</label>
-                <input type="text" id="username" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="admin" required>
+    <!-- УНИВЕРСАЛЬНАЯ ШАПКА -->
+    <nav class="glass fixed top-0 w-full z-50 transition-all duration-300 nav-visible" id="navbar">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-20">
+                <a href="/" class="flex-shrink-0 flex items-center space-x-2 group">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-500/30 group-hover:scale-105 transition-transform">IT</div>
+                    <span class="text-lg font-bold text-slate-800">Ivan Tishchenko</span>
+                </a>
+                <div class="hidden md:flex space-x-8 items-center" id="desktop-nav-links">
+                    <a href="/#projects" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Проекты</a>
+                    <a href="/schedule" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Расписание</a>
+                    <div id="desktop-auth-container" class="flex items-center gap-4">
+                        <a href="/login" class="group relative px-6 py-2.5 bg-slate-900 text-white rounded-full font-medium overflow-hidden shadow-lg shadow-slate-900/20 hover:shadow-slate-900/40 transition-all">
+                            <span class="relative z-10 flex items-center gap-2">Авторизация</span>
+                            <div class="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                        </a>
+                    </div>
+                </div>
+                <div class="md:hidden flex items-center">
+                    <button id="mobile-menu-button" class="text-slate-600 hover:text-blue-600 focus:outline-none p-2 rounded-lg hover:bg-slate-100 transition-colors">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
+                    </button>
+                </div>
             </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Пароль</label>
-                <input type="password" id="password" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="••••••••" required>
-            </div>
-            <button type="submit" class="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200">
-                Войти по паролю
-            </button>
-        </form>
-        <div id="error" class="mt-4 text-red-500 text-center text-sm hidden"></div>
-        
-        <div class="mt-6 text-center text-sm text-slate-500">
-            Нет аккаунта администратора? <a href="/register" class="text-blue-600 font-semibold hover:underline">Создать</a>
         </div>
-    </div>
+        <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-slate-100 absolute w-full shadow-xl">
+            <div class="px-4 pt-2 pb-6 space-y-1" id="mobile-nav-links">
+                <a href="/#projects" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Проекты</a>
+                <a href="/schedule" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Расписание</a>
+                <div id="mobile-auth-container">
+                    <a href="/login" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">Авторизация</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ОТСТУП СВЕРХУ (pt-32), чтобы шапка не перекрывала контент -->
+    <main class="flex-grow flex items-center justify-center w-full pt-32 pb-10 px-4">
+        <div class="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md border border-slate-100">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-blue-600 rounded-2xl mx-auto flex items-center justify-center text-white text-2xl font-bold mb-4 shadow-lg shadow-blue-200">IT</div>
+                <h1 class="text-2xl font-bold text-slate-900">Добро пожаловать</h1>
+                <p class="text-slate-500">Войдите для доступа к настройкам</p>
+            </div>
+            
+            <div class="flex justify-center mb-6">
+                <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                        data-telegram-login="matplobbot" 
+                        data-size="large" 
+                        data-radius="12" 
+                        data-onauth="onTelegramAuth(user)" 
+                        data-request-access="write"></script>
+            </div>
+
+            <div class="relative flex py-5 items-center">
+                <div class="flex-grow border-t border-slate-200"></div>
+                <span class="flex-shrink-0 mx-4 text-slate-400 text-sm font-medium">или по паролю (для админов)</span>
+                <div class="flex-grow border-t border-slate-200"></div>
+            </div>
+            
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Логин</label>
+                    <input type="text" id="username" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="admin" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Пароль</label>
+                    <input type="password" id="password" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200">
+                    Войти по паролю
+                </button>
+            </form>
+            <div id="error" class="mt-4 text-red-500 text-center text-sm hidden"></div>
+            
+            <div class="mt-6 text-center text-sm text-slate-500">
+                Нет аккаунта администратора? <a href="/register" class="text-blue-600 font-semibold hover:underline">Создать</a>
+            </div>
+        </div>
+    </main>
     
-    <!-- Добавлена глобальная функция для Telegram коллбека -->
     <script>
         function onTelegramAuth(user) {
-            // Вызываем логику из auth.js
             window.handleTelegramLogin(user);
         }
     </script>
+    <script src="/js/navbar.js?v=2"></script>
     <script src="/js/auth.js?v=3"></script>
 </body>
 </html>

@@ -6,8 +6,14 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Стили универсальной шапки */
+        .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255, 255, 255, 0.3); }
+        .nav-hidden { transform: translateY(-100%); opacity: 0; }
+        .nav-visible { transform: translateY(0); opacity: 1; }
+    </style>
     <script>
-        // Защита страницы: если нет токена, отправляем на логин
         if (!localStorage.getItem('jwt_token')) {
             window.location.href = '/login';
         }
@@ -15,17 +21,43 @@
 </head>
 <body class="bg-slate-50 font-['Inter'] text-slate-900">
 
-    <!-- Header -->
-    <header class="fixed top-0 w-full bg-white/80 backdrop-blur-md border-b border-slate-200 z-50">
-        <div class="max-w-7xl mx-auto px-6 h-20 flex justify-between items-center">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white font-bold">IT</div>
-                <h1 class="text-xl font-bold">Matplobbot Dashboard</h1>
+    <!-- УНИВЕРСАЛЬНАЯ ШАПКА -->
+    <nav class="glass fixed top-0 w-full z-50 transition-all duration-300 nav-visible" id="navbar">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-20">
+                <a href="/" class="flex-shrink-0 flex items-center space-x-2 group">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-500/30 group-hover:scale-105 transition-transform">IT</div>
+                    <span class="text-lg font-bold text-slate-800">Ivan Tishchenko</span>
+                </a>
+                <div class="hidden md:flex space-x-8 items-center" id="desktop-nav-links">
+                    <a href="/#projects" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Проекты</a>
+                    <a href="/schedule" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Расписание</a>
+                    <div id="desktop-auth-container" class="flex items-center gap-4">
+                        <a href="/login" class="group relative px-6 py-2.5 bg-slate-900 text-white rounded-full font-medium overflow-hidden shadow-lg shadow-slate-900/20 hover:shadow-slate-900/40 transition-all">
+                            <span class="relative z-10 flex items-center gap-2">Авторизация</span>
+                            <div class="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                        </a>
+                    </div>
+                </div>
+                <div class="md:hidden flex items-center">
+                    <button id="mobile-menu-button" class="text-slate-600 hover:text-blue-600 focus:outline-none p-2 rounded-lg hover:bg-slate-100 transition-colors">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
+                    </button>
+                </div>
             </div>
-            <button onclick="logout()" class="text-sm font-medium text-red-500 hover:text-red-600 transition-colors">Выйти</button>
         </div>
-    </header>
+        <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-slate-100 absolute w-full shadow-xl">
+            <div class="px-4 pt-2 pb-6 space-y-1" id="mobile-nav-links">
+                <a href="/#projects" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Проекты</a>
+                <a href="/schedule" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Расписание</a>
+                <div id="mobile-auth-container">
+                    <a href="/login" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">Авторизация</a>
+                </div>
+            </div>
+        </div>
+    </nav>
 
+    <!-- ОТСТУП СВЕРХУ (pt-32) -->
     <main class="pt-32 pb-20 max-w-7xl mx-auto px-6">
         <!-- KPI Карточки -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10" id="kpi-container">
@@ -33,17 +65,14 @@
                 <p class="text-slate-400 text-sm font-bold uppercase tracking-wider mb-2">Всего действий</p>
                 <h2 class="text-4xl font-black text-slate-900" id="totalActions">...</h2>
             </div>
-            <!-- Сюда можно добавить еще карточки -->
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- График активности -->
             <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
                 <h3 class="text-xl font-bold mb-6">Активность пользователей</h3>
                 <canvas id="activityChart"></canvas>
             </div>
 
-            <!-- Таблица лидеров -->
             <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
                 <h3 class="text-xl font-bold mb-6">🏆 Таблица лидеров</h3>
                 <div class="overflow-x-auto">
@@ -63,6 +92,7 @@
         </div>
     </main>
 
-    <script src="/js/stats.js"></script>
+    <script src="/js/navbar.js?v=2"></script>
+    <script src="/js/stats.js?v=2"></script>
 </body>
 </html>

@@ -13,30 +13,59 @@
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        /* Скелетон анимация */
         .skeleton { background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%); background-size: 200% 100%; animation: loading 1.5s infinite; }
         @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        /* Стили универсальной шапки */
+        .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255, 255, 255, 0.3); }
+        .nav-hidden { transform: translateY(-100%); opacity: 0; }
+        .nav-visible { transform: translateY(0); opacity: 1; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
     
-    <nav class="fixed top-0 w-full bg-white/90 backdrop-blur-md border-b border-slate-200 z-50 h-16 flex items-center px-6 shadow-sm">
-        <a href="/" class="font-bold text-lg flex items-center gap-2">
-            <div class="w-8 h-8 bg-blue-600 rounded-lg text-white flex items-center justify-center">IT</div>
-            Ivan Tishchenko
-        </a>
+    <!-- УНИВЕРСАЛЬНАЯ ШАПКА -->
+    <nav class="glass fixed top-0 w-full z-50 transition-all duration-300 nav-visible" id="navbar">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-20">
+                <a href="/" class="flex-shrink-0 flex items-center space-x-2 group">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-500/30 group-hover:scale-105 transition-transform">IT</div>
+                    <span class="text-lg font-bold text-slate-800">Ivan Tishchenko</span>
+                </a>
+                <div class="hidden md:flex space-x-8 items-center" id="desktop-nav-links">
+                    <a href="/#projects" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Проекты</a>
+                    <a href="/schedule" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Расписание</a>
+                    <div id="desktop-auth-container" class="flex items-center gap-4">
+                        <a href="/login" class="group relative px-6 py-2.5 bg-slate-900 text-white rounded-full font-medium overflow-hidden shadow-lg shadow-slate-900/20 hover:shadow-slate-900/40 transition-all">
+                            <span class="relative z-10 flex items-center gap-2">Авторизация</span>
+                            <div class="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                        </a>
+                    </div>
+                </div>
+                <div class="md:hidden flex items-center">
+                    <button id="mobile-menu-button" class="text-slate-600 hover:text-blue-600 focus:outline-none p-2 rounded-lg hover:bg-slate-100 transition-colors">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-slate-100 absolute w-full shadow-xl">
+            <div class="px-4 pt-2 pb-6 space-y-1" id="mobile-nav-links">
+                <a href="/#projects" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Проекты</a>
+                <a href="/schedule" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Расписание</a>
+                <div id="mobile-auth-container">
+                    <a href="/login" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">Авторизация</a>
+                </div>
+            </div>
+        </div>
     </nav>
 
-<main class="pt-20 md:pt-24 max-w-[1600px] mx-auto px-2 sm:px-6 lg:px-8 pb-20">
-        
+    <!-- КОНТЕНТ (Остается без изменений) -->
+    <main class="pt-24 max-w-[1600px] mx-auto px-2 sm:px-6 lg:px-8 pb-20">
         <div class="w-full">
-            <!-- Шапка: Адаптированная под мобилки -->
             <div class="flex flex-col md:flex-row justify-between items-center mb-4 md:mb-8 gap-3 relative z-40 w-full px-1">
-                
                 <div class="flex items-center justify-between w-full md:w-auto gap-3">
                     <h1 class="text-2xl md:text-4xl font-black text-slate-900 tracking-tight">Расписание</h1>
-                    
-                    <!-- Выпадающая панель истории -->
                     <div class="relative" id="offlinePanelContainer">
                         <button onclick="toggleOfflinePanel(event)" 
                             class="group flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-blue-400 transition-all">
@@ -49,7 +78,6 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                             </svg>
                         </button>
-
                         <div id="offlineDropdown" 
                             class="absolute right-0 md:left-0 mt-2 w-64 md:w-72 bg-white border border-slate-100 rounded-2xl shadow-2xl overflow-hidden hidden opacity-0 translate-y-2 transition-all duration-200 z-50">
                             <div class="p-3 border-b border-slate-50 bg-slate-50/50">
@@ -60,7 +88,6 @@
                     </div>
                 </div>
                 
-                <!-- Поиск: на мобилках всегда под заголовком -->
                 <div class="relative w-full md:w-96" id="searchContainer">
                     <input type="text" id="groupSearch" autocomplete="off"
                         class="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-slate-700 text-sm md:text-base" 
@@ -72,11 +99,8 @@
                 </div>
             </div>
 
-            <!-- ЕДИНЫЙ БЛОК РАСПИСАНИЯ -->
             <div id="mainScheduleBlock" class="bg-white rounded-3xl md:rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col w-full min-h-[500px]">
-                
                 <div id="scheduleControls" class="hidden border-b border-slate-100">
-                    <!-- Навигация: кнопки крупнее для удобства нажатия пальцем -->
                     <div id="weekNav" class="flex items-center justify-between p-3 md:p-4 gap-2 bg-slate-50/50 border-b border-slate-100">
                         <div class="flex items-center gap-1 md:gap-2">
                             <button onclick="changeWeek(-1)" class="p-3 md:p-2 bg-white hover:bg-slate-50 rounded-lg text-slate-600 shadow-sm border border-slate-200">
@@ -90,7 +114,6 @@
                         <button onclick="setTodayWeek()" class="px-3 py-2 text-xs md:text-sm font-bold bg-white text-blue-600 rounded-lg border border-blue-100 shadow-sm">Сегодня</button>
                     </div>
 
-                    <!-- Секция фильтров: Сворачиваемая на мобилках -->
                     <div id="moduleFilterSection" class="p-3 md:p-5">
                         <button onclick="toggleFiltersMobile()" class="md:hidden flex items-center justify-between w-full text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
                             Фильтры и модули
@@ -120,19 +143,13 @@
                     </div>
                 </div>
 
-                <!-- Контент сетки -->
                 <div id="scheduleGridContent" class="relative bg-white">
-                    <!-- Предупреждение -->
                     <div id="offlineWarning" class="hidden m-3 p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-2 text-amber-800 fade-in">
                         <svg class="w-4 h-4 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                         <span class="text-[10px] md:text-sm font-medium">ВУЗ недоступен. Загружена копия.</span>
                     </div>
-
                     <div id="desktopSchedule" class="hidden lg:block w-full"></div>
-                    <!-- Плотная лента для мобилок -->
                     <div id="mobileSchedule" class="block lg:hidden flex flex-col gap-0"></div>
-                    
-                    <!-- Дефолтное состояние -->
                     <div id="defaultState" class="text-center py-24 px-4">
                         <div class="w-16 h-16 bg-slate-50 text-slate-200 rounded-full flex items-center justify-center mx-auto mb-4">
                             <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
@@ -144,7 +161,7 @@
         </div>
     </main>
 
+    <script src="/js/navbar.js?v=2"></script>
     <script src="/js/schedule.js?v=9.0"></script>
 </body>
 </html>
-
