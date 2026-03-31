@@ -13,7 +13,6 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from shared_lib.redis_client import redis_client
-from shared_lib.models import WebUser
 
 from shared_lib.database import (
     get_session, 

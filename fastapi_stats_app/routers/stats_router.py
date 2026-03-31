@@ -28,7 +28,6 @@ from shared_lib.schemas import (
     ExportActionsResponse,
     SendMessageRequest 
 )
-from shared_lib.models import WebUser
 from ..auth import get_current_user 
 
 router = APIRouter(prefix="/stats", tags=["stats"])
