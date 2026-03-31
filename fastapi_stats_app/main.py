@@ -29,7 +29,7 @@ from fastapi import FastAPI, Request, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from .routers import stats_router, ws_router, calendar_router, schedule_router, auth_router
+from .routers import stats_router, ws_router, calendar_router, schedule_router, auth_router, studio_router
 from shared_lib.database import init_db_pool, close_db_pool
 from .auth import get_current_user  # Импортируем нашу функцию
 
@@ -99,6 +99,7 @@ async def read_user_details_html(request: Request, user_id: int):
 
 app.include_router(auth_router.router, prefix="/api")
 app.include_router(schedule_router.router, prefix="/api")
+app.include_router(studio_router.router, prefix="/api")
 app.include_router(stats_router.router, prefix="/api")
 app.include_router(ws_router.router, tags=["websockets"])
 app.include_router(calendar_router.router, prefix="/api", tags=["calendar"])

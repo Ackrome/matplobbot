@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <title>Document Studio | Matplobbot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Split.js для панелей -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/split.js/1.6.5/split.min.js"></script>
+    
+    <!-- Monaco Editor Loader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; overflow: hidden; }
+        .split { display: flex; flex-direction: row; height: calc(100vh - 64px); }
+        .gutter { background-color: #f1f5f9; background-repeat: no-repeat; background-position: 50%; cursor: col-resize; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;}
+        .gutter.gutter-horizontal { background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjB5IMDAQAKC/P1X+0kKTAAAAAElFTkSuQmCC'); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 h-full flex flex-col">
+
+    <!-- Navbar -->
+    <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 shrink-0 z-10">
+        <div class="flex items-center gap-4">
+            <a href="/" class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md">IT</a>
+            <span class="font-bold text-lg hidden sm:block">Document Studio <span class="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full ml-1">Beta</span></span>
+            
+            <!-- Type Selector -->
+            <select id="doc-type" class="ml-4 bg-slate-50 border border-slate-200 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2 outline-none cursor-pointer">
+                <option value="latex">LaTeX Document</option>
+                <option value="markdown">Markdown</option>
+                <option value="mermaid">Mermaid Diagram</option>
+            </select>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <span id="status-text" class="text-xs text-slate-400 font-medium mr-2">Ready</span>
+            <button id="compile-btn" class="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg shadow-sm transition-colors flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                Compile (Ctrl+S)
+            </button>
+        </div>
+    </header>
+
+    <!-- Workspace Split -->
+    <div id="split-container" class="split w-full bg-slate-100 relative">
+        
+        <!-- Оверлей при загрузке/компиляции -->
+        <div id="loader-overlay" class="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-50 hidden flex-col items-center justify-center">
+            <div class="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
+            <div class="text-sm font-bold text-slate-600 shadow-white drop-shadow-md">Компиляция документа...</div>
+        </div>
+
+        <!-- Left: Editor -->
+        <div id="editor-pane" class="h-full bg-white relative">
+            <div id="monaco-container" class="absolute inset-0"></div>
+            
+            <!-- Панель ошибок (выезжает снизу) -->
+            <div id="error-panel" class="absolute bottom-0 w-full bg-red-50 border-t border-red-200 text-red-800 text-xs p-3 hidden max-h-48 overflow-y-auto font-mono">
+                <div class="font-bold mb-1 flex justify-between">
+                    <span>Compilation Errors:</span>
+                    <button onclick="document.getElementById('error-panel').classList.add('hidden')" class="hover:text-red-500">✕</button>
+                </div>
+                <pre id="error-text" class="whitespace-pre-wrap"></pre>
+            </div>
+        </div>
+
+        <!-- Right: Viewer -->
+        <div id="viewer-pane" class="h-full bg-[#525659] flex items-center justify-center overflow-hidden relative">
+            <!-- Для PDF -->
+            <iframe id="pdf-viewer" class="w-full h-full border-none hidden"></iframe>
+            <!-- Для Картинок (Mermaid) -->
+            <img id="image-viewer" class="max-w-full max-h-full object-contain hidden bg-white shadow-lg p-4" />
+            
+            <div id="empty-state" class="text-slate-400 flex flex-col items-center">
+                <svg class="w-16 h-16 mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <p class="font-medium text-sm">Нажмите Compile, чтобы увидеть результат</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/studio.js?v=1"></script>
+</body>
+</html>

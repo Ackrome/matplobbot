@@ -315,3 +315,61 @@ def render_html_task(self, content: str, page_title: str):
 
     except Exception as e:
         return {"status": "error", "error": str(e)}
+    
+@app.task(bind=True, soft_time_limit=60, name='shared_lib.tasks.compile_full_latex')
+def compile_full_latex_task(self, latex_code: str):
+    """
+    Компилирует полный LaTeX документ (от \documentclass до \end{document}) в PDF.
+    Для Фазы 1 поддерживается компиляция одного файла без внешних ассетов.
+    """
+    # 1. Жесткие проверки безопасности (отключаем возможность записи файлов и выполнения команд)
+    forbidden_commands =[r'\write18', r'\openout', r'\newwrite', r'\immediate']
+    for cmd in forbidden_commands:
+        if cmd in latex_code:
+            return {"status": "error", "error": f"Security violation: command {cmd} is forbidden."}
+
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tex_path = os.path.join(temp_dir, 'main.tex')
+            pdf_path = os.path.join(temp_dir, 'main.pdf')
+            log_path = os.path.join(temp_dir, 'main.log')
+
+            with open(tex_path, 'w', encoding='utf-8') as f:
+                f.write(latex_code)
+
+            # Используем latexmk для автоматического разрешения ссылок и генерации PDF
+            compile_cmd =[
+                'latexmk', 
+                '-pdf', 
+                '-interaction=nonstopmode', 
+                '-halt-on-error',
+                f'-output-directory={temp_dir}', 
+                tex_path
+            ]
+            
+            proc = subprocess.run(compile_cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=50)
+
+            # Если PDF не создан, парсим ошибки из .log файла
+            if not os.path.exists(pdf_path):
+                error_msg = "Compilation failed. Unknown error."
+                if os.path.exists(log_path):
+                    with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        lines = f.readlines()
+                    # Ищем строки с ошибками (начинаются с "!")
+                    error_lines = [l.strip() for l in lines if l.startswith('!')]
+                    if error_lines:
+                        error_msg = "\n".join(error_lines[:5])
+                    else:
+                        error_msg = "\n".join(lines[-15:]) # Последние строки лога как fallback
+                
+                return {"status": "error", "error": f"LaTeX Error:\n{error_msg}"}
+
+            # Если всё ок, читаем PDF и конвертируем в Base64
+            with open(pdf_path, 'rb') as f:
+                pdf_b64 = base64.b64encode(f.read()).decode('utf-8')
+                return {"status": "success", "pdf": pdf_b64}
+
+    except subprocess.TimeoutExpired:
+        return {"status": "error", "error": "Compilation timed out (limit: 50s)."}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
