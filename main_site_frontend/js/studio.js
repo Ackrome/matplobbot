@@ -1,65 +1,32 @@
 const API_BASE = "https://api.ivantishchenko.ru/api";
 let editor = null;
+const token = localStorage.getItem('jwt_token');
 
-// Дефолтные шаблоны для типов документов
-const TEMPLATES = {
-    latex: `\\documentclass[12pt, a4paper]{article}
-\\usepackage[utf8]{inputenc}
-\\usepackage[T2A]{fontenc}
-\\usepackage[russian]{babel}
-\\usepackage{amsmath, amssymb}
+// Состояние приложения
+let currentProjectId = null;
+let currentFileId = null;
+let projectFiles = [];
 
-\\title{Мой первый документ}
-\\author{Matplobbot Studio}
-\\date{\\today}
-
-\\begin{document}
-\\maketitle
-
-\\section{Введение}
-Здесь начинается ваш текст. Вы можете писать формулы:
-\\[ E = mc^2 \\]
-
-\\section{Заключение}
-Всё работает отлично!
-\\end{document}`,
-
-    markdown: `# Привет, Markdown!
-
-Это тестовый документ.
-
-## Списки
-* Пункт 1
-* Пункт 2
-
-## Формулы (LaTeX)
-$$
-\\int_{0}^{\\infty} e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}
-$$`,
-
-    mermaid: `graph TD;
-    A[Начало] --> B{Есть идея?};
-    B -- Да --> C[Пишем код];
-    B -- Нет --> D[Идем пить кофе];
-    C --> E[Profit!];`
-};
-
-// 1. Инициализация Split.js
-Split(['#editor-pane', '#viewer-pane'], {
-    sizes:[50, 50],
-    minSize: [300, 300],
-    gutterSize: 8,
+// 1. Инициализация UI
+Split(['#sidebar-pane', '#editor-pane', '#viewer-pane'], {
+    sizes: [20, 40, 40],
+    minSize: [200, 300, 300],
+    gutterSize: 6,
     cursor: 'col-resize'
 });
 
+if (!token) {
+    alert("Пожалуйста, авторизуйтесь.");
+    window.location.href = '/login';
+}
+
 // 2. Инициализация Monaco Editor
 require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.38.0/min/vs' }});
-
 require(['vs/editor/editor.main'], function() {
     editor = monaco.editor.create(document.getElementById('monaco-container'), {
-        value: TEMPLATES.latex,
+        value: "% Выберите проект слева",
         language: 'latex',
-        theme: 'vs-light', // Можно 'vs-dark'
+        theme: 'vs-light',
         automaticLayout: true,
         wordWrap: 'on',
         minimap: { enabled: false },
@@ -67,113 +34,190 @@ require(['vs/editor/editor.main'], function() {
     });
 
     // Биндим Ctrl+S
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
-        compileDocument();
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, async function() {
+        await saveCurrentFile();
+        compileProject();
     });
+
+    // Запускаем загрузку проектов
+    loadProjects();
 });
 
-// 3. Обработка смены типа документа
-document.getElementById('doc-type').addEventListener('change', (e) => {
-    const type = e.target.value;
-    if (editor) {
-        // Меняем синтаксис
-        let lang = type;
-        if (type === 'mermaid') lang = 'javascript'; // mermaid подсветка ставится отдельно, юзаем базовую
-        monaco.editor.setModelLanguage(editor.getModel(), lang);
-        
-        // Вставляем темплейт, если редактор пустой или был дефолтным
-        editor.setValue(TEMPLATES[type]);
-    }
-});
+// --- API ФУНКЦИИ ---
 
-// 4. Логика компиляции
-document.getElementById('compile-btn').addEventListener('click', compileDocument);
-
-async function compileDocument() {
-    const token = localStorage.getItem('jwt_token');
-    if (!token) {
-        alert("Для компиляции необходимо авторизоваться.");
-        window.location.href = '/login';
-        return;
-    }
-
-    const type = document.getElementById('doc-type').value;
-    const content = editor.getValue();
+async function loadProjects() {
+    const res = await fetch(`${API_BASE}/studio/projects`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const projects = await res.json();
     
-    const overlay = document.getElementById('loader-overlay');
-    const statusText = document.getElementById('status-text');
-    const errorPanel = document.getElementById('error-panel');
-    const errorText = document.getElementById('error-text');
+    const selector = document.getElementById('project-selector');
+    selector.innerHTML = '<option value="" disabled selected>-- Выберите проект --</option>';
+    
+    projects.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.text = p.name;
+        selector.appendChild(opt);
+    });
 
-    // UI Feedback
+    if(projects.length > 0) {
+        selector.value = projects[0].id;
+        openProject(projects[0].id);
+    }
+}
+
+async function createNewProject() {
+    const name = prompt("Введите название нового проекта:");
+    if (!name) return;
+
+    const res = await fetch(`${API_BASE}/studio/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ name: name, project_type: 'latex' })
+    });
+    
+    if (res.ok) {
+        await loadProjects(); // Перезагружаем список
+    }
+}
+
+async function openProject(id) {
+    currentProjectId = id;
+    document.getElementById('empty-state').classList.remove('hidden');
+    document.getElementById('pdf-viewer').classList.add('hidden');
+
+    const res = await fetch(`${API_BASE}/studio/projects/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    projectFiles = await res.json();
+    
+    renderFileList();
+
+    // Открываем main.tex по умолчанию
+    const mainFile = projectFiles.find(f => f.is_main);
+    if (mainFile) openFile(mainFile.id);
+}
+
+function renderFileList() {
+    const list = document.getElementById('file-list');
+    list.innerHTML = '';
+
+    projectFiles.forEach(f => {
+        const div = document.createElement('div');
+        div.className = `file-item px-4 py-2 text-sm text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors flex items-center gap-2 border-l-[3px] border-transparent`;
+        if (f.id === currentFileId) div.classList.add('active');
+        
+        let icon = f.is_binary ? '🖼️' : '📄';
+        div.innerHTML = `<span>${icon}</span> <span class="truncate">${f.path}</span>`;
+        
+        div.onclick = () => openFile(f.id);
+        list.appendChild(div);
+    });
+}
+
+async function openFile(id) {
+    if (currentFileId !== null) {
+        await saveCurrentFile(); // Сохраняем предыдущий открытый файл
+    }
+
+    const file = projectFiles.find(f => f.id === id);
+    if (!file) return;
+
+    currentFileId = id;
+    renderFileList(); // Обновляем выделение в UI
+
+    if (file.is_binary) {
+        editor.setValue(`% Это бинарный файл (${file.path}).\n% Используйте \\includegraphics{${file.path}} в main.tex, чтобы вставить его.`);
+        monaco.editor.setModelLanguage(editor.getModel(), 'plaintext');
+        editor.updateOptions({ readOnly: true });
+    } else {
+        editor.updateOptions({ readOnly: false });
+        monaco.editor.setModelLanguage(editor.getModel(), 'latex');
+        editor.setValue(file.content || "");
+    }
+}
+
+async function saveCurrentFile() {
+    if (!currentFileId || !currentProjectId) return;
+    const file = projectFiles.find(f => f.id === currentFileId);
+    if (file && !file.is_binary) {
+        const newContent = editor.getValue();
+        if (newContent !== file.content) {
+            document.getElementById('status-text').innerText = "Saving...";
+            await fetch(`${API_BASE}/studio/projects/${currentProjectId}/files/${currentFileId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ content: newContent })
+            });
+            file.content = newContent;
+            document.getElementById('status-text').innerText = "Saved";
+        }
+    }
+}
+
+async function uploadAsset(event) {
+    if (!currentProjectId) { alert("Сначала откройте проект."); return; }
+    
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch(`${API_BASE}/studio/projects/${currentProjectId}/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+    });
+
+    if (res.ok) {
+        await openProject(currentProjectId); // Перезагружаем файлы проекта
+    } else {
+        alert("Ошибка загрузки файла.");
+    }
+}
+
+async function compileProject() {
+    if (!currentProjectId) return;
+    
+    await saveCurrentFile(); // Убеждаемся, что всё сохранено
+
+    const overlay = document.getElementById('loader-overlay');
+    const errorPanel = document.getElementById('error-panel');
+    
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');
     errorPanel.classList.add('hidden');
-    statusText.innerText = "Compiling...";
-    statusText.className = "text-xs font-medium mr-2 text-blue-500 animate-pulse";
 
     try {
-        const response = await fetch(`${API_BASE}/studio/compile`, {
+        const response = await fetch(`${API_BASE}/studio/projects/${currentProjectId}/compile`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ type, content })
+            headers: { 'Authorization': `Bearer ${token}` }
         });
 
         const data = await response.json();
 
         if (response.ok && data.status === 'success') {
-            statusText.innerText = "Success";
-            statusText.className = "text-xs font-bold mr-2 text-green-500";
-            renderOutput(type, data);
+            const pdfViewer = document.getElementById('pdf-viewer');
+            document.getElementById('empty-state').classList.add('hidden');
+            pdfViewer.classList.remove('hidden');
+
+            const byteCharacters = atob(data.pdf);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) { byteNumbers[i] = byteCharacters.charCodeAt(i); }
+            const blob = new Blob([new Uint8Array(byteNumbers)], {type: 'application/pdf'});
+            
+            pdfViewer.src = URL.createObjectURL(blob) + "#toolbar=0&view=FitH";
         } else {
             throw new Error(data.detail || data.error || "Compilation failed");
         }
 
     } catch (err) {
-        statusText.innerText = "Error";
-        statusText.className = "text-xs font-bold mr-2 text-red-500";
-        errorText.innerText = err.message;
+        document.getElementById('error-text').innerText = err.message;
         errorPanel.classList.remove('hidden');
     } finally {
         overlay.classList.add('hidden');
         overlay.classList.remove('flex');
-    }
-}
-
-// 5. Рендеринг результата (Base64 -> Blob -> Iframe / Image)
-function renderOutput(type, data) {
-    const pdfViewer = document.getElementById('pdf-viewer');
-    const imageViewer = document.getElementById('image-viewer');
-    const emptyState = document.getElementById('empty-state');
-
-    emptyState.classList.add('hidden');
-
-    if (type === 'latex' || type === 'markdown') {
-        // Работаем с PDF
-        imageViewer.classList.add('hidden');
-        pdfViewer.classList.remove('hidden');
-
-        // Конвертируем base64 PDF в Blob для правильного отображения в браузере
-        const byteCharacters = atob(data.pdf);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], {type: 'application/pdf'});
-        
-        // Создаем локальный URL и вставляем в Iframe
-        const blobUrl = URL.createObjectURL(blob);
-        pdfViewer.src = blobUrl + "#toolbar=0&view=FitH"; // Скрываем верхнюю панель PDF и подгоняем по ширине
-        
-    } else if (type === 'mermaid') {
-        // Работаем с PNG
-        pdfViewer.classList.add('hidden');
-        imageViewer.classList.remove('hidden');
-        
-        imageViewer.src = "data:image/png;base64," + data.image;
     }
 }

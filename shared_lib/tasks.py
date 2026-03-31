@@ -373,3 +373,70 @@ def compile_full_latex_task(self, latex_code: str):
         return {"status": "error", "error": "Compilation timed out (limit: 50s)."}
     except Exception as e:
         return {"status": "error", "error": str(e)}
+    
+@app.task(bind=True, soft_time_limit=60, name='shared_lib.tasks.compile_project')
+def compile_project_task(self, project_files: list, main_file: str):
+    """
+    Компилирует многофайловый проект.
+    project_files:[{"path": "main.tex", "text": "...", "binary": "base64..."}]
+    """
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # 1. Воссоздаем файловую структуру проекта
+            for pf in project_files:
+                path = pf.get('path')
+                # Защита от выхода за пределы директории (Path Traversal)
+                if '..' in path or path.startswith('/'):
+                    continue
+                
+                full_path = os.path.join(temp_dir, path)
+                os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                
+                if pf.get('binary'):
+                    with open(full_path, 'wb') as f:
+                        f.write(base64.b64decode(pf['binary']))
+                else:
+                    with open(full_path, 'w', encoding='utf-8') as f:
+                        # Простая проверка безопасности для .tex файлов
+                        text_content = pf.get('text', '')
+                        if path.endswith('.tex') and r'\write18' in text_content:
+                            return {"status": "error", "error": "Security violation: \\write18 is forbidden."}
+                        f.write(text_content)
+
+            tex_path = os.path.join(temp_dir, main_file)
+            pdf_path = os.path.join(temp_dir, main_file.replace('.tex', '.pdf'))
+            log_path = os.path.join(temp_dir, main_file.replace('.tex', '.log'))
+
+            if not os.path.exists(tex_path):
+                return {"status": "error", "error": f"Main file '{main_file}' not found in project."}
+
+            # 2. Компиляция
+            compile_cmd =[
+                'latexmk', 
+                '-pdf', 
+                '-interaction=nonstopmode', 
+                '-halt-on-error',
+                f'-output-directory={temp_dir}', 
+                tex_path
+            ]
+            
+            subprocess.run(compile_cmd, capture_output=True, text=True, errors='ignore', timeout=50)
+
+            # 3. Обработка результатов
+            if not os.path.exists(pdf_path):
+                error_msg = "Compilation failed."
+                if os.path.exists(log_path):
+                    with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        lines = f.readlines()
+                    error_lines = [l.strip() for l in lines if l.startswith('!')]
+                    error_msg = "\n".join(error_lines[:5]) if error_lines else "\n".join(lines[-15:])
+                return {"status": "error", "error": f"LaTeX Error:\n{error_msg}"}
+
+            with open(pdf_path, 'rb') as f:
+                pdf_b64 = base64.b64encode(f.read()).decode('utf-8')
+                return {"status": "success", "pdf": pdf_b64}
+
+    except subprocess.TimeoutExpired:
+        return {"status": "error", "error": "Compilation timed out (limit: 50s)."}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}

@@ -1,5 +1,5 @@
 # shared_lib/models.py
-from sqlalchemy import Column, Integer, BigInteger, String, Boolean, JSON, Time, DateTime, ForeignKey, UniqueConstraint, func
+from sqlalchemy import Column, Integer, BigInteger, String, Boolean, JSON, Time, DateTime, ForeignKey, UniqueConstraint, func, LargeBinary 
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 
@@ -145,3 +145,27 @@ class WebAccount(Base):
     telegram_id = Column(BigInteger, ForeignKey('users.user_id', ondelete='SET NULL'), unique=True, nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+class Project(Base):
+    __tablename__ = 'projects'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    owner_id = Column(Integer, ForeignKey('web_accounts.id', ondelete='CASCADE'), nullable=False)
+    name = Column(String, nullable=False)
+    project_type = Column(String, nullable=False, server_default='latex') # latex, markdown, mermaid
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+class ProjectFile(Base):
+    __tablename__ = 'project_files'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
+    file_path = Column(String, nullable=False) # e.g. 'main.tex', 'images/logo.png'
+    content_text = Column(String, nullable=True) # Для кода
+    content_binary = Column(LargeBinary, nullable=True) # Для картинок
+    is_main = Column(Boolean, server_default='false')
+    
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (UniqueConstraint('project_id', 'file_path', name='uq_project_file_path'),)
