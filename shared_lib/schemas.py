@@ -110,24 +110,28 @@ class NewUserStatEntry(BaseModel):
     
     model_config = BASE_CONFIG
     
-class WebUserCreate(BaseModel):
-    username: str = Field(..., min_length=3, max_length=50)
-    password: str = Field(..., min_length=6)
-
-class WebUserPreferencesUpdate(BaseModel):
-    preferences: Dict[str, Any] = Field(default_factory=dict, description="Любые настройки фронтенда")
 
 class WebUserResponse(BaseModel):
     id: int
-    username: str
+    username: Optional[str]
+    telegram_id: Optional[int]
+    role: str
     preferences: Dict[str, Any] = Field(default_factory=dict)
     created_at: Any
     model_config = BASE_CONFIG
 
+# --- СХЕМЫ ДЛЯ WEB ACCOUNTS & TELEGRAM LOGIN ---
+class WebAccountCreate(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6)
+
+class WebAccountPreferencesUpdate(BaseModel):
+    preferences: Dict[str, Any] = Field(default_factory=dict, description="Любые настройки фронтенда")
+
 class Token(BaseModel):
     access_token: str
     token_type: str
-    
+
 class TelegramAuthData(BaseModel):
     id: int
     first_name: str
@@ -138,10 +142,10 @@ class TelegramAuthData(BaseModel):
     hash: str
 
 class CurrentUserResponse(BaseModel):
-    id: str | int
+    id: int
     username: str
-    role: str # "admin" или "telegram"
+    role: str
     avatar_url: Optional[str] = None
-    preferences: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    preferences: Dict[str, Any] = Field(default_factory=dict)
     
     model_config = BASE_CONFIG

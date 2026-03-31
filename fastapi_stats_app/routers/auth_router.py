@@ -2,19 +2,19 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from shared_lib.database import get_db_session_dependency
-from shared_lib.models import WebUser, User
-from shared_lib.schemas import WebUserCreate, WebUserResponse, Token, WebUserPreferencesUpdate, TelegramAuthData, CurrentUserResponse
+from shared_lib.models import WebAccount, User
+from shared_lib.schemas import WebAccountCreate, Token, WebAccountPreferencesUpdate, TelegramAuthData, CurrentUserResponse
 from ..auth import create_access_token, verify_password, get_password_hash, get_current_user, verify_telegram_authorization
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-@router.post("/register", response_model=WebUserResponse, status_code=status.HTTP_201_CREATED)
-async def register(user_data: WebUserCreate, db: AsyncSession = Depends(get_db_session_dependency)):
-    result = await db.execute(select(WebUser).where(WebUser.username == user_data.username))
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+async def register(user_data: WebAccountCreate, db: AsyncSession = Depends(get_db_session_dependency)):
+    result = await db.execute(select(WebAccount).where(WebAccount.username == user_data.username))
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -22,40 +22,38 @@ async def register(user_data: WebUserCreate, db: AsyncSession = Depends(get_db_s
         )
     
     hashed_password = get_password_hash(user_data.password)
-    new_user = WebUser(username=user_data.username, password_hash=hashed_password, preferences={})
+    # Регистрация по паролю по умолчанию дает роль админа
+    new_account = WebAccount(username=user_data.username, password_hash=hashed_password, role='admin', preferences={})
     
-    db.add(new_user)
+    db.add(new_account)
     await db.commit()
-    await db.refresh(new_user)
     
-    return new_user
+    return {"status": "success"}
 
 @router.post("/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db_session_dependency)):
-    result = await db.execute(select(WebUser).where(WebUser.username == form_data.username))
-    user = result.scalar_one_or_none()
+    result = await db.execute(select(WebAccount).where(WebAccount.username == form_data.username))
+    account = result.scalar_one_or_none()
     
-    if not user or not verify_password(form_data.password, user.password_hash):
+    if not account or not verify_password(form_data.password, account.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Неверный логин или пароль",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Добавляем роль в токен
-    access_token = create_access_token(data={"sub": user.username, "role": "admin"})
+    access_token = create_access_token(data={"sub": str(account.id), "role": account.role})
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/telegram", response_model=Token)
 async def telegram_login(tg_data: TelegramAuthData, db: AsyncSession = Depends(get_db_session_dependency)):
-    # 1. Проверяем криптографическую подпись Telegram
     if not verify_telegram_authorization(tg_data.model_dump()):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Недействительная подпись Telegram"
         )
     
-    # 2. Сохраняем или обновляем пользователя в таблице бота (User)
+    # 1. Обновляем/создаем профиль в боте (users)
     full_name = tg_data.first_name
     if tg_data.last_name:
         full_name += f" {tg_data.last_name}"
@@ -67,41 +65,39 @@ async def telegram_login(tg_data: TelegramAuthData, db: AsyncSession = Depends(g
         avatar_pic_url=tg_data.photo_url
     ).on_conflict_do_update(
         index_elements=['user_id'],
-        set_=dict(
-            username=tg_data.username,
-            full_name=full_name,
-            avatar_pic_url=tg_data.photo_url
-        )
+        set_=dict(username=tg_data.username, full_name=full_name, avatar_pic_url=tg_data.photo_url)
     )
     await db.execute(stmt)
+    
+    # 2. Ищем связующий WebAccount по telegram_id
+    result = await db.execute(select(WebAccount).where(WebAccount.telegram_id == tg_data.id))
+    account = result.scalar_one_or_none()
+    
+    if not account:
+        # Если нет, прозрачно создаем новый WebAccount для этого пользователя
+        account = WebAccount(role='user', preferences={}, telegram_id=tg_data.id)
+        db.add(account)
+        await db.flush() # Получаем ID
+        
     await db.commit()
     
-    # 3. Генерируем токен для ТГ пользователя
-    access_token = create_access_token(data={"sub": f"tg_{tg_data.id}", "role": "telegram"})
+    access_token = create_access_token(data={"sub": str(account.id), "role": account.role})
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.get("/me", response_model=CurrentUserResponse)
 async def get_me(current_user: dict = Depends(get_current_user)):
-    # Возвращаем подготовленный словарь (уже содержит нужные поля)
     return current_user
 
 @router.put("/preferences", response_model=CurrentUserResponse)
 async def update_preferences(
-    prefs: WebUserPreferencesUpdate, 
+    prefs: WebAccountPreferencesUpdate, 
     current_user: dict = Depends(get_current_user), 
     db: AsyncSession = Depends(get_db_session_dependency)
 ):
     db_obj = current_user["db_obj"]
-    
-    if current_user["role"] == "admin":
-        db_obj.preferences = prefs.preferences
-    elif current_user["role"] == "telegram":
-        db_obj.settings = prefs.preferences
-        
+    db_obj.preferences = prefs.preferences
     db.add(db_obj)
     await db.commit()
-    await db.refresh(db_obj)
     
-    # Обновляем текущий объект для ответа
     current_user["preferences"] = prefs.preferences
     return current_user

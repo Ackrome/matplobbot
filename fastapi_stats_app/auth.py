@@ -12,12 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from shared_lib.database import get_db_session_dependency, get_session
-from shared_lib.models import WebUser, User
+from shared_lib.models import WebAccount, User
 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "super-secret-key-12345")
-BOT_TOKEN = os.getenv("BOT_TOKEN") # Нужно для валидации Telegram
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30 # 30 дней для Telegram
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30 # 30 дней сессии
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login", auto_error=False)
@@ -35,7 +35,6 @@ def create_access_token(data: dict):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def verify_telegram_authorization(data: dict) -> bool:
-    """Проверяет подлинность данных, пришедших от виджета Telegram."""
     if not BOT_TOKEN:
         return False
         
@@ -43,7 +42,6 @@ def verify_telegram_authorization(data: dict) -> bool:
     if not received_hash:
         return False
         
-    # Формируем строку data_check_string
     data_check_arr =[]
     for key, value in data.items():
         if key != 'hash' and value is not None:
@@ -52,14 +50,13 @@ def verify_telegram_authorization(data: dict) -> bool:
     data_check_arr.sort()
     data_check_string = "\n".join(data_check_arr)
     
-    # Хэшируем
     secret_key = hashlib.sha256(BOT_TOKEN.encode('utf-8')).digest()
     expected_hash = hmac.new(secret_key, data_check_string.encode('utf-8'), hashlib.sha256).hexdigest()
     
     return hmac.compare_digest(expected_hash, received_hash)
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db_session_dependency)) -> dict:
-    """Возвращает единый формат пользователя (словарь) независимо от способа входа."""
+    """Возвращает единый формат пользователя (словарь), собирая данные из WebAccount и User(Tg)."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Недействительные учетные данные",
@@ -69,73 +66,57 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
         raise credentials_exception
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        sub: str = payload.get("sub")
-        role: str = payload.get("role", "admin") # По умолчанию старые токены считаем админскими
-        
-        if sub is None:
+        sub_id: str = payload.get("sub") # В payload всегда лежит ID из WebAccount
+        if not sub_id:
             raise credentials_exception
-            
     except JWTError:
         raise credentials_exception
         
-    if role == "telegram":
-        # Ищем пользователя в таблице телеграм-бота
-        tg_id = int(sub.replace("tg_", ""))
-        result = await db.execute(select(User).where(User.user_id == tg_id))
-        user = result.scalar_one_or_none()
-        if not user:
-            raise credentials_exception
+    # Ищем WebAccount
+    result = await db.execute(select(WebAccount).where(WebAccount.id == int(sub_id)))
+    account = result.scalar_one_or_none()
+    
+    if not account:
+        raise credentials_exception
+        
+    # По умолчанию для админа
+    display_name = account.username or "Пользователь"
+    avatar_url = None
+    
+    # Если привязан Telegram, берем красивые данные оттуда
+    if account.telegram_id:
+        tg_result = await db.execute(select(User).where(User.user_id == account.telegram_id))
+        tg_user = tg_result.scalar_one_or_none()
+        if tg_user:
+            display_name = tg_user.full_name
+            avatar_url = tg_user.avatar_pic_url
             
-        return {
-            "id": user.user_id,
-            "username": user.full_name, # Для UI используем Имя из ТГ
-            "role": "telegram",
-            "avatar_url": user.avatar_pic_url,
-            "preferences": user.settings,
-            "db_obj": user # Ссылка на ORM объект, если понадобится
-        }
-    else:
-        # Ищем пользователя в веб-админке
-        result = await db.execute(select(WebUser).where(WebUser.username == sub))
-        user = result.scalar_one_or_none()
-        if not user:
-            raise credentials_exception
-            
-        return {
-            "id": user.id,
-            "username": user.username,
-            "role": "admin",
-            "avatar_url": None,
-            "preferences": user.preferences,
-            "db_obj": user
-        }
+    return {
+        "id": account.id,
+        "username": display_name,
+        "role": account.role,
+        "avatar_url": avatar_url,
+        "preferences": account.preferences,
+        "db_obj": account # Ссылка на ORM объект для обновления preferences
+    }
 
 async def get_ws_user(websocket: WebSocket) -> dict:
-    """Адаптация для вебсокетов (токен в query params)."""
     token = websocket.query_params.get("token")
     if not token:
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        sub: str = payload.get("sub")
-        role: str = payload.get("role", "admin")
-        if not sub:
+        sub_id: str = payload.get("sub")
+        if not sub_id:
             raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
             
         async with get_session() as db:
-            if role == "telegram":
-                tg_id = int(sub.replace("tg_", ""))
-                result = await db.execute(select(User).where(User.user_id == tg_id))
-                user = result.scalar_one_or_none()
-            else:
-                result = await db.execute(select(WebUser).where(WebUser.username == sub))
-                user = result.scalar_one_or_none()
-                
-            if not user:
+            result = await db.execute(select(WebAccount).where(WebAccount.id == int(sub_id)))
+            account = result.scalar_one_or_none()
+            if not account:
                 raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
-            
-            # Для WS нам обычно нужен просто факт валидности, но вернем тот же формат
-            return {"id": sub, "role": role, "db_obj": user}
+                
+            return {"id": account.id, "role": account.role, "db_obj": account}
             
     except JWTError:
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)

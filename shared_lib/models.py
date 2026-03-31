@@ -130,12 +130,18 @@ class DisciplineModule(Base):
     discipline_name = Column(String, primary_key=True)
     module_name = Column(String, nullable=False)
 
-class WebUser(Base):
-    __tablename__ = 'web_users'
+class WebAccount(Base):
+    __tablename__ = 'web_accounts'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String, unique=True, nullable=False, index=True)
-    password_hash = Column(String, nullable=False)
-    # НОВОЕ ПОЛЕ: Хранение пользовательских настроек (расписание, интерфейс и т.д.)
-    preferences = Column(JSON, server_default='{}', nullable=False)
+    role = Column(String, nullable=False, server_default='user') # 'admin' или 'user'
+    preferences = Column(JSON, server_default='{}', nullable=False) # Настройки сайта
+    
+    # Для входа по логину/паролю
+    username = Column(String, unique=True, nullable=True, index=True)
+    password_hash = Column(String, nullable=True)
+    
+    # Для входа через Telegram
+    telegram_id = Column(BigInteger, ForeignKey('users.user_id', ondelete='SET NULL'), unique=True, nullable=True)
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())

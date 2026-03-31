@@ -148,7 +148,7 @@ async def periodic_stats_updater():
         await asyncio.sleep(2)
 
 @router.websocket("/ws/stats/total_actions")
-async def websocket_total_actions_endpoint(websocket: WebSocket, user: WebUser = Depends(get_ws_user)):
+async def websocket_total_actions_endpoint(websocket: WebSocket, user: dict = Depends(get_ws_user)):
     global stats_update_task
     
     await stats_manager.connect(websocket)
@@ -211,7 +211,7 @@ async def stream_log_file_to_websocket(websocket: WebSocket, manager: Connection
             await manager.send_personal_text(f"Error reading log: {str(e)}", websocket)
 
 @router.websocket("/ws/bot_log")
-async def websocket_bot_log_endpoint(websocket: WebSocket, user: WebUser = Depends(get_ws_user)):
+async def websocket_bot_log_endpoint(websocket: WebSocket, user: dict  = Depends(get_ws_user)):
     await log_manager.connect(websocket)
     try:
         await stream_log_file_to_websocket(websocket, log_manager)
@@ -222,7 +222,7 @@ async def websocket_bot_log_endpoint(websocket: WebSocket, user: WebUser = Depen
         await log_manager.disconnect(websocket)
         
 @router.websocket("/ws/users/{user_id}")
-async def websocket_user_updates(websocket: WebSocket, user_id: int, user: WebUser = Depends(get_ws_user)):
+async def websocket_user_updates(websocket: WebSocket, user_id: int, user: dict  = Depends(get_ws_user)):
     await websocket.accept()
     
     pubsub = redis_client.client.pubsub()

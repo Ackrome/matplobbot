@@ -1,7 +1,6 @@
 // main_site_frontend/js/navbar.js
 const NAV_API_BASE = "https://api.ivantishchenko.ru/api";
 
-// Глобальная функция выхода
 window.performLogout = function() {
     localStorage.removeItem('jwt_token');
     window.location.href = '/login'; 
@@ -21,7 +20,8 @@ async function checkAuthAndRenderNavbar() {
             const desktopContainer = document.getElementById('desktop-auth-container');
             const mobileContainer = document.getElementById('mobile-auth-container');
 
-            const profileLink = user.role === "telegram" ? "/schedule" : "/stats";
+            // Админы в панель, юзеры в расписание
+            const profileLink = user.role === "admin" ? "/stats" : "/schedule";
             
             let avatarHtml = `<div class="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold shrink-0">${user.username[0].toUpperCase()}</div>`;
             if (user.avatar_url) {
@@ -58,7 +58,6 @@ async function checkAuthAndRenderNavbar() {
                 `;
             }
         } else {
-            // Если токен невалиден
             localStorage.removeItem('jwt_token');
             if (window.location.pathname === '/stats') {
                 window.location.href = '/login';
@@ -72,7 +71,6 @@ async function checkAuthAndRenderNavbar() {
 document.addEventListener('DOMContentLoaded', () => {
     checkAuthAndRenderNavbar();
 
-    // Логика мобильного меню
     const btn = document.getElementById('mobile-menu-button');
     const menu = document.getElementById('mobile-menu');
 
@@ -88,7 +86,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Анимация скрытия шапки при скролле
     let lastScrollY = window.scrollY;
     let ticking = false;
     const navbar = document.getElementById('navbar');

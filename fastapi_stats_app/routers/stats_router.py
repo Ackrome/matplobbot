@@ -235,11 +235,11 @@ async def send_message_to_user(user_id: int, message_data: SendMessageRequest):
     return {"status": "success"}
 
 @router.get("/leaderboard")
-async def get_leaderboard(current_user: WebUser = Depends(get_current_user)):
+async def get_leaderboard(current_user: dict = Depends(get_current_user)):
     async with get_session() as db:
         return await get_leaderboard_data_from_db(db)
 
 @router.get("/activity")
-async def get_activity(current_user: WebUser = Depends(get_current_user)):
+async def get_activity(current_user: dict = Depends(get_current_user)):
     async with get_session() as db:
         return await get_activity_over_time_data_from_db(db, period='day')
