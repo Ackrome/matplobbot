@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 import asyncio
 import logging
+import io
+import zipfile
 import base64
 
 from shared_lib.tasks import compile_project_task, render_pdf_task, render_mermaid, compile_full_latex_task
@@ -21,6 +24,9 @@ class ProjectCreate(BaseModel):
 
 class FileSave(BaseModel):
     content: str
+
+class FileRename(BaseModel):
+    new_name: str
 
 DEFAULT_LATEX = r"""\documentclass[12pt, a4paper]{article}
 \usepackage[utf8]{inputenc}
@@ -170,3 +176,63 @@ async def compile_project(project_id: int, db: AsyncSession = Depends(get_db_ses
 
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="Compilation timed out.")
+    
+    
+    
+@router.delete("/projects/{project_id}/files/{file_id}")
+async def delete_file(project_id: int, file_id: int, db: AsyncSession = Depends(get_db_session_dependency), current_user: dict = Depends(get_current_user)):
+    # Проверяем, не является ли файл главным (main.tex)
+    result = await db.execute(select(ProjectFile).where(ProjectFile.id == file_id, ProjectFile.project_id == project_id))
+    file_obj = result.scalar_one_or_none()
+    
+    if not file_obj:
+        raise HTTPException(status_code=404, detail="File not found")
+    if file_obj.is_main:
+        raise HTTPException(status_code=400, detail="Cannot delete the main project file")
+
+    await db.execute(delete(ProjectFile).where(ProjectFile.id == file_id))
+    await db.commit()
+    return {"status": "success"}
+
+@router.put("/projects/{project_id}/files/{file_id}/rename")
+async def rename_file(project_id: int, file_id: int, data: FileRename, db: AsyncSession = Depends(get_db_session_dependency), current_user: dict = Depends(get_current_user)):
+    if not data.new_name.strip():
+        raise HTTPException(status_code=400, detail="Filename cannot be empty")
+        
+    try:
+        await db.execute(
+            update(ProjectFile)
+            .where(ProjectFile.id == file_id, ProjectFile.project_id == project_id)
+            .values(file_path=data.new_name.strip())
+        )
+        await db.commit()
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Filename might already exist or invalid")
+
+@router.get("/projects/{project_id}/export/zip")
+async def export_project_zip(project_id: int, db: AsyncSession = Depends(get_db_session_dependency), current_user: dict = Depends(get_current_user)):
+    # 1. Получаем проект и файлы
+    proj_result = await db.execute(select(Project).where(Project.id == project_id))
+    project = proj_result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    files_result = await db.execute(select(ProjectFile).where(ProjectFile.project_id == project_id))
+    files = files_result.scalars().all()
+
+    # 2. Создаем ZIP архив в памяти
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for f in files:
+            if f.content_binary:
+                zip_file.writestr(f.file_path, f.content_binary)
+            else:
+                zip_file.writestr(f.file_path, f.content_text or "")
+
+    zip_buffer.seek(0)
+    
+    safe_name = "".join([c if c.isalnum() else "_" for c in project.name])
+    headers = {"Content-Disposition": f"attachment; filename={safe_name}_export.zip"}
+    
+    return StreamingResponse(zip_buffer, media_type="application/zip", headers=headers)
