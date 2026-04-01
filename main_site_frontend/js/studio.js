@@ -53,9 +53,13 @@ require(['vs/editor/editor.main'], function() {
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, compileCurrent);
     
-    // Инит Mermaid
-    mermaid.initialize({ startOnLoad: false, theme: 'default' });
-});
+    // Инит Mermaid (безопасно)
+    try {
+        mermaid.initialize({ startOnLoad: false, theme: 'default' });
+    } catch (e) {
+        console.warn("Mermaid init ignored:", e);
+    }
+});    
 
 // --- ПЕРЕКЛЮЧЕНИЕ РЕЖИМОВ ---
 document.getElementById('mode-quick').onclick = () => switchMode('quick');
