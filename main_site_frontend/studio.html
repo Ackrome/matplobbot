@@ -5,99 +5,107 @@
     <title>Document Studio | Matplobbot</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Split.js & Monaco -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/split.js/1.6.5/split.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
+
+    <!-- Markdown (Marked) & KaTeX for Live Preview -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <!-- Mermaid -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 
     <style>
         body { font-family: 'Inter', sans-serif; overflow: hidden; }
         .split { display: flex; flex-direction: row; height: calc(100vh - 64px); }
-        .gutter { background-color: #f1f5f9; background-repeat: no-repeat; background-position: 50%; cursor: col-resize; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;}
-        .gutter.gutter-horizontal { background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjB5IMDAQAKC/P1X+0kKTAAAAAElFTkSuQmCC'); }
-        
+        .gutter { background-color: #f1f5f9; cursor: col-resize; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;}
         .file-item.active { background-color: #e0e7ff; border-left: 3px solid #4f46e5; font-weight: 600;}
+        
+        /* Стили для Live Preview Markdown */
+        #live-preview-content { font-family: 'Inter', sans-serif; line-height: 1.6; padding: 2rem; max-width: 800px; margin: 0 auto; background: white; min-height: 100%; box-shadow: 0 0 15px rgba(0,0,0,0.05); }
+        #live-preview-content h1, #live-preview-content h2 { border-bottom: 1px solid #eee; padding-bottom: 0.3em; margin-top: 1em; }
+        #live-preview-content pre { background: #f8fafc; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 h-full flex flex-col">
 
-    <!-- Navbar -->
-    <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 shrink-0 z-10">
+    <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0 z-10">
         <div class="flex items-center gap-4">
             <a href="/" class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md">IT</a>
-            <span class="font-bold text-lg hidden sm:block">Overleaf <span class="text-xs font-normal text-slate-400">by Matplobbot</span></span>
+            
+            <!-- Mode Switcher -->
+            <div class="bg-slate-100 p-1 rounded-lg flex gap-1 items-center">
+                <button id="mode-quick" class="px-3 py-1.5 text-sm font-medium rounded-md bg-white shadow-sm text-blue-700 transition-all">Quick Snippet</button>
+                <button id="mode-project" class="px-3 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all">Project</button>
+            </div>
+
+            <!-- Quick Type Selector (visible only in Quick Mode) -->
+            <select id="doc-type" class="bg-slate-50 border border-slate-200 text-sm rounded-lg focus:ring-blue-500 p-2 outline-none">
+                <option value="latex">LaTeX</option>
+                <option value="markdown">Markdown</option>
+                <option value="mermaid">Mermaid</option>
+            </select>
         </div>
 
         <div class="flex items-center gap-3">
             <span id="status-text" class="text-xs text-slate-400 font-medium mr-2"></span>
-            <button onclick="compileProject()" class="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg shadow-sm transition-colors flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                Compile (Ctrl+S)
+            <!-- Для MD/Mermaid кнопка "Compile" будет делать серверный PDF -->
+            <button id="compile-btn" onclick="compileCurrent()" class="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg shadow-sm transition-colors flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path></svg>
+                Build PDF (Ctrl+S)
             </button>
         </div>
     </header>
 
-    <!-- Workspace Split -->
     <div id="split-container" class="split w-full bg-slate-100 relative">
-        
-        <!-- Loader -->
-        <div id="loader-overlay" class="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-50 hidden flex-col items-center justify-center">
+        <div id="loader-overlay" class="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-50 hidden flex-col items-center justify-center">
             <div class="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
-            <div class="text-sm font-bold text-slate-600">Компиляция на сервере...</div>
+            <div class="text-sm font-bold text-slate-600">Компиляция PDF на сервере...</div>
         </div>
 
-        <!-- Pane 1: Sidebar -->
-        <div id="sidebar-pane" class="h-full bg-slate-50 flex flex-col border-r border-slate-200 shrink-0">
-            <!-- Project Selector -->
+        <!-- Sidebar (Hidden in Quick Mode) -->
+        <div id="sidebar-pane" class="h-full bg-slate-50 flex flex-col border-r border-slate-200 shrink-0 hidden">
             <div class="p-3 border-b border-slate-200">
                 <div class="flex justify-between items-center mb-2">
                     <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Проекты</span>
-                    <button onclick="createNewProject()" class="text-blue-600 hover:text-blue-800" title="Новый проект">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                    </button>
+                    <button onclick="createNewProject()" class="text-blue-600 hover:text-blue-800">+</button>
                 </div>
-                <select id="project-selector" class="w-full text-sm border-slate-300 rounded-md p-1 outline-none focus:ring-1 focus:ring-blue-500 bg-white" onchange="openProject(this.value)">
-                    <option value="" disabled selected>Загрузка...</option>
-                </select>
+                <select id="project-selector" class="w-full text-sm border border-slate-200 rounded-md p-1.5 outline-none bg-white" onchange="openProject(this.value)"></select>
             </div>
-            
-            <!-- File List -->
             <div class="p-3 border-b border-slate-200 bg-slate-100 flex justify-between items-center">
-                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Файлы проекта</span>
-                <div class="flex gap-2">
-                    <label class="cursor-pointer text-slate-500 hover:text-blue-600 transition-colors" title="Загрузить изображение">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                        <input type="file" id="file-uploader" class="hidden" onchange="uploadAsset(event)" accept="image/*,.sty">
-                    </label>
-                </div>
+                <span class="text-xs font-bold text-slate-500 uppercase">Файлы</span>
+                <label class="cursor-pointer text-blue-600 font-bold text-xs" title="Загрузить">
+                    Upload <input type="file" id="file-uploader" class="hidden" onchange="uploadAsset(event)">
+                </label>
             </div>
-            <div id="file-list" class="flex-1 overflow-y-auto py-2">
-                <!-- Файлы будут здесь -->
-            </div>
+            <div id="file-list" class="flex-1 overflow-y-auto py-2"></div>
         </div>
 
-        <!-- Pane 2: Editor -->
+        <!-- Editor -->
         <div id="editor-pane" class="h-full bg-white relative">
             <div id="monaco-container" class="absolute inset-0"></div>
-            
-            <!-- Error Panel -->
-            <div id="error-panel" class="absolute bottom-0 w-full bg-red-50 border-t border-red-200 text-red-800 text-xs p-3 hidden max-h-48 overflow-y-auto font-mono z-20">
-                <div class="font-bold mb-1 flex justify-between">
-                    <span>LaTeX Errors:</span>
-                    <button onclick="document.getElementById('error-panel').classList.add('hidden')" class="hover:text-red-500">✕</button>
-                </div>
-                <pre id="error-text" class="whitespace-pre-wrap"></pre>
-            </div>
         </div>
 
-        <!-- Pane 3: Viewer -->
-        <div id="viewer-pane" class="h-full bg-[#525659] flex items-center justify-center overflow-hidden relative">
-            <iframe id="pdf-viewer" class="w-full h-full border-none hidden"></iframe>
+        <!-- Viewer -->
+        <div id="viewer-pane" class="h-full bg-slate-200 flex items-center justify-center overflow-y-auto relative">
+            <!-- PDF Viewer (Для результатов компиляции) -->
+            <iframe id="pdf-viewer" class="w-full h-full border-none hidden absolute inset-0"></iframe>
+            
+            <!-- Live Preview (HTML) для Markdown/Mermaid -->
+            <div id="live-preview" class="w-full h-full hidden overflow-y-auto absolute inset-0">
+                <div id="live-preview-content"></div>
+            </div>
+
             <div id="empty-state" class="text-slate-400 flex flex-col items-center">
-                <svg class="w-16 h-16 mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                <p class="font-medium text-sm">Выберите проект и нажмите Compile</p>
+                <svg class="w-12 h-12 mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                <p class="font-medium text-sm">Preview</p>
             </div>
         </div>
     </div>
 
-    <script src="/js/studio.js?v=2"></script>
+    <script src="/js/studio.js?v=3"></script>
 </body>
 </html>

@@ -316,17 +316,45 @@ def render_html_task(self, content: str, page_title: str):
     except Exception as e:
         return {"status": "error", "error": str(e)}
     
+
+def parse_latex_log(log_path: str) -> list[dict]:
+    """Парсит .log файл LaTeX и возвращает структурированный список ошибок."""
+    errors =[]
+    if not os.path.exists(log_path):
+        return errors
+        
+    with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+        lines = f.readlines()
+        
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        # Ошибки в LaTeX обычно начинаются с "!"
+        if line.startswith('!'):
+            error_msg = line[1:].strip()
+            line_num = 1
+            
+            # Заглядываем вперед на несколько строк, чтобы найти номер строки "l.42"
+            for j in range(1, 8):
+                if i + j < len(lines):
+                    lookahead = lines[i+j].strip()
+                    if lookahead.startswith('l.'):
+                        match = re.search(r'l\.(\d+)', lookahead)
+                        if match:
+                            line_num = int(match.group(1))
+                            break
+            
+            errors.append({"line": line_num, "message": error_msg})
+        i += 1
+    return errors
+
 @app.task(bind=True, soft_time_limit=60, name='shared_lib.tasks.compile_full_latex')
 def compile_full_latex_task(self, latex_code: str):
-    """
-    Компилирует полный LaTeX документ (от \documentclass до \end{document}) в PDF.
-    Для Фазы 1 поддерживается компиляция одного файла без внешних ассетов.
-    """
-    # 1. Жесткие проверки безопасности (отключаем возможность записи файлов и выполнения команд)
+    """Быстрая компиляция одного файла (Quick Mode)"""
     forbidden_commands =[r'\write18', r'\openout', r'\newwrite', r'\immediate']
     for cmd in forbidden_commands:
         if cmd in latex_code:
-            return {"status": "error", "error": f"Security violation: command {cmd} is forbidden."}
+            return {"status": "error", "message": f"Security violation: {cmd} is forbidden.", "errors":[{"line": 1, "message": f"Forbidden command: {cmd}"}]}
 
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -337,106 +365,50 @@ def compile_full_latex_task(self, latex_code: str):
             with open(tex_path, 'w', encoding='utf-8') as f:
                 f.write(latex_code)
 
-            # Используем latexmk для автоматического разрешения ссылок и генерации PDF
-            compile_cmd =[
-                'latexmk', 
-                '-pdf', 
-                '-interaction=nonstopmode', 
-                '-halt-on-error',
-                f'-output-directory={temp_dir}', 
-                tex_path
-            ]
-            
-            proc = subprocess.run(compile_cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=50)
+            subprocess.run(['latexmk', '-pdf', '-interaction=nonstopmode', '-halt-on-error', f'-output-directory={temp_dir}', tex_path], capture_output=True, timeout=50)
 
-            # Если PDF не создан, парсим ошибки из .log файла
             if not os.path.exists(pdf_path):
-                error_msg = "Compilation failed. Unknown error."
-                if os.path.exists(log_path):
-                    with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        lines = f.readlines()
-                    # Ищем строки с ошибками (начинаются с "!")
-                    error_lines = [l.strip() for l in lines if l.startswith('!')]
-                    if error_lines:
-                        error_msg = "\n".join(error_lines[:5])
-                    else:
-                        error_msg = "\n".join(lines[-15:]) # Последние строки лога как fallback
-                
-                return {"status": "error", "error": f"LaTeX Error:\n{error_msg}"}
+                parsed_errors = parse_latex_log(log_path)
+                # Fallback, если парсер ничего не нашел
+                if not parsed_errors:
+                    parsed_errors =[{"line": 1, "message": "Unknown LaTeX error. Check syntax."}]
+                return {"status": "error", "message": "Compilation failed", "errors": parsed_errors}
 
-            # Если всё ок, читаем PDF и конвертируем в Base64
             with open(pdf_path, 'rb') as f:
-                pdf_b64 = base64.b64encode(f.read()).decode('utf-8')
-                return {"status": "success", "pdf": pdf_b64}
-
-    except subprocess.TimeoutExpired:
-        return {"status": "error", "error": "Compilation timed out (limit: 50s)."}
+                return {"status": "success", "pdf": base64.b64encode(f.read()).decode('utf-8')}
     except Exception as e:
-        return {"status": "error", "error": str(e)}
-    
+        return {"status": "error", "message": str(e), "errors":[{"line": 1, "message": str(e)}]}
+
 @app.task(bind=True, soft_time_limit=60, name='shared_lib.tasks.compile_project')
 def compile_project_task(self, project_files: list, main_file: str):
-    """
-    Компилирует многофайловый проект.
-    project_files:[{"path": "main.tex", "text": "...", "binary": "base64..."}]
-    """
+    """Многофайловая компиляция (Project Mode)"""
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
-            # 1. Воссоздаем файловую структуру проекта
             for pf in project_files:
                 path = pf.get('path')
-                # Защита от выхода за пределы директории (Path Traversal)
-                if '..' in path or path.startswith('/'):
-                    continue
+                if '..' in path or path.startswith('/'): continue
                 
                 full_path = os.path.join(temp_dir, path)
                 os.makedirs(os.path.dirname(full_path), exist_ok=True)
                 
                 if pf.get('binary'):
-                    with open(full_path, 'wb') as f:
-                        f.write(base64.b64decode(pf['binary']))
+                    with open(full_path, 'wb') as f: f.write(base64.b64decode(pf['binary']))
                 else:
-                    with open(full_path, 'w', encoding='utf-8') as f:
-                        # Простая проверка безопасности для .tex файлов
-                        text_content = pf.get('text', '')
-                        if path.endswith('.tex') and r'\write18' in text_content:
-                            return {"status": "error", "error": "Security violation: \\write18 is forbidden."}
-                        f.write(text_content)
+                    with open(full_path, 'w', encoding='utf-8') as f: f.write(pf.get('text', ''))
 
             tex_path = os.path.join(temp_dir, main_file)
             pdf_path = os.path.join(temp_dir, main_file.replace('.tex', '.pdf'))
             log_path = os.path.join(temp_dir, main_file.replace('.tex', '.log'))
 
-            if not os.path.exists(tex_path):
-                return {"status": "error", "error": f"Main file '{main_file}' not found in project."}
+            subprocess.run(['latexmk', '-pdf', '-interaction=nonstopmode', '-halt-on-error', f'-output-directory={temp_dir}', tex_path], capture_output=True, timeout=50)
 
-            # 2. Компиляция
-            compile_cmd =[
-                'latexmk', 
-                '-pdf', 
-                '-interaction=nonstopmode', 
-                '-halt-on-error',
-                f'-output-directory={temp_dir}', 
-                tex_path
-            ]
-            
-            subprocess.run(compile_cmd, capture_output=True, text=True, errors='ignore', timeout=50)
-
-            # 3. Обработка результатов
             if not os.path.exists(pdf_path):
-                error_msg = "Compilation failed."
-                if os.path.exists(log_path):
-                    with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        lines = f.readlines()
-                    error_lines = [l.strip() for l in lines if l.startswith('!')]
-                    error_msg = "\n".join(error_lines[:5]) if error_lines else "\n".join(lines[-15:])
-                return {"status": "error", "error": f"LaTeX Error:\n{error_msg}"}
+                parsed_errors = parse_latex_log(log_path)
+                if not parsed_errors:
+                    parsed_errors =[{"line": 1, "message": "Unknown LaTeX error in project."}]
+                return {"status": "error", "message": "Compilation failed", "errors": parsed_errors}
 
             with open(pdf_path, 'rb') as f:
-                pdf_b64 = base64.b64encode(f.read()).decode('utf-8')
-                return {"status": "success", "pdf": pdf_b64}
-
-    except subprocess.TimeoutExpired:
-        return {"status": "error", "error": "Compilation timed out (limit: 50s)."}
+                return {"status": "success", "pdf": base64.b64encode(f.read()).decode('utf-8')}
     except Exception as e:
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "message": str(e), "errors": [{"line": 1, "message": str(e)}]}
