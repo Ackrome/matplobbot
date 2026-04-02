@@ -7,19 +7,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- 1. ВСЕ БИБЛИОТЕКИ СТРОГО ДО ЗАГРУЗЧИКА MONACO -->
-    <!-- Markdown & KaTeX -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-    
-    <!-- Mermaid (используем v9 для стабильной работы без ES-модулей) -->
     <script src="https://cdn.jsdelivr.net/npm/mermaid@9.4.3/dist/mermaid.min.js"></script>
-    
-    <!-- Split.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/split.js/1.6.5/split.min.js"></script>
 
-    <!-- 2. Загрузчик MONACO (Обязательно в самом конце!) -->
+    <!-- 2. Загрузчик MONACO -->
     <script>var require = { paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.38.0/min/vs' } };</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.38.0/min/vs/loader.min.js"></script>
 
@@ -37,6 +32,7 @@
 </head>
 <body class="bg-slate-50 text-slate-900 h-full flex flex-col">
 
+    <!-- Navbar -->
     <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0 z-10">
         <div class="flex items-center gap-4">
             <a href="/" class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md">IT</a>
@@ -54,14 +50,15 @@
         </div>
 
         <div class="flex items-center gap-2">
-            <!-- Кнопки Экспорта (Изначально скрыты) -->
+            <!-- Экспорт -->
             <button id="btn-download-pdf" onclick="downloadPDF()" class="hidden p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Скачать PDF">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
             </button>
-            <button id="btn-download-zip" onclick="downloadZIP()" class="hidden p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors mr-2" title="Скачать ZIP проект">
+            <button id="btn-download-zip" onclick="downloadZIP()" class="hidden p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors mr-2" title="Скачать ZIP архив">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
             </button>
 
+            <!-- Compile -->
             <button id="compile-btn" onclick="compileCurrent()" class="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg shadow-sm transition-colors flex items-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path></svg>
                 Build PDF (Ctrl+S)
@@ -69,13 +66,16 @@
         </div>
     </header>
 
+    <!-- Workspace Split -->
     <div id="split-container" class="split w-full bg-slate-100 relative">
+        
+        <!-- Loader -->
         <div id="loader-overlay" class="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-50 hidden flex-col items-center justify-center">
             <div class="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
-            <div class="text-sm font-bold text-slate-600">Компиляция PDF на сервере...</div>
+            <div class="text-sm font-bold text-slate-600">Ожидание сервера...</div>
         </div>
 
-        <!-- Sidebar (Hidden in Quick Mode) -->
+        <!-- Pane 1: Sidebar (Project Mode) -->
         <div id="sidebar-pane" class="h-full bg-slate-50 flex flex-col border-r border-slate-200 shrink-0 hidden">
             <div class="p-3 border-b border-slate-200">
                 <div class="flex justify-between items-center mb-2">
@@ -87,17 +87,17 @@
             <div class="p-3 border-b border-slate-200 bg-slate-100 flex justify-between items-center">
                 <span class="text-xs font-bold text-slate-500 uppercase">Файлы</span>
                 <label class="cursor-pointer text-blue-600 font-bold text-xs" title="Загрузить">
-                    Upload <input type="file" id="file-uploader" class="hidden" onchange="uploadAsset(event)">
+                    Upload <input type="file" id="file-uploader" class="hidden" onchange="uploadAsset(event)" multiple>
                 </label>
             </div>
             <div id="file-list" class="flex-1 overflow-y-auto py-2"></div>
         </div>
 
-        <!-- Editor -->
+        <!-- Pane 2: Editor -->
         <div id="editor-pane" class="h-full bg-white relative flex flex-col">
             <div id="monaco-container" class="flex-grow relative"></div>
             
-            <!-- СТАТУС БАР (НОВОЕ) -->
+            <!-- Статус бар -->
             <div class="h-7 bg-blue-600 text-white flex items-center justify-between px-3 text-[11px] font-medium shrink-0 z-10">
                 <div class="flex items-center gap-4">
                     <span id="doc-stats">0 words, 0 chars</span>
@@ -112,14 +112,29 @@
             <!-- Error Panel -->
             <div id="error-panel" class="absolute bottom-7 w-full bg-red-50 border-t border-red-200 text-red-800 text-xs p-3 hidden max-h-48 overflow-y-auto font-mono z-20 shadow-[0_-10px_15px_rgba(0,0,0,0.05)]">
                 <div class="font-bold mb-1 flex justify-between">
-                    <span>LaTeX Errors:</span>
+                    <span>Errors:</span>
                     <button onclick="document.getElementById('error-panel').classList.add('hidden')" class="hover:text-red-500">✕</button>
                 </div>
                 <pre id="error-text" class="whitespace-pre-wrap"></pre>
             </div>
         </div>
+
+        <!-- Pane 3: Viewer -->
+        <div id="viewer-pane" class="h-full bg-slate-200 flex items-center justify-center overflow-y-auto relative">
+            <iframe id="pdf-viewer" class="w-full h-full border-none hidden absolute inset-0"></iframe>
+            
+            <div id="live-preview" class="w-full h-full hidden overflow-y-auto absolute inset-0">
+                <div id="live-preview-content"></div>
+            </div>
+
+            <div id="empty-state" class="text-slate-400 flex flex-col items-center">
+                <svg class="w-12 h-12 mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                <p class="font-medium text-sm">Preview</p>
+            </div>
+        </div>
     </div>
 
-    <script src="/js/studio.js?v=4"></script>
+    <!-- Загрузка нашего скрипта -->
+    <script src="/js/studio.js?v=6"></script>
 </body>
 </html>

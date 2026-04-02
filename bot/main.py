@@ -85,7 +85,9 @@ async def main():
     # Настраиваем сессию для бота с увеличенным таймаутом
     # Это решает проблему ServerDisconnectedError
 
-    bot_session = AiohttpSession(timeout=60, proxy="socks5://127.0.0.1:20170")
+    bot_session = AiohttpSession(timeout=60)
+    # bot_session = AiohttpSession(timeout=60, proxy="socks5://127.0.0.1:20170")
+
     bot = Bot(BOT_TOKEN, session=bot_session)
 
     async def on_shutdown(dispatcher: Dispatcher):
