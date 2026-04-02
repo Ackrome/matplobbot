@@ -19,7 +19,7 @@ httpx
 redis
 weasyprint
 certifi
-ics
+git+https://github.com/ics-py/ics-py.git
 beautifulsoup4
 markdown-it-py
 cachetools
