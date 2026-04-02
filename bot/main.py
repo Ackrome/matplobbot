@@ -4,6 +4,7 @@ import os
 import aiohttp
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
+from aiohttp_socks import ProxyConnector
 from aiogram.client.session.aiohttp import AiohttpSession
 
 from .handlers import setup_handlers
@@ -82,12 +83,17 @@ async def set_bot_commands(bot: Bot):
         logging.error(f"Failed to set bot commands: {e}")
 
 async def main():
-    # Настраиваем сессию для бота с увеличенным таймаутом
-    # Это решает проблему ServerDisconnectedError
+    proxy_url = os.getenv("PROXY_URL")
+    
+    # Настраиваем сессию СПЕЦИАЛЬНО для Telegram-бота
+    if proxy_url:
+        logger.info(f"Using proxy for bot: {proxy_url}")
+        # AiohttpSession сам умеет работать с SOCKS5, если указать параметр proxy
+        bot_session = AiohttpSession(timeout=300, proxy=proxy_url)
+    else:
+        bot_session = AiohttpSession(timeout=300)
 
-    bot_session = AiohttpSession(timeout=60)
-    # bot_session = AiohttpSession(timeout=60, proxy="http://127.0.0.1:20171")
-
+    # Передаем правильный объект сессии в бота
     bot = Bot(BOT_TOKEN, session=bot_session)
 
     async def on_shutdown(dispatcher: Dispatcher):
@@ -97,8 +103,10 @@ async def main():
 
     await init_db_pool()
 
-    # Создаем отдельную сессию для RUZ API клиента
-    timeout_client = aiohttp.ClientTimeout(total=60)
+    # --- Создаем ОТДЕЛЬНУЮ сессию для RUZ API ---
+    # Так как мы не передаем сюда proxy или connector, эта сессия
+    # будет делать прямые запросы в интернет, игнорируя v2raya.
+    timeout_client = aiohttp.ClientTimeout(total=300)
     async with aiohttp.ClientSession(timeout=timeout_client) as ruz_session:
         ruz_api_client_instance = create_ruz_api_client(ruz_session)
 
@@ -109,9 +117,7 @@ async def main():
         
         setup_handlers(dp, bot=bot, ruz_api_client=ruz_api_client_instance)
         
-        # Безопасная установка команд
         await set_bot_commands(bot)
-        
         
         logging.info("Building semantic search index...")
         asyncio.create_task(index_matplobblib_library())

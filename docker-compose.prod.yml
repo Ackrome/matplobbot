@@ -47,6 +47,8 @@ services:
         condition: service_healthy
       migrator:
         condition: service_completed_successfully
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 
   mpb-scheduler:
@@ -60,6 +62,8 @@ services:
       - TZ=Europe/Moscow
     volumes:
       - bot_logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy

@@ -53,6 +53,7 @@ STATS_PASS=${PROD_STATS_PASS}
 PUBLIC_API_URL=${PROD_PUBLIC_API_URL}
 JWT_SECRET_KEY=${PROD_JWT_SECRET_KEY}
 REDIS_URL=redis://redis:6379/0
+PROXY_URL=socks5://host.docker.internal:20170
 EOF
                         """
                         

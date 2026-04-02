@@ -37,6 +37,8 @@ services:
     env_file: ./.env # env_file is sufficient
     environment:
       - REDIS_URL=redis://redis:6379/0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - bot_logs:/app/logs        # Именованный volume для логов бота
       - ./examples:/app/examples    # Volume для файлов-примеров
@@ -61,6 +63,8 @@ services:
     env_file: ./.env # env_file is sufficient
     environment:
       - TZ=Europe/Moscow
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - bot_logs:/app/logs
     depends_on:
