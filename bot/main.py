@@ -3,8 +3,21 @@ import logging
 import os
 import aiohttp
 from dotenv import load_dotenv
+
+load_dotenv()
+
+# --- ПАТЧ ДЛЯ СИНХРОННЫХ ЗАПРОСОВ (requests / matplobblib) ---
+# Устанавливаем прокси в ОС до импорта хендлеров, чтобы requests подхватил его
+PROXY_URL = os.getenv("PROXY_URL")
+if PROXY_URL:
+    # Меняем socks5:// на socks5h:// -> буква 'h' заставит прокси 
+    # самостоятельно резолвить DNS (api.github.com), что решит проблему [Errno -3]
+    socks5h_proxy = PROXY_URL.replace("socks5://", "socks5h://")
+    os.environ["HTTP_PROXY"] = socks5h_proxy
+    os.environ["HTTPS_PROXY"] = socks5h_proxy
+    os.environ["ALL_PROXY"] = socks5h_proxy
+
 from aiogram import Bot, Dispatcher, types
-from aiohttp_socks import ProxyConnector
 from aiogram.client.session.aiohttp import AiohttpSession
 
 from .handlers import setup_handlers
@@ -16,10 +29,8 @@ from shared_lib.services.university_api import create_ruz_api_client
 from .services.search_utils import index_matplobblib_library
 from shared_lib.services.semantic_search import search_engine
 
-# Импорт логгера для инициализации конфига
+# Импорт вашего конфига логгера
 from . import logger
-
-load_dotenv()
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 
@@ -83,17 +94,14 @@ async def set_bot_commands(bot: Bot):
         logging.error(f"Failed to set bot commands: {e}")
 
 async def main():
-    proxy_url = os.getenv("PROXY_URL")
-    
     # Настраиваем сессию СПЕЦИАЛЬНО для Telegram-бота
-    if proxy_url:
-        logger.info(f"Using proxy for bot: {proxy_url}")
-        # AiohttpSession сам умеет работать с SOCKS5, если указать параметр proxy
-        bot_session = AiohttpSession(timeout=300, proxy=proxy_url)
+    if PROXY_URL:
+        # ИСПРАВЛЕНИЕ: здесь используем logging.info вместо logger.info
+        logging.info(f"Using proxy for bot: {PROXY_URL}")
+        bot_session = AiohttpSession(timeout=60, proxy=PROXY_URL)
     else:
-        bot_session = AiohttpSession(timeout=300)
+        bot_session = AiohttpSession(timeout=60)
 
-    # Передаем правильный объект сессии в бота
     bot = Bot(BOT_TOKEN, session=bot_session)
 
     async def on_shutdown(dispatcher: Dispatcher):
@@ -104,9 +112,7 @@ async def main():
     await init_db_pool()
 
     # --- Создаем ОТДЕЛЬНУЮ сессию для RUZ API ---
-    # Так как мы не передаем сюда proxy или connector, эта сессия
-    # будет делать прямые запросы в интернет, игнорируя v2raya.
-    timeout_client = aiohttp.ClientTimeout(total=300)
+    timeout_client = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout_client) as ruz_session:
         ruz_api_client_instance = create_ruz_api_client(ruz_session)
 
