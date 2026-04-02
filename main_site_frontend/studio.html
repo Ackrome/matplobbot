@@ -133,8 +133,36 @@
             </div>
         </div>
     </div>
+ <!-- МОДАЛЬНОЕ ОКНО СОЗДАНИЯ ПРОЕКТА (ДОБАВИТЬ СЮДА) -->
+    <div id="create-project-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] hidden flex items-center justify-center transition-opacity">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 transform transition-all">
+            <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                Создать проект
+            </h2>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-slate-600 mb-1">Название проекта</label>
+                <input type="text" id="new-project-name" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-colors" placeholder="Например: Курсовая работа">
+            </div>
+            
+            <div class="mb-8">
+                <label class="block text-sm font-medium text-slate-600 mb-1">Тип проекта</label>
+                <select id="new-project-type" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-colors cursor-pointer">
+                    <option value="latex">LaTeX Document (.tex)</option>
+                    <option value="markdown">Markdown (.md)</option>
+                    <option value="mermaid">Mermaid Diagram (.mmd)</option>
+                </select>
+            </div>
+            
+            <div class="flex justify-end gap-3">
+                <button onclick="closeCreateProjectModal()" class="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Отмена</button>
+                <button onclick="submitNewProject()" class="px-5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md transition-all active:scale-95">Создать</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Загрузка нашего скрипта -->
-    <script src="/js/studio.js?v=6"></script>
+    <script src="/js/studio.js?v=7"></script>
 </body>
 </html>

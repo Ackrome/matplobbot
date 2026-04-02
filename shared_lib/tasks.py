@@ -5,6 +5,7 @@ import tempfile
 import subprocess
 import shutil
 import html
+import zipfile
 import io
 import logging
 from PIL import Image
@@ -379,11 +380,22 @@ def compile_full_latex_task(self, latex_code: str):
     except Exception as e:
         return {"status": "error", "message": str(e), "errors":[{"line": 1, "message": str(e)}]}
 
+
 @app.task(bind=True, soft_time_limit=60, name='shared_lib.tasks.compile_project')
-def compile_project_task(self, project_files: list, main_file: str):
-    """Многофайловая компиляция (Project Mode)"""
+def compile_project_task(self, project_files: list, main_file: str, build_cache_b64: str = None):
+    """Многофайловая компиляция с поддержкой Инкрементальной сборки и SyncTeX"""
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
+            # 1. Распаковка кэша предыдущей сборки (если есть)
+            if build_cache_b64:
+                try:
+                    cache_bytes = base64.b64decode(build_cache_b64)
+                    with zipfile.ZipFile(io.BytesIO(cache_bytes), 'r') as zf:
+                        zf.extractall(temp_dir)
+                except Exception as e:
+                    logger.warning(f"Failed to unpack build cache: {e}")
+
+            # 2. Запись актуальных файлов пользователя (перезапишет файлы из кэша, если имена совпадают)
             for pf in project_files:
                 path = pf.get('path')
                 if '..' in path or path.startswith('/'): continue
@@ -400,15 +412,39 @@ def compile_project_task(self, project_files: list, main_file: str):
             pdf_path = os.path.join(temp_dir, main_file.replace('.tex', '.pdf'))
             log_path = os.path.join(temp_dir, main_file.replace('.tex', '.log'))
 
-            subprocess.run(['latexmk', '-pdf', '-interaction=nonstopmode', '-halt-on-error', f'-output-directory={temp_dir}', tex_path], capture_output=True, timeout=50)
+            # 3. Компиляция (Добавлен флаг -synctex=1)
+            compile_cmd =[
+                'latexmk', '-pdf', '-interaction=nonstopmode', 
+                '-halt-on-error', '-synctex=1', 
+                f'-output-directory={temp_dir}', tex_path
+            ]
+            subprocess.run(compile_cmd, capture_output=True, text=True, errors='ignore', timeout=50)
 
+            # 4. Упаковка артефактов в новый кэш
+            out_cache_b64 = None
+            try:
+                out_zip_io = io.BytesIO()
+                with zipfile.ZipFile(out_zip_io, 'w', zipfile.ZIP_DEFLATED) as zf:
+                    for root, _, files in os.walk(temp_dir):
+                        for file in files:
+                            # Сохраняем только файлы кэша (исходники не нужны, они есть в БД)
+                            if file.endswith(('.aux', '.fls', '.fdb_latexmk', '.synctex.gz', '.toc', '.bbl', '.out', '.log')):
+                                abs_path = os.path.join(root, file)
+                                rel_path = os.path.relpath(abs_path, temp_dir)
+                                zf.write(abs_path, rel_path)
+                out_cache_b64 = base64.b64encode(out_zip_io.getvalue()).decode('utf-8')
+            except Exception as e:
+                logger.warning(f"Failed to pack build cache: {e}")
+
+            # 5. Возврат результатов
             if not os.path.exists(pdf_path):
                 parsed_errors = parse_latex_log(log_path)
-                if not parsed_errors:
-                    parsed_errors =[{"line": 1, "message": "Unknown LaTeX error in project."}]
-                return {"status": "error", "message": "Compilation failed", "errors": parsed_errors}
+                if not parsed_errors: parsed_errors = [{"line": 1, "message": "Unknown LaTeX error in project."}]
+                return {"status": "error", "message": "Compilation failed", "errors": parsed_errors, "build_cache": out_cache_b64}
 
             with open(pdf_path, 'rb') as f:
-                return {"status": "success", "pdf": base64.b64encode(f.read()).decode('utf-8')}
+                pdf_b64 = base64.b64encode(f.read()).decode('utf-8')
+                return {"status": "success", "pdf": pdf_b64, "build_cache": out_cache_b64}
+
     except Exception as e:
-        return {"status": "error", "message": str(e), "errors": [{"line": 1, "message": str(e)}]}
+        return {"status": "error", "message": str(e), "errors":[{"line": 1, "message": str(e)}]}

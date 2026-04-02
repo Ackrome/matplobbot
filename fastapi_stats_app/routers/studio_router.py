@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Response, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +9,7 @@ import logging
 import io
 import zipfile
 import base64
+import mimetypes
 
 from shared_lib.tasks import compile_project_task, render_pdf_task, render_mermaid, compile_full_latex_task
 from shared_lib.database import get_db_session_dependency
@@ -83,22 +84,38 @@ async def get_projects(db: AsyncSession = Depends(get_db_session_dependency), cu
     projects = result.scalars().all()
     return[{"id": p.id, "name": p.name, "type": p.project_type} for p in projects]
 
+DEFAULT_TEMPLATES = {
+    "latex": (
+        "main.tex", 
+        "\\documentclass[12pt, a4paper]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage[T2A]{fontenc}\n\\usepackage[russian]{babel}\n\\usepackage{amsmath, amssymb, graphicx}\n\n\\begin{document}\n\\section{Новый проект}\nВаш текст здесь. Вы можете загружать картинки слева и вставлять их через \\verb|\\includegraphics{image.png}|.\n\\end{document}"
+    ),
+    "markdown": (
+        "main.md",
+        "# Новый проект Markdown\n\nЗдесь поддерживаются формулы: $$E = mc^2$$\n\nА если загрузить картинку в проект, можно вставить её так: `![Описание](logo.png)`"
+    ),
+    "mermaid": (
+        "main.mmd",
+        "graph TD;\n    A[Идея] --> B{Работает?};\n    B -- Да --> C[Отлично!];\n    B -- Нет --> D[Дебаг];"
+    )
+}
+
 @router.post("/projects")
 async def create_project(data: ProjectCreate, db: AsyncSession = Depends(get_db_session_dependency), current_user: dict = Depends(get_current_user)):
     new_proj = Project(owner_id=current_user['id'], name=data.name, project_type=data.project_type)
     db.add(new_proj)
-    await db.flush() # Получаем ID
+    await db.flush()
 
-    # Создаем дефолтный файл
+    file_path, content_text = DEFAULT_TEMPLATES.get(data.project_type, ("main.txt", ""))
+
     main_file = ProjectFile(
         project_id=new_proj.id, 
-        file_path="main.tex" if data.project_type == 'latex' else "main.md",
-        content_text=DEFAULT_LATEX if data.project_type == 'latex' else "# Hello",
+        file_path=file_path,
+        content_text=content_text,
         is_main=True
     )
     db.add(main_file)
     await db.commit()
-    return {"id": new_proj.id, "name": new_proj.name}
+    return {"id": new_proj.id, "name": new_proj.name, "type": new_proj.project_type}
 
 @router.get("/projects/{project_id}")
 async def get_project_files(project_id: int, db: AsyncSession = Depends(get_db_session_dependency), current_user: dict = Depends(get_current_user)):
@@ -141,20 +158,27 @@ async def upload_asset(project_id: int, file: UploadFile = File(...), db: AsyncS
 
 @router.post("/projects/{project_id}/compile")
 async def compile_project(project_id: int, db: AsyncSession = Depends(get_db_session_dependency), current_user: dict = Depends(get_current_user)):
-    # 1. Извлекаем все файлы проекта
+    
+    # Получаем проект, чтобы достать старый кэш
+    proj_result = await db.execute(select(Project).where(Project.id == project_id))
+    project = proj_result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    build_cache_b64 = base64.b64encode(project.build_cache).decode('utf-8') if project.build_cache else None
+
+    # Извлекаем все файлы проекта
     result = await db.execute(select(ProjectFile).where(ProjectFile.project_id == project_id))
     files = result.scalars().all()
 
     if not files:
         raise HTTPException(status_code=400, detail="Project is empty")
 
-    # 2. Формируем Payload для Celery
     payload =[]
     main_file_path = "main.tex"
     
     for f in files:
-        if f.is_main:
-            main_file_path = f.file_path
+        if f.is_main: main_file_path = f.file_path
             
         file_data = {"path": f.file_path}
         if f.content_binary:
@@ -164,10 +188,14 @@ async def compile_project(project_id: int, db: AsyncSession = Depends(get_db_ses
         payload.append(file_data)
 
     try:
-        # 3. Отправляем в Celery
-        task = compile_project_task.delay(payload, main_file_path)
-        # Ждем результат (в MVP синхронно)
+        # Передаем build_cache в Celery
+        task = compile_project_task.delay(payload, main_file_path, build_cache_b64)
         res = await asyncio.to_thread(task.get, timeout=55)
+
+        # Если воркер вернул новый кэш - сохраняем его в БД
+        if res.get('build_cache'):
+            project.build_cache = base64.b64decode(res['build_cache'])
+            await db.commit()
 
         if res.get('status') == 'error':
             raise HTTPException(status_code=400, detail=res.get('error', 'Compilation error'))
@@ -236,3 +264,23 @@ async def export_project_zip(project_id: int, db: AsyncSession = Depends(get_db_
     headers = {"Content-Disposition": f"attachment; filename={safe_name}_export.zip"}
     
     return StreamingResponse(zip_buffer, media_type="application/zip", headers=headers)
+
+# --- Эндпоинт для локальных картинок в Markdown ---
+@router.get("/projects/{project_id}/assets/{file_path:path}")
+async def get_project_asset(project_id: int, file_path: str, token: str = Query(...), db: AsyncSession = Depends(get_db_session_dependency)):
+    # Верификация токена вручную, т.к. img src не поддерживает заголовки
+    try:
+        user = await get_current_user(token, db)
+    except HTTPException:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    result = await db.execute(select(ProjectFile).where(ProjectFile.project_id == project_id, ProjectFile.file_path == file_path))
+    file_obj = result.scalar_one_or_none()
+
+    if not file_obj:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    content = file_obj.content_binary if file_obj.content_binary else (file_obj.content_text.encode('utf-8') if file_obj.content_text else b"")
+    mime_type, _ = mimetypes.guess_type(file_path)
+
+    return Response(content=content, media_type=mime_type or "application/octet-stream")

@@ -2,7 +2,19 @@
 
 const API_BASE = "https://api.ivantishchenko.ru/api";
 const token = localStorage.getItem('jwt_token');
-
+// Настройка парсера Markdown для поддержки локальных картинок
+const renderer = new marked.Renderer();
+renderer.image = function(href, title, text) {
+    // Если мы в режиме проекта и ссылка относительная (не http/data)
+    if (currentMode === 'project' && currentProjectId && !href.startsWith('http') && !href.startsWith('data:')) {
+        // Убираем слеш в начале, если есть
+        let cleanHref = href.replace(/^\/+/, '');
+        // Формируем прямую ссылку на наш новый эндпоинт + токен
+        href = `${API_BASE}/studio/projects/${currentProjectId}/assets/${cleanHref}?token=${token}`;
+    }
+    return `<img src="${href}" alt="${text || ''}" title="${title || ''}" class="max-w-full rounded-lg shadow-sm my-2 mx-auto" />`;
+};
+marked.use({ renderer });
 // Состояние приложения
 let editor = null;
 let currentMode = 'quick'; // 'quick' | 'project'
@@ -11,6 +23,8 @@ let currentFileId = null;
 let projectFiles =[];
 let splitInstance = null;
 let currentBlobUrl = null; // Ссылка на скомпилированный PDF для скачивания
+let projectsList =[];
+let currentProjectType = 'latex';
 
 const TEMPLATES = {
     latex: `\\documentclass[12pt, a4paper]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage[T2A]{fontenc}\n\\usepackage[russian]{babel}\n\\usepackage{amsmath, amssymb, graphicx}\n\n\\begin{document}\n\\section{Введение}\nПривет, LaTeX! Формула: \\[ E = mc^2 \\]\n\\end{document}`,
@@ -180,7 +194,7 @@ function setLanguage(type) {
 
 // === 4. LIVE PREVIEW (Markdown & Mermaid) ===
 async function updateLivePreview() {
-    const type = currentMode === 'quick' ? document.getElementById('doc-type').value : 'latex';
+    const type = currentMode === 'quick' ? document.getElementById('doc-type').value : currentProjectType;
     if (type === 'latex') return; // LaTeX требует серверной сборки
 
     const code = editor.getValue();
@@ -313,40 +327,75 @@ async function loadProjects() {
     const res = await fetch(`${API_BASE}/studio/projects`, { headers: { 'Authorization': `Bearer ${token}` } });
     if (!res.ok) return;
     
-    const projects = await res.json();
+    projectsList = await res.json(); // Сохраняем в глобальную переменную
     const selector = document.getElementById('project-selector');
     
     selector.innerHTML = '<option value="" disabled selected>-- Выберите проект --</option>';
-    projects.forEach(p => {
+    projectsList.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p.id; 
         opt.text = p.name; 
         selector.appendChild(opt);
     });
 
-    if(projects.length > 0) {
-        selector.value = projects[0].id;
-        openProject(projects[0].id);
+    if(projectsList.length > 0) {
+        // Если мы только что создали проект, открываем его, иначе первый в списке
+        const targetId = currentProjectId || projectsList[0].id;
+        selector.value = targetId;
+        openProject(targetId);
     }
 }
 
-async function createNewProject() {
-    const name = prompt("Название нового проекта:");
-    if (!name) return;
+// --- УПРАВЛЕНИЕ МОДАЛКОЙ ---
+function createNewProject() {
+    document.getElementById('new-project-name').value = '';
+    document.getElementById('new-project-type').value = 'latex';
+    document.getElementById('create-project-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('new-project-name').focus(), 100);
+}
+
+function closeCreateProjectModal() {
+    document.getElementById('create-project-modal').classList.add('hidden');
+}
+
+async function submitNewProject() {
+    const name = document.getElementById('new-project-name').value.trim();
+    const type = document.getElementById('new-project-type').value;
     
+    if (!name) { alert("Введите название проекта"); return; }
+    
+    closeCreateProjectModal();
+    setStatus("Creating...", true);
+
     const res = await fetch(`${API_BASE}/studio/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ name: name, project_type: 'latex' })
+        body: JSON.stringify({ name: name, project_type: type })
     });
-    if (res.ok) await loadProjects();
+    
+    if (res.ok) {
+        const newProj = await res.json();
+        currentProjectId = newProj.id; // Переключаемся на новый проект
+        await loadProjects();
+        setStatus("Ready", false);
+    } else {
+        alert("Ошибка при создании проекта");
+        setStatus("Error", false);
+    }
 }
 
+// --- ОТКРЫТИЕ ПРОЕКТА ---
 async function openProject(id) {
     currentProjectId = id;
+    
+    // Определяем тип открытого проекта
+    const proj = projectsList.find(p => p.id == id);
+    currentProjectType = proj ? proj.type : 'latex';
+
     document.getElementById('empty-state').classList.remove('hidden');
     document.getElementById('pdf-viewer').classList.add('hidden');
     document.getElementById('btn-download-pdf').classList.add('hidden');
+    document.getElementById('live-preview').classList.add('hidden'); // Прячем live preview по умолчанию
 
     const res = await fetch(`${API_BASE}/studio/projects/${id}`, { headers: { 'Authorization': `Bearer ${token}` } });
     projectFiles = await res.json();
@@ -410,15 +459,24 @@ async function openFile(id) {
     renderFileList(); // Обновляем выделение в Sidebar
 
     if (file.is_binary) {
-        editor.setValue(`% Это бинарный файл (${file.path}).\n% Используйте \\includegraphics{${file.path}} в коде.`);
+        editor.setValue(`% Это бинарный файл (${file.path}).\n% Используйте относительный путь в коде.`);
         monaco.editor.setModelLanguage(editor.getModel(), 'plaintext');
         editor.updateOptions({ readOnly: true });
     } else {
         editor.updateOptions({ readOnly: false });
+        
         let ext = file.path.split('.').pop().toLowerCase();
-        let langMap = { 'tex': 'latex', 'md': 'markdown', 'sty': 'latex' };
+        let langMap = { 'tex': 'latex', 'md': 'markdown', 'mmd': 'javascript', 'sty': 'latex' };
         monaco.editor.setModelLanguage(editor.getModel(), langMap[ext] || 'plaintext');
+        
         editor.setValue(file.content || "");
+        
+        // Включаем Live Preview для не-LaTeX файлов в режиме проекта
+        if (currentProjectType !== 'latex') {
+            document.getElementById('pdf-viewer').classList.add('hidden');
+            document.getElementById('empty-state').classList.add('hidden');
+            updateLivePreview(); // Запускаем рендер сразу после открытия
+        }
     }
 }
 

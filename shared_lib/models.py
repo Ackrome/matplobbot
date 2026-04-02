@@ -152,7 +152,8 @@ class Project(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     owner_id = Column(Integer, ForeignKey('web_accounts.id', ondelete='CASCADE'), nullable=False)
     name = Column(String, nullable=False)
-    project_type = Column(String, nullable=False, server_default='latex') # latex, markdown, mermaid
+    project_type = Column(String, nullable=False, server_default='latex')
+    build_cache = Column(LargeBinary, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
