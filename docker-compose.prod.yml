@@ -152,21 +152,19 @@ services:
       - /bin/sh
       - -c
       - |
-        echo "1. Downloading proxy core securely..."
-        # Качаем ядро надежно через Python, чтобы избежать ошибок wget
+        echo "1. Downloading proxy core..."
         python3 -c "import urllib.request; urllib.request.urlretrieve('https://github.com/MetaCubeX/mihomo/releases/download/v1.18.3/mihomo-linux-amd64-compatible-v1.18.3.gz', 'mihomo.gz')"
         gunzip mihomo.gz
         chmod +x mihomo
         mv mihomo /usr/local/bin/
 
-        echo "2. Creating Ultimate Subscription Cleaner..."
+        echo "2. Creating Enhanced somethingsomething Converter..."
         cat << 'EOF' > /cleaner.py
-        import urllib.request, json, os, base64
+        import urllib.request, json, os, base64, re
         from http.server import BaseHTTPRequestHandler, HTTPServer
         
-        # Защитные функции, чтобы спастись от любых ошибок Attribute/TypeError
         def safe_dict(d): return d if isinstance(d, dict) else {}
-        def safe_list(l): return l if isinstance(l, list) else[]
+        def safe_list(l): return l if isinstance(l, list) else []
 
         def process_something_json(raw_data):
             try:
@@ -177,143 +175,118 @@ services:
                 print(f"JSON Parse Error: {e}", flush=True)
                 return None
 
-            yaml_lines =[]
+            yaml_lines = ["proxies:"]
             valid_nodes = 0
             
             for i, conf in enumerate(configs):
                 conf = safe_dict(conf)
-                if not conf: continue
-                
-                raw_name = conf.get('remarks', f'something_{i}')
-                safe_name = "".join([c for c in str(raw_name) if c.isalnum() or c in " -_"]).strip()
-                safe_name = f"{safe_name}_{i}"
+                raw_name = conf.get('remarks', f'Node_{i}')
+                # Очистка имени для YAML
+                safe_name = re.sub(r'[^\w\s-]', '', str(raw_name)).strip()
+                safe_name = f"{safe_name or 'something'}_{i}"
                 
                 vless = None
                 socks = None
-                
-                for out in safe_list(conf.get('outbounds')):
-                    out = safe_dict(out)
-                    if out.get('protocol') == 'vless': vless = out
-                    elif out.get('protocol') == 'socks': socks = out
+                for outbound in safe_list(conf.get('outbounds')):
+                    o = safe_dict(outbound)
+                    if o.get('protocol') == 'vless': vless = o
+                    elif o.get('protocol') == 'socks': socks = o
                 
                 if not vless: continue
                 
-                socks_name = f"upstream_{i}"
+                # 1. Обработка SOCKS5 Upstream (РФ точка входа)
+                socks_name = f"socks_in_{i}"
+                has_socks = False
                 if socks:
                     try:
                         s_sett = safe_dict(socks.get('settings'))
-                        s_srv = safe_list(s_sett.get('servers'))
-                        s_srv = safe_dict(s_srv[0] if s_srv else {})
-                        s_usr = safe_list(s_srv.get('users'))
-                        s_usr = safe_dict(s_usr[0] if s_usr else {})
+                        s_servers = safe_list(s_sett.get('servers'))
+                        s_srv = safe_dict(s_servers[0] if s_servers else {})
+                        s_users = safe_list(s_srv.get('users'))
+                        s_usr = safe_dict(s_users[0] if s_users else {})
                         
-                        if s_srv.get('address'):
+                        addr = s_srv.get('address')
+                        if addr:
                             yaml_lines.append(f"  - name: '{socks_name}'")
                             yaml_lines.append(f"    type: socks5")
-                            yaml_lines.append(f"    server: {s_srv.get('address')}")
+                            yaml_lines.append(f"    server: '{addr}'")
                             yaml_lines.append(f"    port: {s_srv.get('port', 1080)}")
                             if s_usr.get('user'):
                                 yaml_lines.append(f"    username: '{s_usr.get('user')}'")
                                 yaml_lines.append(f"    password: '{s_usr.get('pass')}'")
-                        else:
-                            socks = None
-                    except Exception as e:
-                        print(f"Socks error: {e}", flush=True)
-                        socks = None
-                
+                            has_socks = True
+                    except: pass
+
+                # 2. Обработка VLESS Reality
                 try:
                     v_sett = safe_dict(vless.get('settings'))
                     v_next = safe_list(v_sett.get('vnext'))
                     v_srv = safe_dict(v_next[0] if v_next else {})
-                    v_usr = safe_list(v_srv.get('users'))
-                    v_usr = safe_dict(v_usr[0] if v_usr else {})
+                    v_users = safe_list(v_srv.get('users'))
+                    v_usr = safe_dict(v_users[0] if v_users else {})
                     
                     stream = safe_dict(vless.get('streamSettings'))
                     reality = safe_dict(stream.get('realitySettings'))
                     
-                    if not v_srv.get('address'): continue
+                    target_addr = v_srv.get('address')
+                    if not target_addr: continue
 
                     yaml_lines.append(f"  - name: '{safe_name}'")
                     yaml_lines.append(f"    type: vless")
-                    yaml_lines.append(f"    server: {v_srv.get('address')}")
+                    yaml_lines.append(f"    server: '{target_addr}'")
                     yaml_lines.append(f"    port: {v_srv.get('port', 443)}")
-                    yaml_lines.append(f"    uuid: {v_usr.get('id', '')}")
-                    yaml_lines.append(f"    network: {stream.get('network', 'tcp')}")
+                    yaml_lines.append(f"    uuid: '{v_usr.get('id')}'")
+                    yaml_lines.append(f"    network: '{stream.get('network', 'tcp')}'")
                     yaml_lines.append(f"    tls: true")
                     yaml_lines.append(f"    udp: true")
+                    if v_usr.get('flow'): yaml_lines.append(f"    flow: '{v_usr.get('flow')}'")
                     
-                    if v_usr.get('flow'):
-                        yaml_lines.append(f"    flow: {v_usr.get('flow')}")
-                    
-                    yaml_lines.append(f"    client-fingerprint: {reality.get('fingerprint', 'chrome')}")
-                    yaml_lines.append(f"    servername: {reality.get('serverName', '')}")
+                    yaml_lines.append(f"    client-fingerprint: '{reality.get('fingerprint', 'chrome')}'")
+                    yaml_lines.append(f"    servername: '{reality.get('serverName', 'google.com')}'")
                     yaml_lines.append(f"    reality-opts:")
-                    yaml_lines.append(f"      public-key: {reality.get('publicKey', '')}")
-                    yaml_lines.append(f"      short-id: {reality.get('shortId', '')}")
+                    yaml_lines.append(f"      public-key: '{reality.get('publicKey', '')}'")
                     
-                    if socks:
+                    # КРИТИЧЕСКИЙ ФИКС: Проверка short-id на валидность (только hex)
+                    sid = str(reality.get('shortId', ''))
+                    if sid and all(c in '0123456789abcdefABCDEF' for c in sid):
+                        yaml_lines.append(f"      short-id: '{sid}'")
+                    
+                    if has_socks:
                         yaml_lines.append(f"    dialer-proxy: '{socks_name}'")
                     
                     valid_nodes += 1
                 except Exception as e:
-                    print(f"VLESS error: {e}", flush=True)
+                    print(f"Skip node {i} due to error: {e}", flush=True)
 
-            if valid_nodes == 0: return None
-            return "proxies:\n" + "\n".join(yaml_lines)
+            return "\n".join(yaml_lines) if valid_nodes > 0 else None
 
         class SubHandler(BaseHTTPRequestHandler):
             def log_message(self, format, *args): pass
             def do_GET(self):
                 try:
                     url = os.environ.get('SUB_URL')
-                    print(f"Fetching from {url[:40]}...", flush=True)
+                    print(f"Updating subscription...", flush=True)
                     req = urllib.request.Request(url, headers={'User-Agent': 'v2rayNG/1.8.5'})
-                    
                     with urllib.request.urlopen(req, timeout=15) as resp:
                         raw = resp.read().decode('utf-8', errors='ignore').strip()
                     
                     if raw.startswith('[') or raw.startswith('{'):
-                        print("Detected JSON Array/Object. Converting...", flush=True)
                         yaml_out = process_something_json(raw)
                         if yaml_out:
-                            print("Conversion successful! Sending YAML to Mihomo.", flush=True)
                             self.send_response(200)
                             self.send_header('Content-type', 'application/yaml')
                             self.end_headers()
                             self.wfile.write(yaml_out.encode('utf-8'))
+                            print("YAML delivered to core.", flush=True)
                             return
-                    else:
-                        print("Detected Base64 format. Converting...", flush=True)
-                        pad = "=" * ((4 - len(raw) % 4) % 4)
-                        try:
-                            decoded = base64.b64decode(raw + pad).decode('utf-8', errors='ignore')
-                        except:
-                            decoded = base64.urlsafe_b64decode(raw + pad).decode('utf-8', errors='ignore')
-                            
-                        clean_links = []
-                        for i, line in enumerate(decoded.splitlines()):
-                            line = line.strip()
-                            if '://' in line:
-                                parts = line.split('#', 1)
-                                clean_links.append(f"{parts[0]}#Node_{i}")
-                        if clean_links:
-                            out_data = base64.b64encode('\n'.join(clean_links).encode('utf-8'))
-                            print("Conversion successful! Sending Base64.", flush=True)
-                            self.send_response(200)
-                            self.send_header('Content-type', 'text/plain')
-                            self.end_headers()
-                            self.wfile.write(out_data)
-                            return
-
-                    print("Failed to process. Sending 500.", flush=True)
                     self.send_response(500)
                     self.end_headers()
                 except Exception as e:
-                    print(f"Server Error: {e}", flush=True)
+                    print(f"Error: {e}", flush=True)
                     self.send_response(500)
                     self.end_headers()
         
-        print("Starting Python Converter on 8080...", flush=True)
+        print("Cleaner started on 8080", flush=True)
         HTTPServer(('127.0.0.1', 8080), SubHandler).serve_forever()
         EOF
 
@@ -344,15 +317,9 @@ services:
           - MATCH, AUTO-BEST-NODE
         EOF
 
-        echo "4. Starting Python Converter in background..."
         python3 -u /cleaner.py &
-        
-        echo "5. Waiting for Python Server..."
         sleep 2
-        
-        echo "6. Starting Proxy Core in foreground..."
         exec /usr/local/bin/mihomo -d / -f /config.yaml
-
 volumes:
   bot_logs:
   redis_data:
