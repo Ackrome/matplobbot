@@ -144,6 +144,44 @@ services:
       - mpb-fastapi-stats
       - main-site-frontend
 
+proxy:
+    image: metacubex/mihomo:latest
+    restart: unless-stopped
+    env_file: ./.env
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ -z "$$SUB_URL" ]; then
+          echo "WARNING: SUB_URL is not set. Proxy won't work correctly!";
+        fi
+        cat <<EOF > /config.yaml
+        mixed-port: 20170
+        allow-lan: true
+        mode: rule
+        log-level: warning
+        proxy-providers:
+          ytrebil:
+            type: http
+            url: "$$SUB_URL"
+            interval: 43200
+            path: ./ytrebil.yaml
+            health-check:
+              enable: true
+              url: http://www.gstatic.com/generate_204
+              interval: 300
+        proxy-groups:
+          - name: "AUTO-BEST-NODE"
+            type: url-test
+            use: [ytrebil]
+            url: http://www.gstatic.com/generate_204
+            interval: 300
+            tolerance: 50
+        rules:
+          - MATCH, AUTO-BEST-NODE
+        EOF
+        exec /mihomo -d / -f /config.yaml
+
 volumes:
   bot_logs:
   redis_data:

@@ -21,6 +21,7 @@ pipeline {
         PROD_PUBLIC_API_URL = credentials('PROD_PUBLIC_API_URL')
         PROD_DATABASE_URL   = "postgresql://${PROD_POSTGRES_USER}:${PROD_POSTGRES_PASSWORD}@postgres:5432/${PROD_POSTGRES_DB}"
         PROD_JWT_SECRET_KEY = credentials('PROD_JWT_SECRET_KEY')
+        PROD_SUB_URL = credentials('PROD_SUB_URL')
         // Redis URL might be needed if you connect externally, but usually internal docker network handles it.
         // If needed: PROD_REDIS_URL = "redis://redis:6379/0" 
     }
@@ -53,7 +54,8 @@ STATS_PASS=${PROD_STATS_PASS}
 PUBLIC_API_URL=${PROD_PUBLIC_API_URL}
 JWT_SECRET_KEY=${PROD_JWT_SECRET_KEY}
 REDIS_URL=redis://redis:6379/0
-PROXY_URL=socks5://host.docker.internal:20170
+PROXY_URL=socks5://proxy:20170
+SUB_URL=${PROD_SUB_URL}
 EOF
                         """
                         
