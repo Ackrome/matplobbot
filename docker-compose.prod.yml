@@ -144,7 +144,7 @@ services:
       - mpb-fastapi-stats
       - main-site-frontend
 
-proxy:
+  proxy:
     image: python:3.11-alpine
     restart: unless-stopped
     env_file: ./.env
