@@ -145,42 +145,99 @@ services:
       - main-site-frontend
 
   proxy:
-    image: metacubex/mihomo:latest
+    image: python:3.11-alpine
     restart: unless-stopped
     env_file: ./.env
     entrypoint:
       - /bin/sh
       - -c
       - |
-        if [ -z "$$SUB_URL" ]; then
-          echo "WARNING: SUB_URL is not set. Proxy won't work correctly!";
-        fi
-        cat <<EOF > /config.yaml
+        echo "1. Downloading proxy core..."
+        wget -qO mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.18.3/mihomo-linux-amd64-v1.18.3.gz
+        gunzip mihomo.gz
+        chmod +x mihomo
+        mv mihomo /usr/local/bin/
+
+        echo "2. Creating Dynamic Subscription Cleaner..."
+        cat << 'EOF' > /cleaner.py
+        import urllib.request, base64, os
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        
+        class SubHandler(BaseHTTPRequestHandler):
+            def log_message(self, format, *args): pass # Отключаем спам в логи
+            
+            def do_GET(self):
+                try:
+                    url = os.environ.get('SUB_URL')
+                    # Скачиваем подписку
+                    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req, timeout=15) as resp:
+                        raw_data = resp.read().decode('utf-8').strip()
+                    
+                    # ЧИНИМ PADDING И РАСШИФРОВЫВАЕМ BASE64
+                    try:
+                        padded = raw_data + "=" * ((4 - len(raw_data) % 4) % 4)
+                        decoded = base64.b64decode(padded).decode('utf-8')
+                    except Exception:
+                        decoded = raw_data # Если подписка пришла не в base64
+                    
+                    # ОЧИЩАЕМ УЗЛЫ ОТ ЭМОДЗИ И КРИВЫХ СИМВОЛОВ
+                    clean_links =[]
+                    for i, line in enumerate(decoded.splitlines()):
+                        line = line.strip()
+                        if '://' in line:
+                            parts = line.split('#', 1)
+                            # Отрезаем грязное имя и ставим безопасное
+                            clean_links.append(f"{parts[0]}#Node_{i}")
+                    
+                    # ЗАШИФРОВЫВАЕМ ОБРАТНО
+                    final_b64 = base64.b64encode('\n'.join(clean_links).encode('utf-8'))
+                    
+                    # Отдаем чистый список прокси-ядру
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/plain')
+                    self.end_headers()
+                    self.wfile.write(final_b64)
+                except Exception as e:
+                    print(f"Error fetching sub: {e}")
+                    self.send_response(500)
+                    self.end_headers()
+        
+        HTTPServer(('127.0.0.1', 8080), SubHandler).serve_forever()
+        EOF
+
+        echo "3. Generating proxy config..."
+        cat << 'EOF' > /config.yaml
         mixed-port: 20170
         allow-lan: true
         mode: rule
         log-level: warning
         proxy-providers:
-          ytrebil:
+          providor:
             type: http
-            url: "$$SUB_URL"
-            interval: 43200
-            path: ./ytrebil.yaml
+            url: "http://127.0.0.1:8080/"  # Стучимся в наш локальный Python-очиститель
+            interval: 3600                 # Обновляем подписку каждый час
+            path: ./providor.yaml
             health-check:
               enable: true
               url: http://www.gstatic.com/generate_204
-              interval: 300
+              interval: 60                 # Пингуем узлы каждые 60 секунд
         proxy-groups:
           - name: "AUTO-BEST-NODE"
-            type: url-test
-            use: [ytrebil]
+            type: url-test                 # Автоматический балансировщик по пингу
+            use: [providor]
             url: http://www.gstatic.com/generate_204
-            interval: 300
-            tolerance: 50
+            interval: 60                   # Пересчитываем лучший узел каждую минуту
+            tolerance: 50                  # Допуск переключения (мс)
         rules:
           - MATCH, AUTO-BEST-NODE
         EOF
-        exec /mihomo -d / -f /config.yaml
+
+        echo "4. Starting Python Cleaner in background..."
+        python3 /cleaner.py &
+        
+        echo "5. Starting Proxy Core in foreground..."
+        exec /usr/local/bin/mihomo -d / -f /config.yaml
 
 volumes:
   bot_logs:
