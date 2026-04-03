@@ -7,7 +7,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import asyncio, json, hashlib
 import sys, os, logging
 import matplobblib
-import pkg_resources
+import importlib.metadata
 # from main import logging
 
 from shared_lib import database
@@ -72,7 +72,13 @@ class AdminManager:
 
     async def _update_library_async(self, library_name: str, lang: str):
         try:
-            old_version = pkg_resources.get_distribution(library_name).version
+            # 1. Получаем старую версию через современный API
+            try:
+                old_version = importlib.metadata.version(library_name)
+            except importlib.metadata.PackageNotFoundError:
+                old_version = "not installed"
+
+            # 2. Запускаем обновление через pip
             process = await asyncio.create_subprocess_exec(
                 sys.executable, "-m", "pip", "install", "--upgrade", library_name,
                 stdout=asyncio.subprocess.PIPE,
@@ -81,16 +87,34 @@ class AdminManager:
             stdout, stderr = await process.communicate()
 
             if process.returncode == 0:
-                importlib.reload(pkg_resources)
-                new_version = pkg_resources.get_distribution(library_name).version
-                return True, translator.gettext(lang, "admin_update_success", library_name=library_name, old_version=old_version, new_version=new_version)
+                # 3. Сбрасываем кэши поиска модулей (замена reload(pkg_resources))
+                importlib.invalidate_caches()
+                
+                # 4. Получаем новую версию
+                try:
+                    new_version = importlib.metadata.version(library_name)
+                except importlib.metadata.PackageNotFoundError:
+                    new_version = "unknown"
+
+                return True, translator.gettext(
+                    lang, "admin_update_success", 
+                    library_name=library_name, 
+                    old_version=old_version, 
+                    new_version=new_version
+                )
             else:
-                error_text = stderr.decode()
+                error_text = stderr.decode().strip()
                 logging.error(f"Error updating library '{library_name}': {error_text}")
-                return False, translator.gettext(lang, "admin_update_error", library_name=library_name, error=error_text)
+                return False, translator.gettext(
+                    lang, "admin_update_error", 
+                    library_name=library_name, 
+                    error=error_text
+                )
+                
         except Exception as e:
             logging.error(f"Unexpected error during library update: {e}", exc_info=True)
-            return False, translator.gettext(lang, "admin_update_unexpected_error", error=e)
+            return False, translator.gettext(lang, "admin_update_unexpected_error", error=str(e))
+
 
     async def update_command(self, message: Message):
         user_id = message.from_user.id

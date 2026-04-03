@@ -5,7 +5,19 @@ from contextlib import asynccontextmanager
 from fastapi_stats_app.config import LOG_DIR, FASTAPI_LOG_FILE_NAME # Импортируем константы для логгирования
 from fastapi.middleware.cors import CORSMiddleware
 
+from dotenv import load_dotenv # Добавьте импорт
 
+load_dotenv() # Загружаем .env
+
+# --- ПАТЧ ДЛЯ ПРОКСИ (как в боте) ---
+PROXY_URL = os.getenv("PROXY_URL")
+if PROXY_URL:
+    # Используем socks5h для резолвинга DNS на стороне прокси
+    socks5h_proxy = PROXY_URL.replace("socks5://", "socks5h://")
+    os.environ["HTTP_PROXY"] = socks5h_proxy
+    os.environ["HTTPS_PROXY"] = socks5h_proxy
+    os.environ["ALL_PROXY"] = socks5h_proxy
+# ------------------------------------
 # Определяем пути для логгирования FastAPI приложения
 LOG_FILE_FASTAPI = os.path.join(LOG_DIR, FASTAPI_LOG_FILE_NAME) # Используем константы из config
 

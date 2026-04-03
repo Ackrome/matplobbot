@@ -37,29 +37,74 @@ if (!token) {
     window.location.href = '/login';
 }
 
-// === 1. ИНИЦИАЛИЗАЦИЯ ИНТЕРФЕЙСА (SPLIT.JS) ===
+// === 1. ИНИЦИАЛИЗАЦИЯ ИНТЕРФЕЙСА (SPLIT.JS & MOBILE) ===
 function setupSplit() {
-    if (splitInstance) splitInstance.destroy();
+    const isMobile = window.innerWidth < 768;
+
+    if (splitInstance) {
+        splitInstance.destroy();
+        splitInstance = null;
+    }
     
-    if (currentMode === 'project') {
-        document.getElementById('sidebar-pane').classList.remove('hidden');
-        splitInstance = Split(['#sidebar-pane', '#editor-pane', '#viewer-pane'], { 
-            sizes: [20, 40, 40], 
-            minSize:[150, 300, 300], 
-            gutterSize: 6,
-            cursor: 'col-resize'
-        });
+    const sidebar = document.getElementById('sidebar-pane');
+    const editor = document.getElementById('editor-pane');
+    const viewer = document.getElementById('viewer-pane');
+
+    if (isMobile) {
+        // Мобильный режим: скрываем Split.js, управляем табами
+        sidebar.classList.add('w-full', 'absolute', 'inset-0', 'z-10');
+        editor.classList.add('w-full', 'absolute', 'inset-0', 'z-10');
+        viewer.classList.add('w-full', 'absolute', 'inset-0', 'z-10');
+        
+        document.getElementById('mobile-tabs').classList.remove('hidden');
+        switchMobileTab('editor-pane'); // Открываем код по умолчанию
     } else {
-        document.getElementById('sidebar-pane').classList.add('hidden');
-        splitInstance = Split(['#editor-pane', '#viewer-pane'], { 
-            sizes:[50, 50], 
-            minSize: [300, 300], 
-            gutterSize: 6,
-            cursor: 'col-resize'
-        });
+        // Десктопный режим
+        sidebar.classList.remove('w-full', 'absolute', 'inset-0', 'z-10', 'hidden');
+        editor.classList.remove('w-full', 'absolute', 'inset-0', 'z-10', 'hidden');
+        viewer.classList.remove('w-full', 'absolute', 'inset-0', 'z-10', 'hidden');
+        document.getElementById('mobile-tabs').classList.add('hidden');
+
+        if (currentMode === 'project') {
+            sidebar.classList.remove('hidden');
+            splitInstance = Split(['#sidebar-pane', '#editor-pane', '#viewer-pane'], { 
+                sizes: [20, 40, 40], minSize:[150, 300, 300], gutterSize: 6, cursor: 'col-resize'
+            });
+        } else {
+            sidebar.classList.add('hidden');
+            splitInstance = Split(['#editor-pane', '#viewer-pane'], { 
+                sizes:[50, 50], minSize: [300, 300], gutterSize: 6, cursor: 'col-resize'
+            });
+        }
     }
 }
 setupSplit();
+window.addEventListener('resize', () => {
+    // Простейший debounce для resize
+    clearTimeout(window.resizeTimer);
+    window.resizeTimer = setTimeout(setupSplit, 250);
+});
+
+// Логика переключения мобильных табов
+window.switchMobileTab = function(targetPaneId) {
+    const panes = ['sidebar-pane', 'editor-pane', 'viewer-pane'];
+    
+    panes.forEach(pane => {
+        const el = document.getElementById(pane);
+        const btn = document.getElementById(`tab-btn-${pane.split('-')[0]}`);
+        
+        if (pane === targetPaneId) {
+            el.classList.remove('hidden');
+            btn.classList.replace('text-slate-500', 'text-blue-600');
+            btn.classList.replace('border-transparent', 'border-blue-600');
+            if (pane === 'editor-pane' && editor) setTimeout(() => editor.layout(), 100);
+        } else {
+            el.classList.add('hidden');
+            btn.classList.replace('text-blue-600', 'text-slate-500');
+            btn.classList.replace('border-blue-600', 'border-transparent');
+        }
+    });
+};
 
 // === 2. ИНИЦИАЛИЗАЦИЯ MONACO EDITOR И INTELLISENSE ===
 require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.38.0/min/vs' }});
@@ -154,12 +199,15 @@ function switchMode(mode) {
     const btnP = document.getElementById('mode-project');
     const typeSelect = document.getElementById('doc-type');
     const btnZip = document.getElementById('btn-download-zip');
+    const btnTg = document.getElementById('btn-send-tg');
 
     if (mode === 'quick') {
         btnQ.className = "px-3 py-1.5 text-sm font-medium rounded-md bg-white shadow-sm text-blue-700 transition-all";
         btnP.className = "px-3 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all";
         typeSelect.classList.remove('hidden');
+        
         btnZip.classList.add('hidden');
+        if (btnTg) btnTg.classList.add('hidden');
         
         currentProjectId = null;
         currentFileId = null;
@@ -168,7 +216,9 @@ function switchMode(mode) {
         btnP.className = "px-3 py-1.5 text-sm font-medium rounded-md bg-white shadow-sm text-blue-700 transition-all";
         btnQ.className = "px-3 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all";
         typeSelect.classList.add('hidden');
+        
         btnZip.classList.remove('hidden');
+        if (btnTg) btnTg.classList.remove('hidden'); // <-- ПОКАЗЫВАЕМ В PROJECT РЕЖИМЕ
         
         loadProjects();
     }
@@ -358,9 +408,34 @@ function closeCreateProjectModal() {
     document.getElementById('create-project-modal').classList.add('hidden');
 }
 
+// Вспомогательная функция для обновления селекта шаблонов
+window.updateTemplateOptions = function() {
+    const type = document.getElementById('new-project-type').value;
+    const templateContainer = document.getElementById('template-container');
+    const templateSelect = document.getElementById('new-project-template');
+    
+    templateSelect.innerHTML = '';
+    
+    if (type === 'latex') {
+        templateContainer.classList.remove('hidden');
+        templateSelect.innerHTML = `
+            <option value="latex_blank">Пустой документ (Article)</option>
+            <option value="latex_beamer">Презентация (Beamer)</option>
+            <option value="latex_report">Отчет (ГОСТ / extreport)</option>
+        `;
+    } else if (type === 'markdown') {
+        templateContainer.classList.remove('hidden');
+        templateSelect.innerHTML = `<option value="markdown">Стандартный Markdown</option>`;
+    } else if (type === 'mermaid') {
+        templateContainer.classList.remove('hidden');
+        templateSelect.innerHTML = `<option value="mermaid">Базовая диаграмма</option>`;
+    }
+};
+
 async function submitNewProject() {
     const name = document.getElementById('new-project-name').value.trim();
     const type = document.getElementById('new-project-type').value;
+    const templateId = document.getElementById('new-project-template').value; // Берем ID шаблона
     
     if (!name) { alert("Введите название проекта"); return; }
     
@@ -370,12 +445,12 @@ async function submitNewProject() {
     const res = await fetch(`${API_BASE}/studio/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ name: name, project_type: type })
+        body: JSON.stringify({ name: name, project_type: type, template_id: templateId }) // Отправляем шаблон!
     });
     
     if (res.ok) {
         const newProj = await res.json();
-        currentProjectId = newProj.id; // Переключаемся на новый проект
+        currentProjectId = newProj.id;
         await loadProjects();
         setStatus("Ready", false);
     } else {
@@ -619,4 +694,39 @@ function downloadZIP() {
         alert("Ошибка выгрузки ZIP архива");
         setStatus("Error", false);
     });
+}
+
+// === 9. ИНТЕГРАЦИЯ С TELEGRAM ===
+async function sendToTelegram() {
+    if (!currentProjectId) return;
+    
+    await saveCurrentFile(); // Обязательно сохраняем перед сборкой
+    setStatus("Sending to TG...", true);
+    const overlay = document.getElementById('loader-overlay');
+    
+    overlay.classList.remove('hidden');
+    overlay.classList.add('flex');
+    overlay.querySelector('div:last-child').innerText = "Отправка в Telegram...";
+
+    try {
+        const res = await fetch(`${API_BASE}/studio/projects/${currentProjectId}/send_telegram`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await res.json();
+        if (res.ok) {
+            alert("Успех! Файл отправлен вам в личные сообщения в Telegram.");
+            setStatus("Saved", false);
+        } else {
+            throw new Error(data.detail || "Ошибка отправки");
+        }
+    } catch (err) {
+        alert(err.message);
+        setStatus("Error", false);
+    } finally {
+        overlay.classList.add('hidden');
+        overlay.classList.remove('flex');
+        overlay.querySelector('div:last-child').innerText = "Ожидание сервера..."; // Сброс текста лоадера
+    }
 }

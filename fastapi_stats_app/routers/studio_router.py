@@ -10,6 +10,9 @@ import io
 import zipfile
 import base64
 import mimetypes
+import aiohttp
+import os
+from aiohttp_socks import ProxyConnector
 
 from shared_lib.tasks import compile_project_task, render_pdf_task, render_mermaid, compile_full_latex_task
 from shared_lib.database import get_db_session_dependency
@@ -18,10 +21,12 @@ from ..auth import get_current_user
 
 router = APIRouter(prefix="/studio", tags=["studio"])
 logger = logging.getLogger(__name__)
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 class ProjectCreate(BaseModel):
     name: str
     project_type: str = "latex"
+    template_id: str = "latex_blank"
 
 class FileSave(BaseModel):
     content: str
@@ -41,6 +46,28 @@ DEFAULT_LATEX = r"""\documentclass[12pt, a4paper]{article}
 \end{document}
 """
 
+DEFAULT_TEMPLATES = {
+    "latex_blank": (
+        "main.tex", 
+        "\\documentclass[12pt, a4paper]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage[T2A]{fontenc}\n\\usepackage[russian]{babel}\n\\usepackage{amsmath, amssymb, graphicx}\n\n\\begin{document}\n\\section{Новый проект}\nВаш текст здесь.\n\\end{document}"
+    ),
+    "latex_beamer": (
+        "main.tex",
+        "\\documentclass{beamer}\n\\usepackage[utf8]{inputenc}\n\\usepackage[T2A]{fontenc}\n\\usepackage[russian]{babel}\n\n\\usetheme{Madrid}\n\n\\title{Моя Презентация}\n\\author{Студент}\n\\date{\\today}\n\n\\begin{document}\n\\frame{\\titlepage}\n\n\\begin{frame}{Первый слайд}\n\\begin{itemize}\n\\item Пункт 1\n\\item Пункт 2\n\\end{itemize}\n\\end{frame}\n\\end{document}"
+    ),
+    "latex_report": (
+        "main.tex",
+        "\\documentclass[14pt, a4paper]{extreport}\n\\usepackage[utf8]{inputenc}\n\\usepackage[T2A]{fontenc}\n\\usepackage[russian]{babel}\n\\usepackage[left=3cm,right=1.5cm,top=2cm,bottom=2cm]{geometry}\n\n\\begin{document}\n\\tableofcontents\n\\chapter{Введение}\nТекст введения по ГОСТ...\n\\end{document}"
+    ),
+    "markdown": (
+        "main.md",
+        "# Заголовок\n\nТекст с формулой: $$E = mc^2$$\n\n`![Описание](image.png)`"
+    ),
+    "mermaid": (
+        "main.mmd",
+        "graph TD;\n    A[Начало] --> B{Работает?};\n    B -- Да --> C[Отлично!];\n    B -- Нет --> D[Ищем баг];"
+    )
+}
 
 class CompileRequest(BaseModel):
     type: str     # 'latex', 'markdown', 'mermaid'
@@ -84,28 +111,15 @@ async def get_projects(db: AsyncSession = Depends(get_db_session_dependency), cu
     projects = result.scalars().all()
     return[{"id": p.id, "name": p.name, "type": p.project_type} for p in projects]
 
-DEFAULT_TEMPLATES = {
-    "latex": (
-        "main.tex", 
-        "\\documentclass[12pt, a4paper]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage[T2A]{fontenc}\n\\usepackage[russian]{babel}\n\\usepackage{amsmath, amssymb, graphicx}\n\n\\begin{document}\n\\section{Новый проект}\nВаш текст здесь. Вы можете загружать картинки слева и вставлять их через \\verb|\\includegraphics{image.png}|.\n\\end{document}"
-    ),
-    "markdown": (
-        "main.md",
-        "# Новый проект Markdown\n\nЗдесь поддерживаются формулы: $$E = mc^2$$\n\nА если загрузить картинку в проект, можно вставить её так: `![Описание](logo.png)`"
-    ),
-    "mermaid": (
-        "main.mmd",
-        "graph TD;\n    A[Идея] --> B{Работает?};\n    B -- Да --> C[Отлично!];\n    B -- Нет --> D[Дебаг];"
-    )
-}
 
 @router.post("/projects")
 async def create_project(data: ProjectCreate, db: AsyncSession = Depends(get_db_session_dependency), current_user: dict = Depends(get_current_user)):
     new_proj = Project(owner_id=current_user['id'], name=data.name, project_type=data.project_type)
     db.add(new_proj)
-    await db.flush()
+    await db.flush() 
 
-    file_path, content_text = DEFAULT_TEMPLATES.get(data.project_type, ("main.txt", ""))
+    # Выбираем шаблон (если шаблон не найден, берем blank)
+    file_path, content_text = DEFAULT_TEMPLATES.get(data.template_id, DEFAULT_TEMPLATES["latex_blank"])
 
     main_file = ProjectFile(
         project_id=new_proj.id, 
@@ -284,3 +298,70 @@ async def get_project_asset(project_id: int, file_path: str, token: str = Query(
     mime_type, _ = mimetypes.guess_type(file_path)
 
     return Response(content=content, media_type=mime_type or "application/octet-stream")
+
+@router.post("/projects/{project_id}/send_telegram")
+async def send_project_to_telegram(project_id: int, db: AsyncSession = Depends(get_db_session_dependency), current_user: dict = Depends(get_current_user)):
+    # 1. Проверяем, привязан ли Telegram
+    telegram_id = current_user['db_obj'].telegram_id
+    if not telegram_id:
+        raise HTTPException(status_code=400, detail="Аккаунт Telegram не привязан. Войдите через Telegram.")
+
+    if not BOT_TOKEN:
+        raise HTTPException(status_code=500, detail="BOT_TOKEN не настроен на сервере.")
+
+    # 2. Получаем проект и собираем его (компилируем)
+    proj_result = await db.execute(select(Project).where(Project.id == project_id, Project.owner_id == current_user['id']))
+    project = proj_result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    build_cache_b64 = base64.b64encode(project.build_cache).decode('utf-8') if project.build_cache else None
+
+    files_result = await db.execute(select(ProjectFile).where(ProjectFile.project_id == project_id))
+    files = files_result.scalars().all()
+
+    payload =[]
+    main_file_path = "main.tex"
+    for f in files:
+        if f.is_main: main_file_path = f.file_path
+        file_data = {"path": f.file_path}
+        if f.content_binary:
+            file_data["binary"] = base64.b64encode(f.content_binary).decode('utf-8')
+        else:
+            file_data["text"] = f.content_text or ""
+        payload.append(file_data)
+
+    # Запускаем сборку
+    task = compile_project_task.delay(payload, main_file_path, build_cache_b64)
+    res = await asyncio.to_thread(task.get, timeout=55)
+
+    if res.get('status') == 'error' or not res.get('pdf'):
+        raise HTTPException(status_code=400, detail="Ошибка компиляции. Исправьте ошибки перед отправкой.")
+
+    # 3. Отправляем готовый PDF в Telegram
+    pdf_bytes = base64.b64decode(res['pdf'])
+    safe_name = "".join([c if c.isalnum() or c in " -_" else "_" for c in project.name])
+    
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument"
+    form_data = aiohttp.FormData()
+    form_data.add_field('chat_id', str(telegram_id))
+    form_data.add_field('document', pdf_bytes, filename=f"{safe_name}.pdf", content_type='application/pdf')
+    form_data.add_field('caption', f"📄 Ваш проект: <b>{project.name}</b>", parse_mode="HTML")
+
+    # Получаем прокси из окружения
+    PROXY_URL = os.getenv("PROXY_URL")
+
+    connector = ProxyConnector.from_url(PROXY_URL) if PROXY_URL else None
+    async with aiohttp.ClientSession(connector=connector) as session:
+        async with session.post(url, data=form_data) as resp:
+            try:
+                async with session.post(url, data=form_data, proxy=PROXY_URL, timeout=30) as resp:
+                    if resp.status != 200:
+                        err_text = await resp.text()
+                        logger.error(f"Telegram Send Error (Status {resp.status}): {err_text}")
+                        raise HTTPException(status_code=500, detail="Telegram API отклонил запрос.")
+            except Exception as e:
+                logger.error(f"Network error during TG send: {e}")
+                raise HTTPException(status_code=500, detail="Не удалось связаться с сервером Telegram (проверьте прокси).")
+                
+    return {"status": "success", "message": "Файл успешно отправлен в Telegram!"}
