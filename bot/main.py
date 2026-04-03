@@ -98,9 +98,9 @@ async def main():
     if PROXY_URL:
         # ИСПРАВЛЕНИЕ: здесь используем logging.info вместо logger.info
         logging.info(f"Using proxy for bot: {PROXY_URL}")
-        bot_session = AiohttpSession(timeout=60, proxy=PROXY_URL)
+        bot_session = AiohttpSession(timeout=600, proxy=PROXY_URL)
     else:
-        bot_session = AiohttpSession(timeout=60)
+        bot_session = AiohttpSession(timeout=600)
 
     bot = Bot(BOT_TOKEN, session=bot_session)
 
@@ -112,7 +112,7 @@ async def main():
     await init_db_pool()
 
     # --- Создаем ОТДЕЛЬНУЮ сессию для RUZ API ---
-    timeout_client = aiohttp.ClientTimeout(total=60)
+    timeout_client = aiohttp.ClientTimeout(total=600)
     async with aiohttp.ClientSession(timeout=timeout_client) as ruz_session:
         ruz_api_client_instance = create_ruz_api_client(ruz_session)
 

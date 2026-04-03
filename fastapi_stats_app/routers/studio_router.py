@@ -338,30 +338,45 @@ async def send_project_to_telegram(project_id: int, db: AsyncSession = Depends(g
     if res.get('status') == 'error' or not res.get('pdf'):
         raise HTTPException(status_code=400, detail="Ошибка компиляции. Исправьте ошибки перед отправкой.")
 
-    # 3. Отправляем готовый PDF в Telegram
+    # 3. Подготовка полей для Telegram
     pdf_bytes = base64.b64decode(res['pdf'])
     safe_name = "".join([c if c.isalnum() or c in " -_" else "_" for c in project.name])
     
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument"
+    
+    # ИСПРАВЛЕНИЕ: parse_mode добавляем как отдельное поле, а не аргумент add_field
     form_data = aiohttp.FormData()
     form_data.add_field('chat_id', str(telegram_id))
     form_data.add_field('document', pdf_bytes, filename=f"{safe_name}.pdf", content_type='application/pdf')
-    form_data.add_field('caption', f"📄 Ваш проект: <b>{project.name}</b>", parse_mode="HTML")
+    form_data.add_field('caption', f"📄 Ваш проект: <b>{project.name}</b>")
+    form_data.add_field('parse_mode', 'HTML') 
 
-    # Получаем прокси из окружения
     PROXY_URL = os.getenv("PROXY_URL")
+    
+    # Настраиваем коннектор для SOCKS5 если нужно
+    connector = None
+    if PROXY_URL and PROXY_URL.startswith("socks"):
+        connector = ProxyConnector.from_url(PROXY_URL)
 
-    connector = ProxyConnector.from_url(PROXY_URL) if PROXY_URL else None
-    async with aiohttp.ClientSession(connector=connector) as session:
-        async with session.post(url, data=form_data) as resp:
-            try:
-                async with session.post(url, data=form_data, proxy=PROXY_URL, timeout=30) as resp:
-                    if resp.status != 200:
-                        err_text = await resp.text()
-                        logger.error(f"Telegram Send Error (Status {resp.status}): {err_text}")
-                        raise HTTPException(status_code=500, detail="Telegram API отклонил запрос.")
-            except Exception as e:
-                logger.error(f"Network error during TG send: {e}")
-                raise HTTPException(status_code=500, detail="Не удалось связаться с сервером Telegram (проверьте прокси).")
+    try:
+        # Если прокси SOCKS, используем connector. Если HTTP, можно через параметр proxy.
+        # Для универсальности лучше использовать connector
+        async with aiohttp.ClientSession(connector=connector) as session:
+            # Если прокси HTTP, aiohttp_socks сам это поймет. 
+            # Если прокси нет, connector будет None и aiohttp сработает напрямую.
+            post_kwargs = {"data": form_data, "timeout": 60}
+            
+            # Если это обычный HTTP прокси, а не SOCKS:
+            if PROXY_URL and not PROXY_URL.startswith("socks"):
+                post_kwargs["proxy"] = PROXY_URL
+
+            async with session.post(url, **post_kwargs) as resp:
+                if resp.status != 200:
+                    err_text = await resp.text()
+                    logger.error(f"Telegram API Error: {err_text}")
+                    raise HTTPException(status_code=500, detail="Ошибка при отправке файла в Telegram.")
+    except Exception as e:
+        logger.error(f"Network error during Telegram send: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка сети: {str(e)}")
                 
     return {"status": "success", "message": "Файл успешно отправлен в Telegram!"}

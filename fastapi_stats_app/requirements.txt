@@ -8,3 +8,4 @@ websockets
 python-jose[cryptography]
 passlib[bcrypt]
 python-multipart
+aiohttp-socks>=0.8.0
