@@ -152,55 +152,168 @@ services:
       - /bin/sh
       - -c
       - |
-        echo "1. Downloading proxy core..."
-        wget -qO mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.18.3/mihomo-linux-amd64-compatible-v1.18.3.gz
+        echo "1. Downloading proxy core securely..."
+        # Качаем ядро надежно через Python, чтобы избежать ошибок wget
+        python3 -c "import urllib.request; urllib.request.urlretrieve('https://github.com/MetaCubeX/mihomo/releases/download/v1.18.3/mihomo-linux-amd64-compatible-v1.18.3.gz', 'mihomo.gz')"
         gunzip mihomo.gz
         chmod +x mihomo
         mv mihomo /usr/local/bin/
 
-        echo "2. Creating Dynamic Subscription Cleaner..."
+        echo "2. Creating Ultimate Subscription Cleaner..."
         cat << 'EOF' > /cleaner.py
-        import urllib.request, base64, os
+        import urllib.request, json, os, base64
         from http.server import BaseHTTPRequestHandler, HTTPServer
         
-        class SubHandler(BaseHTTPRequestHandler):
-            def log_message(self, format, *args): pass # Отключаем спам в логи
+        # Защитные функции, чтобы спастись от любых ошибок Attribute/TypeError
+        def safe_dict(d): return d if isinstance(d, dict) else {}
+        def safe_list(l): return l if isinstance(l, list) else[]
+
+        def process_something_json(raw_data):
+            try:
+                configs = json.loads(raw_data)
+                if isinstance(configs, dict): configs = [configs]
+                if not isinstance(configs, list): return None
+            except Exception as e:
+                print(f"JSON Parse Error: {e}", flush=True)
+                return None
+
+            yaml_lines =[]
+            valid_nodes = 0
             
+            for i, conf in enumerate(configs):
+                conf = safe_dict(conf)
+                if not conf: continue
+                
+                raw_name = conf.get('remarks', f'something_{i}')
+                safe_name = "".join([c for c in str(raw_name) if c.isalnum() or c in " -_"]).strip()
+                safe_name = f"{safe_name}_{i}"
+                
+                vless = None
+                socks = None
+                
+                for out in safe_list(conf.get('outbounds')):
+                    out = safe_dict(out)
+                    if out.get('protocol') == 'vless': vless = out
+                    elif out.get('protocol') == 'socks': socks = out
+                
+                if not vless: continue
+                
+                socks_name = f"upstream_{i}"
+                if socks:
+                    try:
+                        s_sett = safe_dict(socks.get('settings'))
+                        s_srv = safe_list(s_sett.get('servers'))
+                        s_srv = safe_dict(s_srv[0] if s_srv else {})
+                        s_usr = safe_list(s_srv.get('users'))
+                        s_usr = safe_dict(s_usr[0] if s_usr else {})
+                        
+                        if s_srv.get('address'):
+                            yaml_lines.append(f"  - name: '{socks_name}'")
+                            yaml_lines.append(f"    type: socks5")
+                            yaml_lines.append(f"    server: {s_srv.get('address')}")
+                            yaml_lines.append(f"    port: {s_srv.get('port', 1080)}")
+                            if s_usr.get('user'):
+                                yaml_lines.append(f"    username: '{s_usr.get('user')}'")
+                                yaml_lines.append(f"    password: '{s_usr.get('pass')}'")
+                        else:
+                            socks = None
+                    except Exception as e:
+                        print(f"Socks error: {e}", flush=True)
+                        socks = None
+                
+                try:
+                    v_sett = safe_dict(vless.get('settings'))
+                    v_next = safe_list(v_sett.get('vnext'))
+                    v_srv = safe_dict(v_next[0] if v_next else {})
+                    v_usr = safe_list(v_srv.get('users'))
+                    v_usr = safe_dict(v_usr[0] if v_usr else {})
+                    
+                    stream = safe_dict(vless.get('streamSettings'))
+                    reality = safe_dict(stream.get('realitySettings'))
+                    
+                    if not v_srv.get('address'): continue
+
+                    yaml_lines.append(f"  - name: '{safe_name}'")
+                    yaml_lines.append(f"    type: vless")
+                    yaml_lines.append(f"    server: {v_srv.get('address')}")
+                    yaml_lines.append(f"    port: {v_srv.get('port', 443)}")
+                    yaml_lines.append(f"    uuid: {v_usr.get('id', '')}")
+                    yaml_lines.append(f"    network: {stream.get('network', 'tcp')}")
+                    yaml_lines.append(f"    tls: true")
+                    yaml_lines.append(f"    udp: true")
+                    
+                    if v_usr.get('flow'):
+                        yaml_lines.append(f"    flow: {v_usr.get('flow')}")
+                    
+                    yaml_lines.append(f"    client-fingerprint: {reality.get('fingerprint', 'chrome')}")
+                    yaml_lines.append(f"    servername: {reality.get('serverName', '')}")
+                    yaml_lines.append(f"    reality-opts:")
+                    yaml_lines.append(f"      public-key: {reality.get('publicKey', '')}")
+                    yaml_lines.append(f"      short-id: {reality.get('shortId', '')}")
+                    
+                    if socks:
+                        yaml_lines.append(f"    dialer-proxy: '{socks_name}'")
+                    
+                    valid_nodes += 1
+                except Exception as e:
+                    print(f"VLESS error: {e}", flush=True)
+
+            if valid_nodes == 0: return None
+            return "proxies:\n" + "\n".join(yaml_lines)
+
+        class SubHandler(BaseHTTPRequestHandler):
+            def log_message(self, format, *args): pass
             def do_GET(self):
                 try:
                     url = os.environ.get('SUB_URL')
-                    # Скачиваем подписку
-                    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                    print(f"Fetching from {url[:40]}...", flush=True)
+                    req = urllib.request.Request(url, headers={'User-Agent': 'v2rayNG/1.8.5'})
+                    
                     with urllib.request.urlopen(req, timeout=15) as resp:
-                        raw_data = resp.read().decode('utf-8').strip()
+                        raw = resp.read().decode('utf-8', errors='ignore').strip()
                     
-                    # ЧИНИМ PADDING И РАСШИФРОВЫВАЕМ BASE64
-                    try:
-                        padded = raw_data + "=" * ((4 - len(raw_data) % 4) % 4)
-                        decoded = base64.b64decode(padded).decode('utf-8')
-                    except Exception:
-                        decoded = raw_data # Если не base64
-                    
-                    # ОЧИЩАЕМ УЗЛЫ
-                    clean_links =[]
-                    for i, line in enumerate(decoded.splitlines()):
-                        line = line.strip()
-                        if '://' in line:
-                            parts = line.split('#', 1)
-                            clean_links.append(f"{parts[0]}#Node_{i}")
-                    
-                    # ЗАШИФРОВЫВАЕМ ОБРАТНО
-                    final_b64 = base64.b64encode('\n'.join(clean_links).encode('utf-8'))
-                    
-                    self.send_response(200)
-                    self.send_header('Content-type', 'text/plain')
+                    if raw.startswith('[') or raw.startswith('{'):
+                        print("Detected JSON Array/Object. Converting...", flush=True)
+                        yaml_out = process_something_json(raw)
+                        if yaml_out:
+                            print("Conversion successful! Sending YAML to Mihomo.", flush=True)
+                            self.send_response(200)
+                            self.send_header('Content-type', 'application/yaml')
+                            self.end_headers()
+                            self.wfile.write(yaml_out.encode('utf-8'))
+                            return
+                    else:
+                        print("Detected Base64 format. Converting...", flush=True)
+                        pad = "=" * ((4 - len(raw) % 4) % 4)
+                        try:
+                            decoded = base64.b64decode(raw + pad).decode('utf-8', errors='ignore')
+                        except:
+                            decoded = base64.urlsafe_b64decode(raw + pad).decode('utf-8', errors='ignore')
+                            
+                        clean_links = []
+                        for i, line in enumerate(decoded.splitlines()):
+                            line = line.strip()
+                            if '://' in line:
+                                parts = line.split('#', 1)
+                                clean_links.append(f"{parts[0]}#Node_{i}")
+                        if clean_links:
+                            out_data = base64.b64encode('\n'.join(clean_links).encode('utf-8'))
+                            print("Conversion successful! Sending Base64.", flush=True)
+                            self.send_response(200)
+                            self.send_header('Content-type', 'text/plain')
+                            self.end_headers()
+                            self.wfile.write(out_data)
+                            return
+
+                    print("Failed to process. Sending 500.", flush=True)
+                    self.send_response(500)
                     self.end_headers()
-                    self.wfile.write(final_b64)
                 except Exception as e:
-                    print(f"Error fetching sub: {e}")
+                    print(f"Server Error: {e}", flush=True)
                     self.send_response(500)
                     self.end_headers()
         
+        print("Starting Python Converter on 8080...", flush=True)
         HTTPServer(('127.0.0.1', 8080), SubHandler).serve_forever()
         EOF
 
@@ -211,11 +324,11 @@ services:
         mode: rule
         log-level: warning
         proxy-providers:
-          provider:
+          something:
             type: http
             url: "http://127.0.0.1:8080/"
             interval: 3600
-            path: ./provider.yaml
+            path: ./something.yaml
             health-check:
               enable: true
               url: http://www.gstatic.com/generate_204
@@ -223,7 +336,7 @@ services:
         proxy-groups:
           - name: "AUTO-BEST-NODE"
             type: url-test
-            use: [provider]
+            use: [something]
             url: http://www.gstatic.com/generate_204
             interval: 60
             tolerance: 50
@@ -231,10 +344,13 @@ services:
           - MATCH, AUTO-BEST-NODE
         EOF
 
-        echo "4. Starting Python Cleaner in background..."
-        python3 /cleaner.py &
+        echo "4. Starting Python Converter in background..."
+        python3 -u /cleaner.py &
         
-        echo "5. Starting Proxy Core in foreground..."
+        echo "5. Waiting for Python Server..."
+        sleep 2
+        
+        echo "6. Starting Proxy Core in foreground..."
         exec /usr/local/bin/mihomo -d / -f /config.yaml
 
 volumes:
