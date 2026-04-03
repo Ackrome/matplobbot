@@ -144,7 +144,7 @@ services:
       - mpb-fastapi-stats
       - main-site-frontend
 
-  proxy:
+proxy:
     image: python:3.11-alpine
     restart: unless-stopped
     env_file: ./.env
@@ -153,7 +153,7 @@ services:
       - -c
       - |
         echo "1. Downloading proxy core..."
-        wget -qO mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.18.3/mihomo-linux-amd64-v1.18.3.gz
+        wget -qO mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.18.3/mihomo-linux-amd64-compatible-v1.18.3.gz
         gunzip mihomo.gz
         chmod +x mihomo
         mv mihomo /usr/local/bin/
@@ -179,21 +179,19 @@ services:
                         padded = raw_data + "=" * ((4 - len(raw_data) % 4) % 4)
                         decoded = base64.b64decode(padded).decode('utf-8')
                     except Exception:
-                        decoded = raw_data # Если подписка пришла не в base64
+                        decoded = raw_data # Если не base64
                     
-                    # ОЧИЩАЕМ УЗЛЫ ОТ ЭМОДЗИ И КРИВЫХ СИМВОЛОВ
+                    # ОЧИЩАЕМ УЗЛЫ
                     clean_links =[]
                     for i, line in enumerate(decoded.splitlines()):
                         line = line.strip()
                         if '://' in line:
                             parts = line.split('#', 1)
-                            # Отрезаем грязное имя и ставим безопасное
                             clean_links.append(f"{parts[0]}#Node_{i}")
                     
                     # ЗАШИФРОВЫВАЕМ ОБРАТНО
                     final_b64 = base64.b64encode('\n'.join(clean_links).encode('utf-8'))
                     
-                    # Отдаем чистый список прокси-ядру
                     self.send_response(200)
                     self.send_header('Content-type', 'text/plain')
                     self.end_headers()
@@ -213,22 +211,22 @@ services:
         mode: rule
         log-level: warning
         proxy-providers:
-          providor:
+          provider:
             type: http
-            url: "http://127.0.0.1:8080/"  # Стучимся в наш локальный Python-очиститель
-            interval: 3600                 # Обновляем подписку каждый час
-            path: ./providor.yaml
+            url: "http://127.0.0.1:8080/"
+            interval: 3600
+            path: ./provider.yaml
             health-check:
               enable: true
               url: http://www.gstatic.com/generate_204
-              interval: 60                 # Пингуем узлы каждые 60 секунд
+              interval: 60
         proxy-groups:
           - name: "AUTO-BEST-NODE"
-            type: url-test                 # Автоматический балансировщик по пингу
-            use: [providor]
+            type: url-test
+            use: [provider]
             url: http://www.gstatic.com/generate_204
-            interval: 60                   # Пересчитываем лучший узел каждую минуту
-            tolerance: 50                  # Допуск переключения (мс)
+            interval: 60
+            tolerance: 50
         rules:
           - MATCH, AUTO-BEST-NODE
         EOF
