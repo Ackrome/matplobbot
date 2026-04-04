@@ -129,15 +129,78 @@ jobs:
           # having the same version already published.
           pip install -e .
           pip install -r requirements.txt -r fastapi_stats_app/requirements.txt -r scheduler_app/requirements.txt
-          pip install ruff==0.8.6 mypy==1.13.0 pip-audit==2.7.3
+          pip install ruff==0.8.6 mypy==1.13.0 pip-audit==2.7.3 coverage==7.8.2
       - name: Lint checks
         run: |
           ruff check . --select E9,F63,F7,F82
-      - name: Unit and integration tests
+      - name: Unit and integration tests (with coverage gate)
+        id: coverage_current
         env:
           JWT_SECRET_KEY: ci-test-secret
         run: |
-          python -m unittest discover -s tests -v
+          coverage run --branch -m unittest discover -s tests -v
+          coverage report --skip-covered --fail-under=10
+          coverage xml -o coverage.xml
+          coverage json -o coverage.json
+          python - <<'PY'
+          import json
+          import os
+
+          with open("coverage.json", encoding="utf-8") as f:
+              percent = float(json.load(f)["totals"]["percent_covered"])
+
+          print(f"Current coverage: {percent:.2f}%")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"percent={percent:.2f}\n")
+          PY
+      - name: Coverage trend vs base branch (PR only)
+        if: github.event_name == 'pull_request'
+        env:
+          JWT_SECRET_KEY: ci-test-secret
+          BASE_REF: ${{ github.base_ref }}
+          CURRENT_COVERAGE: ${{ steps.coverage_current.outputs.percent }}
+        run: |
+          set -euo pipefail
+
+          BASE_DIR="$(mktemp -d)"
+          cleanup() {
+            git worktree remove "$BASE_DIR" --force >/dev/null 2>&1 || true
+            rm -rf "$BASE_DIR"
+          }
+          trap cleanup EXIT
+
+          git fetch --no-tags --depth=1 origin "$BASE_REF"
+          git worktree add "$BASE_DIR" "origin/$BASE_REF"
+
+          pushd "$BASE_DIR" >/dev/null
+          # Coverage trend reporting should not fail the whole validation gate.
+          if python -m pip install -e . >/dev/null 2>&1 && coverage run --branch -m unittest discover -s tests -v >/dev/null 2>&1; then
+            coverage json -o coverage-base.json >/dev/null 2>&1
+            BASE_COVERAGE="$(python -c "import json; print(f\"{float(json.load(open('coverage-base.json', encoding='utf-8'))['totals']['percent_covered']):.2f}\")")"
+            DELTA="$(python -c "current=float('${CURRENT_COVERAGE}'); base=float('${BASE_COVERAGE}'); print(f'{current-base:+.2f}')")"
+            {
+              echo "### Coverage Trend (PR vs ${BASE_REF})"
+              echo ""
+              echo "| Base | PR | Delta |"
+              echo "| --- | --- | --- |"
+              echo "| ${BASE_COVERAGE}% | ${CURRENT_COVERAGE}% | ${DELTA}% |"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### Coverage Trend (PR vs ${BASE_REF})"
+              echo ""
+              echo "Coverage delta unavailable: base branch coverage run failed."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          popd >/dev/null
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: |
+            coverage.xml
+            coverage.json
       - name: Type checks
         run: |
           mypy \

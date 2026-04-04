@@ -155,8 +155,18 @@
         <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <!-- Leaderboard (Добавлен класс theme-card) -->
             <div class="xl:col-span-2 theme-card rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col h-[600px]">
-                <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30">
+                <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30 flex items-center justify-between gap-4">
                     <h2 class="text-lg font-bold">🏆 Таблица лидеров</h2>
+                    <div class="flex items-center gap-3">
+                        <span id="leaderboard-status" class="text-xs text-gray-500 dark:text-gray-400">Подключение...</span>
+                        <button
+                            id="leaderboard-retry-btn"
+                            class="hidden px-2 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700 transition"
+                            type="button"
+                        >
+                            Повторить
+                        </button>
+                    </div>
                 </div>
                 <div class="overflow-x-auto flex-grow theme-card">
                     <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">

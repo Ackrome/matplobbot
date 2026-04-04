@@ -6,6 +6,7 @@ pipeline {
         string(name: 'WORKER_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag for the worker')
         string(name: 'API_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag for the API')
         string(name: 'SCHEDULER_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag for the scheduler')
+        string(name: 'DEPLOY_HOST_FINGERPRINT', defaultValue: '', description: 'Optional pinned SHA256 host key fingerprint for DEPLOY_HOST (format: SHA256:...)')
     }
 
     environment {
@@ -29,6 +30,7 @@ pipeline {
         stage('Deploy to Production') {
             steps {
                 script {
+                    env.FAIL_STAGE = 'Deploy to Production'
                     withCredentials([sshUserPrivateKey(credentialsId: 'app-vm-ssh-key', keyFileVariable: 'SSH_KEY_FILE', usernameVariable: 'SSH_USER')]) {
                         withEnv([
                             "BOT_TAG=${params.BOT_IMAGE_TAG}",
@@ -37,12 +39,37 @@ pipeline {
                             "WORKER_TAG=${params.WORKER_IMAGE_TAG}",
                         ]) {
                             sh '''
-                                set -eu
+                                #!/usr/bin/env bash
+                                set -euo pipefail
+
+                                LOG_FILE="$WORKSPACE/deploy_stage.log"
+                                : > "$LOG_FILE"
+                                {
 
                                 chmod 600 "$SSH_KEY_FILE"
 
                                 mkdir -p "$HOME/.ssh"
                                 touch "$HOME/.ssh/known_hosts"
+
+                                # Optional strict host key pinning by fingerprint.
+                                # If not configured yet, we keep TOFU mode with a visible warning.
+                                if [ -n "${DEPLOY_HOST_FINGERPRINT:-}" ]; then
+                                  SCANNED_FP="$(ssh-keyscan -t ed25519 "$DEPLOY_HOST" 2>/dev/null | ssh-keygen -lf - -E sha256 | awk 'NR==1 {print $2}')"
+                                  if [ -z "$SCANNED_FP" ]; then
+                                    echo "ERROR: failed to read host fingerprint for $DEPLOY_HOST"
+                                    exit 1
+                                  fi
+                                  if [ "$SCANNED_FP" != "$DEPLOY_HOST_FINGERPRINT" ]; then
+                                    echo "ERROR: host fingerprint mismatch for $DEPLOY_HOST"
+                                    echo "Expected: $DEPLOY_HOST_FINGERPRINT"
+                                    echo "Actual:   $SCANNED_FP"
+                                    exit 1
+                                  fi
+                                  echo "Host fingerprint verified for $DEPLOY_HOST"
+                                else
+                                  echo "WARNING: DEPLOY_HOST_FINGERPRINT is not set; using TOFU host-key trust"
+                                fi
+
                                 ssh-keyscan -H "$DEPLOY_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
                                 sort -u "$HOME/.ssh/known_hosts" -o "$HOME/.ssh/known_hosts"
 
@@ -75,8 +102,84 @@ EOF
                                 ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "docker image prune -af --filter 'until=168h' && docker container prune -f --filter 'until=24h'"
 
                                 ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && chmod +x deploy.sh || true && bash ./deploy.sh $BOT_TAG $API_TAG $SCHEDULER_TAG $WORKER_TAG"
+                                } 2>&1 | tee -a "$LOG_FILE"
                             '''
                         }
+                    }
+                }
+            }
+        }
+
+        stage('Post-Deploy Smoke Checks') {
+            steps {
+                script {
+                    env.FAIL_STAGE = 'Post-Deploy Smoke Checks'
+                    withCredentials([sshUserPrivateKey(credentialsId: 'app-vm-ssh-key', keyFileVariable: 'SSH_KEY_FILE', usernameVariable: 'SSH_USER')]) {
+                        sh '''
+                            #!/usr/bin/env bash
+                            set -euo pipefail
+
+                            LOG_FILE="$WORKSPACE/smoke_stage.log"
+                            : > "$LOG_FILE"
+                            {
+
+                            chmod 600 "$SSH_KEY_FILE"
+                            mkdir -p "$HOME/.ssh"
+                            touch "$HOME/.ssh/known_hosts"
+                            ssh-keyscan -H "$DEPLOY_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
+                            sort -u "$HOME/.ssh/known_hosts" -o "$HOME/.ssh/known_hosts"
+
+                            SSH_OPTS="-i $SSH_KEY_FILE -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+
+                            ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && bash -s" <<'REMOTE_EOF'
+set -eu
+
+. ./.env
+
+retry_http() {
+  url="$1"
+  attempts="${2:-30}"
+  sleep_seconds="${3:-2}"
+  i=1
+  while [ "$i" -le "$attempts" ]; do
+    if curl -fsS "$url" >/dev/null; then
+      echo "Smoke check OK: $url"
+      return 0
+    fi
+    echo "Waiting for $url ($i/$attempts)..."
+    sleep "$sleep_seconds"
+    i=$((i + 1))
+  done
+  echo "Smoke check FAILED: $url"
+  return 1
+}
+
+# Service health endpoints
+retry_http "http://127.0.0.1:9583/api/stats/health" 40 3
+retry_http "http://127.0.0.1:9584/health" 40 3
+
+# Admin-protected leaderboard endpoint
+if [ -z "${STATS_USER:-}" ] || [ -z "${STATS_PASS:-}" ]; then
+  echo "Smoke check FAILED: STATS_USER/STATS_PASS missing in .env"
+  exit 1
+fi
+
+LOGIN_RESP="$(curl -fsS -X POST "http://127.0.0.1:9583/api/auth/login" \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-urlencode "username=${STATS_USER}" \
+  --data-urlencode "password=${STATS_PASS}")"
+
+TOKEN="$(printf '%s' "$LOGIN_RESP" | sed -n 's/.*"access_token":"\\([^"]*\\)".*/\\1/p')"
+if [ -z "$TOKEN" ]; then
+  echo "Smoke check FAILED: could not parse access_token from login response"
+  exit 1
+fi
+
+curl -fsS -H "Authorization: Bearer ${TOKEN}" "http://127.0.0.1:9583/api/stats/leaderboard" >/dev/null
+echo "Smoke check OK: leaderboard endpoint"
+REMOTE_EOF
+                            } 2>&1 | tee -a "$LOG_FILE"
+                        '''
                     }
                 }
             }
@@ -84,6 +187,54 @@ EOF
     }
 
     post {
+        failure {
+            script {
+                def adminIds = (env.PROD_ADMIN_USER_IDS ?: '')
+                    .split(',')
+                    .collect { it.trim() }
+                    .findAll { it }
+
+                if (!env.PROD_BOT_TOKEN?.trim() || adminIds.isEmpty()) {
+                    echo 'Skip Telegram failure notification: PROD_BOT_TOKEN or PROD_ADMIN_USER_IDS not configured.'
+                    return
+                }
+
+                def failedStage = env.FAIL_STAGE ?: 'unknown'
+                def stageLogFile = (failedStage == 'Post-Deploy Smoke Checks') ? 'smoke_stage.log' : 'deploy_stage.log'
+                def stageLogContent = fileExists(stageLogFile) ? readFile(file: stageLogFile) : ''
+                def stageLogLines = stageLogContent ? stageLogContent.readLines() : []
+                def tailLines = stageLogLines.size() > 40 ? stageLogLines[-40..-1] : stageLogLines
+                def logTail = tailLines.join('\n')
+                def errorLine = tailLines.reverse().find {
+                    def low = it.toLowerCase()
+                    low.contains('error') || low.contains('failed') || low.contains('exit code')
+                } ?: 'No explicit error line found'
+                def clippedLogTail = logTail.length() > 2500 ? logTail[-2500..-1] : logTail
+
+                def message = """matplobbot deployment FAILED
+Job: ${env.JOB_NAME} #${env.BUILD_NUMBER}
+Stage: ${failedStage}
+Result: ${currentBuild.currentResult}
+URL: ${env.BUILD_URL}
+Error: ${errorLine}
+
+Log tail:
+${clippedLogTail}
+"""
+
+                writeFile file: 'deploy_failure_notify.txt', text: message
+                withEnv(["TG_CHAT_ID=${adminIds[0]}"]) {
+                    sh '''
+                        set +e
+                        curl -fsS -X POST "https://api.telegram.org/bot$PROD_BOT_TOKEN/sendMessage" \
+                          --data-urlencode "chat_id=$TG_CHAT_ID" \
+                          --data-urlencode "text@deploy_failure_notify.txt" \
+                          --data-urlencode "disable_web_page_preview=true" \
+                          >/dev/null || true
+                    '''
+                }
+            }
+        }
         always {
             echo 'Deployment finished.'
         }

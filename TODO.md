@@ -38,7 +38,7 @@ Last updated: 2026-04-04
 - [x] Remove `StrictHostKeyChecking=no` and manage known hosts securely
   - partial: host keys are currently learned via `ssh-keyscan` during deploy (TOFU). For stronger security, pin a trusted host key/fingerprint in Jenkins credentials.
 - [x] Replace aggressive `docker system prune --all --force` with safer cleanup policy
-  - partial: Jenkins deploy cleanup is now scoped (`image/container prune` with age filters). Build job still uses `docker system prune -f`.
+  - done: Jenkins deploy cleanup and CI build cleanup both use scoped `image/container prune` with age filters.
 
 ## P2 - Performance and Scalability
 
@@ -69,19 +69,23 @@ Last updated: 2026-04-04
 ## P1 - Deployment Safety and Monitoring
 
 - [ ] Pin a trusted SSH host key/fingerprint in Jenkins credentials (replace TOFU `ssh-keyscan` trust model)
-- [ ] Add post-deploy smoke checks (API health, scheduler health, dashboard stats/leaderboard endpoint) and fail deployment on unhealthy state
-- [ ] Add deployment failure notification (Telegram/email/webhook) with stage and error snippet
+  - partial: Jenkins now supports optional `DEPLOY_HOST_FINGERPRINT` pin verification and hard-fails on mismatch; still pending storing the fingerprint in Jenkins credentials/parameters by default.
+- [x] Add post-deploy smoke checks (API health, scheduler health, dashboard stats/leaderboard endpoint) and fail deployment on unhealthy state
+- [x] Add deployment failure notification (Telegram/email/webhook) with stage and error snippet
 
 ## P2 - Test Coverage Expansion
 
-- [ ] Add integration tests for admin stats/leaderboard data flow (API response contract + empty/error states)
-- [ ] Add auth flow tests (`register/login/logout`, JWT expiry, admin/non-admin access matrix)
-- [ ] Add tests for `version_bumper.py` (version parsing, replacement validation, failure modes)
-- [ ] Add a minimum coverage gate in CI and report trend in PRs
+- [x] Add integration tests for admin stats/leaderboard data flow (API response contract + empty/error states)
+  - partial: current tests are endpoint-level with mocked DB/session boundaries; a real DB-backed integration layer is still optional future work.
+- [x] Add auth flow tests (`register/login/logout`, JWT expiry, admin/non-admin access matrix)
+  - partial: expiry is covered at token-validation dependency level; full end-to-end token lifecycle/revocation is not implemented (JWT is stateless).
+- [x] Add tests for `version_bumper.py` (version parsing, replacement validation, failure modes)
+- [x] Add a minimum coverage gate in CI and report trend in PRs
+  - done: CI enforces `coverage --fail-under=10`, uploads coverage artifacts, and publishes PR base-vs-PR coverage delta in the workflow summary.
 
 ## P2 - Codebase Cleanup
 
-- [ ] Resolve in-code TODO at `bot/handlers/settings.py` (API fallback for settings flow)
+- [x] Resolve in-code TODO at `bot/handlers/settings.py` (API fallback for settings flow)
 
 ## P2 - Functional Improvements (User-Facing)
 
@@ -101,7 +105,9 @@ Last updated: 2026-04-04
 ## P2 - Site UI/UX Improvements
 
 - [ ] Add explicit loading/empty/error states for all dashboard widgets (especially leaderboard and charts)
+  - partial: leaderboard now has explicit loading/empty/error state text in dashboard header.
 - [ ] Add inline retry actions for failed data blocks (leaderboard, activity feed, user details fetch)
+  - partial: added a retry button for leaderboard websocket/data block when connection/data errors occur.
 - [ ] Improve mobile responsiveness for dashboard cards/tables (breakpoints, stacking, touch-friendly spacing)
 - [ ] Improve table UX: sticky headers, sortable columns, and consistent pagination controls
 - [ ] Add visible "last updated" and websocket connection status indicator on live stats pages

@@ -44,6 +44,8 @@ from shared_lib.database import (
 from shared_lib.i18n import translator
 from shared_lib.services.schedule_service import (
     generate_module_details_text,
+    get_schedule_with_cache_fallback,
+    get_semester_bounds,
     get_unique_modules_hybrid,
 )
 
@@ -1395,9 +1397,26 @@ class SettingsManager:
 
         full_schedule = await get_cached_schedule(sub["entity_type"], sub["entity_id"])
         if not full_schedule:
-            # TODO: Сделать fallback запрос к API здесь
+            try:
+                await callback.answer("Кэш пуст, пробую получить расписание из API...")
+                sem_start, sem_end = get_semester_bounds()
+                full_schedule, _ = await get_schedule_with_cache_fallback(
+                    self.schedule_manager.api_client,
+                    sub["entity_type"],
+                    str(sub["entity_id"]),
+                    sem_start,
+                    sem_end,
+                )
+            except Exception as e:
+                logger.warning(
+                    "Fallback schedule fetch failed for modules menu "
+                    f"{sub['entity_type']}:{sub['entity_id']}: {e}"
+                )
+                full_schedule = None
+
+        if not full_schedule:
             await callback.message.answer(
-                "Кэш пуст. Попробуйте обновить расписание через /schedule."
+                "Не удалось получить расписание. Попробуйте снова через /schedule."
             )
             return
 

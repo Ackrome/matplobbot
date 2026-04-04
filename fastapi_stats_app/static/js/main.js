@@ -8,11 +8,14 @@ const botLogContentElement = document.getElementById('bot-log-content');
 const botLogStatusElement = document.getElementById('bot-log-status');
 const lastUpdatedContainer = document.getElementById('last-updated-container');
 const lastUpdatedValueElement = document.getElementById('last-updated-value');
+const leaderboardStatusElement = document.getElementById('leaderboard-status');
+const leaderboardRetryButtonElement = document.getElementById('leaderboard-retry-btn');
 
 let popularActionsChartInstance;
 let actionTypesChartInstance;
 let activityOverTimeChartInstance;
 let newUsersChartInstance;
+let statsSocketManager;
 
 const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 const wsHost = window.location.host;
@@ -20,6 +23,26 @@ const statsWsUrl = `${wsProtocol}//${wsHost}/ws/stats/total_actions`;
 const logWsUrl = `${wsProtocol}//${wsHost}/ws/bot_log`;
 
 const chartDataStore = {};
+
+function setLeaderboardState(state, text) {
+    if (!leaderboardStatusElement || !leaderboardRetryButtonElement) return;
+
+    leaderboardStatusElement.textContent = text;
+    leaderboardStatusElement.classList.remove('text-red-500', 'text-yellow-600', 'text-green-600');
+
+    if (state === 'error') {
+        leaderboardStatusElement.classList.add('text-red-500');
+        leaderboardRetryButtonElement.classList.remove('hidden');
+    } else if (state === 'empty') {
+        leaderboardStatusElement.classList.add('text-yellow-600');
+        leaderboardRetryButtonElement.classList.add('hidden');
+    } else if (state === 'ok') {
+        leaderboardStatusElement.classList.add('text-green-600');
+        leaderboardRetryButtonElement.classList.add('hidden');
+    } else {
+        leaderboardRetryButtonElement.classList.add('hidden');
+    }
+}
 
 class WebSocketManager {
     constructor(url, { onOpen, onMessage, onClose, onError }) {
@@ -75,6 +98,7 @@ class WebSocketManager {
 
 function handleStatsSocketOpen() {
     totalActionsValueElement.textContent = "Обновление...";
+    setLeaderboardState('loading', 'Загрузка...');
     const statusDot = document.querySelector("#connection-status span");
     if(statusDot) {
         statusDot.classList.remove('bg-red-500');
@@ -98,8 +122,10 @@ function handleStatsSocketMessage(event) {
         if (data.leaderboard && Array.isArray(data.leaderboard)) {
             leaderboardBodyElement.innerHTML = '';
             if (data.leaderboard.length === 0) {
+                setLeaderboardState('empty', 'Нет данных');
                 leaderboardBodyElement.innerHTML = `<tr><td colspan="5" class="px-6 py-4 text-center">Нет данных.</td></tr>`;
             } else {
+                setLeaderboardState('ok', 'Данные обновляются');
                 data.leaderboard.forEach((user, index) => {
                     const tr = document.createElement('tr');
                     // Используем theme-card вместо жестких цветов
@@ -169,15 +195,21 @@ function handleStatsSocketMessage(event) {
 
     } catch (e) {
         console.error("Error parsing WS stats:", e);
+        setLeaderboardState('error', 'Ошибка данных');
     }
 }
 
 function handleStatsSocketClose() {
+    setLeaderboardState('error', 'Нет соединения');
     const statusDot = document.querySelector("#connection-status span");
     if(statusDot) {
         statusDot.classList.remove('bg-green-500');
         statusDot.classList.add('bg-red-500');
     }
+}
+
+function handleStatsSocketError() {
+    setLeaderboardState('error', 'Ошибка соединения');
 }
 
 function handleLogSocketMessage(event) {
@@ -428,12 +460,20 @@ function fetchUsersForModal(label, type, page = 1) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    const statsSocketManager = new WebSocketManager(statsWsUrl, {
+    statsSocketManager = new WebSocketManager(statsWsUrl, {
         onOpen: handleStatsSocketOpen,
         onMessage: handleStatsSocketMessage,
-        onClose: handleStatsSocketClose
+        onClose: handleStatsSocketClose,
+        onError: handleStatsSocketError
     });
     statsSocketManager.connect();
+
+    if (leaderboardRetryButtonElement) {
+        leaderboardRetryButtonElement.addEventListener('click', () => {
+            setLeaderboardState('loading', 'Повторное подключение...');
+            statsSocketManager.connect();
+        });
+    }
 
     const logSocketManager = new WebSocketManager(logWsUrl, {
         onOpen: () => botLogStatusElement.textContent = "Connected",

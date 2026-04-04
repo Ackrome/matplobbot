@@ -127,6 +127,13 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     return current_user
 
 
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout(_current_user: dict = Depends(get_current_user)):
+    # JWT auth is stateless: client-side token disposal is sufficient for logout.
+    # Endpoint exists for explicit UX flow and API contract symmetry.
+    return {"status": "success"}
+
+
 @router.put("/preferences", response_model=CurrentUserResponse)
 async def update_preferences(
     prefs: WebAccountPreferencesUpdate,
