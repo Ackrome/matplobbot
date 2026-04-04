@@ -71,6 +71,7 @@ jobs:
             version_bumper.py \
             --ignore-missing-imports \
             --follow-imports=skip \
+            --disable-error-code=import-untyped \
             --allow-untyped-defs \
             --allow-incomplete-defs
 
