@@ -76,10 +76,41 @@ jobs:
             --allow-incomplete-defs
       - name: Dependency security audit
         run: |
-          # matplobbot-shared is installed from the local repo (editable),
-          # so it may not exist on PyPI at this exact version yet.
-          # Keep strict mode for external deps, skip local editable packages.
-          pip-audit --strict --skip-editable
+          # Build a filtered requirements list for audit:
+          # - exclude editable installs (-e/--editable)
+          # - exclude local in-repo package (matplobbot-shared)
+          # Keep strict mode for all third-party dependencies.
+          python - <<'PY'
+          from pathlib import Path
+
+          req_files = [
+              Path("requirements.txt"),
+              Path("fastapi_stats_app/requirements.txt"),
+              Path("scheduler_app/requirements.txt"),
+          ]
+
+          seen = set()
+          filtered = []
+          for req_path in req_files:
+              for raw in req_path.read_text(encoding="utf-8").splitlines():
+                  line = raw.strip()
+                  if not line or line.startswith("#"):
+                      continue
+                  lower = line.lower()
+                  if lower.startswith(("-e ", "--editable ")):
+                      continue
+                  if lower.startswith("matplobbot-shared"):
+                      continue
+                  if line in seen:
+                      continue
+                  seen.add(line)
+                  filtered.append(line)
+
+          out = Path("audit-requirements.txt")
+          out.write_text("\n".join(filtered) + "\n", encoding="utf-8")
+          print(f"Prepared {len(filtered)} packages for security audit")
+          PY
+          pip-audit --strict -r audit-requirements.txt
 
   # 3. Auto-Versioning
   auto-version-patch:
