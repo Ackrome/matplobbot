@@ -247,6 +247,8 @@ It executes `pre-commit --all-files` and pushes auto-fixes back automatically.
 To avoid infinite loops, the job skips commits authored by `github-actions[bot]`.
 The autofix run is non-blocking: it commits all available automatic fixes even if
 some lint issues still require manual refactoring.
+Workflow files under `.github/workflows/` are intentionally excluded from auto-fix
+commits due GitHub token permission limits for workflow updates.
 
 Local hooks are still optional and useful for faster feedback:
 
