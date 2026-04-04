@@ -4,10 +4,13 @@ WORKDIR /
 
 COPY shared_lib/ /shared_lib/
 COPY setup.py /
-# scheduler specific reqs might be small, or you can merge them into the base requirements.txt
+# Install local shared package first to avoid dependency on PyPI publish timing.
+RUN pip install --no-cache-dir /
+
+# FastAPI-specific requirements
 COPY fastapi_stats_app/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir /
+RUN grep -Ev '^[[:space:]]*matplobbot-shared==' requirements.txt > /tmp/requirements.api.txt && \
+    pip install --no-cache-dir -r /tmp/requirements.api.txt
 
 COPY fastapi_stats_app/ /fastapi_stats_app/
 
