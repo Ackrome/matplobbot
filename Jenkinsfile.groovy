@@ -39,8 +39,7 @@ pipeline {
                             "WORKER_TAG=${params.WORKER_IMAGE_TAG}",
                         ]) {
                             sh '''
-                                #!/usr/bin/env bash
-                                set -euo pipefail
+                                bash -euo pipefail <<'BASH'
 
                                 LOG_FILE="$WORKSPACE/deploy_stage.log"
                                 : > "$LOG_FILE"
@@ -103,6 +102,7 @@ EOF
 
                                 ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && chmod +x deploy.sh || true && bash ./deploy.sh $BOT_TAG $API_TAG $SCHEDULER_TAG $WORKER_TAG"
                                 } 2>&1 | tee -a "$LOG_FILE"
+BASH
                             '''
                         }
                     }
@@ -116,8 +116,7 @@ EOF
                     env.FAIL_STAGE = 'Post-Deploy Smoke Checks'
                     withCredentials([sshUserPrivateKey(credentialsId: 'app-vm-ssh-key', keyFileVariable: 'SSH_KEY_FILE', usernameVariable: 'SSH_USER')]) {
                         sh '''
-                            #!/usr/bin/env bash
-                            set -euo pipefail
+                            bash -euo pipefail <<'BASH'
 
                             LOG_FILE="$WORKSPACE/smoke_stage.log"
                             : > "$LOG_FILE"
@@ -179,6 +178,7 @@ curl -fsS -H "Authorization: Bearer ${TOKEN}" "http://127.0.0.1:9583/api/stats/l
 echo "Smoke check OK: leaderboard endpoint"
 REMOTE_EOF
                             } 2>&1 | tee -a "$LOG_FILE"
+BASH
                         '''
                     }
                 }
