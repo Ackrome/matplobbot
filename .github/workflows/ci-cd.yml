@@ -24,7 +24,7 @@ jobs:
     outputs:
       base: ${{ steps.filter.outputs.base }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - uses: dorny/paths-filter@v2
         id: filter
         with:
@@ -40,10 +40,88 @@ jobs:
     name: Validate (Lint, Tests, Types)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+      - name: Verify shared package version consistency
+        run: |
+          python - <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          setup_text = Path("setup.py").read_text(encoding="utf-8")
+          setup_match = re.search(r'version="(\d+\.\d+\.\d+)"', setup_text)
+          if not setup_match:
+              print("Could not read version from setup.py", file=sys.stderr)
+              sys.exit(1)
+          setup_version = setup_match.group(1)
+
+          files = [
+              Path("requirements.in"),
+              Path("requirements.txt"),
+              Path("fastapi_stats_app/requirements.txt"),
+              Path("scheduler_app/requirements.txt"),
+          ]
+          pattern = re.compile(r"^matplobbot-shared==(\d+\.\d+\.\d+)$", re.MULTILINE)
+
+          errors = []
+          for req_file in files:
+              content = req_file.read_text(encoding="utf-8")
+              matches = pattern.findall(content)
+              if not matches:
+                  errors.append(f"{req_file}: missing matplobbot-shared pin")
+                  continue
+              unique = sorted(set(matches))
+              if len(unique) != 1:
+                  errors.append(f"{req_file}: conflicting pins {unique}")
+                  continue
+              if unique[0] != setup_version:
+                  errors.append(
+                      f"{req_file}: pin {unique[0]} does not match setup.py version {setup_version}"
+                  )
+
+          if errors:
+              print("Shared package version consistency check failed:", file=sys.stderr)
+              for err in errors:
+                  print(f" - {err}", file=sys.stderr)
+              sys.exit(1)
+
+          print(f"Shared version is consistent across files: {setup_version}")
+          PY
+      - name: Verify Dockerfiles do not install shared package from PyPI
+        run: |
+          python - <<'PY'
+          import sys
+          from pathlib import Path
+
+          grep_guard = "grep -Ev '^[[:space:]]*matplobbot-shared=='"
+          required_snippets = {
+              "Dockerfile.base-python": [grep_guard],
+              "Dockerfile.base-worker": [grep_guard],
+              "fastapi_stats_app/Dockerfile": [grep_guard, "pip install --no-cache-dir /"],
+              "scheduler_app/Dockerfile": [grep_guard, "pip install --no-cache-dir /"],
+          }
+
+          errors = []
+          for file_path, snippets in required_snippets.items():
+              content = Path(file_path).read_text(encoding="utf-8")
+              for snippet in snippets:
+                  if snippet not in content:
+                      errors.append(f"{file_path}: missing snippet `{snippet}`")
+
+          if errors:
+              print(
+                  "Dockerfile shared-package guard check failed. Expected local/source install guards:",
+                  file=sys.stderr,
+              )
+              for err in errors:
+                  print(f" - {err}", file=sys.stderr)
+              sys.exit(1)
+
+          print("Dockerfile guard check passed")
+          PY
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -127,14 +205,14 @@ jobs:
       contents: write
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         id: checkout
         with:
           ref: main
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: Configure Git User
@@ -156,8 +234,8 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - run: python -m pip install --upgrade pip build twine
@@ -166,7 +244,7 @@ jobs:
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload dist/*
+        run: twine upload --skip-existing dist/*
 
   # 5. Build Base Images (Conditional)
   build-base-images:
@@ -181,13 +259,13 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -195,7 +273,7 @@ jobs:
 
       # Build Python Base
       - name: Build and Push Base Python
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile.base-python
@@ -206,7 +284,7 @@ jobs:
 
       # Build Worker Base (Heavy)
       - name: Build and Push Base Worker
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile.base-worker
@@ -230,16 +308,18 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
 
       - name: Maintenance Cleanup
-        run: docker system prune -f
+        run: |
+          docker image prune -af --filter "until=168h"
+          docker container prune -f --filter "until=24h"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -247,7 +327,7 @@ jobs:
 
       # WORKER (Uses Base Worker)
       - name: Build Worker
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile.worker
@@ -258,7 +338,7 @@ jobs:
 
       # BOT (Uses Base Python)
       - name: Build Bot
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile.bot
@@ -269,7 +349,7 @@ jobs:
 
       # API (Uses Base Python)
       - name: Build API
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./fastapi_stats_app/Dockerfile
@@ -280,7 +360,7 @@ jobs:
 
       # SCHEDULER (Uses Base Python)
       - name: Build Scheduler
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./scheduler_app/Dockerfile
@@ -291,7 +371,9 @@ jobs:
 
       - name: Soft Cleanup
         if: always()
-        run: docker system prune -f
+        run: |
+          docker image prune -af --filter "until=168h"
+          docker container prune -f --filter "until=24h"
 
   # 7. Deploy
   trigger-deployment:
