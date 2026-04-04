@@ -10,6 +10,12 @@ const lastUpdatedContainer = document.getElementById('last-updated-container');
 const lastUpdatedValueElement = document.getElementById('last-updated-value');
 const leaderboardStatusElement = document.getElementById('leaderboard-status');
 const leaderboardRetryButtonElement = document.getElementById('leaderboard-retry-btn');
+const connectionStatusElement = document.getElementById('connection-status');
+const connectionDotElement = document.getElementById('connection-dot');
+const connectionTextElement = document.getElementById('connection-text');
+const connectionLastSyncElement = document.getElementById('connection-last-sync');
+const statsRetryButtonElement = document.getElementById('stats-retry-btn');
+const toastContainerElement = document.getElementById('toast-container');
 
 let popularActionsChartInstance;
 let actionTypesChartInstance;
@@ -23,21 +29,95 @@ const statsWsUrl = `${wsProtocol}//${wsHost}/ws/stats/total_actions`;
 const logWsUrl = `${wsProtocol}//${wsHost}/ws/bot_log`;
 
 const chartDataStore = {};
+let lastSyncDate = null;
+
+function renderLeaderboardSkeleton(rows = 6) {
+    if (!leaderboardBodyElement) return;
+
+    leaderboardBodyElement.innerHTML = Array.from({ length: rows }, () => `
+        <tr class="border-b border-gray-200 dark:border-gray-700 animate-pulse">
+            <td class="px-6 py-4"><div class="h-3 w-6 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
+            <td class="px-6 py-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700"></div>
+                    <div class="h-3 w-28 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                </div>
+            </td>
+            <td class="px-6 py-4"><div class="h-3 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
+            <td class="px-6 py-4"><div class="h-3 w-10 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
+            <td class="px-6 py-4"><div class="h-3 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
+        </tr>
+    `).join('');
+}
+
+function setConnectionState(state, text) {
+    if (!connectionStatusElement || !connectionDotElement || !connectionTextElement) return;
+
+    connectionTextElement.textContent = text;
+    connectionDotElement.classList.remove('bg-red-500', 'bg-yellow-500', 'bg-green-500');
+
+    if (state === 'online') {
+        connectionDotElement.classList.add('bg-green-500');
+        if (statsRetryButtonElement) statsRetryButtonElement.classList.add('hidden');
+    } else if (state === 'connecting') {
+        connectionDotElement.classList.add('bg-yellow-500');
+    } else {
+        connectionDotElement.classList.add('bg-red-500');
+        if (statsRetryButtonElement) statsRetryButtonElement.classList.remove('hidden');
+    }
+}
+
+function updateLastSync(timestamp) {
+    if (!timestamp || !connectionLastSyncElement) return;
+    lastSyncDate = new Date(timestamp);
+    connectionLastSyncElement.textContent = `Р В РЎвЂєР В Р’В±Р В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В Р’В»Р В Р’ВµР В Р вЂ¦Р В РЎвЂў ${lastSyncDate.toLocaleTimeString()}`;
+}
+
+function setWidgetStatus(element, state, message) {
+    if (!element) return;
+    element.textContent = message;
+    element.classList.remove('text-red-500', 'text-yellow-600', 'text-green-600', 'text-gray-500');
+    if (state === 'error') {
+        element.classList.add('text-red-500');
+    } else if (state === 'empty') {
+        element.classList.add('text-yellow-600');
+    } else if (state === 'ok') {
+        element.classList.add('text-green-600');
+    } else {
+        element.classList.add('text-gray-500');
+    }
+}
+
+function showToast(type, message) {
+    if (!toastContainerElement || !message) return;
+
+    const colorClassByType = {
+        error: 'bg-red-600',
+        warning: 'bg-yellow-600',
+        success: 'bg-green-600',
+        info: 'bg-blue-600',
+    };
+
+    const toast = document.createElement('div');
+    toast.className = `pointer-events-auto text-white text-sm px-3 py-2 rounded shadow-lg ${colorClassByType[type] || colorClassByType.info}`;
+    toast.textContent = message;
+    toastContainerElement.appendChild(toast);
+
+    setTimeout(() => {
+        toast.remove();
+    }, 4500);
+}
 
 function setLeaderboardState(state, text) {
     if (!leaderboardStatusElement || !leaderboardRetryButtonElement) return;
 
-    leaderboardStatusElement.textContent = text;
-    leaderboardStatusElement.classList.remove('text-red-500', 'text-yellow-600', 'text-green-600');
+    setWidgetStatus(leaderboardStatusElement, state, text);
 
     if (state === 'error') {
-        leaderboardStatusElement.classList.add('text-red-500');
         leaderboardRetryButtonElement.classList.remove('hidden');
     } else if (state === 'empty') {
-        leaderboardStatusElement.classList.add('text-yellow-600');
         leaderboardRetryButtonElement.classList.add('hidden');
     } else if (state === 'ok') {
-        leaderboardStatusElement.classList.add('text-green-600');
         leaderboardRetryButtonElement.classList.add('hidden');
     } else {
         leaderboardRetryButtonElement.classList.add('hidden');
@@ -97,18 +177,28 @@ class WebSocketManager {
 }
 
 function handleStatsSocketOpen() {
-    totalActionsValueElement.textContent = "Обновление...";
-    setLeaderboardState('loading', 'Загрузка...');
-    const statusDot = document.querySelector("#connection-status span");
-    if(statusDot) {
-        statusDot.classList.remove('bg-red-500');
-        statusDot.classList.add('bg-green-500');
-    }
+    totalActionsValueElement.textContent = "Р С›Р В±Р Р…Р С•Р Р†Р В»Р ВµР Р…Р С‘Р Вµ...";
+    setConnectionState('online', 'Р С›Р Р…Р В»Р В°Р в„–Р Р…');
+    setLeaderboardState('loading', 'Р вЂ”Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В°...');
+    setWidgetStatus(popularActionsStatusElement, 'loading', 'Р С›Р В¶Р С‘Р Т‘Р В°Р Р…Р С‘Р Вµ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦...');
+    setWidgetStatus(activityOverTimeStatusElement, 'loading', 'Р С›Р В¶Р С‘Р Т‘Р В°Р Р…Р С‘Р Вµ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦...');
+    setWidgetStatus(newUsersStatusElement, 'loading', 'Р С›Р В¶Р С‘Р Т‘Р В°Р Р…Р С‘Р Вµ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦...');
+    setWidgetStatus(actionTypesStatusElement, 'loading', 'Р С›Р В¶Р С‘Р Т‘Р В°Р Р…Р С‘Р Вµ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦...');
+    renderLeaderboardSkeleton();
 }
-
 function handleStatsSocketMessage(event) {
     try {
         const data = JSON.parse(event.data);
+
+        if (data.error) {
+            setLeaderboardState('error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦');
+            setWidgetStatus(popularActionsStatusElement, 'error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦');
+            setWidgetStatus(activityOverTimeStatusElement, 'error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦');
+            setWidgetStatus(newUsersStatusElement, 'error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦');
+            setWidgetStatus(actionTypesStatusElement, 'error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦');
+            showToast('error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° Р В·Р В°Р С–РЎР‚РЎС“Р В·Р С”Р С‘ РЎРѓРЎвЂљР В°РЎвЂљР С‘РЎРѓРЎвЂљР С‘Р С”Р С‘');
+            return;
+        }
 
         if (data.total_actions !== undefined) {
             totalActionsValueElement.textContent = data.total_actions.toLocaleString();
@@ -116,19 +206,19 @@ function handleStatsSocketMessage(event) {
                 const date = new Date(data.last_updated);
                 lastUpdatedValueElement.textContent = date.toLocaleTimeString();
                 lastUpdatedContainer.classList.remove('hidden');
+                updateLastSync(data.last_updated);
             }
         }
 
         if (data.leaderboard && Array.isArray(data.leaderboard)) {
             leaderboardBodyElement.innerHTML = '';
             if (data.leaderboard.length === 0) {
-                setLeaderboardState('empty', 'Нет данных');
-                leaderboardBodyElement.innerHTML = `<tr><td colspan="5" class="px-6 py-4 text-center">Нет данных.</td></tr>`;
+                setLeaderboardState('empty', 'Р СњР ВµРЎвЂљ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦');
+                leaderboardBodyElement.innerHTML = `<tr><td colspan="5" class="px-6 py-4 text-center">Р СњР ВµРЎвЂљ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦.</td></tr>`;
             } else {
-                setLeaderboardState('ok', 'Данные обновляются');
+                setLeaderboardState('ok', 'Р вЂќР В°Р Р…Р Р…РЎвЂ№Р Вµ Р С•Р В±Р Р…Р С•Р Р†Р В»РЎРЏРЎР‹РЎвЂљРЎРѓРЎРЏ');
                 data.leaderboard.forEach((user, index) => {
                     const tr = document.createElement('tr');
-                    // Используем theme-card вместо жестких цветов
                     tr.className = "theme-card border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors";
                     const tdRank = document.createElement('td');
                     tdRank.className = "px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white";
@@ -152,7 +242,7 @@ function handleStatsSocketMessage(event) {
 
                     const tdTag = document.createElement('td');
                     tdTag.className = "px-6 py-4";
-                    if (user.username && user.username !== 'Нет username') {
+                    if (user.username && user.username !== 'Р СњР ВµРЎвЂљ username') {
                         tdTag.innerHTML = `<span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-gray-700 dark:text-gray-300">@${user.username}</span>`;
                     } else {
                         tdTag.innerHTML = `<span class="text-gray-400 text-xs">-</span>`;
@@ -195,23 +285,22 @@ function handleStatsSocketMessage(event) {
 
     } catch (e) {
         console.error("Error parsing WS stats:", e);
-        setLeaderboardState('error', 'Ошибка данных');
+        setLeaderboardState('error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦');
+        setConnectionState('offline', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦');
+        showToast('error', 'Р СњР Вµ РЎС“Р Т‘Р В°Р В»Р С•РЎРѓРЎРЉ Р С•Р В±РЎР‚Р В°Р В±Р С•РЎвЂљР В°РЎвЂљРЎРЉ Р Т‘Р В°Р Р…Р Р…РЎвЂ№Р Вµ РЎРѓРЎвЂљР В°РЎвЂљР С‘РЎРѓРЎвЂљР С‘Р С”Р С‘');
     }
 }
-
 function handleStatsSocketClose() {
-    setLeaderboardState('error', 'Нет соединения');
-    const statusDot = document.querySelector("#connection-status span");
-    if(statusDot) {
-        statusDot.classList.remove('bg-green-500');
-        statusDot.classList.add('bg-red-500');
-    }
+    setLeaderboardState('error', 'Р СњР ВµРЎвЂљ РЎРѓР С•Р ВµР Т‘Р С‘Р Р…Р ВµР Р…Р С‘РЎРЏ');
+    setConnectionState('offline', 'Р СњР ВµРЎвЂљ РЎРѓР С•Р ВµР Т‘Р С‘Р Р…Р ВµР Р…Р С‘РЎРЏ');
+    showToast('warning', 'WebSocket Р С•РЎвЂљР С”Р В»РЎР‹РЎвЂЎР ВµР Р…, Р С‘Р Т‘Р ВµРЎвЂљ Р С—Р ВµРЎР‚Р ВµР С—Р С•Р Т‘Р С”Р В»РЎР‹РЎвЂЎР ВµР Р…Р С‘Р Вµ');
 }
 
 function handleStatsSocketError() {
-    setLeaderboardState('error', 'Ошибка соединения');
+    setLeaderboardState('error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° РЎРѓР С•Р ВµР Т‘Р С‘Р Р…Р ВµР Р…Р С‘РЎРЏ');
+    setConnectionState('offline', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° РЎРѓР С•Р ВµР Т‘Р С‘Р Р…Р ВµР Р…Р С‘РЎРЏ');
+    showToast('error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° РЎРѓР С•Р ВµР Т‘Р С‘Р Р…Р ВµР Р…Р С‘РЎРЏ РЎРѓР С• РЎРѓРЎвЂљР В°РЎвЂљР С‘РЎРѓРЎвЂљР С‘Р С”Р С•Р в„–');
 }
-
 function handleLogSocketMessage(event) {
     const newLogEntry = document.createElement('div');
     newLogEntry.className = "log-entry"; // Basic CSS class from styles.css
@@ -256,6 +345,12 @@ function updateCombinedPopularActionsChart() {
     combinedData.sort((a, b) => b.count - a.count);
     const topData = combinedData.slice(0, 10);
 
+    if (topData.length === 0) {
+        setWidgetStatus(popularActionsStatusElement, 'empty', 'Р СњР ВµРЎвЂљ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦ Р С—Р С• Р Р†РЎвЂ№Р В±РЎР‚Р В°Р Р…Р Р…Р С•Р СРЎС“ РЎвЂћР С‘Р В»РЎРЉРЎвЂљРЎР‚РЎС“');
+    } else {
+        setWidgetStatus(popularActionsStatusElement, 'ok', `Р СџР С•Р С”Р В°Р В·Р В°Р Р…Р С•: ${topData.length}`);
+    }
+
     popularActionsChartInstance = updateChart({
         instance: popularActionsChartInstance,
         ctx: document.getElementById('popularActionsChart').getContext('2d'),
@@ -275,6 +370,12 @@ const updateActivityOverTimeChart = () => {
     const filter = document.querySelector('input[name="timeFilter"]:checked').value;
     const data = chartDataStore.activityOverTime ? chartDataStore.activityOverTime[filter] : [];
 
+    if (!data || data.length === 0) {
+        setWidgetStatus(activityOverTimeStatusElement, 'empty', 'Р СњР ВµРЎвЂљ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦ Р В·Р В° Р Р†РЎвЂ№Р В±РЎР‚Р В°Р Р…Р Р…РЎвЂ№Р в„– Р С—Р ВµРЎР‚Р С‘Р С•Р Т‘');
+    } else {
+        setWidgetStatus(activityOverTimeStatusElement, 'ok', `Р СџР ВµРЎР‚Р С‘Р С•Р Т‘: ${filter}`);
+    }
+
     activityOverTimeChartInstance = updateChart({
         instance: activityOverTimeChartInstance,
         ctx: document.getElementById('activityOverTimeChart').getContext('2d'),
@@ -287,6 +388,12 @@ const updateActivityOverTimeChart = () => {
 };
 
 const updateNewUsersChart = (data) => {
+    if (!data || data.length === 0) {
+        setWidgetStatus(newUsersStatusElement, 'empty', 'Р СњР ВµРЎвЂљ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦ Р С• Р Р…Р С•Р Р†РЎвЂ№РЎвЂ¦ Р С—Р С•Р В»РЎРЉР В·Р С•Р Р†Р В°РЎвЂљР ВµР В»РЎРЏРЎвЂ¦');
+    } else {
+        setWidgetStatus(newUsersStatusElement, 'ok', `Р вЂ”Р В°Р С—Р С‘РЎРѓР ВµР в„–: ${data.length}`);
+    }
+
     newUsersChartInstance = updateChart({
         instance: newUsersChartInstance,
         ctx: document.getElementById('newUsersChart').getContext('2d'),
@@ -299,6 +406,12 @@ const updateNewUsersChart = (data) => {
 };
 
 const updateActionTypesChart = (data) => {
+    if (!data || data.length === 0) {
+        setWidgetStatus(actionTypesStatusElement, 'empty', 'Р СњР ВµРЎвЂљ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦ Р С—Р С• РЎвЂљР С‘Р С—Р В°Р С Р Т‘Р ВµР в„–РЎРѓРЎвЂљР Р†Р С‘Р в„–');
+    } else {
+        setWidgetStatus(actionTypesStatusElement, 'ok', `Р С™Р В°РЎвЂљР ВµР С–Р С•РЎР‚Р С‘Р в„–: ${data.length}`);
+    }
+
     const colors = [
         'rgba(59, 130, 246, 0.8)',
         'rgba(16, 185, 129, 0.8)',
@@ -397,13 +510,18 @@ function handleChartClick(event, chart, data) {
 function fetchUsersForModal(label, type, page = 1) {
     const modalBody = document.getElementById('modal-body');
     const controls = document.getElementById('modal-pagination-controls');
-    modalBody.innerHTML = '<div class="p-4 text-center">Загрузка...</div>';
+    modalBody.innerHTML = '<div class="p-4 text-center">Р—Р°РіСЂСѓР·РєР°...</div>';
 
     fetch(`/api/stats/action_users?action_type=${type}&action_details=${encodeURIComponent(label)}&page=${page}`)
-        .then(res => res.json())
+        .then(res => {
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}`);
+            }
+            return res.json();
+        })
         .then(data => {
-            if(!data.users || data.users.length === 0) {
-                modalBody.innerHTML = '<div class="p-4 text-center text-gray-500">Пользователи не найдены.</div>';
+            if (!data.users || data.users.length === 0) {
+                modalBody.innerHTML = '<div class="p-4 text-center text-gray-500">РџРѕР»СЊР·РѕРІР°С‚РµР»Рё РЅРµ РЅР°Р№РґРµРЅС‹.</div>';
                 return;
             }
 
@@ -413,7 +531,7 @@ function fetchUsersForModal(label, type, page = 1) {
                 <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-300">
                     <tr>
                         <th class="px-6 py-3">ID</th>
-                        <th class="px-6 py-3">Имя</th>
+                        <th class="px-6 py-3">РРјСЏ</th>
                         <th class="px-6 py-3">Username</th>
                     </tr>
                 </thead>
@@ -434,7 +552,7 @@ function fetchUsersForModal(label, type, page = 1) {
             if (data.pagination.total_pages > 1) {
                 if (page > 1) {
                     const prevBtn = document.createElement('button');
-                    prevBtn.textContent = '« Назад';
+                    prevBtn.textContent = 'В« РќР°Р·Р°Рґ';
                     prevBtn.className = "px-3 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white";
                     prevBtn.onclick = () => fetchUsersForModal(label, type, page - 1);
                     controls.appendChild(prevBtn);
@@ -446,7 +564,7 @@ function fetchUsersForModal(label, type, page = 1) {
 
                 if (page < data.pagination.total_pages) {
                     const nextBtn = document.createElement('button');
-                    nextBtn.textContent = 'Вперед »';
+                    nextBtn.textContent = 'Р’РїРµСЂРµРґ В»';
                     nextBtn.className = "px-3 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white";
                     nextBtn.onclick = () => fetchUsersForModal(label, type, page + 1);
                     controls.appendChild(nextBtn);
@@ -455,11 +573,30 @@ function fetchUsersForModal(label, type, page = 1) {
         })
         .catch(err => {
             console.error(err);
-            modalBody.innerHTML = '<div class="p-4 text-center text-red-500">Ошибка загрузки.</div>';
+            showToast('error', 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃРїРёСЃРѕРє РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№');
+            modalBody.innerHTML = `
+                <div class="p-4 text-center text-red-500">РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё.</div>
+                <div class="pb-4 text-center">
+                    <button id="modal-retry-btn" class="px-3 py-1 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 transition">
+                        РџРѕРІС‚РѕСЂРёС‚СЊ
+                    </button>
+                </div>
+            `;
+            const retryButton = document.getElementById('modal-retry-btn');
+            if (retryButton) {
+                retryButton.addEventListener('click', () => fetchUsersForModal(label, type, page));
+            }
         });
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    setConnectionState('connecting', 'РџРѕРґРєР»СЋС‡РµРЅРёРµ...');
+    renderLeaderboardSkeleton();
+    setWidgetStatus(popularActionsStatusElement, 'loading', 'РћР¶РёРґР°РЅРёРµ РґР°РЅРЅС‹С…...');
+    setWidgetStatus(activityOverTimeStatusElement, 'loading', 'РћР¶РёРґР°РЅРёРµ РґР°РЅРЅС‹С…...');
+    setWidgetStatus(newUsersStatusElement, 'loading', 'РћР¶РёРґР°РЅРёРµ РґР°РЅРЅС‹С…...');
+    setWidgetStatus(actionTypesStatusElement, 'loading', 'РћР¶РёРґР°РЅРёРµ РґР°РЅРЅС‹С…...');
+
     statsSocketManager = new WebSocketManager(statsWsUrl, {
         onOpen: handleStatsSocketOpen,
         onMessage: handleStatsSocketMessage,
@@ -468,17 +605,31 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     statsSocketManager.connect();
 
+    const reconnectStats = () => {
+        setConnectionState('connecting', 'РџРµСЂРµРїРѕРґРєР»СЋС‡РµРЅРёРµ...');
+        setLeaderboardState('loading', 'РџРѕРІС‚РѕСЂРЅРѕРµ РїРѕРґРєР»СЋС‡РµРЅРёРµ...');
+        renderLeaderboardSkeleton();
+        statsSocketManager.connect();
+    };
+
     if (leaderboardRetryButtonElement) {
-        leaderboardRetryButtonElement.addEventListener('click', () => {
-            setLeaderboardState('loading', 'Повторное подключение...');
-            statsSocketManager.connect();
-        });
+        leaderboardRetryButtonElement.addEventListener('click', reconnectStats);
+    }
+    if (statsRetryButtonElement) {
+        statsRetryButtonElement.addEventListener('click', reconnectStats);
     }
 
     const logSocketManager = new WebSocketManager(logWsUrl, {
-        onOpen: () => botLogStatusElement.textContent = "Connected",
+        onOpen: () => {
+            botLogStatusElement.textContent = 'Connected';
+        },
         onMessage: handleLogSocketMessage,
-        onClose: () => botLogStatusElement.textContent = "Disconnected"
+        onClose: () => {
+            botLogStatusElement.textContent = 'Disconnected';
+        },
+        onError: () => {
+            botLogStatusElement.textContent = 'Connection error';
+        },
     });
     logSocketManager.connect();
 
