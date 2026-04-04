@@ -29,10 +29,13 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
         self.app.dependency_overrides.clear()
 
     def _mock_db(self, *, account=None):
-        db = AsyncMock()
+        db = Mock()
         execute_result = Mock()
         execute_result.scalar_one_or_none.return_value = account
-        db.execute.return_value = execute_result
+        db.execute = AsyncMock(return_value=execute_result)
+        db.commit = AsyncMock()
+        db.flush = AsyncMock()
+        db.add = Mock()
         return db
 
     def test_register_creates_non_admin_user(self):

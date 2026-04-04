@@ -237,11 +237,19 @@ async def send_message_to_user(user_id: int, message_data: SendMessageRequest):
 
 @router.get("/leaderboard")
 async def get_leaderboard(current_user: dict = Depends(require_admin)):
-    async with get_session() as db:
-        return await get_leaderboard_data_from_db(db)
+    try:
+        async with get_session() as db:
+            return await get_leaderboard_data_from_db(db)
+    except Exception as e:
+        logger.error(f"Database error fetching leaderboard: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Database Error")
 
 
 @router.get("/activity")
 async def get_activity(current_user: dict = Depends(require_admin)):
-    async with get_session() as db:
-        return await get_activity_over_time_data_from_db(db, period="day")
+    try:
+        async with get_session() as db:
+            return await get_activity_over_time_data_from_db(db, period="day")
+    except Exception as e:
+        logger.error(f"Database error fetching activity: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Database Error")
