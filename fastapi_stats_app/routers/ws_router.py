@@ -119,9 +119,7 @@ async def periodic_stats_updater():
 
                 if current_actions == last_checked_actions_count:
                     await asyncio.sleep(idle_sleep_seconds)
-                    idle_sleep_seconds = min(
-                        idle_sleep_seconds * 2, STATS_MAX_IDLE_POLL_SECONDS
-                    )
+                    idle_sleep_seconds = min(idle_sleep_seconds * 2, STATS_MAX_IDLE_POLL_SECONDS)
                     continue
 
                 idle_sleep_seconds = STATS_MIN_POLL_SECONDS
