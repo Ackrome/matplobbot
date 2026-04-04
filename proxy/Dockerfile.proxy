@@ -1,7 +1,7 @@
 FROM python:3.11-alpine
 
-# Устанавливаем системные зависимости
-RUN apk add --no-cache wget gunzip curl
+# Устанавливаем системные зависимости (gzip вместо gunzip)
+RUN apk add --no-cache wget gzip curl ca-certificates
 
 # Скачиваем ядро один раз при сборке образа
 RUN wget -qO mihomo.gz https://github.com/MetaCubeX/mihomo/releases/download/v1.18.3/mihomo-linux-amd64-compatible-v1.18.3.gz && \
@@ -14,10 +14,9 @@ WORKDIR /app
 # Создаем папку для кэша подписок
 RUN mkdir -p /app/cache
 
-# Копируем файлы конфигурации (мы создадим их ниже)
+# Копируем файлы конфигурации из папки proxy (контекст сборки)
 COPY proxy_cleaner.py .
 COPY proxy_config.yaml .
 
 # Команда запуска обоих процессов
-# -u для моментального вывода логов питона
 CMD python3 -u proxy_cleaner.py & sleep 2 && mihomo -d . -f proxy_config.yaml
