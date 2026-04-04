@@ -355,7 +355,10 @@ def generate_ical_from_schedule(schedule_data: List[Dict[str, Any]], entity_name
             if 'group' in lesson: description_parts.append(f"Группа: {lesson['group']}")
             event.description = "\n".join(description_parts)
             
-            cal.events.add(event)
+            if isinstance(cal.events, list):
+                cal.events.append(event)
+            else:
+                cal.events.add(event)
         except (ValueError, KeyError) as e:
             logging.warning(f"Skipping lesson due to parsing error: {e}. Lesson data: {lesson}")
             continue
@@ -481,7 +484,10 @@ def generate_ical_from_aggregated_schedule(schedule_data: List[Dict[str, Any]]) 
                 # Экранируем переносы для библиотеки
                 event.description = "\n".join(desc_lines)
                 
-                cal.events.add(event)
+                if isinstance(cal.events, list):
+                    cal.events.append(event)
+                else:
+                    cal.events.add(event)
             except Exception as e:
                 logging.warning(f"iCal Gen Error: {e}")
                 continue
