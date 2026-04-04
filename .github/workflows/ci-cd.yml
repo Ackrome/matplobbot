@@ -260,7 +260,10 @@ jobs:
   trigger-deployment:
     name: Trigger Jenkins Deployment
     needs: [build-services]
-    if: github.event_name == 'push' && needs.build-services.result == 'success'
+    if: |
+      always() &&
+      github.event_name == 'push' &&
+      needs.build-services.result == 'success'
     runs-on: self-hosted
     steps:
       - name: Trigger Jenkins Job via cURL
