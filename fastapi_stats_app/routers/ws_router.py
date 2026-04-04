@@ -1,5 +1,5 @@
 # fastapi_stats_app/routers/ws_router.py
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, status, WebSocketException
 from starlette.websockets import WebSocketState
 import logging
 import asyncio
@@ -222,6 +222,11 @@ async def websocket_bot_log_endpoint(websocket: WebSocket, user: dict  = Depends
         
 @router.websocket("/ws/users/{user_id}")
 async def websocket_user_updates(websocket: WebSocket, user_id: int, user: dict  = Depends(get_ws_user)):
+    is_admin = user.get("role") == "admin"
+    is_same_user = user.get("telegram_id") == user_id
+    if not (is_admin or is_same_user):
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
+
     await websocket.accept()
     
     pubsub = redis_client.client.pubsub()

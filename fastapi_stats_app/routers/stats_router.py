@@ -28,7 +28,7 @@ from shared_lib.schemas import (
     ExportActionsResponse,
     SendMessageRequest 
 )
-from ..auth import get_current_user 
+from ..auth import require_admin
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 logger = logging.getLogger(__name__)
@@ -59,7 +59,7 @@ async def health_check(db: AsyncSession = Depends(get_db_session_dependency)) ->
     summary="Профиль пользователя",
     description="Возвращает детальную информацию о пользователе и историю его действий с пагинацией.",
     response_model=UserProfileResponse,
-    dependencies=[Depends(get_current_user)]
+    dependencies=[Depends(require_admin)]
 )
 async def get_user_profile(
     user_id: int,
@@ -118,7 +118,7 @@ async def get_user_profile(
     summary="Пользователи по действию",
     description="Возвращает список пользователей, совершивших конкретное действие.",
     response_model=ActionUsersResponse,
-    dependencies=[Depends(get_current_user)]
+    dependencies=[Depends(require_admin)]
 )
 async def get_action_users(
     action_type: str = Query(..., description="Тип действия"),
@@ -172,7 +172,7 @@ async def get_action_users(
     summary="Экспорт действий",
     description="Выгружает полную историю действий пользователя.",
     response_model=ExportActionsResponse,
-    dependencies=[Depends(get_current_user)]
+    dependencies=[Depends(require_admin)]
 )
 async def export_user_actions(
     user_id: int,
@@ -190,7 +190,7 @@ async def export_user_actions(
     summary="Отправить сообщение пользователю",
     description="Отправляет сообщение в Telegram и сохраняет его в БД как исходящее от админа.",
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(get_current_user)]
+    dependencies=[Depends(require_admin)]
 )
 async def send_message_to_user(user_id: int, message_data: SendMessageRequest):
     if not BOT_TOKEN:
@@ -234,11 +234,11 @@ async def send_message_to_user(user_id: int, message_data: SendMessageRequest):
     return {"status": "success"}
 
 @router.get("/leaderboard")
-async def get_leaderboard(current_user: dict = Depends(get_current_user)):
+async def get_leaderboard(current_user: dict = Depends(require_admin)):
     async with get_session() as db:
         return await get_leaderboard_data_from_db(db)
 
 @router.get("/activity")
-async def get_activity(current_user: dict = Depends(get_current_user)):
+async def get_activity(current_user: dict = Depends(require_admin)):
     async with get_session() as db:
         return await get_activity_over_time_data_from_db(db, period='day')

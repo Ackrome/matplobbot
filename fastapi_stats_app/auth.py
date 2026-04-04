@@ -95,10 +95,20 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
         "id": account.id,
         "username": display_name,
         "role": account.role,
+        "telegram_id": account.telegram_id,
         "avatar_url": avatar_url,
         "preferences": account.preferences,
         "db_obj": account # Ссылка на ORM объект для обновления preferences
     }
+
+def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return current_user
+
 
 async def get_ws_user(websocket: WebSocket) -> dict:
     token = websocket.query_params.get("token")
@@ -116,7 +126,12 @@ async def get_ws_user(websocket: WebSocket) -> dict:
             if not account:
                 raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
                 
-            return {"id": account.id, "role": account.role, "db_obj": account}
+            return {
+                "id": account.id,
+                "role": account.role,
+                "telegram_id": account.telegram_id,
+                "db_obj": account,
+            }
             
     except JWTError:
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)

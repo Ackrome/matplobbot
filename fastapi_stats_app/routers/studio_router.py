@@ -23,6 +23,16 @@ router = APIRouter(prefix="/studio", tags=["studio"])
 logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
+
+async def get_owned_project_or_404(db: AsyncSession, project_id: int, owner_id: int) -> Project:
+    result = await db.execute(
+        select(Project).where(Project.id == project_id, Project.owner_id == owner_id)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
 class ProjectCreate(BaseModel):
     name: str
     project_type: str = "latex"
@@ -134,6 +144,7 @@ async def create_project(data: ProjectCreate, db: AsyncSession = Depends(get_db_
 @router.get("/projects/{project_id}")
 async def get_project_files(project_id: int, db: AsyncSession = Depends(get_db_session_dependency), current_user: dict = Depends(get_current_user)):
     # Проверка прав (в идеале нужно всегда проверять owner_id)
+    await get_owned_project_or_404(db, project_id, current_user['id'])
     result = await db.execute(select(ProjectFile).where(ProjectFile.project_id == project_id).order_by(ProjectFile.file_path))
     files = result.scalars().all()
     
@@ -147,12 +158,20 @@ async def get_project_files(project_id: int, db: AsyncSession = Depends(get_db_s
 
 @router.put("/projects/{project_id}/files/{file_id}")
 async def save_file(project_id: int, file_id: int, data: FileSave, db: AsyncSession = Depends(get_db_session_dependency), current_user: dict = Depends(get_current_user)):
-    await db.execute(update(ProjectFile).where(ProjectFile.id == file_id).values(content_text=data.content))
+    await get_owned_project_or_404(db, project_id, current_user['id'])
+    result = await db.execute(
+        update(ProjectFile)
+        .where(ProjectFile.id == file_id, ProjectFile.project_id == project_id)
+        .values(content_text=data.content)
+    )
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="File not found")
     await db.commit()
     return {"status": "success"}
 
 @router.post("/projects/{project_id}/upload")
 async def upload_asset(project_id: int, file: UploadFile = File(...), db: AsyncSession = Depends(get_db_session_dependency), current_user: dict = Depends(get_current_user)):
+    await get_owned_project_or_404(db, project_id, current_user['id'])
     content = await file.read()
     if len(content) > 5 * 1024 * 1024: # Лимит 5 МБ
         raise HTTPException(status_code=400, detail="File too large (max 5MB)")
@@ -174,10 +193,7 @@ async def upload_asset(project_id: int, file: UploadFile = File(...), db: AsyncS
 async def compile_project(project_id: int, db: AsyncSession = Depends(get_db_session_dependency), current_user: dict = Depends(get_current_user)):
     
     # Получаем проект, чтобы достать старый кэш
-    proj_result = await db.execute(select(Project).where(Project.id == project_id))
-    project = proj_result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_owned_project_or_404(db, project_id, current_user['id'])
         
     build_cache_b64 = base64.b64encode(project.build_cache).decode('utf-8') if project.build_cache else None
 
@@ -224,6 +240,7 @@ async def compile_project(project_id: int, db: AsyncSession = Depends(get_db_ses
 @router.delete("/projects/{project_id}/files/{file_id}")
 async def delete_file(project_id: int, file_id: int, db: AsyncSession = Depends(get_db_session_dependency), current_user: dict = Depends(get_current_user)):
     # Проверяем, не является ли файл главным (main.tex)
+    await get_owned_project_or_404(db, project_id, current_user['id'])
     result = await db.execute(select(ProjectFile).where(ProjectFile.id == file_id, ProjectFile.project_id == project_id))
     file_obj = result.scalar_one_or_none()
     
@@ -232,33 +249,37 @@ async def delete_file(project_id: int, file_id: int, db: AsyncSession = Depends(
     if file_obj.is_main:
         raise HTTPException(status_code=400, detail="Cannot delete the main project file")
 
-    await db.execute(delete(ProjectFile).where(ProjectFile.id == file_id))
+    await db.execute(
+        delete(ProjectFile).where(ProjectFile.id == file_id, ProjectFile.project_id == project_id)
+    )
     await db.commit()
     return {"status": "success"}
 
 @router.put("/projects/{project_id}/files/{file_id}/rename")
 async def rename_file(project_id: int, file_id: int, data: FileRename, db: AsyncSession = Depends(get_db_session_dependency), current_user: dict = Depends(get_current_user)):
+    await get_owned_project_or_404(db, project_id, current_user['id'])
     if not data.new_name.strip():
         raise HTTPException(status_code=400, detail="Filename cannot be empty")
         
     try:
-        await db.execute(
+        result = await db.execute(
             update(ProjectFile)
             .where(ProjectFile.id == file_id, ProjectFile.project_id == project_id)
             .values(file_path=data.new_name.strip())
         )
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="File not found")
         await db.commit()
         return {"status": "success"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail="Filename might already exist or invalid")
 
 @router.get("/projects/{project_id}/export/zip")
 async def export_project_zip(project_id: int, db: AsyncSession = Depends(get_db_session_dependency), current_user: dict = Depends(get_current_user)):
     # 1. Получаем проект и файлы
-    proj_result = await db.execute(select(Project).where(Project.id == project_id))
-    project = proj_result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_owned_project_or_404(db, project_id, current_user['id'])
 
     files_result = await db.execute(select(ProjectFile).where(ProjectFile.project_id == project_id))
     files = files_result.scalars().all()
@@ -287,6 +308,7 @@ async def get_project_asset(project_id: int, file_path: str, token: str = Query(
         user = await get_current_user(token, db)
     except HTTPException:
         raise HTTPException(status_code=401, detail="Invalid token")
+    await get_owned_project_or_404(db, project_id, user['id'])
 
     result = await db.execute(select(ProjectFile).where(ProjectFile.project_id == project_id, ProjectFile.file_path == file_path))
     file_obj = result.scalar_one_or_none()
@@ -310,10 +332,7 @@ async def send_project_to_telegram(project_id: int, db: AsyncSession = Depends(g
         raise HTTPException(status_code=500, detail="BOT_TOKEN не настроен на сервере.")
 
     # 2. Получаем проект и собираем его (компилируем)
-    proj_result = await db.execute(select(Project).where(Project.id == project_id, Project.owner_id == current_user['id']))
-    project = proj_result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await get_owned_project_or_404(db, project_id, current_user['id'])
         
     build_cache_b64 = base64.b64encode(project.build_cache).decode('utf-8') if project.build_cache else None
 

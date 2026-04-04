@@ -1,478 +1,252 @@
-<div align="center" style="border: none; padding: 0; margin: 0;">
-  <img src="image/logo/thelogo.png" alt="Matplobbot Logo" width="400" style="border: none; outline: none;">
-  <h1>Matplobbot & Stats Dashboard</h1>
-  <strong>A comprehensive solution: An Aiogram 3 Telegram bot for advanced code interaction and a FastAPI dashboard for real-time analytics.</strong>
-  <br>
-  </br>
+<div align="center">
+  <img src="image/logo/thelogo.png" alt="Matplobbot Logo" width="320">
+  <h1>Matplobbot</h1>
+  <strong>Telegram bot and web dashboard for browsing study materials, rendering technical content, and tracking usage in real time.</strong>
+
   <p align="center">
     <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
     <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
     <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI">
     <img src="https://img.shields.io/badge/Aiogram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Aiogram">
     <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL">
-    <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black" alt="JavaScript">
-    <img src="https://img.shields.io/badge/Pandoc-5A5A5A?style=for-the-badge&logo=pandoc&logoColor=white" alt="Pandoc">
-    <img src="https://img.shields.io/badge/LaTeX-008080?style=for-the-badge&logo=latex&logoColor=white" alt="LaTeX">
-    <img src ="https://img.shields.io/badge/Tailscale-000000?style=for-the-badge&logo=tailscale&logoColor=white" alt="Tailscale">
-    <img src="https://img.shields.io/badge/Jenkins-D24939?style=for-the-badge&logo=jenkins&logoColor=white" alt="Jenkins">
-    <img src="https://img.shields.io/badge/Ubuntu-E95420?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Ubuntu">
-    <img src="https://img.shields.io/badge/markdown-%23000000.svg?style=for-the-badge&logo=markdown&logoColor=white" alt="Markdown">
-    <img src="https://img.shields.io/badge/Pydantic-E92063?style=for-the-badge&logo=Pydantic&logoColor=white" alt="Pydantic">
-    <img src="https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=github-actions&logoColor=white" alt="GithubActions">
-    <img src="https://img.shields.io/badge/redis-%23DD0031.svg?&style=for-the-badge&logo=redis&logoColor=white" alt="Redis">
-    <img src="https://img.shields.io/badge/celery-%2337814A.svg?&style=for-the-badge&logo=celery&logoColor=white" alt="celery">
-    <img src="https://img.shields.io/badge/aiohttp-%232C5BB4.svg?&style=for-the-badge&logo=aiohttp&logoColor=white" alt="aiohttp">
-    <img src="https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white">
-    <img src="https://img.shields.io/badge/chart.js-F5788D.svg?style=for-the-badge&logo=chart.js&logoColor=white">
-    <img src="https://img.shields.io/badge/puppeteer-%2340B5A4.svg?style=for-the-badge&logo=puppeteer&logoColor=white">
   </p>
-  
+
   <p align="center">
-    <img src="https://img.shields.io/github/actions/workflow/status/Ackrome/matplobbot/ci-cd.yml?style=for-the-badge&label=Build&logo=github">
+    <img src="https://img.shields.io/github/actions/workflow/status/Ackrome/matplobbot/ci-cd.yml?style=for-the-badge&label=Build&logo=github" alt="Build status">
   </p>
-  <h2>Reach it on telegram</h2>
+
+  <h3>Try it on Telegram</h3>
   <p align="center">
-  <a href="https://t.me/matplobbot"><img src="https://img.shields.io/badge/STABLE_TELEGRAM_BOT-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="telegram"></a>
-  <a href="https://t.me/test_matplobbot"><img src="https://img.shields.io/badge/DEVELOPEMENT_Telegram_BOT-ff8800?style=for-the-badge&logo=telegram&logoColor=white" alt="telegram"></a>
+    <a href="https://t.me/matplobbot"><img src="https://img.shields.io/badge/STABLE_TELEGRAM_BOT-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Stable Telegram bot"></a>
+    <a href="https://t.me/test_matplobbot"><img src="https://img.shields.io/badge/DEVELOPMENT_TELEGRAM_BOT-ff8800?style=for-the-badge&logo=telegram&logoColor=white" alt="Development Telegram bot"></a>
   </p>
 </div>
 
+## Overview
 
+Matplobbot is a multi-service platform built around a Telegram bot for technical and educational workflows. It combines interactive content browsing, Markdown and document rendering, university schedule tools, background processing, and a live analytics dashboard in one Docker-based stack.
 
-## 🚀 Project Overview
+The project currently includes:
 
-This project is a powerful, dual-component system designed for advanced interaction with programming content and real-time monitoring, all containerized with Docker for seamless deployment.
+1. A Telegram bot built with `aiogram 3`.
+2. A scheduler service for notifications and background schedule checks.
+3. A FastAPI analytics dashboard with live stats and user drill-down pages.
+4. A Celery worker for heavy rendering tasks such as LaTeX, Mermaid, and document conversion.
+5. Supporting infrastructure via PostgreSQL, Redis, Docker Compose, and optional frontend/reverse-proxy services.
 
-1.  **Matplobbot (Telegram Bot)**: The primary user-facing service. A sophisticated asynchronous bot built on `aiogram 3` that serves as an intelligent gateway to programming libraries and educational materials. It handles all user commands, interactions, and on-demand rendering. All user interactions are logged to a shared PostgreSQL database.
-2.  **Scheduler Service**: A new, standalone asynchronous service responsible for all background and time-based tasks. Its primary role is to provide proactive daily schedule notifications to users, complete with intelligent change-detection to prevent spam.
-3.  **Stats Dashboard (FastAPI Web App)**: A real-time monitoring dashboard powered by `FastAPI`. It features a clean, responsive frontend built with vanilla JavaScript and `Chart.js`. The dashboard provides deep insights into bot usage statistics by querying the shared PostgreSQL database and streams live log events directly from the bot's log file via WebSockets.
-4.  **Worker Service**: A dedicated heavy-lifting service powered by **Celery**. It handles resource-intensive tasks such as compiling LaTeX formulas, rendering Mermaid diagrams via Puppeteer, and converting Markdown to PDF using Pandoc. This ensures the main bot process remains responsive even during complex document generation.
+## Key Features
 
-The entire ecosystem is orchestrated by Docker Compose, utilizing shared volumes for the database and logs, which ensures data consistency and perfect integration between the three services.
+### Telegram Bot
 
-## ✨ Key Features
+- Browse `matplobblib` modules and topics interactively with `/matp_all`.
+- Search `matplobblib` content with `/matp_search`.
+- Browse and search user-linked GitHub repositories with `/lec_all` and `/lec_search`.
+- Render LaTeX formulas to PNG with `/latex`.
+- Render Mermaid diagrams to PNG with `/mermaid`.
+- Convert Markdown into raw Markdown, HTML, or PDF output.
+- Save favorites, manage repositories, and configure personal settings from inline menus.
+- Use university schedule search, calendar navigation, daily and weekly views, and subscription-based notifications.
 
-### 🤖 Telegram Bot
+### Schedule Tools
 
-The bot provides a rich, interactive experience for developers, students, and researchers.
+- Search schedules by group, teacher, or auditorium.
+- Navigate dates through an inline calendar.
+- Receive next-day schedule notifications at a chosen time.
+- Get update alerts when lessons change, are added, or are cancelled.
 
-#### Content Interaction
--   **Library Browsing**: Interactively navigate the `matplobblib` library by modules and topics (`/matp_all`).
--   **GitHub Repository Browsing**: Explore user-configured GitHub repositories file by file (`/lec_all`).
--   **Full-Text Search**: Perform deep searches within the `matplobblib` source code (`/matp_search`) and across Markdown files in your linked GitHub repositories (`/lec_search`).
+### Web Dashboard
 
-#### 🔬 Dynamic On-Demand Rendering
--   **LaTeX Rendering**: Convert LaTeX equations into crisp, high-quality PNG images using the `/latex` command. Results are cached in the database for instant retrieval on subsequent requests.
--   **Mermaid.js Rendering**: Transform Mermaid diagram syntax into PNG images via the `/mermaid` command, utilizing a headless Chrome instance managed by Puppeteer.
+- View live usage stats over WebSockets.
+- See popular commands, text activity, action-type breakdowns, and activity trends.
+- Inspect user-specific pages with paginated history, filtering, and CSV export.
+- Stream the bot log into the dashboard for real-time monitoring.
 
-#### 📄 Advanced Markdown Processing
-The bot features a sophisticated pipeline for displaying `.md` files from GitHub. It uses **Pandoc** augmented with **custom Lua and Python filters** to correctly process and render complex documents containing embedded LaTeX and Mermaid code.
+## Screenshots
 
-| Display Mode | Description |
-| :--- | :--- |
-| ⚫ **MD File** | Sends the original, raw `.md` file without any processing. |
-| 📄 **HTML File** | Generates a fully self-contained `.html` file with a navigation panel, client-side rendering for LaTeX (via KaTeX) and Mermaid diagrams, and a modern, responsive design with theme support. |
-|   **PDF File** | On-the-fly compilation of the Markdown file into a professional-quality PDF document using a robust **Pandoc + TeX Live** pipeline. This process correctly handles complex LaTeX equations and Mermaid diagrams, embedding them directly into the final PDF. |
-
-#### 📅 University Schedule Integration
-The bot now integrates with the university's schedule API, offering a rich set of features for students and teachers.
--   **Multi-Entity Search**: Users can search for schedules by group, teacher, or auditorium.
--   **Interactive Calendar**: A full inline calendar keyboard allows users to easily select a specific date or navigate by month and year.
--   **Daily & Weekly Views**: Users can view the schedule for a single day or an entire week.
--   **Proactive Notifications**: Users can subscribe to a schedule (e.g., their group) and receive a push notification every day at a chosen time with the schedule for the next day.
--   **Intelligent Change Detection**: The scheduler backend constantly monitors for changes. If a lesson is added, cancelled, or modified, subscribed users receive an immediate notification with a human-readable "diff" of what changed.
-
-##### Schedule pipe view:
-
-<div align="center" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">
-
-  <!-- First Image -->
-  <img src="image/notes/schedule_en_1.png" alt="Step 1: Search Interface" width="420" style="border: 2px solid #24292e; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin: 8px 0;">
-
-  <!-- Custom Arrow (GitHub-safe) -->
-  <div style="color: #0366d6; font-size: 28px; margin: 4px 0;">
-    &#x25BC; <!-- Unicode: BLACK DOWN-POINTING TRIANGLE -->
-  </div>
-
-  <!-- Second Image -->
-  <img src="image/notes/schedule_en_2.png" alt="Step 2: Schedule Results" width="420" style="border: 2px solid #24292e; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin: 8px 0;">
-
-  <!-- Custom Arrow -->
-  <div style="color: #0366d6; font-size: 28px; margin: 4px 0;">
-    &#x25BC;
-  </div>
-
-  <!-- Third Image -->
-  <img src="image/notes/schedule_en_3.png" alt="Step 3: Calendar View" width="420" style="border: 2px solid #24292e; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin: 8px 0;">
-
-  <div style="color: #0366d6; font-size: 28px; margin: 4px 0;">
-    &#x25BC;
-  </div>
-
-  <!-- Third Image -->
-  <img src="image\notes\calendar_screenshot.png" alt="Step 3: Calendar View" width="420" style="border: 2px solid #24292e; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin: 8px 0;">
-
-</div>
-
-
-<!-- <div style="display: flex; flex-direction: column; align-items: center; gap: 25px; margin: 20px auto; max-width: 420px;">
-  <img src="image\notes\schedule_en_1.png" alt="Interactive Calendar" width="400" style="border: 2px solid #3498db; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-  
-  <div style="position: relative; width: 40px; height: 40px;">
-    <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 2px; height: 40px; background: #3498db;"></div>
-    <div style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%) translateY(50%) rotate(45deg); width: 12px; height: 12px; border-right: 2px solid #3498db; border-bottom: 2px solid #3498db;"></div>
-  </div>
-  
-  <img src="image\notes\schedule_en_2.png" alt="Interactive Calendar" width="400" style="border: 2px solid #3498db; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-  
-  <div style="position: relative; width: 40px; height: 40px;">
-    <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 2px; height: 40px; background: #3498db;"></div>
-    <div style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%) translateY(50%) rotate(45deg); width: 12px; height: 12px; border-right: 2px solid #3498db; border-bottom: 2px solid #3498db;"></div>
-  </div>
-  
-  <img src="image\notes\schedule_en_3.png" alt="Interactive Calendar" width="400" style="border: 2px solid #3498db; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-    <div style="position: relative; width: 40px; height: 40px;">
-    <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 2px; height: 40px; background: #3498db;"></div>
-    <div style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%) translateY(50%) rotate(45deg); width: 12px; height: 12px; border-right: 2px solid #3498db; border-bottom: 2px solid #3498db;"></div>
-  </div>
-  
-  <img src="image\notes\calendar_screenshot.png" alt="Interactive Calendar" width="400" style="border: 2px solid #3498db; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-</div> -->
-
-#### ⚙️ Personalization & User Management
--   **Favorites (`/favorites`)**: Bookmark useful code examples from your searches for quick access later.
--   **Settings (`/settings`)**: A comprehensive inline menu allows users to:
-    -   Toggle the display of code docstrings.
-    -   Select their preferred Markdown display mode.
-    -   Fine-tune LaTeX rendering quality (DPI and padding).
-    -   Manage their personal list of GitHub repositories.
--   **Smart Subject Renaming (`/offershorter`)**:
-    -   Users can suggest shorter, cleaner aliases for long university discipline names (e.g., changing "Mathematics and Linear Algebra..." to "Math").
-    -   Suggestions are sent to admins for approval via an inline interface.
-    -   Once approved, the short name is globally applied to schedule notifications for all users who opted in.
-
-#### 👑 Administration
--   **Live Library Updates (`/update`)**: (Admin-only) Fetches the latest version of the `matplobblib` library from PyPI and dynamically reloads the module without bot downtime.
--   **Cache Management (`/clear_cache`)**: (Admin-only) Instantly purges all application caches, including in-memory `TTLCache` for API calls and the persistent LaTeX cache in the database.
-
-### 📊 Web Dashboard
-
-The dashboard provides a live, data-rich view of the bot's health and user engagement.
+### Dashboard
 
 <div align="center">
-    <img src="image/notes/Dashboard.png" alt="Dashboard" width="800" style="border: 2px solid #24292e; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin: 8px 0;">
+  <img src="image/notes/Dashboard.png" alt="Dashboard overview" width="800">
 </div>
 
--   **Real-time Updates**: All statistical charts and counters update instantly via **WebSocket** connections, providing a true live monitoring experience.
--   **Rich Data Visualization**:
-    -   Total user actions counter.
-    -   Leaderboard of the most active users, complete with their Telegram avatars.
-    -   Bar charts for the most frequently used commands and text messages.
-    -   A pie chart visualizing the distribution of action types (e.g., command vs. callback query).
-    -   A line chart illustrating user activity over time.
--   **Live Log Streaming**: A live feed of the `bot.log` file is streamed directly to the web UI, enabling real-time operational monitoring.
--   **Modern UI**: A clean, responsive interface with automatic **light and dark theme** support.
--   **Detailed User Profile Pages**: The dashboard is no longer just an aggregate view. Clicking on a user in the leaderboard navigates to a dedicated profile page showing their complete, paginated, sortable, and filterable action history.
--   **CSV Export**: A user's entire action history can be exported to a CSV file directly from their profile page.
--   **API for Deeper Analytics**: New API endpoints have been added to allow for deeper analysis, such as finding all users who have performed a specific action.
--   **User Drill-Down & History**:
-    -   Click on any user in the leaderboard to view their full, paginated interaction history.
-    -   **Search & Filter**: Real-time filtering of user actions history.
-    -   **Data Export**: Download specific user history or chart data as CSV files for offline analysis.
-    -   **Admin Interaction**: Send direct messages to users via the dashboard interface (logged as admin actions).
+### User Details
 
 <div align="center">
-    <img src="image/notes/User.png" alt="User" width="700" style="border: 2px solid #24292e; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); margin: 8px 0;">
+  <img src="image/notes/User.png" alt="User details page" width="700">
 </div>
 
+### Schedule Flow
 
-## 🛠️ Architecture & Tech Stack
+<div align="center">
+  <img src="image/notes/schedule_en_1.png" alt="Schedule search" width="260">
+  <img src="image/notes/schedule_en_2.png" alt="Schedule results" width="260">
+  <img src="image/notes/schedule_en_3.png" alt="Schedule day view" width="260">
+</div>
 
+<div align="center">
+  <img src="image/notes/calendar_screenshot.png" alt="Inline calendar" width="320">
+</div>
 
+## Quickstart
 
-The project is built on modern, asynchronous frameworks with a strong emphasis on modularity and separation of concerns.
+### Prerequisites
 
-| Category | Technology & Key Libraries |
+- Docker
+- Docker Compose
+
+### Minimal `.env` example
+
+Create a `.env` file in the project root. This is a minimal example for local startup; your production setup may require additional variables.
+
+```env
+BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+ADMIN_USER_IDS=123456789,987654321
+GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+POSTGRES_USER=user
+POSTGRES_PASSWORD=password
+POSTGRES_DB=matplobbot_db
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+```
+
+### Run locally
+
+```bash
+git clone https://github.com/Ackrome/matplobbot.git
+cd matplobbot
+docker compose up --build -d
+```
+
+### Access services
+
+- Telegram bot: available through Telegram after `BOT_TOKEN` is configured.
+- Analytics dashboard: `http://localhost:9583`
+- Static site frontend: `http://localhost:8080`
+- Scheduler health endpoint: `http://localhost:9584/health` for operational checks
+
+### Stop the stack
+
+```bash
+docker compose down
+```
+
+To remove named volumes as well:
+
+```bash
+docker compose down -v
+```
+
+## Popular Commands
+
+| Command | Purpose |
 | :--- | :--- |
-| **Backend** | Python 3.11+ |
-| **Bot Framework** | **Aiogram 3** (utilizing `Router` for modular handlers) |
-| **Web Framework** | **FastAPI**, Uvicorn |
-| **Database** | **PostgreSQL** (accessed asynchronously via `asyncpg`) |
-| **Task Queue** | **Celery**, **Redis** (Broker & Backend) |
-| **Frontend** | HTML5, CSS3, Vanilla JavaScript, **Chart.js** |
-| **Containerization** | **Docker, Docker Compose** |
-| **Rendering Pipeline** | **Pandoc** with custom Lua & Python filters, **TeX Live**, dvipng, **Mermaid-CLI**, Puppeteer |
-| **Key Libraries** | `aiohttp`, `cachetools`, `python-dotenv` |
+| `/start` | Start the bot and initialize the main flow |
+| `/help` | Show the command/help menu |
+| `/schedule` | Search for a schedule by entity |
+| `/myschedule` | Show today's schedule for the saved entity |
+| `/matp_all` | Browse library content |
+| `/matp_search` | Search inside `matplobblib` |
+| `/lec_all` | Browse configured GitHub repositories |
+| `/lec_search` | Search Markdown files in a linked repository |
+| `/latex` | Render a LaTeX expression to PNG |
+| `/mermaid` | Render a Mermaid diagram to PNG |
+| `/favorites` | Open saved favorites |
+| `/settings` | Manage personal preferences and repositories |
 
-## 📂 Project Structure
+## Architecture
 
-The project follows a monorepo-style structure with distinct directories for each service and a shared library core.
+### Tech Stack
+
+| Category | Technology |
+| :--- | :--- |
+| Backend | Python 3.11+ |
+| Bot | Aiogram 3 |
+| API | FastAPI, Uvicorn |
+| Database | PostgreSQL, asyncpg |
+| Queue | Celery, Redis |
+| Frontend | HTML, CSS, JavaScript, Chart.js |
+| Rendering | Pandoc, TeX Live, Mermaid CLI, Puppeteer |
+| Deployment | Docker, Docker Compose, Caddy, Nginx |
+
+### Project Structure
 
 ```text
 .
-├── bot/                 # Main Telegram Bot logic (Handlers, Middlewares)
-├── fastapi_stats_app/   # Web Dashboard & API (Routers, Static files, Templates)
-├── scheduler_app/       # Periodic tasks (Schedule fetching, Notifications)
-├── shared_lib/          # CORE: Shared Database models, Redis client, i18n, Tasks
-├── alembic/             # Database migrations scripts
-├── worker/              # (Implicit via Dockerfile.worker) Heavy processing tasks
-├── docker-compose.yml   # Dev orchestration
-└── docker-compose.prod.yml # Production orchestration
+|-- bot/                  # Telegram bot logic, handlers, services, templates
+|-- fastapi_stats_app/    # Dashboard API, static assets, templates, routers
+|-- scheduler_app/        # Scheduled jobs and notification service
+|-- shared_lib/           # Shared database, schemas, services, tasks, i18n
+|-- main_site_frontend/   # Static frontend served by nginx
+|-- proxy/                # Proxy-related utilities/config
+|-- alembic/              # Database migrations
+|-- docker-compose.yml    # Local orchestration
+`-- docker-compose.prod.yml
 ```
 
-## How Rendering Works
- 
+### Rendering Flow
+
 ```mermaid
 sequenceDiagram
     participant User
     participant Bot
-    participant Redis as Redis (Broker)
+    participant Redis as Redis Broker
     participant Worker as Celery Worker
     participant DB as Database
 
     User->>Bot: Sends /latex \frac{a}{b}
-    Bot->>Redis: Pushes render_latex task
-    Bot-->>User: "Rendering..." (Status Msg)
-    
+    Bot->>Redis: Enqueues render task
+    Bot-->>User: Sends temporary status message
     Redis->>Worker: Delivers task
-    activate Worker
-    Worker->>Worker: Compiles LaTeX to PNG
+    Worker->>Worker: Compiles output
     Worker->>Redis: Stores result
-    deactivate Worker
-    
-    Bot->>Redis: Polls/Gets Result
-    Bot->>User: Sends Photo
-    Bot->>DB: Caches result for future
+    Bot->>Redis: Retrieves result
+    Bot->>User: Sends rendered image
+    Bot->>DB: Caches result
 ```
 
-### Architectural Highlights
--   **Shared Core Library**: All common code (database, services, i18n, Redis client) is encapsulated in a `matplobbot-shared` library. This library is versioned and published to PyPI automatically, serving as a single source of truth for all services in the ecosystem.
--   **Decoupled Services**: The project runs as three distinct services (Bot, API, Scheduler) in separate Docker containers. They communicate only through the shared PostgreSQL database and Redis cache, creating a robust, microservice-like architecture.
--   **Manager Pattern & Dependency Injection**: The bot's logic is cleanly organized into feature-specific "Manager" classes (`ScheduleManager`, `GitHubManager`, etc.). Dependencies (like the `RuzAPIClient`) are injected at startup, promoting modular and testable code.
--   **Asynchronous Everywhere**: From database calls (`asyncpg`) to external API requests (`aiohttp`), the entire stack is asynchronous to ensure high performance and scalability.
--   **Persistent Caching with Redis**: User-specific data and schedule information are now cached in Redis, providing persistence across bot restarts and significantly improving performance.
+### Architectural Notes
 
+- Shared logic lives in `shared_lib`, including database access, schemas, Redis integration, tasks, and localization.
+- Services are separated by responsibility and communicate through PostgreSQL and Redis.
+- Heavy rendering work is moved off the bot process to keep interactions responsive.
+- The stack is asynchronous end-to-end for API calls, database work, and bot interactions.
 
-## ⚙️ Installation & Setup
+## Development Notes
 
-The project is fully containerized, enabling a simple and reproducible setup.
+### Database Migrations
 
-### 1. Prerequisites
--   **Docker** and **Docker Compose** must be installed on your system.
+Alembic is used for schema changes.
 
-### 2. Environment Variables
+- In Docker Compose, migrations are applied automatically by the `migrator` service during startup.
+- Manual Alembic commands are mainly useful during development when you are changing models or preparing a new migration.
 
-Create a `.env` file in the project's root directory. Fill it out using the template below.
-
-```env
-# Get this from @BotFather on Telegram
-BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
-
-# Comma-separated list of Telegram User IDs for admin command access
-ADMIN_USER_IDS=123456789,987654321
-
-# GitHub Personal Access Token with 'repo' scope for reading repositories
-# Required for /lec_search, /lec_all, and uploading rendered LaTeX images
-GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-
-# --- PostgreSQL Credentials ---
-POSTGRES_USER=user
-POSTGRES_PASSWORD=password
-POSTGRES_DB=matplobbot_db
-POSTGRES_HOST=postgres # The service name in docker-compose
-POSTGRES_PORT=5432
+```bash
+alembic revision --autogenerate -m "Add new table"
+alembic upgrade head
 ```
 
+### CI/CD Summary
 
-### 3. Running with Docker Compose
+The repository uses GitHub Actions for CI and image publishing, with Jenkins handling deployment orchestration. The shared library is versioned and published before updated service images are built and deployed.
 
-This is the recommended method for running the project.
+## Roadmap
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/Ackrome/matplobbot.git
-    cd matplobbot
-    ```
+- [x] Integrate SQLAlchemy Core instead of raw SQL
+- [x] Add semantic search for project materials
+- [ ] Add plugin-based support for multiple universities
+- [ ] Support voice-driven schedule requests
 
-2.  **Ensure your `.env` file is created and configured** as described above.
+## Contributing
 
-3.  **Build and run the services in detached mode:**
-    ```bash
-    docker compose up --build -d
-    ```
+Contributions are welcome.
 
-### 4. Accessing the Services
+1. Fork the repository.
+2. Create a feature branch.
+3. Commit your changes.
+4. Push the branch.
+5. Open a pull request.
 
--   **Telegram Bot**: Will be active and available on Telegram.
--   **Web Dashboard**: Open `http://localhost:9583` in your browser.
+## License
 
-### 5. Stopping the Services
-
--   To stop all running containers, execute:
-    ```bash
-    docker compose down
-    ```
-    -   Your database and log files will persist in named volumes. To remove all data, run `docker-compose down -v`.
-
-#### Database Migrations
-We use **Alembic** for handling database schema changes.
--   **Production**: Migrations are applied automatically via a dedicated service in `docker-compose.prod.yml` before the app starts.
--   **Development**: You can generate new migrations when changing `shared_lib/models.py`:
-    ```bash
-    # Generate migration
-    alembic revision --autogenerate -m "Add new table"
-    
-    # Apply migration
-    alembic upgrade head
-    ```
-
-## 📚 Bot Command Reference
-
-| Command | Description | Usage |
-| :--- | :--- | :--- |
-| **General** | | |
-| `/start` | Initializes the bot and displays the main command keyboard. | Send to begin or reset your session. |
-| `/help` | Shows an interactive inline menu with descriptions of all available commands. | Send to get a quick overview of the bot's features. |
-| `/cancel` | Aborts any ongoing operation or conversation state. | Use if you get stuck waiting for input or want to return to the main menu. |
-| **University Schedule** | | |
-| `/schedule` | Starts an interactive search for a schedule (by group, teacher, etc.). | Send the command to begin the search process. |
-| `/myschedule` | Instantly displays today's schedule for your default (subscribed) group or teacher. | A one-click command for daily use. |
-| **Content Browsing & Search** | | |
-| `/matp_all` | Interactively browse the `matplobblib` library by modules and topics. | Send the command and navigate the library structure using inline buttons. |
-| `/matp_search` | Performs a full-text search for code examples within `matplobblib`. | Send the command, then type your search query (e.g., "line plot"). |
-| `/lec_all` | Interactively browse files in your configured GitHub repositories. | Send the command. If you have multiple repos, you'll be asked to choose one. |
-| `/lec_search` | Performs a full-text search within `.md` files in a chosen GitHub repository. | Send the command, choose a repository, then enter your search query. |
-| **Dynamic Rendering** | | |
-| `/latex` | Renders a LaTeX formula into a high-quality PNG image. | Send the command, then provide the LaTeX code (e.g., `\frac{a}{b}`). |
-| `/mermaid` | Renders a Mermaid.js diagram into a PNG image. | Send the command, then provide the Mermaid diagram code (e.g., `graph TD; A-->B;`). |
-| **Personalization** | | |
-| `/favorites` | View, manage, and access your saved favorite code examples. | Send the command to see your list. You can add items from search results or library browsing. |
-| `/settings` | Access and modify your personal settings. | Configure docstring visibility, Markdown display format, LaTeX quality, and manage your GitHub repositories. |
-| `/offershorter` | Suggest a shorter, more convenient name for a long discipline title. | Send the command to start the suggestion process. |
-| **Admin Commands** | | |
-| `/update` | Updates the `matplobblib` library to the latest version from PyPI. | *(Admin-only)* Send the command to perform a live update. |
-| `/clear_cache` | Clears all application caches (in-memory and database). | *(Admin-only)* Useful for forcing the bot to fetch fresh data. |
-
-### On-boarding users
-```mermaid
-graph TD;
-    subgraph "Start"
-        A[User sends /start] --> B{Is onboarding_completed?};
-    end
-
-    B -- No --> C[Show Welcome with 'Next' and 'Skip' buttons];
-    B -- Yes --> Z[Show Regular Welcome];
-    C --> D{User clicks 'Next'};
-    C -- Skip --> Q[Set onboarding_completed = true];
-
-    D --> E[Show GitHub Feature & 'Add Repository' button];
-    
-    subgraph "Feature Interaction Steps"
-        E --> I{User clicks 'Next'};
-        I --> J[Show Library Feature & 'Next' button];
-        J --> K{User clicks 'Next'};
-        K --> L[Show Rendering Feature & 'Try LaTeX' button];
-        L --> M{User clicks 'Next'};
-        M --> N[Show Schedule Feature & 'Try Schedule' button];
-        N --> O{User clicks 'Next'};
-    end
-
-    O --> P[Show Final Message & 'Finish Tour' button];
-    P --> Q{User clicks 'Finish Tour'};
-    Q --> R[Set onboarding_completed = true];
-    R --> S[Show Main Menu Keyboard];
-
-    style Z fill:#f90934,stroke:#333,stroke-width:2px
-    style S fill:#cc762f,stroke:#333,stroke-width:2px
-```
-
-### 🚀 CI/CD Pipeline
-
-The project is built around a modern, secure, and fully automated CI/CD pipeline that handles everything from code validation to production deployment. This pipeline leverages a hybrid approach, using a self-hosted GitHub Runner to securely bridge the public cloud (GitHub) with a private deployment environment (Proxmox/Tailscale).
-
-**Key Technologies:**
-*   **Continuous Integration**: GitHub Actions
-*   **Continuous Deployment**: Jenkins
-*   **Containerization**: Docker & Docker Compose
-*   **Secure Networking**: Tailscale
-
-
-#### The Workflow
-
-The entire process is event-driven and fully automated. It now includes automatic version bumping and publishing of the shared library before the application services are deployed.
-
-```mermaid
-graph TD
-    subgraph "GitHub (Public Cloud)"
-        A[Developer pushes to main] --> B{GitHub Actions: Auto-Version};
-        B --> |Commits back to main| C{GitHub Actions: Publish Library};
-        C --> |Pushes package| D[PyPI Repository];
-        C --> E{Build & Push All Images};
-        E --> F[GitHub Container Registry];
-    end
-
-    subgraph "Docker Images"
-        direction TB
-        F -.-> Img1[Bot Image];
-        F -.-> Img2[API Image];
-        F -.-> Img3[Scheduler Image];
-        F -.-> Img4[Worker Image];
-    end
-
-    subgraph "Your Proxmox Network (Private & Secure)"
-        direction LR
-        G(Self-Hosted Runner)
-        H(Jenkins VM)
-        I(Application VM)
-
-        E -- "Triggers Deploy via Tailscale IP" --> H;
-        H -- "Executes Deploy via SSH" --> I;
-    end
-    
-    B -- "Assigns Job" --> G;
-
-    subgraph "Deployment Steps on Application VM"
-        direction TB
-        I --> J["1. Git Pull (Get latest deploy scripts)"];
-        J --> K["2. Jenkins creates .env file from secrets"];
-        K --> L["3. Pull new Bot, API, Scheduler & Worker images"];
-        L --> M["4. docker-compose up -d"];
-        M --> N[🚀 New version is live!];
-    end
-```
-
-#### Step-by-Step Breakdown:
-
-1.  **Commit & Push**: A developer pushes new code to the `main` branch.
-2.  **Auto-Versioning**: A GitHub Actions job automatically runs `version_bumper.py`, increments the patch version, and pushes a version commit (e.g., `chore(release): version v0.5.1`) back to the `main` branch.
-3.  **Publish Library**: Triggered by the new version commit, a second job builds the `matplobbot-shared` library and publishes the new version to **PyPI**.
-4.  **Build & Push Images**: A third job waits for the library to be published. It then builds new Docker images for the `bot`, `api`, and `scheduler` services.This build process installs the newly published shared library from PyPI. The images are tagged with the commit SHA and `:latest`, then pushed to GitHub Container Registry (GHCR).
-5.  **Secure Trigger for CD**: Upon successful image push, the workflow triggers a job on the **self-hosted runner**, which securely sends a webhook to the Jenkins server over the private Tailscale network.
-6.  **Deployment Orchestration**: The Jenkins pipeline takes over, connecting to the **Application VM** via SSH to:
-    *   Pull the latest changes from the Git repository (to get the updated `docker-compose.prod.yml`).
-    *   Securely create the `.env` file from Jenkins credentials.
-    *   Execute the `deploy.sh` script.
-7.  **Final Rollout**: The `deploy.sh` script pulls the new Docker images from GHCR and gracefully restarts all services using `docker compose up -d`.
-
-
-## 🗺️ Roadmap
-
-- [x] **SQLAlchemy Core**: Integrate SQLAlchemy instead of raw SQL
-- [x] **Semantic Search via Embeddings**: Add semantic Search for all the materials in Bot
-- ~~[x] **AI Analysis**: Integrate OpenAI/Gemini to generate summaries of lecture notes.~~ due to server incompitence
-- [ ] **Multi-University Support**: Abstract the schedule parser to support other universities via plugins.
-- [ ] **Voice Commands**: Allow users to ask for schedules via voice messages.
-
-## 🤝 Contributing
-
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
-
-1.  Fork the Project
-2.  Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3.  Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4.  Push to the Branch (`git push origin feature/AmazingFeature`)
-5.  Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
