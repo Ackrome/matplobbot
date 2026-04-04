@@ -45,7 +45,10 @@ class TestStatsLeaderboardAPI(unittest.TestCase):
                 "last_action_time": "2026-04-04 12:00:00",
             }
         ]
-        self.app.dependency_overrides[stats_router.require_admin] = lambda: {"id": 1, "role": "admin"}
+        self.app.dependency_overrides[stats_router.require_admin] = lambda: {
+            "id": 1,
+            "role": "admin",
+        }
 
         with (
             patch.object(stats_router, "get_session", return_value=_SessionContext(object())),
@@ -71,11 +74,16 @@ class TestStatsLeaderboardAPI(unittest.TestCase):
         )
 
     def test_leaderboard_empty_state(self):
-        self.app.dependency_overrides[stats_router.require_admin] = lambda: {"id": 1, "role": "admin"}
+        self.app.dependency_overrides[stats_router.require_admin] = lambda: {
+            "id": 1,
+            "role": "admin",
+        }
 
         with (
             patch.object(stats_router, "get_session", return_value=_SessionContext(object())),
-            patch.object(stats_router, "get_leaderboard_data_from_db", new=AsyncMock(return_value=[])),
+            patch.object(
+                stats_router, "get_leaderboard_data_from_db", new=AsyncMock(return_value=[])
+            ),
         ):
             response = self.client.get("/api/stats/leaderboard")
 
@@ -83,7 +91,10 @@ class TestStatsLeaderboardAPI(unittest.TestCase):
         self.assertEqual(response.json(), [])
 
     def test_leaderboard_returns_500_on_backend_error(self):
-        self.app.dependency_overrides[stats_router.require_admin] = lambda: {"id": 1, "role": "admin"}
+        self.app.dependency_overrides[stats_router.require_admin] = lambda: {
+            "id": 1,
+            "role": "admin",
+        }
 
         with (
             patch.object(stats_router, "get_session", return_value=_SessionContext(object())),

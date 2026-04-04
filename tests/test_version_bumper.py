@@ -29,7 +29,7 @@ class TestVersionBumper(unittest.TestCase):
             replacements = update_file(
                 file_path=file_path,
                 pattern=VERSION_PATTERN,
-                replacement_template='\\g<1>0.1.2\\g<3>',
+                replacement_template="\\g<1>0.1.2\\g<3>",
             )
 
         self.assertEqual(replacements, 1)
@@ -47,6 +47,6 @@ class TestVersionBumper(unittest.TestCase):
                 update_file(
                     file_path=file_path,
                     pattern=VERSION_PATTERN,
-                    replacement_template='\\g<1>0.1.2\\g<3>',
+                    replacement_template="\\g<1>0.1.2\\g<3>",
                     min_replacements=1,
                 )
