@@ -93,6 +93,8 @@ log_manager = ConnectionManager(name="bot_log")
 stats_update_task: asyncio.Task | None = None
 last_sent_stats_data_str: str = ""
 last_checked_actions_count: int = -1
+STATS_MIN_POLL_SECONDS = 2
+STATS_MAX_IDLE_POLL_SECONDS = 15
 
 
 def can_subscribe_user_updates(user: dict, target_user_id: int) -> bool:
@@ -102,10 +104,12 @@ def can_subscribe_user_updates(user: dict, target_user_id: int) -> bool:
 async def periodic_stats_updater():
     global last_sent_stats_data_str, last_checked_actions_count
     logger.info("Starting periodic_stats_updater task.")
+    idle_sleep_seconds = STATS_MIN_POLL_SECONDS
 
     while True:
         try:
             if not stats_manager.active_connections:
+                idle_sleep_seconds = STATS_MIN_POLL_SECONDS
                 await asyncio.sleep(5)
                 continue
 
@@ -114,9 +118,13 @@ async def periodic_stats_updater():
                 current_actions = result.scalar() or 0
 
                 if current_actions == last_checked_actions_count:
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(idle_sleep_seconds)
+                    idle_sleep_seconds = min(
+                        idle_sleep_seconds * 2, STATS_MAX_IDLE_POLL_SECONDS
+                    )
                     continue
 
+                idle_sleep_seconds = STATS_MIN_POLL_SECONDS
                 last_checked_actions_count = current_actions
 
                 leaderboard_data = await get_leaderboard_data_from_db(db)
@@ -157,7 +165,7 @@ async def periodic_stats_updater():
             await stats_manager.broadcast_json({"error": "Internal server error updating stats"})
             await asyncio.sleep(10)
 
-        await asyncio.sleep(2)
+        await asyncio.sleep(STATS_MIN_POLL_SECONDS)
 
 
 @router.websocket("/ws/stats/total_actions")

@@ -51,7 +51,7 @@ jobs:
           # having the same version already published.
           pip install -e .
           pip install -r requirements.txt -r fastapi_stats_app/requirements.txt -r scheduler_app/requirements.txt
-          pip install ruff==0.8.6 mypy==1.13.0
+          pip install ruff==0.8.6 mypy==1.13.0 pip-audit==2.7.3
       - name: Lint checks
         run: |
           ruff check . --select E9,F63,F7,F82
@@ -74,6 +74,9 @@ jobs:
             --disable-error-code=import-untyped \
             --allow-untyped-defs \
             --allow-incomplete-defs
+      - name: Dependency security audit
+        run: |
+          pip-audit --strict
 
   # 3. Auto-Versioning
   auto-version-patch:

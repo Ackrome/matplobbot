@@ -33,24 +33,26 @@ Last updated: 2026-04-04
 
 ## P1 - Deployment Hardening
 
-- [ ] Remove source bind mounts from `docker-compose.prod.yml` for API container
-- [ ] Replace root SSH deploy in Jenkins with least-privileged deploy user
-- [ ] Remove `StrictHostKeyChecking=no` and manage known hosts securely
-- [ ] Replace aggressive `docker system prune --all --force` with safer cleanup policy
+- [x] Remove source bind mounts from `docker-compose.prod.yml` for API container
+- [ ] Replace root SSH deploy in Jenkins with least-privileged deploy user (infra: requires Jenkins credential/user rotation)
+- [x] Remove `StrictHostKeyChecking=no` and manage known hosts securely
+  - partial: host keys are currently learned via `ssh-keyscan` during deploy (TOFU). For stronger security, pin a trusted host key/fingerprint in Jenkins credentials.
+- [x] Replace aggressive `docker system prune --all --force` with safer cleanup policy
+  - partial: Jenkins deploy cleanup is now scoped (`image/container prune` with age filters). Build job still uses `docker system prune -f`.
 
 ## P2 - Performance and Scalability
 
-- [ ] Stop fetching Telegram avatars on every update in bot middleware; cache or throttle
-- [ ] Reduce stats websocket polling pressure (event-driven updates or adaptive polling)
-- [ ] Reuse long-lived aiohttp sessions where possible (e.g. schedule router)
+- [x] Stop fetching Telegram avatars on every update in bot middleware; cache or throttle
+- [x] Reduce stats websocket polling pressure (event-driven updates or adaptive polling)
+- [ ] Reuse long-lived aiohttp sessions where possible (e.g. schedule router) (deferred: requires lifecycle-managed shared session wiring)
 
 ## P2 - Task Sandbox Hardening
 
-- [ ] Replace `ZipFile.extractall()` for build cache with validated safe extraction
-- [ ] Strengthen file path validation in project compilation flow (`shared_lib/tasks.py`)
+- [x] Replace `ZipFile.extractall()` for build cache with validated safe extraction
+- [x] Strengthen file path validation in project compilation flow (`shared_lib/tasks.py`)
 
 ## P2 - Project Tooling
 
 - [x] Add `pyproject.toml` with lint/test/type tool config
 - [x] Add pre-commit hooks
-- [ ] Add security scan step (`pip-audit`/Bandit or equivalent)
+- [x] Add security scan step (`pip-audit`/Bandit or equivalent)

@@ -476,6 +476,56 @@ def compile_full_latex_task(self, latex_code: str):
         return {"status": "error", "message": str(e), "errors": [{"line": 1, "message": str(e)}]}
 
 
+def _safe_relative_path(path: str | None) -> str | None:
+    if not isinstance(path, str) or not path.strip():
+        return None
+
+    normalized = os.path.normpath(path).replace("\\", "/")
+    if normalized in {"", ".", ".."}:
+        return None
+    if normalized.startswith("../") or normalized.startswith("/"):
+        return None
+
+    drive, _ = os.path.splitdrive(normalized)
+    if drive:
+        return None
+
+    return normalized
+
+
+def _safe_join(base_dir: str, path: str | None) -> str | None:
+    normalized = _safe_relative_path(path)
+    if not normalized:
+        return None
+
+    base_abs = os.path.abspath(base_dir)
+    target_abs = os.path.abspath(os.path.join(base_abs, normalized))
+
+    try:
+        if os.path.commonpath([base_abs, target_abs]) != base_abs:
+            return None
+    except ValueError:
+        return None
+
+    return target_abs
+
+
+def _safe_extract_zip(zf: zipfile.ZipFile, destination: str):
+    for member in zf.infolist():
+        target_path = _safe_join(destination, member.filename)
+        if not target_path:
+            logger.warning(f"Skipped unsafe zip entry: {member.filename}")
+            continue
+
+        if member.is_dir():
+            os.makedirs(target_path, exist_ok=True)
+            continue
+
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        with zf.open(member, "r") as src, open(target_path, "wb") as dst:
+            shutil.copyfileobj(src, dst)
+
+
 @app.task(bind=True, soft_time_limit=60, name="shared_lib.tasks.compile_project")
 def compile_project_task(self, project_files: list, main_file: str, build_cache_b64: str = None):
     """Многофайловая компиляция с поддержкой Инкрементальной сборки и SyncTeX"""
@@ -486,17 +536,18 @@ def compile_project_task(self, project_files: list, main_file: str, build_cache_
                 try:
                     cache_bytes = base64.b64decode(build_cache_b64)
                     with zipfile.ZipFile(io.BytesIO(cache_bytes), "r") as zf:
-                        zf.extractall(temp_dir)
+                        _safe_extract_zip(zf, temp_dir)
                 except Exception as e:
                     logger.warning(f"Failed to unpack build cache: {e}")
 
             # 2. Запись актуальных файлов пользователя (перезапишет файлы из кэша, если имена совпадают)
             for pf in project_files:
                 path = pf.get("path")
-                if ".." in path or path.startswith("/"):
+                full_path = _safe_join(temp_dir, path)
+                if not full_path:
+                    logger.warning(f"Skipped unsafe project file path: {path}")
                     continue
 
-                full_path = os.path.join(temp_dir, path)
                 os.makedirs(os.path.dirname(full_path), exist_ok=True)
 
                 if pf.get("binary"):
@@ -506,9 +557,16 @@ def compile_project_task(self, project_files: list, main_file: str, build_cache_
                     with open(full_path, "w", encoding="utf-8") as f:
                         f.write(pf.get("text", ""))
 
-            tex_path = os.path.join(temp_dir, main_file)
-            pdf_path = os.path.join(temp_dir, main_file.replace(".tex", ".pdf"))
-            log_path = os.path.join(temp_dir, main_file.replace(".tex", ".log"))
+            tex_path = _safe_join(temp_dir, main_file)
+            if not tex_path:
+                return {
+                    "status": "error",
+                    "message": "Invalid main file path",
+                    "errors": [{"line": 1, "message": "Unsafe main file path"}],
+                }
+
+            pdf_path = os.path.splitext(tex_path)[0] + ".pdf"
+            log_path = os.path.splitext(tex_path)[0] + ".log"
 
             # 3. Компиляция (Добавлен флаг -synctex=1)
             compile_cmd = [
