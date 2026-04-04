@@ -34,10 +34,12 @@ jobs:
           python -m pip install --upgrade pip pre-commit
 
       - name: Run auto-fixes
+        continue-on-error: true
         run: |
-          pre-commit run --all-files
+          pre-commit run --all-files --show-diff-on-failure
 
       - name: Commit and push changes
+        if: always()
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "chore(lint): auto-fix with pre-commit"

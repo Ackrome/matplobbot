@@ -245,6 +245,8 @@ pip-compile --resolver=backtracking --output-file requirements.txt requirements.
 
 It executes `pre-commit --all-files` and pushes auto-fixes back automatically.
 To avoid infinite loops, the job skips commits authored by `github-actions[bot]`.
+The autofix run is non-blocking: it commits all available automatic fixes even if
+some lint issues still require manual refactoring.
 
 Local hooks are still optional and useful for faster feedback:
 
