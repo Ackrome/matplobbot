@@ -18,7 +18,7 @@ markdown==3.7
 markdown-it-py==3.0.0
 matplotlib==3.9.2
 matplobblib==0.3.21
-matplobbot-shared==0.1.207
+matplobbot-shared==0.1.208
 mdit-py-plugins==0.5.0
 Pillow==10.4.0
 pysocks==1.7.1
