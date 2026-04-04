@@ -183,6 +183,7 @@ jobs:
     name: Build Service Images
     needs: [check-changes, validate, build-base-images]
     if: |
+      always() &&
       github.event_name == 'push' &&
       needs.validate.result == 'success' &&
       (needs.build-base-images.result == 'success' || needs.build-base-images.result == 'skipped') &&
