@@ -1,0 +1,26 @@
+mixed-port: 20170
+allow-lan: true
+mode: rule
+log-level: warning
+
+proxy-providers:
+  something:
+    type: http
+    url: "http://127.0.0.1:8080/"
+    interval: 3600
+    path: ./something.yaml
+    health-check:
+      enable: true
+      url: http://www.gstatic.com/generate_204
+      interval: 60
+
+proxy-groups:
+  - name: "AUTO-BEST-NODE"
+    type: url-test
+    use: [something]
+    url: http://www.gstatic.com/generate_204
+    interval: 60
+    tolerance: 50
+
+rules:
+  - MATCH, AUTO-BEST-NODE
