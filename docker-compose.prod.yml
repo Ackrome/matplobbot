@@ -3,7 +3,7 @@
 # This file is for production. It uses pre-built images from GHCR.
 services:
   redis: # Added redis service for production consistency
-    image: redis:7-alpine 
+    image: redis:7-alpine
     restart: unless-stopped
     # The port is exposed to the host, but other services will connect via the internal Docker network.
     # If you don't need to access Redis from outside the Docker host, you can remove the 'ports' section.
@@ -97,9 +97,9 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-        
+
   mpb-fastapi-stats:
-    image: ghcr.io/ackrome/matplobbot-api:${API_TAG:-latest} 
+    image: ghcr.io/ackrome/matplobbot-api:${API_TAG:-latest}
     restart: unless-stopped
     stop_grace_period: 30s
     env_file: ./.env
@@ -120,7 +120,7 @@ services:
       timeout: 10s
       retries: 3
 
-  
+
 
   main-site-frontend:
     image: nginx:alpine

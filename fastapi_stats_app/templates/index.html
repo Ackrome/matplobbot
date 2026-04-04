@@ -4,16 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Matplobbot Dashboard</title>
-    
+
     <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = { darkMode: 'class' }
     </script>
-    
+
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
+
     <!-- CSS (v=9 для сброса кэша) -->
     <link rel="stylesheet" href="/static/css/styles.css?v=9">
     <!-- Fonts -->
@@ -34,7 +34,7 @@
                 <div class="text-sm text-gray-500 dark:text-gray-400 hidden sm:block" id="connection-status">
                     <span class="w-2.5 h-2.5 bg-green-500 rounded-full inline-block mr-1 animate-pulse"></span> Online
                 </div>
-                
+
                 <button id="theme-toggle-button" type="button" class="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700 transition-colors">
                     <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
                     <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 100 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
@@ -45,7 +45,7 @@
 
     <!-- Main Content -->
     <div class="pt-24 px-4 pb-8 max-w-screen-2xl mx-auto">
-        
+
         <!-- KPI Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <!-- Total Actions (Добавлен класс theme-card) -->
@@ -200,7 +200,7 @@
 
     <!-- Modals & Buttons ... -->
     <!-- (Оставляем как есть, только подвал скриптов обновляем) -->
-    
+
     <div id="user-list-modal" class="fixed inset-0 z-50 hidden bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
         <div class="theme-card w-full max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
             <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">

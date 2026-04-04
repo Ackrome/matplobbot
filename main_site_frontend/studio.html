@@ -5,7 +5,7 @@
     <title>Document Studio | Matplobbot</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
+
     <!-- 1. ВСЕ БИБЛИОТЕКИ СТРОГО ДО ЗАГРУЗЧИКА MONACO -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
@@ -23,7 +23,7 @@
         .split { display: flex; flex-direction: row; height: calc(100vh - 64px); }
         .gutter { background-color: #f1f5f9; cursor: col-resize; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;}
         .file-item.active { background-color: #e0e7ff; border-left: 3px solid #4f46e5; font-weight: 600;}
-        
+
         /* Стили для Live Preview Markdown */
         #live-preview-content { font-family: 'Inter', sans-serif; line-height: 1.6; padding: 2rem; max-width: 800px; margin: 0 auto; background: white; min-height: 100%; box-shadow: 0 0 15px rgba(0,0,0,0.05); }
         #live-preview-content h1, #live-preview-content h2 { border-bottom: 1px solid #eee; padding-bottom: 0.3em; margin-top: 1em; }
@@ -34,12 +34,12 @@
 
     <!-- Navbar -->
     <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0 z-10">
-        
+
 
 
         <div class="flex items-center gap-4">
             <a href="/" class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md">IT</a>
-            
+
             <div class="bg-slate-100 p-1 rounded-lg flex gap-1 items-center">
                 <button id="mode-quick" class="px-3 py-1.5 text-sm font-medium rounded-md bg-white shadow-sm text-blue-700 transition-all">Quick Snippet</button>
                 <button id="mode-project" class="px-3 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all">Project</button>
@@ -80,7 +80,7 @@
 
     <!-- Workspace Split -->
     <div id="split-container" class="split w-full bg-slate-100 relative">
-        
+
         <!-- Loader -->
         <div id="loader-overlay" class="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-50 hidden flex-col items-center justify-center">
             <div class="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
@@ -108,7 +108,7 @@
         <!-- Pane 2: Editor -->
         <div id="editor-pane" class="h-full bg-white relative flex flex-col">
             <div id="monaco-container" class="flex-grow relative"></div>
-            
+
             <!-- Статус бар -->
             <div class="h-7 bg-blue-600 text-white flex items-center justify-between px-3 text-[11px] font-medium shrink-0 z-10">
                 <div class="flex items-center gap-4">
@@ -134,7 +134,7 @@
         <!-- Pane 3: Viewer -->
         <div id="viewer-pane" class="h-full bg-slate-200 flex items-center justify-center overflow-y-auto relative">
             <iframe id="pdf-viewer" class="w-full h-full border-none hidden absolute inset-0"></iframe>
-            
+
             <div id="live-preview" class="w-full h-full hidden overflow-y-auto absolute inset-0">
                 <div id="live-preview-content"></div>
             </div>
@@ -152,12 +152,12 @@
                 <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                 Создать проект
             </h2>
-            
+
             <div class="mb-4">
                 <label class="block text-sm font-medium text-slate-600 mb-1">Название проекта</label>
                 <input type="text" id="new-project-name" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-colors" placeholder="Например: Курсовая работа">
             </div>
-            
+
             <div class="mb-4">
                 <label class="block text-sm font-medium text-slate-600 mb-1">Тип проекта</label>
                 <select id="new-project-type" onchange="updateTemplateOptions()" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none cursor-pointer">
@@ -175,7 +175,7 @@
                     <option value="latex_report">Отчет (ГОСТ / extreport)</option>
                 </select>
             </div>
-            
+
             <div class="flex justify-end gap-3">
                 <button onclick="closeCreateProjectModal()" class="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Отмена</button>
                 <button onclick="submitNewProject()" class="px-5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md transition-all active:scale-95">Создать</button>

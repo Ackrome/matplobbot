@@ -1,7 +1,7 @@
 /* bot/templates/report.js */
 
 document.addEventListener("DOMContentLoaded", function() {
-    
+
     // 1. Initialize Mermaid
     if (typeof mermaid !== 'undefined') {
         mermaid.initialize({ startOnLoad: true, theme: 'default' });

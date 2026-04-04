@@ -1,8 +1,8 @@
 import json
-from pathlib import Path
 import logging
+from pathlib import Path
 
-from .database import get_user_settings, get_chat_settings
+from .database import get_chat_settings, get_user_settings
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +19,10 @@ class Translator:
         for lang_file in self.locales_dir.glob("*.json"):
             lang_code = lang_file.stem
             try:
-                with open(lang_file, 'r', encoding='utf-8') as f:
+                with open(lang_file, encoding="utf-8") as f:
                     self.translations[lang_code] = json.load(f)
                 logger.info(f"Successfully loaded language: {lang_code}")
-            except (json.JSONDecodeError, IOError) as e:
+            except (OSError, json.JSONDecodeError) as e:
                 logger.error(f"Failed to load language file {lang_file}: {e}")
 
     async def get_language(self, user_id: int, chat_id: int | None = None) -> str:
@@ -34,10 +34,10 @@ class Translator:
         # If it's a group chat (negative chat_id), check for a group-specific setting.
         if chat_id and chat_id < 0:
             chat_settings = await get_chat_settings(chat_id)
-            return chat_settings.get('language', self.default_lang)
-        
+            return chat_settings.get("language", self.default_lang)
+
         user_settings = await get_user_settings(user_id)
-        return user_settings.get('language', self.default_lang)
+        return user_settings.get("language", self.default_lang)
 
     def gettext(self, lang: str, key: str, **kwargs) -> str:
         """

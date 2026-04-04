@@ -1,9 +1,9 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 setup(
     name="matplobbot-shared",
-    version="0.1.202", # Bump version
-    packages=find_packages(include=['shared_lib', 'shared_lib.*']),
+    version="0.1.202",  # Bump version
+    packages=find_packages(include=["shared_lib", "shared_lib.*"]),
     description="Shared library for the Matplobbot ecosystem.",
     author="Ackrome",
     author_email="ivansergeyevich@gmail.com",
@@ -16,12 +16,12 @@ setup(
         "celery",
         "Pillow",
         "markdown-it-py",
-        "mdit-py-plugins" 
+        "mdit-py-plugins",
     ],
     # ВАЖНОЕ ИЗМЕНЕНИЕ ЗДЕСЬ:
     package_data={
-        'shared_lib': ['locales/*.json', 'templates/*.tex'], 
+        "shared_lib": ["locales/*.json", "templates/*.tex"],
     },
     include_package_data=True,
-    python_requires='>=3.11',
+    python_requires=">=3.11",
 )

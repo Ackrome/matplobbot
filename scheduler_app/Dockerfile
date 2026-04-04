@@ -6,7 +6,7 @@ WORKDIR /
 COPY shared_lib/ /shared_lib/
 COPY setup.py /
 # scheduler specific reqs might be small, or you can merge them into the base requirements.txt
-COPY scheduler_app/requirements.txt . 
+COPY scheduler_app/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir /
 

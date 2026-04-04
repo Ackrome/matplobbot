@@ -28,7 +28,7 @@ const searchContainer = document.getElementById('searchContainer');
 
 
 document.addEventListener('DOMContentLoaded', async () => {
-    await initOfflineHistory(); 
+    await initOfflineHistory();
     await loadInitialPreferences(); // Загружаем настройки из API (если залогинен) или LocalStorage
 });
 
@@ -43,7 +43,7 @@ async function initOfflineHistory() {
                 return;
             }
             container.innerHTML = list.map(item => `
-                <button onclick="loadSchedule('${item.type}', '${item.id}', '${item.label}'); closeOfflinePanel();" 
+                <button onclick="loadSchedule('${item.type}', '${item.id}', '${item.label}'); closeOfflinePanel();"
                         class="group w-full text-left px-4 py-3 bg-white hover:bg-blue-50 rounded-xl transition-all flex items-center justify-between border border-transparent hover:border-blue-100">
                     <div>
                         <div class="text-xs font-black text-slate-700 group-hover:text-blue-700">${item.label}</div>
@@ -106,7 +106,7 @@ async function loadInitialPreferences() {
         if (prefsToApply.useShortNames !== undefined) {
             document.getElementById('useShortNames').checked = prefsToApply.useShortNames;
         }
-        
+
         if (prefsToApply.entity && prefsToApply.entity.id) {
             if (prefsToApply.modules && prefsToApply.modules.length > 0) {
                 selectedModules = new Set(prefsToApply.modules);
@@ -122,7 +122,7 @@ async function savePreferences() {
         modules: Array.from(selectedModules), // Конвертируем Set в Array для JSON
         useShortNames: document.getElementById('useShortNames').checked
     };
-    
+
     // Всегда сохраняем локально
     localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
 
@@ -137,7 +137,7 @@ async function pushPreferencesToAPI(prefs, token) {
     try {
         await fetch(`${API_BASE}/auth/preferences`, {
             method: 'PUT',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
@@ -173,10 +173,10 @@ function getMonday(d) {
 
 async function changeWeek(offset) {
     currentWeekStart.setDate(currentWeekStart.getDate() + offset * 7);
-    
+
     const weekEnd = new Date(currentWeekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
-    
+
     const loadedStart = parseDate(loadedBounds.start);
     const loadedEnd = parseDate(loadedBounds.end);
 
@@ -190,7 +190,7 @@ async function changeWeek(offset) {
 
 async function setTodayWeek() {
     currentWeekStart = getMonday(new Date());
-    await changeWeek(0); 
+    await changeWeek(0);
 }
 
 function copyToClipboard(text, event) {
@@ -224,7 +224,7 @@ function renderSearchResults(results) {
         resultsBox.innerHTML = results.map(item => {
             const offlineBadge = item.is_offline ? `<span class="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-600">⚡ КЭШ</span>` : '';
             return `
-            <div class="px-6 py-3 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-none" 
+            <div class="px-6 py-3 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-none"
                  onclick="loadSchedule('${item.type || 'group'}', '${item.id}', '${item.label.replace(/'/g, "\\'")}')">
                 <div class="font-bold text-slate-800 flex items-center">${item.label} ${offlineBadge}</div>
                 <div class="text-xs text-slate-400 mt-0.5">${item.description || ''}</div>
@@ -238,34 +238,34 @@ async function loadSchedule(type, id, name, targetDate = null) {
     resultsBox.classList.add('hidden');
     groupInput.value = name;
     currentEntity = { type, id, name };
-    
+
     document.getElementById('defaultState').classList.add('hidden');
-    document.getElementById('scheduleControls').classList.remove('hidden'); 
-    
+    document.getElementById('scheduleControls').classList.remove('hidden');
+
     document.getElementById('desktopSchedule').innerHTML = `<div class="p-8"><div class="skeleton h-64 w-full rounded-3xl"></div></div>`;
     document.getElementById('mobileSchedule').innerHTML = `<div class="skeleton h-64 w-full rounded-3xl"></div>`;
 
     let url = `${API_BASE}/schedule/data/${type}/${id}`;
     if (targetDate) url += `?base_date=${targetDate}`;
-    
+
     savePreferences();
 
     try {
         const res = await fetch(url);
         const data = await res.json();
-        
+
         fullSchedule = data.schedule || [];
-        allAvailableModules = data.available_modules ||[]; 
+        allAvailableModules = data.available_modules ||[];
         loadedBounds = data.loaded_bounds || {start: "2000-01-01", end: "2099-01-01"};
-        
+
         if (!targetDate && selectedModules.size === 0) {
             selectedModules = new Set(allAvailableModules);
         }
-        
-        if (!targetDate) currentWeekStart = getMonday(new Date()); 
-        
-        isOfflineMode = data.is_offline || false; 
-        
+
+        if (!targetDate) currentWeekStart = getMonday(new Date());
+
+        isOfflineMode = data.is_offline || false;
+
         renderModuleFilters();
         filterAndRender();
 
@@ -277,15 +277,15 @@ async function loadSchedule(type, id, name, targetDate = null) {
 function renderModuleFilters() {
     const container = document.getElementById('moduleContainer');
     const section = document.getElementById('moduleFilterSection');
-    
+
     if (allAvailableModules.length === 0) {
         section.classList.add('hidden');
         return;
     }
     section.classList.remove('hidden');
     container.innerHTML = allAvailableModules.map(mod => `
-        <button onclick="toggleModule('${mod}')" 
-            class="px-3 py-1.5 rounded-xl border text-xs sm:text-sm font-bold transition-all duration-200 
+        <button onclick="toggleModule('${mod}')"
+            class="px-3 py-1.5 rounded-xl border text-xs sm:text-sm font-bold transition-all duration-200
             ${selectedModules.has(mod) ? 'bg-slate-800 border-slate-800 text-white shadow-md' : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'}">
             ${selectedModules.has(mod) ? '✓ ' : ''}${mod}
         </button>
@@ -300,17 +300,17 @@ function toggleModule(mod) {
     savePreferences();
 }
 
-function selectAllModules() { 
-    selectedModules = new Set(allAvailableModules); 
-    renderModuleFilters(); 
-    filterAndRender(); 
+function selectAllModules() {
+    selectedModules = new Set(allAvailableModules);
+    renderModuleFilters();
+    filterAndRender();
     savePreferences();
 }
 
-function clearAllModules() { 
-    selectedModules.clear(); 
-    renderModuleFilters(); 
-    filterAndRender(); 
+function clearAllModules() {
+    selectedModules.clear();
+    renderModuleFilters();
+    filterAndRender();
     savePreferences();
 }
 
@@ -319,11 +319,11 @@ function filterAndRender() {
     else document.getElementById('offlineWarning').classList.add('hidden');
 
     document.getElementById('weekNav').classList.remove('hidden');
-    
+
     const weekEnd = new Date(currentWeekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
-    
-    document.getElementById('weekRangeDisplay').innerText = 
+
+    document.getElementById('weekRangeDisplay').innerText =
         `${currentWeekStart.toLocaleDateString('ru', {day:'numeric', month:'short'})} — ${weekEnd.toLocaleDateString('ru', {day:'numeric', month:'short'})}`;
 
     const filteredLessons = fullSchedule.filter(lesson => {
@@ -339,7 +339,7 @@ function filterAndRender() {
 
 function renderDesktopGrid(lessons) {
     const container = document.getElementById('desktopSchedule');
-    
+
     const weekDates =[];
     for(let i=0; i<7; i++) {
         const d = new Date(currentWeekStart);
@@ -347,7 +347,7 @@ function renderDesktopGrid(lessons) {
         weekDates.push(d);
     }
 
-    const gridData = {}; 
+    const gridData = {};
     lessons.forEach(l => {
         const normDate = getISODateStr(parseDate(l.date));
         if (!gridData[normDate]) gridData[normDate] = {};
@@ -364,7 +364,7 @@ function renderDesktopGrid(lessons) {
             <thead class="bg-slate-50/50 border-b border-slate-100">
                 <tr>
                     <th class="w-16 sm:w-20 p-3 text-center text-xs font-bold text-slate-400 border-r border-slate-200">Время</th>`;
-                    
+
     weekDates.forEach(d => {
         const isToday = isSameDay(d, now);
         html += `<th class="p-3 border-r border-slate-200 last:border-r-0 ${isToday ? 'bg-blue-50/70' : ''} relative">
@@ -379,7 +379,7 @@ function renderDesktopGrid(lessons) {
 
     FIXED_TIMES.forEach(timeSlot => {
         const timeStr = timeSlot.start;
-        
+
         const [hStart, mStart] = timeSlot.start.split(':').map(Number);
         const[hEnd, mEnd] = timeSlot.end.split(':').map(Number);
         const slotStartMins = hStart * 60 + mStart;
@@ -391,12 +391,12 @@ function renderDesktopGrid(lessons) {
                 <div class="text-xs font-black ${isCurrentSlot ? 'text-red-500' : 'text-slate-500'}">${timeSlot.start}</div>
                 <div class="text-[10px] font-medium text-slate-400">${timeSlot.end}</div>
             </td>`;
-            
+
         weekDates.forEach(d => {
             const dateStr = getISODateStr(d);
             const slotLessons = gridData[dateStr]?.[timeStr] ||[];
             const isToday = isSameDay(d, now);
-            
+
             html += `<td class="p-1.5 border-r border-slate-100 last:border-r-0 align-top ${isToday ? 'bg-blue-50/10' : ''} hover:bg-slate-50 transition-colors relative">
                 ${isToday && isCurrentSlot ? '<div class="absolute top-1/2 left-0 w-full h-[2px] bg-red-400 z-10 pointer-events-none opacity-50"></div>' : ''}
                 <div class="flex flex-col gap-1.5 h-full">
@@ -423,21 +423,21 @@ function renderMobileFeed(lessons) {
         if(!byDate[normDate]) byDate[normDate] = [];
         byDate[normDate].push(l);
     });
-    
+
     const sortedDates = Object.keys(byDate).sort();
     let html = '';
-    
+
     sortedDates.forEach(dateStr => {
         const d = parseDate(dateStr);
         const isToday = isSameDay(d, new Date());
-        
+
         html += `
         <div class="relative">
             <div class="sticky top-[56px] md:top-[64px] z-20 bg-white px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                 <div class="font-black text-slate-800 capitalize">${d.toLocaleDateString('ru', {weekday: 'long'})}</div>
                 <div class="text-xs font-bold ${isToday ? 'text-blue-600' : 'text-slate-400'}">${d.toLocaleDateString('ru', {day: 'numeric', month: 'long'})}</div>
             </div>
-            
+
             <div class="flex flex-col divide-y divide-slate-50">
                 ${byDate[dateStr].sort((a,b) => a.beginLesson.localeCompare(b.beginLesson)).map(l => renderCard(l, false)).join('')}
             </div>
@@ -450,11 +450,11 @@ function renderCard(l, isDesktop) {
     const color = getBadgeColor(l.kindOfWork);
     const useShort = document.getElementById('useShortNames').checked;
     const discName = useShort ? l.discipline_short : l.discipline_full;
-    
+
     if (isDesktop) {
         const teacherTokens = (l.lecturer_title || '').split(' ');
-        const teacherShort = teacherTokens.length > 2 
-            ? `${teacherTokens[0]} ${teacherTokens[1][0]}.${teacherTokens[2][0]}.` 
+        const teacherShort = teacherTokens.length > 2
+            ? `${teacherTokens[0]} ${teacherTokens[1][0]}.${teacherTokens[2][0]}.`
             : l.lecturer_title;
 
         return `
@@ -468,19 +468,19 @@ function renderCard(l, isDesktop) {
                         ${l.module}
                     </span>` : ''}
             </div>
-            
+
             <div class="font-bold text-slate-800 text-[13px] leading-snug line-clamp-3 mb-2 flex-grow" title="${discName}">
                 ${discName}
             </div>
-            
+
             <div class="flex flex-col gap-1">
-                <div class="flex items-center gap-1 text-[10px] font-medium text-slate-600 hover:text-blue-600 cursor-pointer transition-colors" 
+                <div class="flex items-center gap-1 text-[10px] font-medium text-slate-600 hover:text-blue-600 cursor-pointer transition-colors"
                      onclick="copyToClipboard('${l.auditorium}', event)" title="Копировать аудиторию">
                     <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     <span class="truncate">${l.auditorium}</span>
                 </div>
                 ${teacherShort ? `
-                <div class="flex items-center gap-1 text-[10px] font-medium text-slate-600 hover:text-blue-600 cursor-pointer transition-colors" 
+                <div class="flex items-center gap-1 text-[10px] font-medium text-slate-600 hover:text-blue-600 cursor-pointer transition-colors"
                      onclick="copyToClipboard('${l.lecturer_title}', event)" title="Копировать ФИО">
                     <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
                     <span class="truncate">${teacherShort}</span>
@@ -512,12 +512,12 @@ function renderCard(l, isDesktop) {
         </div>
 
         <div class="grid grid-cols-2 gap-2 mt-1">
-            <div class="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 truncate cursor-pointer active:text-blue-600" 
+            <div class="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 truncate cursor-pointer active:text-blue-600"
                  onclick="copyToClipboard('${l.auditorium}', event)">
                 <svg class="w-3.5 h-3.5 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" stroke-width="2"></path></svg>
                 <span class="truncate">${l.auditorium}</span>
             </div>
-            <div class="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 truncate cursor-pointer active:text-blue-600" 
+            <div class="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 truncate cursor-pointer active:text-blue-600"
                  onclick="copyToClipboard('${l.lecturer_title}', event)">
                 <svg class="w-3.5 h-3.5 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" stroke-width="2"></path></svg>
                 <span class="truncate">${l.lecturer_title}</span>
@@ -583,7 +583,7 @@ function toggleFiltersMobile() {
     const content = document.getElementById('filterContent');
     const arrow = document.getElementById('filterArrow');
     const isHidden = content.classList.contains('hidden');
-    
+
     if (isHidden) {
         content.classList.remove('hidden');
         arrow.classList.add('rotate-180');

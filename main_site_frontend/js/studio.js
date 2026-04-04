@@ -45,7 +45,7 @@ function setupSplit() {
         splitInstance.destroy();
         splitInstance = null;
     }
-    
+
     const sidebar = document.getElementById('sidebar-pane');
     const editor = document.getElementById('editor-pane');
     const viewer = document.getElementById('viewer-pane');
@@ -55,7 +55,7 @@ function setupSplit() {
         sidebar.classList.add('w-full', 'absolute', 'inset-0', 'z-10');
         editor.classList.add('w-full', 'absolute', 'inset-0', 'z-10');
         viewer.classList.add('w-full', 'absolute', 'inset-0', 'z-10');
-        
+
         document.getElementById('mobile-tabs').classList.remove('hidden');
         switchMobileTab('editor-pane'); // Открываем код по умолчанию
     } else {
@@ -67,12 +67,12 @@ function setupSplit() {
 
         if (currentMode === 'project') {
             sidebar.classList.remove('hidden');
-            splitInstance = Split(['#sidebar-pane', '#editor-pane', '#viewer-pane'], { 
+            splitInstance = Split(['#sidebar-pane', '#editor-pane', '#viewer-pane'], {
                 sizes: [20, 40, 40], minSize:[150, 300, 300], gutterSize: 6, cursor: 'col-resize'
             });
         } else {
             sidebar.classList.add('hidden');
-            splitInstance = Split(['#editor-pane', '#viewer-pane'], { 
+            splitInstance = Split(['#editor-pane', '#viewer-pane'], {
                 sizes:[50, 50], minSize: [300, 300], gutterSize: 6, cursor: 'col-resize'
             });
         }
@@ -88,11 +88,11 @@ window.addEventListener('resize', () => {
 // Логика переключения мобильных табов
 window.switchMobileTab = function(targetPaneId) {
     const panes = ['sidebar-pane', 'editor-pane', 'viewer-pane'];
-    
+
     panes.forEach(pane => {
         const el = document.getElementById(pane);
         const btn = document.getElementById(`tab-btn-${pane.split('-')[0]}`);
-        
+
         if (pane === targetPaneId) {
             el.classList.remove('hidden');
             btn.classList.replace('text-slate-500', 'text-blue-600');
@@ -109,7 +109,7 @@ window.switchMobileTab = function(targetPaneId) {
 // === 2. ИНИЦИАЛИЗАЦИЯ MONACO EDITOR И INTELLISENSE ===
 require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.38.0/min/vs' }});
 require(['vs/editor/editor.main'], function() {
-    
+
     // Регистрируем умные сниппеты (Snippets) для LaTeX
     monaco.languages.registerCompletionItemProvider('latex', {
         provideCompletionItems: function(model, position) {
@@ -154,17 +154,17 @@ require(['vs/editor/editor.main'], function() {
         updateWordCount();
         setStatus("Unsaved", false);
         monaco.editor.setModelMarkers(editor.getModel(), 'latex',[]); // Очищаем маркеры ошибок при редактировании
-        
+
         clearTimeout(timeout);
         timeout = setTimeout(() => {
             if (currentMode === 'project') saveCurrentFile();
             updateLivePreview();
-        }, 1000); 
+        }, 1000);
     });
 
     // Биндим Ctrl+S
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, compileCurrent);
-    
+
     // Инит Mermaid
     try {
         mermaid.initialize({ startOnLoad: false, theme: 'default' });
@@ -205,10 +205,10 @@ function switchMode(mode) {
         btnQ.className = "px-3 py-1.5 text-sm font-medium rounded-md bg-white shadow-sm text-blue-700 transition-all";
         btnP.className = "px-3 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all";
         typeSelect.classList.remove('hidden');
-        
+
         btnZip.classList.add('hidden');
         if (btnTg) btnTg.classList.add('hidden');
-        
+
         currentProjectId = null;
         currentFileId = null;
         setLanguage(typeSelect.value);
@@ -216,10 +216,10 @@ function switchMode(mode) {
         btnP.className = "px-3 py-1.5 text-sm font-medium rounded-md bg-white shadow-sm text-blue-700 transition-all";
         btnQ.className = "px-3 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all";
         typeSelect.classList.add('hidden');
-        
+
         btnZip.classList.remove('hidden');
         if (btnTg) btnTg.classList.remove('hidden'); // <-- ПОКАЗЫВАЕМ В PROJECT РЕЖИМЕ
-        
+
         loadProjects();
     }
     setupSplit();
@@ -229,11 +229,11 @@ function setLanguage(type) {
     if (!editor) return;
     let lang = type === 'mermaid' ? 'javascript' : type;
     monaco.editor.setModelLanguage(editor.getModel(), lang);
-    
+
     if (currentMode === 'quick') {
         editor.setValue(TEMPLATES[type]);
     }
-    
+
     // Скрываем PDF, если перешли на Live формат
     if (type !== 'latex') {
         document.getElementById('pdf-viewer').classList.add('hidden');
@@ -261,9 +261,9 @@ async function updateLivePreview() {
         // Подменяем $$ формулы для KaTeX перед парсингом Markdown
         let safeCode = code.replace(/\$\$(.*?)\$\$/gs, (m, p1) => `\n<div class="math-block">${p1}</div>\n`);
         safeCode = safeCode.replace(/\$(.*?)\$/g, (m, p1) => `<span class="math-inline">${p1}</span>`);
-        
+
         contentDiv.innerHTML = marked.parse(safeCode);
-        
+
         // Рендерим математику
         if (typeof renderMathInElement === 'function') {
             renderMathInElement(contentDiv, {
@@ -286,11 +286,11 @@ async function updateLivePreview() {
 // === 5. СЕРВЕРНАЯ КОМПИЛЯЦИЯ И ОШИБКИ ===
 async function compileCurrent() {
     if (currentMode === 'project') await saveCurrentFile();
-    
+
     const overlay = document.getElementById('loader-overlay');
     const errorPanel = document.getElementById('error-panel');
     const errorText = document.getElementById('error-text');
-    
+
     if(editor) monaco.editor.setModelMarkers(editor.getModel(), 'latex',[]); // Чистим старые ошибки
 
     overlay.classList.remove('hidden');
@@ -319,7 +319,7 @@ async function compileCurrent() {
 
         if (response.ok && data.status === 'success') {
             setStatus("Saved", false);
-            
+
             // Если вернулся PDF
             if (data.pdf) {
                 document.getElementById('live-preview').classList.add('hidden');
@@ -332,16 +332,16 @@ async function compileCurrent() {
                 const byteNumbers = new Array(byteCharacters.length);
                 for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
                 const blob = new Blob([new Uint8Array(byteNumbers)], {type: 'application/pdf'});
-                
+
                 if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl); // Очистка старой ссылки памяти
                 currentBlobUrl = URL.createObjectURL(blob);
-                
+
                 pdfViewer.src = currentBlobUrl + "#toolbar=0&view=FitH"; // Скрываем тулбар, подгоняем по ширине
                 document.getElementById('btn-download-pdf').classList.remove('hidden');
             }
         } else {
             setStatus("Error", false);
-            
+
             // Парсинг ошибок в Monaco Editor
             if (data.errors && data.errors.length > 0) {
                 const markers = data.errors.map(err => ({
@@ -353,7 +353,7 @@ async function compileCurrent() {
                     message: err.message
                 }));
                 monaco.editor.setModelMarkers(editor.getModel(), 'latex', markers);
-                
+
                 errorText.innerText = data.errors.map(e => `Line ${e.line}: ${e.message}`).join('\n');
             } else {
                 errorText.innerText = data.message || data.error || "Compilation failed";
@@ -376,15 +376,15 @@ async function compileCurrent() {
 async function loadProjects() {
     const res = await fetch(`${API_BASE}/studio/projects`, { headers: { 'Authorization': `Bearer ${token}` } });
     if (!res.ok) return;
-    
+
     projectsList = await res.json(); // Сохраняем в глобальную переменную
     const selector = document.getElementById('project-selector');
-    
+
     selector.innerHTML = '<option value="" disabled selected>-- Выберите проект --</option>';
     projectsList.forEach(p => {
         const opt = document.createElement('option');
-        opt.value = p.id; 
-        opt.text = p.name; 
+        opt.value = p.id;
+        opt.text = p.name;
         selector.appendChild(opt);
     });
 
@@ -413,9 +413,9 @@ window.updateTemplateOptions = function() {
     const type = document.getElementById('new-project-type').value;
     const templateContainer = document.getElementById('template-container');
     const templateSelect = document.getElementById('new-project-template');
-    
+
     templateSelect.innerHTML = '';
-    
+
     if (type === 'latex') {
         templateContainer.classList.remove('hidden');
         templateSelect.innerHTML = `
@@ -436,9 +436,9 @@ async function submitNewProject() {
     const name = document.getElementById('new-project-name').value.trim();
     const type = document.getElementById('new-project-type').value;
     const templateId = document.getElementById('new-project-template').value; // Берем ID шаблона
-    
+
     if (!name) { alert("Введите название проекта"); return; }
-    
+
     closeCreateProjectModal();
     setStatus("Creating...", true);
 
@@ -447,7 +447,7 @@ async function submitNewProject() {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ name: name, project_type: type, template_id: templateId }) // Отправляем шаблон!
     });
-    
+
     if (res.ok) {
         const newProj = await res.json();
         currentProjectId = newProj.id;
@@ -462,7 +462,7 @@ async function submitNewProject() {
 // --- ОТКРЫТИЕ ПРОЕКТА ---
 async function openProject(id) {
     currentProjectId = id;
-    
+
     // Определяем тип открытого проекта
     const proj = projectsList.find(p => p.id == id);
     currentProjectType = proj ? proj.type : 'latex';
@@ -474,7 +474,7 @@ async function openProject(id) {
 
     const res = await fetch(`${API_BASE}/studio/projects/${id}`, { headers: { 'Authorization': `Bearer ${token}` } });
     projectFiles = await res.json();
-    
+
     renderFileList();
 
     const mainFile = projectFiles.find(f => f.is_main);
@@ -485,35 +485,35 @@ async function openProject(id) {
 function renderFileList() {
     const list = document.getElementById('file-list');
     list.innerHTML = '';
-    
+
     projectFiles.forEach(f => {
         const div = document.createElement('div');
         div.className = `file-item group px-3 py-1.5 text-sm text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors flex items-center justify-between border-l-[3px] border-transparent`;
         if (f.id === currentFileId) div.classList.add('active');
-        
+
         let icon = f.is_binary ? '🖼️' : (f.path.endsWith('.tex') ? '✍️' : '📄');
-        
+
         const nameDiv = document.createElement('div');
         nameDiv.className = "flex items-center gap-2 truncate";
         nameDiv.innerHTML = `<span>${icon}</span> <span class="truncate" title="${f.path}">${f.path}</span>`;
         nameDiv.onclick = () => openFile(f.id);
-        
+
         const actionsDiv = document.createElement('div');
         actionsDiv.className = "hidden group-hover:flex items-center gap-2 opacity-50 hover:opacity-100";
-        
+
         if (!f.is_main) {
             const btnRename = document.createElement('button');
             btnRename.innerHTML = '✏️';
             btnRename.className = "hover:scale-125 transition-transform text-xs";
             btnRename.title = "Переименовать";
             btnRename.onclick = (e) => { e.stopPropagation(); renameFile(f.id, f.path); };
-            
+
             const btnDelete = document.createElement('button');
             btnDelete.innerHTML = '❌';
             btnDelete.className = "hover:scale-125 transition-transform text-xs";
             btnDelete.title = "Удалить";
             btnDelete.onclick = (e) => { e.stopPropagation(); deleteFile(f.id, f.path); };
-            
+
             actionsDiv.appendChild(btnRename);
             actionsDiv.appendChild(btnDelete);
         }
@@ -526,7 +526,7 @@ function renderFileList() {
 
 async function openFile(id) {
     if (currentFileId !== null) await saveCurrentFile();
-    
+
     const file = projectFiles.find(f => f.id === id);
     if (!file) return;
 
@@ -539,13 +539,13 @@ async function openFile(id) {
         editor.updateOptions({ readOnly: true });
     } else {
         editor.updateOptions({ readOnly: false });
-        
+
         let ext = file.path.split('.').pop().toLowerCase();
         let langMap = { 'tex': 'latex', 'md': 'markdown', 'mmd': 'javascript', 'sty': 'latex' };
         monaco.editor.setModelLanguage(editor.getModel(), langMap[ext] || 'plaintext');
-        
+
         editor.setValue(file.content || "");
-        
+
         // Включаем Live Preview для не-LaTeX файлов в режиме проекта
         if (currentProjectType !== 'latex') {
             document.getElementById('pdf-viewer').classList.add('hidden');
@@ -558,7 +558,7 @@ async function openFile(id) {
 async function saveCurrentFile() {
     if (!currentFileId || !currentProjectId) return;
     const file = projectFiles.find(f => f.id === currentFileId);
-    
+
     if (file && !file.is_binary) {
         const newContent = editor.getValue();
         if (newContent !== file.content) {
@@ -619,9 +619,9 @@ sidebar.addEventListener('dragleave', (e) => {
 sidebar.addEventListener('drop', async (e) => {
     e.preventDefault();
     sidebar.classList.remove('bg-blue-50', 'border-blue-300');
-    
+
     if (!currentProjectId) { alert("Сначала откройте проект для загрузки файлов."); return; }
-    
+
     const files = e.dataTransfer.files;
     for (let f of files) {
         await uploadSingleFile(f);
@@ -640,17 +640,17 @@ async function uploadAsset(event) {
 
 async function uploadSingleFile(file) {
     setStatus("Uploading...", true);
-    const formData = new FormData(); 
+    const formData = new FormData();
     formData.append('file', file);
-    
+
     const res = await fetch(`${API_BASE}/studio/projects/${currentProjectId}/upload`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData
     });
-    
+
     if (res.ok) {
-        await openProject(currentProjectId); 
+        await openProject(currentProjectId);
         setStatus("Saved", false);
     } else {
         alert(`Ошибка загрузки ${file.name}`);
@@ -672,7 +672,7 @@ function downloadPDF() {
 
 function downloadZIP() {
     if (!currentProjectId) return;
-    
+
     setStatus("Zipping...", true);
     fetch(`${API_BASE}/studio/projects/${currentProjectId}/export/zip`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -699,11 +699,11 @@ function downloadZIP() {
 // === 9. ИНТЕГРАЦИЯ С TELEGRAM ===
 async function sendToTelegram() {
     if (!currentProjectId) return;
-    
+
     await saveCurrentFile(); // Обязательно сохраняем перед сборкой
     setStatus("Sending to TG...", true);
     const overlay = document.getElementById('loader-overlay');
-    
+
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');
     overlay.querySelector('div:last-child').innerText = "Отправка в Telegram...";
@@ -713,7 +713,7 @@ async function sendToTelegram() {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         const data = await res.json();
         if (res.ok) {
             alert("Успех! Файл отправлен вам в личные сообщения в Telegram.");

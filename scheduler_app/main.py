@@ -45,7 +45,9 @@ async def main():
     logger.info("Starting Scheduler Service...")
 
     if not BOT_TOKEN:
-        logger.critical("BOT_TOKEN is not configured. Scheduler cannot send messages. Shutting down.")
+        logger.critical(
+            "BOT_TOKEN is not configured. Scheduler cannot send messages. Shutting down."
+        )
         return
 
     db_pool_initialized = False
@@ -117,7 +119,9 @@ async def main():
                     )
                 except Exception as exc:
                     logger.error("Health check failed with an exception: %s", exc, exc_info=True)
-                    return aiohttp.web.json_response({"status": "error", "reason": str(exc)}, status=500)
+                    return aiohttp.web.json_response(
+                        {"status": "error", "reason": str(exc)}, status=500
+                    )
 
             health_app = aiohttp.web.Application()
             health_app.router.add_get("/health", health_check)

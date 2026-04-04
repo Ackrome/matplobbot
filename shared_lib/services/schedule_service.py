@@ -1,157 +1,181 @@
 # shared_lib/services/schedule_service.py
+import hashlib
 import logging
-from typing import List, Dict, Any
-from datetime import datetime, date, time, timedelta, timezone
+import re
 from collections import defaultdict
-from ics import Calendar, Event
+from datetime import UTC, date, datetime, time, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
+
 from aiogram.utils.markdown import hcode
 from cachetools import TTLCache
-from datetime import date
-import re
-import hashlib
+from ics import Calendar, Event
+
+from shared_lib.database import (
+    get_all_short_names_with_ids,
+    get_disabled_short_names_for_user,
+    get_discipline_modules_map,
+    get_subscription_modules,
+    get_user_settings,
+)
 from shared_lib.i18n import translator
-from shared_lib.database import get_user_settings, get_all_short_names, get_disabled_short_names_for_user, get_all_short_names_with_ids, get_discipline_modules_map, get_subscription_modules
 
 # Cache for short names to avoid frequent DB calls
-short_name_cache = TTLCache(maxsize=1, ttl=300) # Cache for 5 minutes
+short_name_cache = TTLCache(maxsize=1, ttl=300)  # Cache for 5 minutes
 
 # --- Configuration for Lesson Styles ---
 LESSON_STYLES = {
-    'Практические (семинарские) занятия': ('🟨', 'Семинар'),
-    'Лекции': ('🟩', 'Лекция'),
-    'Консультации текущие': ('🟪', 'Консультация'),
-    'Повторная промежуточная аттестация (экзамен)': ('🟥', 'Экзамен')
+    "Практические (семинарские) занятия": ("🟨", "Семинар"),
+    "Лекции": ("🟩", "Лекция"),
+    "Консультации текущие": ("🟪", "Консультация"),
+    "Повторная промежуточная аттестация (экзамен)": ("🟥", "Экзамен"),
 }
 
 MODULE_REGEX = re.compile(r'Модуль\s+["«](.+?)["»]')
 
 
-SUBGROUP_REGEX = re.compile(r'(\([А-Яа-яA-Za-z0-9_]+\)-\d+(?: \(\d+\))?)')
+SUBGROUP_REGEX = re.compile(r"(\([А-Яа-яA-Za-z0-9_]+\)-\d+(?: \(\d+\))?)")
+
 
 def get_module_name(group_name: str | None) -> str | None:
     """
     Извлекает название модуля или подгруппы из названия группы в расписании.
     Используется для фильтрации (пользователь выбирает только свою подгруппу).
     """
-    if not group_name: 
+    if not group_name:
         return None
-    
+
     # 1. Проверяем, является ли это "Модулем" (Майнор и т.д.)
     match_mod = MODULE_REGEX.search(group_name)
     if match_mod:
         return match_mod.group(1).strip()
-        
+
     # 2. Проверяем, является ли это подгруппой (Иностр. язык, Физ-ра)
     # Пример group_name: "003860_3 Иностранный язык ... (КАЯиПК)-1"
     match_sub = SUBGROUP_REGEX.search(group_name)
     if match_sub:
-        return match_sub.group(1).strip() # Вернет "(КАЯиПК)-1"
-        
+        return match_sub.group(1).strip()  # Вернет "(КАЯиПК)-1"
+
     return None
 
 
 def _get_lesson_visuals(kind: str) -> tuple[str, str]:
-    return LESSON_STYLES.get(kind, ('🟦', kind))
+    return LESSON_STYLES.get(kind, ("🟦", kind))
+
 
 def _get_discipline_name(full_name: str, use_short_names: bool, short_names_map: dict) -> str:
     if not use_short_names:
         return full_name
     return short_names_map.get(full_name, full_name)
 
-def _add_date_obj(lessons: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+
+def _add_date_obj(lessons: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for lesson in lessons:
-        lesson['date_obj'] = datetime.strptime(lesson['date'], "%Y-%m-%d").date()
+        lesson["date_obj"] = datetime.strptime(lesson["date"], "%Y-%m-%d").date()
     return lessons
 
-def _format_lesson_details_sync(lesson: Dict[str, Any], lang: str, use_short_names: bool, short_names_map: dict, show_emojis: bool = True) -> str:
+
+def _format_lesson_details_sync(
+    lesson: dict[str, Any],
+    lang: str,
+    use_short_names: bool,
+    short_names_map: dict,
+    show_emojis: bool = True,
+) -> str:
     """Standard formatting for Diff view (single lesson)."""
-    emoji, type_name = _get_lesson_visuals(lesson['kindOfWork'])
-    discipline = _get_discipline_name(lesson['discipline'], use_short_names, short_names_map)
+    emoji, type_name = _get_lesson_visuals(lesson["kindOfWork"])
+    discipline = _get_discipline_name(lesson["discipline"], use_short_names, short_names_map)
     prefix = f"{emoji} " if show_emojis else ""
-    
+
     details = [
         hcode(f"{lesson['beginLesson']} - {lesson['endLesson']} | {lesson['auditorium']}"),
         f"{prefix}{discipline} | {type_name}",
-        f"<i>{translator.gettext(lang, 'lecturer_prefix')}: {lesson.get('lecturer_title', 'N/A').replace('_', ' ')}</i>"
+        f"<i>{translator.gettext(lang, 'lecturer_prefix')}: {lesson.get('lecturer_title', 'N/A').replace('_', ' ')}</i>",
     ]
     return "\n".join(details)
 
+
 async def format_schedule(
-    schedule_data: List[Dict[str, Any]],
+    schedule_data: list[dict[str, Any]],
     lang: str,
     entity_name: str,
     entity_type: str,
     user_id: int,
     start_date: date,
     is_week_view: bool = False,
-    subscription_id: int = None) -> str:
+    subscription_id: int = None,
+) -> str:
     """Formats a list of lessons into a readable daily schedule using Variant B (Subgroup Hierarchy)."""
     if not schedule_data:
         no_lessons_key = "schedule_no_lessons_week" if is_week_view else "schedule_no_lessons_day"
-        return translator.gettext(lang, "schedule_header_for", entity_name=entity_name) + f"\n\n{translator.gettext(lang, no_lessons_key)}"
-    
+        return (
+            translator.gettext(lang, "schedule_header_for", entity_name=entity_name)
+            + f"\n\n{translator.gettext(lang, no_lessons_key)}"
+        )
+
     # --- 0. Filtering Logic (NEW) ---
-    if subscription_id and entity_type == 'group':
+    if subscription_id and entity_type == "group":
         # 1. Загружаем настройки пользователя (какие модули он хочет видеть)
         selected_modules = await get_subscription_modules(subscription_id)
-        
-        # Если список selected_modules пуст, считаем, что пользователь 
+
+        # Если список selected_modules пуст, считаем, что пользователь
         # еще не настроил фильтры -> показываем всё (или ничего, зависит от политики).
-        # Обычно, если список пуст в БД, это значит "фильтрация выключена". 
+        # Обычно, если список пуст в БД, это значит "фильтрация выключена".
         # Но если мы хотим строгую фильтрацию: "не выбрал - не увидел".
         # Давайте сделаем так: если selected_modules не None, фильтруем.
-        
-        if selected_modules is not None: 
+
+        if selected_modules is not None:
             # 2. Загружаем маппинг от админа
             discipline_to_module = await get_discipline_modules_map()
-            
+
             filtered_data = []
             for lesson in schedule_data:
                 # Определяем, относится ли урок к модулю (Явно или через Маппинг)
-                group_val = lesson.get('group')
+                group_val = lesson.get("group")
                 explicit_mod = get_module_name(group_val) if isinstance(group_val, str) else None
-                
-                disc_name = lesson.get('discipline', '')
+
+                disc_name = lesson.get("discipline", "")
                 mapped_mod = discipline_to_module.get(disc_name)
-                
+
                 # Логика:
                 # Это модуль, если найден explicit_mod ИЛИ mapped_mod.
                 is_module_lesson = (explicit_mod is not None) or (mapped_mod is not None)
-                
+
                 if not is_module_lesson:
                     # Это общая дисциплина -> ПОКАЗЫВАЕМ
                     filtered_data.append(lesson)
                     continue
-                
+
                 # Если это модуль, проверяем, выбран ли он пользователем
                 is_selected = False
-                if explicit_mod and explicit_mod in selected_modules: is_selected = True
-                if mapped_mod and mapped_mod in selected_modules: is_selected = True
-                
+                if explicit_mod and explicit_mod in selected_modules:
+                    is_selected = True
+                if mapped_mod and mapped_mod in selected_modules:
+                    is_selected = True
+
                 if is_selected:
                     filtered_data.append(lesson)
-            
+
             schedule_data = filtered_data
-                    
+
     # --- 1. Fetch Settings ---
     user_settings = await get_user_settings(user_id)
-    use_short_names = user_settings.get('use_short_names', True)
-    show_emojis = user_settings.get('show_schedule_emojis', True)
-    show_emails = user_settings.get('show_lecturer_emails', True)
-    
+    use_short_names = user_settings.get("use_short_names", True)
+    show_emojis = user_settings.get("show_schedule_emojis", True)
+    show_emails = user_settings.get("show_lecturer_emails", True)
+
     short_names_map = {}
     if use_short_names:
         all_short_names_with_ids = await get_all_short_names_with_ids(page_size=1000)
         disabled_ids = await get_disabled_short_names_for_user(user_id)
         for item in all_short_names_with_ids[0]:
-            if item['id'] not in disabled_ids:
-                short_names_map[item['full_name']] = item['short_name']
+            if item["id"] not in disabled_ids:
+                short_names_map[item["full_name"]] = item["short_name"]
 
     # --- 2. Group by Date ---
     days = defaultdict(list)
     for lesson in schedule_data:
-        days[lesson['date']].append(lesson)
+        days[lesson["date"]].append(lesson)
 
     formatted_days = []
 
@@ -161,31 +185,32 @@ async def format_schedule(
         day_of_week = translator.gettext(lang, f"day_{date_obj.weekday()}")
         month_name = translator.gettext(lang, f"month_{date_obj.month-1}_gen")
         day_header = f"<b>{day_of_week}, {date_obj.day} {month_name} {date_obj.year}</b>"
-        
+
         # --- 4. Group by Time Slot ---
         time_slots = defaultdict(list)
         for lesson in daily_lessons:
-            time_key = (lesson['beginLesson'], lesson['endLesson'])
+            time_key = (lesson["beginLesson"], lesson["endLesson"])
             time_slots[time_key].append(lesson)
 
         day_content_lines = []
 
         # --- 5. Process Each Time Slot (Variant B Logic) ---
         for (start_time, end_time), slot_lessons in sorted(time_slots.items()):
-            
             # Group identical subjects within this time slot
             # Key: (Discipline Name, Lesson Type)
             # Value: List of lessons (differing by room/teacher)
             subject_groups = defaultdict(list)
             for lesson in slot_lessons:
-                d_name = _get_discipline_name(lesson['discipline'], use_short_names, short_names_map)
-                _, type_name = _get_lesson_visuals(lesson['kindOfWork'])
+                d_name = _get_discipline_name(
+                    lesson["discipline"], use_short_names, short_names_map
+                )
+                _, type_name = _get_lesson_visuals(lesson["kindOfWork"])
                 key = (d_name, type_name)
                 subject_groups[key].append(lesson)
 
             # Render the groups
             for (d_name, type_name), group_lessons in subject_groups.items():
-                emoji, _ = _get_lesson_visuals(group_lessons[0]['kindOfWork'])
+                emoji, _ = _get_lesson_visuals(group_lessons[0]["kindOfWork"])
                 emoji_prefix = f"{emoji} " if show_emojis else ""
 
                 # --- CASE 1: Single Lesson (Standard View) ---
@@ -194,16 +219,16 @@ async def format_schedule(
                     # Format: Time | Room \n Name | Type \n Teacher
                     header_line = hcode(f"{start_time} - {end_time} | {l['auditorium']}")
                     body_line = f"{emoji_prefix}{d_name} | {type_name}"
-                    
+
                     # Teacher / Group info logic
-                    extra_info = l['lecturer_title'].replace('_', ' ')
-                    if entity_type == 'group' and l.get('lecturerEmail'):
-                        pass # Keep concise
-                    if show_emails and l.get('lecturerEmail'):
+                    extra_info = l["lecturer_title"].replace("_", " ")
+                    if entity_type == "group" and l.get("lecturerEmail"):
+                        pass  # Keep concise
+                    if show_emails and l.get("lecturerEmail"):
                         extra_info += f" ({l['lecturerEmail']})"
-                    elif entity_type == 'person':
+                    elif entity_type == "person":
                         extra_info = f"{l.get('group', '???')} | {extra_info}"
-                    elif entity_type == 'auditorium':
+                    elif entity_type == "auditorium":
                         extra_info = f"{l.get('group', '???')} | {extra_info}"
 
                     block = f"{header_line}\n{body_line}\n{extra_info}"
@@ -211,32 +236,36 @@ async def format_schedule(
 
                 # --- CASE 2: Merged Lessons (Variant B) ---
                 else:
-                    # Format: 
+                    # Format:
                     # Time
                     # Emoji Name | Type
                     #   ├─ Room | Teacher
                     #   └─ Room | Teacher
-                    
+
                     header_line = hcode(f"{start_time} - {end_time}")
                     title_line = f"{emoji_prefix}{d_name} | {type_name}"
-                    
+
                     sub_lines = []
                     # Deduplicate exact matches (e.g. if API sends duplicates)
-                    unique_sub_lessons = { (l['auditorium'], l['lecturer_title'], l.get('group','')): l for l in group_lessons }.values()
-                    sorted_subs = sorted(unique_sub_lessons, key=lambda x: x['auditorium'])
-                    
+                    unique_sub_lessons = {
+                        (l["auditorium"], l["lecturer_title"], l.get("group", "")): l
+                        for l in group_lessons
+                    }.values()
+                    sorted_subs = sorted(unique_sub_lessons, key=lambda x: x["auditorium"])
+
                     for i, l in enumerate(sorted_subs):
-                        is_last = (i == len(sorted_subs) - 1)
+                        is_last = i == len(sorted_subs) - 1
                         tree_char = "└─" if is_last else "├─"
-                        
-                        room = l['auditorium']
-                        who = l['lecturer_title'].replace('_', ' ')
-                        
-                        if show_emails and l.get('lecturerEmail'):
+
+                        room = l["auditorium"]
+                        who = l["lecturer_title"].replace("_", " ")
+
+                        if show_emails and l.get("lecturerEmail"):
                             who += f" ({l['lecturerEmail']})"
                         # Adjust "who" based on context
-                        if entity_type == 'person': who = l.get('group', '???')
-                        
+                        if entity_type == "person":
+                            who = l.get("group", "???")
+
                         sub_lines.append(f"  {tree_char} {room} | {who}")
 
                     block = f"{header_line}\n{title_line}\n" + "\n".join(sub_lines)
@@ -247,7 +276,14 @@ async def format_schedule(
     main_header = translator.gettext(lang, "schedule_header_for", entity_name=entity_name)
     return f"{main_header}\n\n" + "\n\n---\n\n".join(formatted_days)
 
-def diff_schedules(old_data: List[Dict[str, Any]], new_data: List[Dict[str, Any]], lang: str, use_short_names: bool, short_names_map: dict) -> str | None:
+
+def diff_schedules(
+    old_data: list[dict[str, Any]],
+    new_data: list[dict[str, Any]],
+    lang: str,
+    use_short_names: bool,
+    short_names_map: dict,
+) -> str | None:
     """Compares two schedule datasets and returns a human-readable diff."""
     if not old_data and not new_data:
         return None
@@ -257,33 +293,43 @@ def diff_schedules(old_data: List[Dict[str, Any]], new_data: List[Dict[str, Any]
     today = datetime.now(ZoneInfo("Europe/Moscow")).date()
 
     if old_data:
-        old_dates = {d['date_obj'] for d in old_data}
+        old_dates = {d["date_obj"] for d in old_data}
         min_relevant_date, max_relevant_date = min(old_dates), max(old_dates)
     else:
         min_relevant_date, max_relevant_date = date.min, date.max
 
-    old_lessons = {l['lessonOid']: l for l in old_data if min_relevant_date <= l['date_obj'] <= max_relevant_date and l['date_obj'] >= today}
-    new_lessons = {l['lessonOid']: l for l in new_data if min_relevant_date <= l['date_obj'] <= max_relevant_date and l['date_obj'] >= today}
+    old_lessons = {
+        l["lessonOid"]: l
+        for l in old_data
+        if min_relevant_date <= l["date_obj"] <= max_relevant_date and l["date_obj"] >= today
+    }
+    new_lessons = {
+        l["lessonOid"]: l
+        for l in new_data
+        if min_relevant_date <= l["date_obj"] <= max_relevant_date and l["date_obj"] >= today
+    }
 
     all_oids = old_lessons.keys() | new_lessons.keys()
-    changes_by_date = defaultdict(lambda: {'added': [], 'removed': [], 'modified': []})
-    fields_to_check = ['beginLesson', 'endLesson', 'auditorium', 'lecturer_title', 'date']
-    
+    changes_by_date = defaultdict(lambda: {"added": [], "removed": [], "modified": []})
+    fields_to_check = ["beginLesson", "endLesson", "auditorium", "lecturer_title", "date"]
+
     for oid in all_oids:
         old_lesson = old_lessons.get(oid)
         new_lesson = new_lessons.get(oid)
 
         if old_lesson and not new_lesson:
-            changes_by_date[old_lesson['date']]['removed'].append(old_lesson)
+            changes_by_date[old_lesson["date"]]["removed"].append(old_lesson)
         elif new_lesson and not old_lesson:
-            changes_by_date[new_lesson['date']]['added'].append(new_lesson)
+            changes_by_date[new_lesson["date"]]["added"].append(new_lesson)
         elif old_lesson and new_lesson:
             modifications = {}
             for field in fields_to_check:
                 if old_lesson.get(field) != new_lesson.get(field):
                     modifications[field] = (old_lesson.get(field), new_lesson.get(field))
             if modifications:
-                changes_by_date[new_lesson['date']]['modified'].append({'old': old_lesson, 'new': new_lesson, 'changes': modifications})
+                changes_by_date[new_lesson["date"]]["modified"].append(
+                    {"old": old_lesson, "new": new_lesson, "changes": modifications}
+                )
 
     if not changes_by_date:
         return None
@@ -297,36 +343,47 @@ def diff_schedules(old_data: List[Dict[str, Any]], new_data: List[Dict[str, Any]
 
         day_parts = [day_header]
 
-        if changes['added']:
-            for lesson in changes['added']:
+        if changes["added"]:
+            for lesson in changes["added"]:
                 # Revert to default behavior for Diff view as grouping here is too complex and less readable for diffs
-                day_parts.append(f"\n✅ {translator.gettext(lang, 'schedule_change_added')}:\n{_format_lesson_details_sync(lesson, lang, use_short_names, short_names_map)}")
+                day_parts.append(
+                    f"\n✅ {translator.gettext(lang, 'schedule_change_added')}:\n{_format_lesson_details_sync(lesson, lang, use_short_names, short_names_map)}"
+                )
 
-        if changes['removed']:
-            for lesson in changes['removed']:
-                day_parts.append(f"\n❌ {translator.gettext(lang, 'schedule_change_removed')}:\n{_format_lesson_details_sync(lesson, lang, use_short_names, short_names_map)}")
+        if changes["removed"]:
+            for lesson in changes["removed"]:
+                day_parts.append(
+                    f"\n❌ {translator.gettext(lang, 'schedule_change_removed')}:\n{_format_lesson_details_sync(lesson, lang, use_short_names, short_names_map)}"
+                )
 
-        if changes['modified']:
-            for mod in changes['modified']:
+        if changes["modified"]:
+            for mod in changes["modified"]:
                 change_descs = []
-                for field, (old_val, new_val) in mod['changes'].items():
-                    if field == 'date':
+                for field, (old_val, new_val) in mod["changes"].items():
+                    if field == "date":
                         old_date_obj = datetime.strptime(old_val, "%Y-%m-%d").date()
                         new_date_obj = datetime.strptime(new_val, "%Y-%m-%d").date()
-                        change_descs.append(f"<i>{translator.gettext(lang, f'field_{field}')}: {hcode(old_date_obj.strftime('%d.%m.%Y'))} → {hcode(new_date_obj.strftime('%d.%m.%Y'))}</i>")
+                        change_descs.append(
+                            f"<i>{translator.gettext(lang, f'field_{field}')}: {hcode(old_date_obj.strftime('%d.%m.%Y'))} → {hcode(new_date_obj.strftime('%d.%m.%Y'))}</i>"
+                        )
                     else:
-                        change_descs.append(f"<i>{translator.gettext(lang, f'field_{field}')}: {hcode(old_val)} → {hcode(new_val)}</i>")
+                        change_descs.append(
+                            f"<i>{translator.gettext(lang, f'field_{field}')}: {hcode(old_val)} → {hcode(new_val)}</i>"
+                        )
 
-                modified_text = (f"\n🔄 {translator.gettext(lang, 'schedule_change_modified')}:\n"
-                                 f"{_format_lesson_details_sync(mod['new'], lang, use_short_names, short_names_map)}\n"
-                                 f"{' '.join(change_descs)}")
+                modified_text = (
+                    f"\n🔄 {translator.gettext(lang, 'schedule_change_modified')}:\n"
+                    f"{_format_lesson_details_sync(mod['new'], lang, use_short_names, short_names_map)}\n"
+                    f"{' '.join(change_descs)}"
+                )
                 day_parts.append(modified_text)
-        
+
         day_diffs.append("\n".join(day_parts))
 
     return "\n\n---\n\n".join(day_diffs) if day_diffs else None
 
-def generate_ical_from_schedule(schedule_data: List[Dict[str, Any]], entity_name: str) -> str:
+
+def generate_ical_from_schedule(schedule_data: list[dict[str, Any]], entity_name: str) -> str:
     """
     Generates an iCalendar (.ics) file string from schedule data.
     """
@@ -339,22 +396,23 @@ def generate_ical_from_schedule(schedule_data: List[Dict[str, Any]], entity_name
     for lesson in schedule_data:
         try:
             event = Event()
-            emoji, type_name = _get_lesson_visuals(lesson['kindOfWork'])
+            emoji, type_name = _get_lesson_visuals(lesson["kindOfWork"])
             event.name = f"{emoji} {lesson['discipline']} ({type_name})"
-            
-            lesson_date = datetime.strptime(lesson['date'], "%Y-%m-%d").date()
-            start_time = time.fromisoformat(lesson['beginLesson'])
-            end_time = time.fromisoformat(lesson['endLesson'])
+
+            lesson_date = datetime.strptime(lesson["date"], "%Y-%m-%d").date()
+            start_time = time.fromisoformat(lesson["beginLesson"])
+            end_time = time.fromisoformat(lesson["endLesson"])
 
             event.begin = datetime.combine(lesson_date, start_time, tzinfo=moscow_tz)
             event.end = datetime.combine(lesson_date, end_time, tzinfo=moscow_tz)
 
             event.location = f"{lesson['auditorium']}, {lesson['building']}"
-            
+
             description_parts = [f"Преподаватель: {lesson['lecturer_title'].replace('_',' ')}"]
-            if 'group' in lesson: description_parts.append(f"Группа: {lesson['group']}")
+            if "group" in lesson:
+                description_parts.append(f"Группа: {lesson['group']}")
             event.description = "\n".join(description_parts)
-            
+
             if isinstance(cal.events, list):
                 cal.events.append(event)
             else:
@@ -362,7 +420,7 @@ def generate_ical_from_schedule(schedule_data: List[Dict[str, Any]], entity_name
         except (ValueError, KeyError) as e:
             logging.warning(f"Skipping lesson due to parsing error: {e}. Lesson data: {lesson}")
             continue
-            
+
     return cal.serialize()
 
 
@@ -374,16 +432,17 @@ def _enforce_rfc5545_folding(ical_content: str) -> bytes:
     4. Гарантирует CRLF.
     """
     # Генерация текущего времени в UTC для DTSTAMP
-    dtstamp_val = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    dtstamp_val = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     dtstamp_line = f"DTSTAMP:{dtstamp_val}"
 
     # 1. Нормализация и Unfolding
-    lines = ical_content.replace('\r\n', '\n').split('\n')
+    lines = ical_content.replace("\r\n", "\n").split("\n")
     unfolded_lines = []
     current_line = ""
-    
+
     for line in lines:
-        if not line: continue
+        if not line:
+            continue
         if line.startswith(" ") or line.startswith("\t"):
             current_line += line[1:]
         else:
@@ -395,79 +454,79 @@ def _enforce_rfc5545_folding(ical_content: str) -> bytes:
 
     # 2. Инъекция DTSTAMP и Refolding
     final_lines = []
-    
+
     for line in unfolded_lines:
         # Если встретили начало события, добавляем его, а следом принудительно DTSTAMP
         if line.strip() == "BEGIN:VEVENT":
             final_lines.append(b"BEGIN:VEVENT")
-            final_lines.append(dtstamp_line.encode('utf-8'))
+            final_lines.append(dtstamp_line.encode("utf-8"))
             continue
-        
+
         # Если библиотека вдруг сама добавила DTSTAMP, пропускаем его (чтобы не было дублей),
         # так как мы уже добавили свой "свежий" сразу после BEGIN:VEVENT.
         if line.startswith("DTSTAMP:"):
             continue
 
         # Логика сворачивания строк (Refolding) с учетом UTF-8
-        line_bytes = line.encode('utf-8')
-        
+        line_bytes = line.encode("utf-8")
+
         if len(line_bytes) <= 75:
             final_lines.append(line_bytes)
         else:
             # Разбиваем длинные строки
             current_chunk = bytearray()
             is_first_chunk = True
-            
+
             # Посимвольный перебор для безопасного разделения мультибайтовых символов
             for char in line:
-                char_bytes = char.encode('utf-8')
-                limit = 75 if is_first_chunk else 74 # 74, т.к. будет добавлен пробел
-                
+                char_bytes = char.encode("utf-8")
+                limit = 75 if is_first_chunk else 74  # 74, т.к. будет добавлен пробел
+
                 if len(current_chunk) + len(char_bytes) > limit:
                     final_lines.append(current_chunk)
-                    current_chunk = bytearray(b' ') # Пробел в начале новой строки (RFC 5545)
+                    current_chunk = bytearray(b" ")  # Пробел в начале новой строки (RFC 5545)
                     is_first_chunk = False
-                
+
                 current_chunk.extend(char_bytes)
-            
+
             if current_chunk:
                 final_lines.append(current_chunk)
 
     # 3. Сборка с CRLF
-    return b'\r\n'.join(final_lines) + b'\r\n'
+    return b"\r\n".join(final_lines) + b"\r\n"
 
 
-def generate_ical_from_aggregated_schedule(schedule_data: List[Dict[str, Any]]) -> bytes:
+def generate_ical_from_aggregated_schedule(schedule_data: list[dict[str, Any]]) -> bytes:
     """
     Генерирует iCal файл и возвращает байты.
     """
     from ics import Calendar, Event
-    
+
     cal = Calendar()
     moscow_tz = ZoneInfo("Europe/Moscow")
     now_dt = datetime.now(moscow_tz)
-    
+
     if schedule_data:
         for lesson in schedule_data:
             try:
                 event = Event()
-                emoji, type_name = _get_lesson_visuals(lesson['kindOfWork'])
-                
-                source = lesson.get('source_entity', '')
+                emoji, type_name = _get_lesson_visuals(lesson["kindOfWork"])
+
+                source = lesson.get("source_entity", "")
                 source_prefix = f"[{source}] " if source else ""
-                
+
                 event.name = f"{source_prefix}{emoji} {lesson['discipline']} ({type_name})"
-                
-                lesson_date = datetime.strptime(lesson['date'], "%Y-%m-%d").date()
-                start_time = time.fromisoformat(lesson['beginLesson'])
-                end_time = time.fromisoformat(lesson['endLesson'])
+
+                lesson_date = datetime.strptime(lesson["date"], "%Y-%m-%d").date()
+                start_time = time.fromisoformat(lesson["beginLesson"])
+                end_time = time.fromisoformat(lesson["endLesson"])
 
                 event.begin = datetime.combine(lesson_date, start_time, tzinfo=moscow_tz)
                 event.end = datetime.combine(lesson_date, end_time, tzinfo=moscow_tz)
                 event.location = f"{lesson['auditorium']}, {lesson['building']}"
-                
+
                 # UID
-                oid = lesson.get('lessonOid')
+                oid = lesson.get("lessonOid")
                 if oid:
                     event.uid = f"lesson-{oid}@matplobbot.ru"
                 else:
@@ -476,14 +535,18 @@ def generate_ical_from_aggregated_schedule(schedule_data: List[Dict[str, Any]]) 
 
                 # Описание
                 desc_lines = []
-                if source: desc_lines.append(f"Источник: {source}")
-                desc_lines.append(f"Преподаватель: {lesson.get('lecturer_title', '').replace('_',' ')}")
-                if 'group' in lesson: desc_lines.append(f"Группы: {lesson['group']}")
+                if source:
+                    desc_lines.append(f"Источник: {source}")
+                desc_lines.append(
+                    f"Преподаватель: {lesson.get('lecturer_title', '').replace('_',' ')}"
+                )
+                if "group" in lesson:
+                    desc_lines.append(f"Группы: {lesson['group']}")
                 desc_lines.append(f"Обновлено: {now_dt.strftime('%H:%M %d.%m')}")
-                
+
                 # Экранируем переносы для библиотеки
                 event.description = "\n".join(desc_lines)
-                
+
                 if isinstance(cal.events, list):
                     cal.events.append(event)
                 else:
@@ -500,21 +563,24 @@ def generate_ical_from_aggregated_schedule(schedule_data: List[Dict[str, Any]]) 
         "X-WR-CALNAME:Расписание (Bot)",
         "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
         "X-PUBLISHED-TTL:PT1H",
-        "PRODID:-//Matplobbot//Schedule//RU"
+        "PRODID:-//Matplobbot//Schedule//RU",
     ]
-    
+
     # Чистим старый PRODID
-    raw_ics_str = re.sub(r'PRODID:.*?\n', '', raw_ics_str)
-    
+    raw_ics_str = re.sub(r"PRODID:.*?\n", "", raw_ics_str)
+
     # Вставляем новые заголовки после VERSION
     injection_point = "VERSION:2.0"
     if injection_point in raw_ics_str:
-        raw_ics_str = raw_ics_str.replace(injection_point, f"{injection_point}\n" + "\n".join(headers_to_inject))
-    
+        raw_ics_str = raw_ics_str.replace(
+            injection_point, f"{injection_point}\n" + "\n".join(headers_to_inject)
+        )
+
     # Прогоняем через санитайзер (он добавит DTSTAMP и исправит переносы)
     final_bytes = _enforce_rfc5545_folding(raw_ics_str)
-    
+
     return final_bytes
+
 
 def get_semester_bounds() -> tuple[str, str]:
     """
@@ -537,35 +603,36 @@ def get_semester_bounds() -> tuple[str, str]:
         start_date = date(year, 8, 25)
         end_date = date(year + 1, 1, 31)
     # Январь (конец осеннего)
-    else: # today.month == 1
+    else:  # today.month == 1
         start_date = date(year - 1, 8, 25)
         end_date = date(year, 1, 31)
 
     return start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
 
+
 async def get_unique_modules_hybrid(schedule_data: list[dict]) -> list[str]:
     """
-    Возвращает список доступных модулей, учитывая и Regex из group, 
+    Возвращает список доступных модулей, учитывая и Regex из group,
     и ручные маппинги (дисциплина -> модуль) из БД.
     """
     modules = set()
-    
+
     # 1. Получаем маппинг от админа
     discipline_to_module = await get_discipline_modules_map()
-    
+
     for lesson in schedule_data:
         # А. Проверяем явный модуль в названии группы
-        group = lesson.get('group')
+        group = lesson.get("group")
         if isinstance(group, str):
             name = get_module_name(group)
             if name:
                 modules.add(name)
-        
+
         # Б. Проверяем маппинг по названию дисциплины
-        disc = lesson.get('discipline')
+        disc = lesson.get("discipline")
         if disc and disc in discipline_to_module:
             modules.add(discipline_to_module[disc])
-            
+
     return sorted(list(modules))
 
 
@@ -574,7 +641,7 @@ async def get_aggregated_schedule(
     subscriptions: list[dict],
     start_date: date,
     end_date: date,
-    filter_config: dict = None
+    filter_config: dict = None,
 ) -> list[dict]:
     """
     Собирает расписание со всех подписок, применяет фильтры и возвращает плоский список пар.
@@ -588,29 +655,29 @@ async def get_aggregated_schedule(
         filter_config = {}
 
     aggregated_lessons = []
-    
+
     # 1. Загружаем глобальный маппинг дисциплин (для гибридной фильтрации модулей)
     discipline_to_module = await get_discipline_modules_map()
 
-    from shared_lib.database import get_cached_schedule # Импорт внутри во избежание циклов
+    from shared_lib.database import get_cached_schedule  # Импорт внутри во избежание циклов
 
     for sub in subscriptions:
         # --- Фильтр по Источнику ---
-        if sub['id'] in filter_config.get('excluded_subs', []):
+        if sub["id"] in filter_config.get("excluded_subs", []):
             continue
 
         # Получаем кэш
-        cached_data = await get_cached_schedule(sub['entity_type'], sub['entity_id'])
+        cached_data = await get_cached_schedule(sub["entity_type"], sub["entity_id"])
         if not cached_data:
             continue
 
         # Получаем настройки модулей для ЭТОЙ подписки
-        selected_modules = await get_subscription_modules(sub['id'])
+        selected_modules = await get_subscription_modules(sub["id"])
 
         for lesson in cached_data:
             # Проверка даты
             try:
-                l_date = datetime.strptime(lesson['date'], "%Y-%m-%d").date()
+                l_date = datetime.strptime(lesson["date"], "%Y-%m-%d").date()
                 if not (start_date <= l_date <= end_date):
                     continue
             except ValueError:
@@ -618,40 +685,48 @@ async def get_aggregated_schedule(
 
             # --- Фильтр по Типу занятия ---
             # Упрощаем типы для фильтрации: 'Lecture', 'Seminar', 'Exam', 'Other'
-            kind = lesson.get('kindOfWork', '')
-            simple_type = 'Other'
-            if 'Лекци' in kind: simple_type = 'Lecture'
-            elif 'Практич' in kind or 'Семинар' in kind or 'Лаборат' in kind: simple_type = 'Seminar'
-            elif 'экзамен' in kind.lower() or 'аттестация' in kind.lower() or 'зачет' in kind.lower(): simple_type = 'Exam'
+            kind = lesson.get("kindOfWork", "")
+            simple_type = "Other"
+            if "Лекци" in kind:
+                simple_type = "Lecture"
+            elif "Практич" in kind or "Семинар" in kind or "Лаборат" in kind:
+                simple_type = "Seminar"
+            elif (
+                "экзамен" in kind.lower() or "аттестация" in kind.lower() or "зачет" in kind.lower()
+            ):
+                simple_type = "Exam"
 
-            if simple_type in filter_config.get('excluded_types', []):
+            if simple_type in filter_config.get("excluded_types", []):
                 continue
 
             # --- Фильтр по Модулям (Гибридный) ---
-            if sub['entity_type'] == 'group' and selected_modules:
+            if sub["entity_type"] == "group" and selected_modules:
                 # (Копируем логику из format_schedule)
-                group_val = lesson.get('group')
+                group_val = lesson.get("group")
                 explicit_module = get_module_name(group_val) if isinstance(group_val, str) else None
-                discipline_name = lesson.get('discipline', '')
+                discipline_name = lesson.get("discipline", "")
                 mapped_module = discipline_to_module.get(discipline_name)
 
                 # Если это модуль, и он НЕ выбран -> пропускаем
                 is_module = (explicit_module is not None) or (mapped_module is not None)
                 is_selected = False
-                if explicit_module and explicit_module in selected_modules: is_selected = True
-                if mapped_module and mapped_module in selected_modules: is_selected = True
-                
+                if explicit_module and explicit_module in selected_modules:
+                    is_selected = True
+                if mapped_module and mapped_module in selected_modules:
+                    is_selected = True
+
                 if is_module and not is_selected:
                     continue
 
             # Добавляем метку источника, чтобы в общем списке понимать, чья пара
             lesson_copy = lesson.copy()
-            lesson_copy['source_entity'] = sub['entity_name']
+            lesson_copy["source_entity"] = sub["entity_name"]
             aggregated_lessons.append(lesson_copy)
 
     # Сортируем по времени
-    aggregated_lessons.sort(key=lambda x: (x['date'], x['beginLesson']))
+    aggregated_lessons.sort(key=lambda x: (x["date"], x["beginLesson"]))
     return aggregated_lessons
+
 
 def generate_module_details_text(schedule_data: list[dict], lang: str) -> str:
     """
@@ -663,13 +738,13 @@ def generate_module_details_text(schedule_data: list[dict], lang: str) -> str:
     # Структура: module -> discipline -> set(lecturers)
     # Используем set для преподавателей, чтобы убрать дубли (один препод ведет много пар)
     grouped = defaultdict(lambda: defaultdict(set))
-    
+
     for lesson in schedule_data:
-        mod_name = get_module_name(lesson.get('group'))
+        mod_name = get_module_name(lesson.get("group"))
         if mod_name:
-            disc = lesson.get('discipline', 'Unknown')
+            disc = lesson.get("discipline", "Unknown")
             # Очищаем имя преподавателя от лишних символов, если нужно
-            lecturer = lesson.get('lecturer_title', '').replace('_', ' ').strip()
+            lecturer = lesson.get("lecturer_title", "").replace("_", " ").strip()
             if lecturer:
                 grouped[mod_name][disc].add(lecturer)
 
@@ -677,7 +752,7 @@ def generate_module_details_text(schedule_data: list[dict], lang: str) -> str:
         return ""
 
     lines = [translator.gettext(lang, "module_details_header")]
-    
+
     # Сортируем модули по алфавиту
     for mod in sorted(grouped.keys()):
         lines.append(f"🔸 <b>{mod}</b>")
@@ -685,41 +760,45 @@ def generate_module_details_text(schedule_data: list[dict], lang: str) -> str:
         for disc, lecturers in sorted(grouped[mod].items()):
             lecturers_str = ", ".join(sorted(list(lecturers)))
             lines.append(f"   🔹 {disc}: <i>{lecturers_str}</i>")
-        lines.append("") # Пустая строка между модулями
+        lines.append("")  # Пустая строка между модулями
 
     return "\n".join(lines)
 
+
 async def get_schedule_with_cache_fallback(
-    ruz_api_client, 
-    entity_type: str, 
-    entity_id: str, 
-    requested_start: str, 
+    ruz_api_client,
+    entity_type: str,
+    entity_id: str,
+    requested_start: str,
     requested_end: str,
-    max_cache_age_hours: int = 12
+    max_cache_age_hours: int = 12,
 ) -> tuple[list[dict], bool]:
     """
-    Умное получение расписания. 
+    Умное получение расписания.
     Возвращает кортеж: (список_занятий, is_offline_mode)
     """
-    from shared_lib.database import get_cached_schedule, upsert_cached_schedule, get_session
-    from shared_lib.models import CachedSchedule
     from sqlalchemy import select
+
+    from shared_lib.database import get_session, upsert_cached_schedule
+    from shared_lib.models import CachedSchedule
 
     # 1. Проверяем свежесть текущего кэша
     cache_is_fresh = False
     cached_data = None
-    
+
     async with get_session() as session:
         result = await session.execute(
-            select(CachedSchedule.schedule_data, CachedSchedule.updated_at)
-            .where(CachedSchedule.entity_type == entity_type, CachedSchedule.entity_id == str(entity_id))
+            select(CachedSchedule.schedule_data, CachedSchedule.updated_at).where(
+                CachedSchedule.entity_type == entity_type,
+                CachedSchedule.entity_id == str(entity_id),
+            )
         )
         row = result.first()
         if row:
             cached_data = row.schedule_data
             updated_at = row.updated_at
             # Проверяем, не старше ли кэш, чем max_cache_age_hours
-            if updated_at and datetime.now(timezone.utc) - updated_at < timedelta(hours=max_cache_age_hours):
+            if updated_at and datetime.now(UTC) - updated_at < timedelta(hours=max_cache_age_hours):
                 cache_is_fresh = True
 
     # 2. Если кэш старый или его нет - идем в API за ВЕCЬМ семестром
@@ -728,21 +807,27 @@ async def get_schedule_with_cache_fallback(
         try:
             # Берем широкие рамки семестра, а не один день!
             sem_start, sem_end = get_semester_bounds()
-            logging.info(f"Cache miss/stale for {entity_type}:{entity_id}. Fetching full semester from API...")
-            
+            logging.info(
+                f"Cache miss/stale for {entity_type}:{entity_id}. Fetching full semester from API..."
+            )
+
             api_data = await ruz_api_client.get_schedule(
                 entity_type, entity_id, start=sem_start, finish=sem_end
             )
-            
+
             # ТРЕБОВАНИЕ: Сохраняем в БД, только если пришло не пустое
             if api_data and len(api_data) > 0:
                 await upsert_cached_schedule(entity_type, entity_id, api_data)
-                cached_data = api_data # Обновляем локальную переменную свежими данными
-                logging.info(f"Successfully cached {len(api_data)} lessons for {entity_type}:{entity_id}")
+                cached_data = api_data  # Обновляем локальную переменную свежими данными
+                logging.info(
+                    f"Successfully cached {len(api_data)} lessons for {entity_type}:{entity_id}"
+                )
             else:
-                logging.warning(f"API returned empty list for {entity_type}:{entity_id}. Keeping old cache if exists.")
+                logging.warning(
+                    f"API returned empty list for {entity_type}:{entity_id}. Keeping old cache if exists."
+                )
                 # Если вернулся пустой список, мы не перезаписываем кэш (вдруг это баг API вуза)
-                
+
         except Exception as e:
             logging.error(f"API Error while fetching schedule for {entity_type}:{entity_id}: {e}")
             api_error = True
@@ -754,11 +839,11 @@ async def get_schedule_with_cache_fallback(
     # 4. Фильтруем данные (из кэша или свежие) под запрошенные даты
     req_start_dt = datetime.strptime(requested_start, "%Y-%m-%d").date()
     req_end_dt = datetime.strptime(requested_end, "%Y-%m-%d").date()
-    
-    filtered_schedule =[]
+
+    filtered_schedule = []
     for lesson in cached_data:
         # API ВУЗа отдает дату в формате YYYY.MM.DD или YYYY-MM-DD
-        lesson_date_str = lesson.get('date', '').replace('.', '-')
+        lesson_date_str = lesson.get("date", "").replace(".", "-")
         try:
             lesson_date = datetime.strptime(lesson_date_str, "%Y-%m-%d").date()
             if req_start_dt <= lesson_date <= req_end_dt:
@@ -768,5 +853,5 @@ async def get_schedule_with_cache_fallback(
 
     # Если была ошибка API, но мы отдали старый кэш -> is_offline_mode = True
     is_offline = api_error or (not cache_is_fresh and not cached_data)
-    
+
     return filtered_schedule, is_offline

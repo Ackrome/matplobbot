@@ -1,14 +1,16 @@
-import redis.asyncio as redis
 import json
 import logging
+
+import redis.asyncio as redis
 
 logger = logging.getLogger(__name__)
 
 # TTL для кэша в секундах (например, 1 час)
 CACHE_TTL = 3600
 
+
 class RedisClient:
-    def __init__(self, host='localhost', port=6379):
+    def __init__(self, host="localhost", port=6379):
         # Используем connection_pool для более эффективного управления соединениями
         self.pool = redis.ConnectionPool(host=host, port=port, db=0, decode_responses=True)
         self.client = redis.Redis(connection_pool=self.pool)
@@ -63,5 +65,6 @@ class RedisClient:
         except Exception as e:
             logger.error(f"Ошибка при очистке кэша Redis: {e}")
 
+
 # Создаем единственный экземпляр клиента
-redis_client = RedisClient(host='redis')
+redis_client = RedisClient(host="redis")

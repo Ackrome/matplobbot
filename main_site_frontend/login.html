@@ -11,7 +11,7 @@
     <link rel="icon" sizes="192x192" href="/android-chrome-192x192.png">
     <link rel="icon" sizes="512x512" href="/android-chrome-512x512.png">
     <link rel="manifest" href="/site.webmanifest">
-    
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
@@ -58,17 +58,17 @@
                 <h1 class="text-2xl font-bold text-slate-900">Добро пожаловать</h1>
                 <p class="text-slate-500">Войдите для доступа к настройкам</p>
             </div>
-            
+
             <!-- TELEGRAM LOGIN WIDGET -->
             <div class="flex flex-col items-center mb-6">
                 <!-- ВАЖНО: ЗАМЕНИТЕ matplobbot НА ИМЯ ВАШЕГО БОТА -->
-                <script async src="https://telegram.org/js/telegram-widget.js" 
-                        data-telegram-login="matplobbot" 
-                        data-size="large" 
-                        data-radius="12" 
-                        data-onauth="onTelegramAuth(user)" 
+                <script async src="https://telegram.org/js/telegram-widget.js"
+                        data-telegram-login="matplobbot"
+                        data-size="large"
+                        data-radius="12"
+                        data-onauth="onTelegramAuth(user)"
                         data-request-access="write"></script>
-                
+
                 <!-- НОВАЯ ПОДСКАЗКА -->
                 <p class="text-[10px] text-slate-400 mt-2 text-center max-w-xs leading-tight">
                     Telegram запоминает вашу сессию. Чтобы выйти вам нужно завершить сессию через Telegram там же, где вы ее разрешали.
@@ -80,7 +80,7 @@
                 <span class="flex-shrink-0 mx-4 text-slate-400 text-sm font-medium">или по паролю (для админов)</span>
                 <div class="flex-grow border-t border-slate-200"></div>
             </div>
-            
+
             <form id="loginForm" class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Логин</label>
@@ -95,13 +95,13 @@
                 </button>
             </form>
             <div id="error" class="mt-4 text-red-500 text-center text-sm hidden"></div>
-            
+
             <div class="mt-6 text-center text-sm text-slate-500">
                 Нет аккаунта администратора? <a href="/register" class="text-blue-600 font-semibold hover:underline">Создать</a>
             </div>
         </div>
     </main>
-    
+
     <script>
         function onTelegramAuth(user) {
             window.handleTelegramLogin(user);

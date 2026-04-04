@@ -23,7 +23,7 @@ pipeline {
         PROD_JWT_SECRET_KEY = credentials('PROD_JWT_SECRET_KEY')
         PROD_SUB_URL = credentials('PROD_SUB_URL')
         // Redis URL might be needed if you connect externally, but usually internal docker network handles it.
-        // If needed: PROD_REDIS_URL = "redis://redis:6379/0" 
+        // If needed: PROD_REDIS_URL = "redis://redis:6379/0"
     }
 
     stages {
@@ -31,12 +31,12 @@ pipeline {
             steps {
                 script {
                     withCredentials([sshUserPrivateKey(credentialsId: 'app-vm-ssh-key', keyFileVariable: 'SSH_KEY_FILE', usernameVariable: 'SSH_USER')]) {
-                        
+
                         sh 'chmod 600 $SSH_KEY_FILE'
 
                         // 1. Update repo
                         sh "ssh -i $SSH_KEY_FILE -o StrictHostKeyChecking=no root@app-vm.panthera-banjo.ts.net 'cd ~/matplobbot && git pull'"
-                        
+
                         // 2. Create .env
                         // Added REDIS_URL just in case it is needed by apps expecting it in .env
                         sh """
@@ -58,10 +58,10 @@ PROXY_URL=socks5://proxy:20170
 SUB_URL=${PROD_SUB_URL}
 EOF
                         """
-                        
+
                         // 3. Prune
                         sh "ssh -i $SSH_KEY_FILE -o StrictHostKeyChecking=no root@app-vm.panthera-banjo.ts.net 'docker system prune --all --force'"
-                        
+
                         // 4. Deploy command
                         // Passed WORKER_IMAGE_TAG as the 4th argument
                         sh "ssh -i $SSH_KEY_FILE -o StrictHostKeyChecking=no root@app-vm.panthera-banjo.ts.net 'cd ~/matplobbot && ./deploy.sh ${params.BOT_IMAGE_TAG} ${params.API_IMAGE_TAG} ${params.SCHEDULER_IMAGE_TAG} ${params.WORKER_IMAGE_TAG}'"

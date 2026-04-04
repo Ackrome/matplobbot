@@ -15,7 +15,7 @@ REQUIREMENT_FILES = [
 ]
 
 VERSION_PATTERN = re.compile(r'(version=")(\d+\.\d+\.\d+)(")')
-SHARED_REQUIREMENT_PATTERN = re.compile(r'^(matplobbot-shared==)\d+\.\d+\.\d+$', re.MULTILINE)
+SHARED_REQUIREMENT_PATTERN = re.compile(r"^(matplobbot-shared==)\d+\.\d+\.\d+$", re.MULTILINE)
 
 
 def bump_version(current_version: str, part: str) -> str:
@@ -35,7 +35,9 @@ def bump_version(current_version: str, part: str) -> str:
     return f"{major}.{minor}.{patch}"
 
 
-def update_file(file_path: Path, pattern: re.Pattern, replacement_template: str, min_replacements: int = 1) -> int:
+def update_file(
+    file_path: Path, pattern: re.Pattern, replacement_template: str, min_replacements: int = 1
+) -> int:
     """Apply a regex substitution to a file and fail if expected replacements are missing."""
     if not file_path.exists():
         print(f"Error: File not found at {file_path}", file=sys.stderr)
@@ -80,9 +82,15 @@ def check_tag_exists(tag_name: str) -> bool:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Automate version bumps for the matplobbot-shared library.")
-    parser.add_argument("part", choices=["patch", "minor", "major"], help="Version part to increment.")
-    parser.add_argument("--commit", action="store_true", help="Commit, tag, and push the version bump.")
+    parser = argparse.ArgumentParser(
+        description="Automate version bumps for the matplobbot-shared library."
+    )
+    parser.add_argument(
+        "part", choices=["patch", "minor", "major"], help="Version part to increment."
+    )
+    parser.add_argument(
+        "--commit", action="store_true", help="Commit, tag, and push the version bump."
+    )
     args = parser.parse_args()
 
     setup_content = SETUP_PY_PATH.read_text(encoding="utf-8")
@@ -116,7 +124,10 @@ def main():
         files_to_stage = [str(SETUP_PY_PATH), *[str(path) for path in REQUIREMENT_FILES]]
         run_git_command(["git", "add", *files_to_stage], "Staging files")
         run_git_command(["git", "commit", "-m", commit_message], "Committing version bump")
-        run_git_command(["git", "tag", "-a", tag_name, "-m", f"Version {new_version}"], f"Creating tag {tag_name}")
+        run_git_command(
+            ["git", "tag", "-a", tag_name, "-m", f"Version {new_version}"],
+            f"Creating tag {tag_name}",
+        )
         run_git_command(["git", "push"], "Pushing commit to origin")
         run_git_command(["git", "push", "origin", tag_name], f"Pushing tag {tag_name} to origin")
     else:

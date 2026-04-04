@@ -1,13 +1,17 @@
 import logging
 import os
-from pathlib import Path # Добавляем импорт pathlib
 from contextlib import asynccontextmanager
-from fastapi_stats_app.config import LOG_DIR, FASTAPI_LOG_FILE_NAME # Импортируем константы для логгирования
+from pathlib import Path  # Добавляем импорт pathlib
+
+from dotenv import load_dotenv  # Добавьте импорт
 from fastapi.middleware.cors import CORSMiddleware
 
-from dotenv import load_dotenv # Добавьте импорт
+from fastapi_stats_app.config import (  # Импортируем константы для логгирования
+    FASTAPI_LOG_FILE_NAME,
+    LOG_DIR,
+)
 
-load_dotenv() # Загружаем .env
+load_dotenv()  # Загружаем .env
 
 # --- ПАТЧ ДЛЯ ПРОКСИ (как в боте) ---
 PROXY_URL = os.getenv("PROXY_URL")
@@ -19,7 +23,7 @@ if PROXY_URL:
     os.environ["ALL_PROXY"] = socks5h_proxy
 # ------------------------------------
 # Определяем пути для логгирования FastAPI приложения
-LOG_FILE_FASTAPI = os.path.join(LOG_DIR, FASTAPI_LOG_FILE_NAME) # Используем константы из config
+LOG_FILE_FASTAPI = os.path.join(LOG_DIR, FASTAPI_LOG_FILE_NAME)  # Используем константы из config
 
 # Настройка логгирования для FastAPI приложения
 # Используем тот же формат, что и в bot/logger.py
@@ -28,22 +32,28 @@ os.makedirs(LOG_DIR, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(name)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s",
-    datefmt='%Y-%m-%d %H:%M:%S',
-    handlers=[
-        logging.FileHandler(LOG_FILE_FASTAPI, encoding='utf-8'),
-        logging.StreamHandler()
-    ]
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[logging.FileHandler(LOG_FILE_FASTAPI, encoding="utf-8"), logging.StreamHandler()],
 )
-logger = logging.getLogger(__name__) # Получаем логгер после базовой конфигурации
+logger = logging.getLogger(__name__)  # Получаем логгер после базовой конфигурации
 
 # --- Теперь можно безопасно импортировать остальные части приложения ---
-from fastapi import FastAPI, Request, Depends
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from .routers import stats_router, ws_router, calendar_router, schedule_router, auth_router, studio_router
-from shared_lib.database import init_db_pool, close_db_pool
+from fastapi.templating import Jinja2Templates
+
+from shared_lib.database import close_db_pool, init_db_pool
+
 from .auth import get_current_user  # Импортируем нашу функцию
+from .routers import (
+    auth_router,
+    calendar_router,
+    schedule_router,
+    stats_router,
+    studio_router,
+    ws_router,
+)
 
 
 @asynccontextmanager
@@ -56,15 +66,16 @@ async def lifespan(app: FastAPI):
     logger.info("Application shutdown: Closing database pool...")
     await close_db_pool()
 
+
 app = FastAPI(title="Bot Stats API", version="0.1.0", lifespan=lifespan)
 
 # Настройка CORS для фронтенда
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://ivantishchenko.ru", 
+        "https://ivantishchenko.ru",
         "http://ivantishchenko.ru",
-        "https://api.ivantishchenko.ru"
+        "https://api.ivantishchenko.ru",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -92,18 +103,19 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     response_class=HTMLResponse,
     summary="Главная страница статистики",
     description="Отображает HTML страницу со статистикой бота.",
-    dependencies=[Depends(get_current_user)]
-    )
+    dependencies=[Depends(get_current_user)],
+)
 async def read_root_html(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
+
 
 @app.get(
     "/users/{user_id}",
     response_class=HTMLResponse,
     summary="Страница профиля пользователя",
     description="Отображает страницу с детальной информацией о действиях пользователя.",
-    dependencies=[Depends(get_current_user)]
-    )
+    dependencies=[Depends(get_current_user)],
+)
 async def read_user_details_html(request: Request, user_id: int):
     # user_id передается в шаблон, но мы будем загружать данные через JS/API
     return templates.TemplateResponse("user_details.html", {"request": request, "user_id": user_id})

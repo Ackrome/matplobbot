@@ -111,7 +111,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-        
+
   migrator:
     build:
       context: .
@@ -131,7 +131,7 @@ services:
     # Порт 8080 внутри Docker, Caddy будет перекидывать сюда трафик
     ports:
       - "8080:80"
-      
+
   caddy:
     image: caddy:alpine
     restart: unless-stopped

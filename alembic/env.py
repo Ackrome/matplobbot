@@ -1,11 +1,12 @@
 import asyncio
-from logging.config import fileConfig
 import os
 import sys
-from dotenv import load_dotenv # <--- Добавлено
+from logging.config import fileConfig
 
+from dotenv import load_dotenv  # <--- Добавлено
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
+
 from alembic import context
 
 # 1. Загружаем переменные окружения из .env файла
@@ -24,6 +25,7 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+
 def get_url():
     """
     Умное получение URL базы данных.
@@ -39,18 +41,19 @@ def get_url():
     # Fix 1: Sync -> Async driver
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    
+
     # Fix 2: Localhost fix for Windows development
     # Если мы запускаем скрипт не в Докере (например, на Windows),
     # то хост 'postgres' (имя контейнера) недоступен. Меняем на localhost.
     # Проверяем по наличию специфичных для Win переменных или отсутствию Docker-файлов
-    is_running_in_docker = os.path.exists('/.dockerenv')
-    
+    is_running_in_docker = os.path.exists("/.dockerenv")
+
     if not is_running_in_docker and "@postgres" in url:
         print("Detected local run: switching DB host from 'postgres' to 'localhost'")
         url = url.replace("@postgres", "@localhost")
-        
+
     return url
+
 
 def run_migrations_offline() -> None:
     url = get_url()
@@ -64,9 +67,10 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         context.run_migrations()
 
+
 async def run_migrations_online() -> None:
     configuration = config.get_section(config.config_ini_section)
-    
+
     # Подменяем URL в конфиге на наш "умный" URL
     configuration["sqlalchemy.url"] = get_url()
 
@@ -81,11 +85,13 @@ async def run_migrations_online() -> None:
 
     await connectable.dispose()
 
+
 def do_run_migrations(connection):
     context.configure(connection=connection, target_metadata=target_metadata)
 
     with context.begin_transaction():
         context.run_migrations()
+
 
 if context.is_offline_mode():
     run_migrations_offline()

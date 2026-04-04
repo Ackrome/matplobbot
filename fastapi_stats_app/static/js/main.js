@@ -28,7 +28,7 @@ class WebSocketManager {
         this.onMessage = onMessage;
         this.onClose = onClose;
         this.onError = onError;
-        
+
         this.socket = null;
         this.reconnectTimeoutId = null;
         this.retryCount = 0;
@@ -85,7 +85,7 @@ function handleStatsSocketOpen() {
 function handleStatsSocketMessage(event) {
     try {
         const data = JSON.parse(event.data);
-        
+
         if (data.total_actions !== undefined) {
             totalActionsValueElement.textContent = data.total_actions.toLocaleString();
             if (data.last_updated) {
@@ -111,7 +111,7 @@ function handleStatsSocketMessage(event) {
 
                     const tdUser = document.createElement('td');
                     tdUser.className = "px-6 py-4 flex items-center space-x-3";
-                    
+
                     let avatarHtml = '';
                     if (user.avatar_pic_url) {
                         avatarHtml = `<img class="w-8 h-8 rounded-full object-cover" src="${user.avatar_pic_url}" alt="Avatar">`;
@@ -119,7 +119,7 @@ function handleStatsSocketMessage(event) {
                         const initial = (user.full_name && user.full_name.trim().length > 0) ? user.full_name.trim()[0] : '?';
                         avatarHtml = `<div class="fallback-avatar">${initial}</div>`;
                     }
-                    
+
                     const nameLink = `<a href="/users/${user.user_id}" class="font-medium text-blue-600 dark:text-blue-400 hover:underline">${user.full_name}</a>`;
                     tdUser.innerHTML = `${avatarHtml} <div>${nameLink}</div>`;
                     tr.appendChild(tdUser);
@@ -201,13 +201,13 @@ function handleLogSocketMessage(event) {
         newLogEntry.textContent = logText;
         if (logText.includes("ERROR")) newLogEntry.classList.add("text-red-400");
     }
-    
+
     botLogContentElement.appendChild(newLogEntry);
     if (botLogContentElement.childElementCount > 200) {
         botLogContentElement.removeChild(botLogContentElement.firstChild);
     }
     botLogContentElement.scrollTop = botLogContentElement.scrollHeight;
-    
+
     if (botLogStatusElement.textContent) botLogStatusElement.textContent = '';
 }
 
@@ -222,14 +222,14 @@ function updateCombinedPopularActionsChart() {
     else if (filter === 'messages') combinedData = messages;
 
     combinedData.sort((a, b) => b.count - a.count);
-    const topData = combinedData.slice(0, 10); 
+    const topData = combinedData.slice(0, 10);
 
     popularActionsChartInstance = updateChart({
         instance: popularActionsChartInstance,
         ctx: document.getElementById('popularActionsChart').getContext('2d'),
         data: topData, type: 'bar', labelKey: 'label', countKey: 'count',
         datasetLabel: 'Count',
-        backgroundColor: topData.map(d => d.type === 'command' ? 'rgba(59, 130, 246, 0.7)' : 'rgba(16, 185, 129, 0.7)'), 
+        backgroundColor: topData.map(d => d.type === 'command' ? 'rgba(59, 130, 246, 0.7)' : 'rgba(16, 185, 129, 0.7)'),
         borderColor: topData.map(d => d.type === 'command' ? 'rgb(59, 130, 246)' : 'rgb(16, 185, 129)'),
         extraOptions: {
             onClick: (event, elements, chart) => handleChartClick(event, chart, topData),
@@ -248,7 +248,7 @@ const updateActivityOverTimeChart = () => {
         ctx: document.getElementById('activityOverTimeChart').getContext('2d'),
         data, type: 'line', labelKey: 'period', countKey: 'count',
         datasetLabel: 'Actions',
-        borderColor: 'rgb(99, 102, 241)', 
+        borderColor: 'rgb(99, 102, 241)',
         backgroundColor: 'rgba(99, 102, 241, 0.1)',
         extraOptions: { fill: true, tension: 0.3 }
     });
@@ -260,7 +260,7 @@ const updateNewUsersChart = (data) => {
         ctx: document.getElementById('newUsersChart').getContext('2d'),
         data, type: 'bar', labelKey: 'date', countKey: 'count',
         datasetLabel: 'New Users',
-        backgroundColor: 'rgba(236, 72, 153, 0.7)', 
+        backgroundColor: 'rgba(236, 72, 153, 0.7)',
         borderColor: 'rgb(236, 72, 153)',
         extraOptions: { borderRadius: 4 }
     });
@@ -268,20 +268,20 @@ const updateNewUsersChart = (data) => {
 
 const updateActionTypesChart = (data) => {
     const colors = [
-        'rgba(59, 130, 246, 0.8)', 
-        'rgba(16, 185, 129, 0.8)', 
-        'rgba(245, 158, 11, 0.8)', 
-        'rgba(239, 68, 68, 0.8)',  
-        'rgba(139, 92, 246, 0.8)'  
+        'rgba(59, 130, 246, 0.8)',
+        'rgba(16, 185, 129, 0.8)',
+        'rgba(245, 158, 11, 0.8)',
+        'rgba(239, 68, 68, 0.8)',
+        'rgba(139, 92, 246, 0.8)'
     ];
-    
+
     actionTypesChartInstance = updateChart({
         instance: actionTypesChartInstance,
         ctx: document.getElementById('actionTypesChart').getContext('2d'),
         data, type: 'doughnut', labelKey: 'action_type', countKey: 'count',
         datasetLabel: 'Distribution',
         backgroundColor: data.map((_, i) => colors[i % colors.length]),
-        extraOptions: { 
+        extraOptions: {
             cutout: '65%',
             plugins: { legend: { position: 'right' } }
         }
@@ -300,7 +300,7 @@ function downloadCSV(headers, data, filename) {
             }
         })
     ].join('\n');
-    
+
     const link = document.createElement("a");
     link.href = encodeURI(csvContent);
     link.download = filename;
@@ -366,7 +366,7 @@ function fetchUsersForModal(label, type, page = 1) {
     const modalBody = document.getElementById('modal-body');
     const controls = document.getElementById('modal-pagination-controls');
     modalBody.innerHTML = '<div class="p-4 text-center">Загрузка...</div>';
-    
+
     fetch(`/api/stats/action_users?action_type=${type}&action_details=${encodeURIComponent(label)}&page=${page}`)
         .then(res => res.json())
         .then(data => {
@@ -374,7 +374,7 @@ function fetchUsersForModal(label, type, page = 1) {
                 modalBody.innerHTML = '<div class="p-4 text-center text-gray-500">Пользователи не найдены.</div>';
                 return;
             }
-            
+
             const table = document.createElement('table');
             table.className = "w-full text-sm text-left text-gray-500 dark:text-gray-400";
             table.innerHTML = `
@@ -397,7 +397,7 @@ function fetchUsersForModal(label, type, page = 1) {
             `;
             modalBody.innerHTML = '';
             modalBody.appendChild(table);
-            
+
             controls.innerHTML = '';
             if (data.pagination.total_pages > 1) {
                 if (page > 1) {
@@ -411,7 +411,7 @@ function fetchUsersForModal(label, type, page = 1) {
                 pageInfo.className = "text-sm text-gray-500 self-center px-2 dark:text-gray-400";
                 pageInfo.textContent = `${page} / ${data.pagination.total_pages}`;
                 controls.appendChild(pageInfo);
-                
+
                 if (page < data.pagination.total_pages) {
                     const nextBtn = document.createElement('button');
                     nextBtn.textContent = 'Вперед »';
@@ -461,13 +461,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 50);
         });
     }
-    
+
     document.querySelectorAll('.download-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const chartKey = e.target.dataset.chart;
             const format = e.target.dataset.format;
             const data = chartDataStore[chartKey];
-            
+
             if(format === 'csv' && data) {
                 downloadCSV(['Label', 'Count'], data, `${chartKey}.csv`);
             } else if (format === 'png') {
@@ -486,7 +486,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
-    
+
     document.querySelector('.modal-close-btn').addEventListener('click', () => {
         document.getElementById('user-list-modal').classList.add('hidden');
     });

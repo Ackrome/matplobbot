@@ -3,7 +3,7 @@ const NAV_API_BASE = "https://api.ivantishchenko.ru/api";
 
 window.performLogout = function() {
     localStorage.removeItem('jwt_token');
-    window.location.href = '/login'; 
+    window.location.href = '/login';
 }
 
 async function checkAuthAndRenderNavbar() {
@@ -22,12 +22,12 @@ async function checkAuthAndRenderNavbar() {
 
             // Админы в панель, юзеры в расписание
             const profileLink = user.role === "admin" ? "/stats" : "/schedule";
-            
+
             let avatarHtml = `<div class="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold shrink-0">${user.username[0].toUpperCase()}</div>`;
             if (user.avatar_url) {
                 avatarHtml = `<img src="${user.avatar_url}" class="w-6 h-6 rounded-full object-cover shrink-0 border border-slate-200">`;
             }
-            
+
             let mobileAvatarHtml = `<div class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold shrink-0">${user.username[0].toUpperCase()}</div>`;
             if (user.avatar_url) {
                 mobileAvatarHtml = `<img src="${user.avatar_url}" class="w-8 h-8 rounded-full object-cover shrink-0 border border-slate-200">`;

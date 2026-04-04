@@ -1,33 +1,32 @@
 # fastapi_stats_app/routers/stats_router.py
-from fastapi import APIRouter, HTTPException, Query, status, Depends
-import math
 import logging
+import math
 import os
-import aiohttp
-import json
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
+import aiohttp
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared_lib.database import (
-    get_db_session_dependency, 
+    get_activity_over_time_data_from_db,
+    get_all_user_actions,
+    get_db_session_dependency,
+    get_leaderboard_data_from_db,
+    get_session,
     get_user_profile_data_from_db,
     get_users_for_action,
-    get_all_user_actions,
     log_user_action,
-    get_session,
-    get_leaderboard_data_from_db,
-    get_activity_over_time_data_from_db
-
 )
 from shared_lib.redis_client import redis_client
 from shared_lib.schemas import (
-    UserProfileResponse, 
-    ActionUsersResponse, 
+    ActionUsersResponse,
     ExportActionsResponse,
-    SendMessageRequest 
+    SendMessageRequest,
+    UserProfileResponse,
 )
+
 from ..auth import require_admin
 
 router = APIRouter(prefix="/stats", tags=["stats"])
@@ -36,12 +35,13 @@ logger = logging.getLogger(__name__)
 CACHE_TTL = 300
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
+
 @router.get(
     "/health",
     summary="Health Check",
     description="Проверяет доступность сервиса и подключение к базе данных.",
     response_model=dict[str, str],
-    status_code=status.HTTP_200_OK
+    status_code=status.HTTP_200_OK,
 )
 async def health_check(db: AsyncSession = Depends(get_db_session_dependency)) -> dict[str, str]:
     try:
@@ -51,23 +51,24 @@ async def health_check(db: AsyncSession = Depends(get_db_session_dependency)) ->
         logger.error(f"Health check failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"status": "error", "database": "disconnected", "reason": str(e)}
+            detail={"status": "error", "database": "disconnected", "reason": str(e)},
         )
+
 
 @router.get(
     "/users/{user_id}/profile",
     summary="Профиль пользователя",
     description="Возвращает детальную информацию о пользователе и историю его действий с пагинацией.",
     response_model=UserProfileResponse,
-    dependencies=[Depends(require_admin)]
+    dependencies=[Depends(require_admin)],
 )
 async def get_user_profile(
     user_id: int,
     page: int = Query(1, ge=1, description="Номер страницы"),
     page_size: int = Query(50, ge=1, le=200, description="Размер страницы"),
-    sort_by: str = Query('timestamp', description="Поле сортировки"),
-    sort_order: str = Query('desc', description="Порядок сортировки"),
-    db: AsyncSession = Depends(get_db_session_dependency)
+    sort_by: str = Query("timestamp", description="Поле сортировки"),
+    sort_order: str = Query("desc", description="Порядок сортировки"),
+    db: AsyncSession = Depends(get_db_session_dependency),
 ) -> Any:
     cache_key = f"user_profile:{user_id}:p{page}:s{page_size}:{sort_by}:{sort_order}"
     if page > 1:
@@ -82,7 +83,7 @@ async def get_user_profile(
         profile_data = await get_user_profile_data_from_db(
             db, user_id, page, page_size, sort_by, sort_order
         )
-        
+
         if profile_data is None:
             raise HTTPException(status_code=404, detail="Пользователь не найден.")
 
@@ -98,8 +99,8 @@ async def get_user_profile(
                 "total_pages": total_pages,
                 "page_size": page_size,
                 "sort_by": sort_by,
-                "sort_order": sort_order
-            }
+                "sort_order": sort_order,
+            },
         }
 
         try:
@@ -113,23 +114,26 @@ async def get_user_profile(
         logger.error(f"Database error fetching user profile {user_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Database Error")
 
+
 @router.get(
     "/stats/action_users",
     summary="Пользователи по действию",
     description="Возвращает список пользователей, совершивших конкретное действие.",
     response_model=ActionUsersResponse,
-    dependencies=[Depends(require_admin)]
+    dependencies=[Depends(require_admin)],
 )
 async def get_action_users(
     action_type: str = Query(..., description="Тип действия"),
     action_details: str = Query(..., description="Содержание действия"),
     page: int = Query(1, ge=1, description="Номер страницы"),
     page_size: int = Query(15, ge=1, le=100, description="Размер страницы"),
-    sort_by: str = Query('full_name', description="Поле сортировки"),
-    sort_order: str = Query('asc', description="Порядок сортировки"),
-    db: AsyncSession = Depends(get_db_session_dependency)
+    sort_by: str = Query("full_name", description="Поле сортировки"),
+    sort_order: str = Query("asc", description="Порядок сортировки"),
+    db: AsyncSession = Depends(get_db_session_dependency),
 ) -> Any:
-    cache_key = f"action_users:{action_type}:{action_details}:p{page}:s{page_size}:{sort_by}:{sort_order}"
+    cache_key = (
+        f"action_users:{action_type}:{action_details}:p{page}:s{page_size}:{sort_by}:{sort_order}"
+    )
     try:
         cached_data = await redis_client.get_cache(cache_key)
         if cached_data:
@@ -141,7 +145,7 @@ async def get_action_users(
         data = await get_users_for_action(
             db, action_type, action_details, page, page_size, sort_by, sort_order
         )
-        
+
         total_users = data["total_users"]
         total_pages = math.ceil(total_users / page_size) if page_size > 0 else 0
 
@@ -152,8 +156,8 @@ async def get_action_users(
                 "total_pages": total_pages,
                 "page_size": page_size,
                 "sort_by": sort_by,
-                "sort_order": sort_order
-            }
+                "sort_order": sort_order,
+            },
         }
 
         try:
@@ -167,16 +171,16 @@ async def get_action_users(
         logger.error(f"Database error fetching action users: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Database Error")
 
+
 @router.get(
     "/users/{user_id}/export_actions",
     summary="Экспорт действий",
     description="Выгружает полную историю действий пользователя.",
     response_model=ExportActionsResponse,
-    dependencies=[Depends(require_admin)]
+    dependencies=[Depends(require_admin)],
 )
 async def export_user_actions(
-    user_id: int,
-    db: AsyncSession = Depends(get_db_session_dependency)
+    user_id: int, db: AsyncSession = Depends(get_db_session_dependency)
 ) -> Any:
     try:
         actions = await get_all_user_actions(db, user_id)
@@ -185,12 +189,13 @@ async def export_user_actions(
         logger.error(f"Database error exporting actions for user {user_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Database Error")
 
+
 @router.post(
     "/users/{user_id}/send_message",
     summary="Отправить сообщение пользователю",
     description="Отправляет сообщение в Telegram и сохраняет его в БД как исходящее от админа.",
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(require_admin)]
+    dependencies=[Depends(require_admin)],
 )
 async def send_message_to_user(user_id: int, message_data: SendMessageRequest):
     if not BOT_TOKEN:
@@ -199,13 +204,9 @@ async def send_message_to_user(user_id: int, message_data: SendMessageRequest):
     text = message_data.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Сообщение не может быть пустым")
-    
+
     tg_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": user_id,
-        "text": text,
-        "parse_mode": "HTML"
-    }
+    payload = {"chat_id": user_id, "text": text, "parse_mode": "HTML"}
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -214,7 +215,7 @@ async def send_message_to_user(user_id: int, message_data: SendMessageRequest):
                     error_text = await response.text()
                     logger.error(f"Failed to send message to {user_id}: {error_text}")
                     raise HTTPException(status_code=400, detail=f"Telegram API Error: {error_text}")
-                
+
     except aiohttp.ClientError as e:
         logger.error(f"Network error sending message to {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Ошибка сети при отправке в Telegram")
@@ -225,20 +226,22 @@ async def send_message_to_user(user_id: int, message_data: SendMessageRequest):
             username=None,
             full_name="System",
             avatar_pic_url=None,
-            action_type='admin_message',
-            action_details=text
+            action_type="admin_message",
+            action_details=text,
         )
     except Exception as e:
         logger.error(f"Error logging admin message to DB for user {user_id}: {e}", exc_info=True)
-    
+
     return {"status": "success"}
+
 
 @router.get("/leaderboard")
 async def get_leaderboard(current_user: dict = Depends(require_admin)):
     async with get_session() as db:
         return await get_leaderboard_data_from_db(db)
 
+
 @router.get("/activity")
 async def get_activity(current_user: dict = Depends(require_admin)):
     async with get_session() as db:
-        return await get_activity_over_time_data_from_db(db, period='day')
+        return await get_activity_over_time_data_from_db(db, period="day")

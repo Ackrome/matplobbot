@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const pageTitle = document.querySelector('title');
     const paginationControlsElement = document.getElementById('pagination-controls');
     const searchInput = document.getElementById('search-input');
-    
+
     const messageForm = document.getElementById('send-message-form');
     const messageInput = document.getElementById('message-input');
     const sendBtn = document.getElementById('send-btn');
@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function connectWebSocket() {
         const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
         const wsUrl = `${wsProtocol}//${window.location.host}/ws/users/${userId}`;
-        
+
         console.log(`Connecting to WebSocket: ${wsUrl}`);
         socket = new WebSocket(wsUrl);
 
@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', function() {
             try {
                 const action = JSON.parse(event.data);
                 // Добавляем сообщение и скроллим вниз
-                appendSingleMessage(action, true); 
+                appendSingleMessage(action, true);
             } catch (e) {
                 console.error("Error parsing WebSocket message:", e);
             }
@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function fetchAndRenderPage(page = 1) {
         loadingStatusElement.textContent = 'Загрузка...';
         // Легкая прозрачность при загрузке
-        actionsBodyElement.classList.add('opacity-50'); 
+        actionsBodyElement.classList.add('opacity-50');
 
         fetch(`/api/users/${userId}/profile?page=${page}&sort_by=${currentSortBy}&sort_order=${currentSortOrder}`)
             .then(response => {
@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 renderChatHistory(data.actions);
                 renderPaginationControls(data.pagination);
-                
+
                 // Применяем фильтр поиска (если там что-то введено)
                 applySearchFilter();
             })
@@ -123,8 +123,8 @@ document.addEventListener('DOMContentLoaded', function() {
             avatarHtml = `<div class="fallback-avatar w-10 h-10 text-base">${initial}</div>`;
         }
 
-        const usernameText = user.username && user.username !== 'Нет username' 
-            ? `<a href="https://t.me/${user.username}" target="_blank" class="text-blue-500 hover:underline">@${user.username}</a>` 
+        const usernameText = user.username && user.username !== 'Нет username'
+            ? `<a href="https://t.me/${user.username}" target="_blank" class="text-blue-500 hover:underline">@${user.username}</a>`
             : `<span class="text-gray-400">ID: ${user.user_id}</span>`;
 
         profileHeaderElement.innerHTML = `
@@ -176,11 +176,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // --- Bubble Logic ---
         const bubble = document.createElement('div');
-        
+
         // Определяем тип сообщения
         const isCommand = action.action_type === 'command';
-        const isAdminMessage = action.action_type === 'admin_message'; 
-        
+        const isAdminMessage = action.action_type === 'admin_message';
+
         // outgoing = справа (синие/зеленые), остальные = слева (белые/серые)
         bubble.className = `message-bubble ${isCommand ? 'command' : ''} ${isAdminMessage ? 'outgoing' : ''}`;
 
@@ -269,8 +269,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!text) return;
 
         // Сохраняем состояние кнопки
-        const originalBtnContent = sendBtn.innerHTML; 
-        
+        const originalBtnContent = sendBtn.innerHTML;
+
         // Показываем спиннер
         sendBtn.innerHTML = '<svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
         sendBtn.disabled = true;
@@ -290,7 +290,7 @@ document.addEventListener('DOMContentLoaded', function() {
             messageInput.value = '';
             messageInput.style.height = '46px'; // Сброс высоты
             messageInput.focus();
-            
+
             // ВАЖНО: Мы НЕ добавляем сообщение вручную в DOM.
             // Мы ждем, пока оно придет через WebSocket (это гарантирует, что оно сохранено).
             // Это происходит очень быстро (<100мс).
@@ -321,10 +321,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const createButton = (text, page, isActive = false) => {
             const btn = document.createElement('button');
             btn.innerHTML = text;
-            btn.className = `px-3 py-1 rounded transition text-xs border ${isActive 
-                ? 'bg-blue-100 text-blue-700 border-blue-200 font-bold dark:bg-blue-900 dark:text-blue-200 dark:border-blue-800' 
+            btn.className = `px-3 py-1 rounded transition text-xs border ${isActive
+                ? 'bg-blue-100 text-blue-700 border-blue-200 font-bold dark:bg-blue-900 dark:text-blue-200 dark:border-blue-800'
                 : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-600'}`;
-            
+
             if (!isActive) {
                 btn.addEventListener('click', (e) => {
                     e.preventDefault();
@@ -339,7 +339,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (current_page > 1) {
             paginationControlsElement.appendChild(createButton('←', current_page - 1));
         }
-        
+
         paginationControlsElement.appendChild(createButton(current_page, current_page, true));
 
         if (current_page < total_pages) {
@@ -350,7 +350,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function applySearchFilter() {
         const term = searchInput.value.toLowerCase().trim();
         const bubbles = actionsBodyElement.querySelectorAll('.message-bubble');
-        
+
         bubbles.forEach(bubble => {
             const text = bubble.textContent.toLowerCase();
             if (!term || text.includes(term)) {
@@ -364,7 +364,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const dates = actionsBodyElement.querySelectorAll('.date-pill');
         dates.forEach(d => d.style.display = term ? 'none' : 'block');
     }
-    
+
     // Debounce для поиска
     function debounce(func, delay) {
         let timeout;
@@ -375,7 +375,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     searchInput.addEventListener('input', debounce(applySearchFilter, 300));
-    
+
     // Экспорт CSV
     document.getElementById('download-all-csv-btn').addEventListener('click', () => {
        window.location.href = `/api/users/${userId}/export_actions`;

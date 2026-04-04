@@ -52,19 +52,13 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.status_code, 403)
 
     def test_ws_guard_allows_admin(self):
-        self.assertTrue(
-            can_subscribe_user_updates({"role": "admin", "telegram_id": None}, 999)
-        )
+        self.assertTrue(can_subscribe_user_updates({"role": "admin", "telegram_id": None}, 999))
 
     def test_ws_guard_allows_same_telegram_user(self):
-        self.assertTrue(
-            can_subscribe_user_updates({"role": "user", "telegram_id": 777}, 777)
-        )
+        self.assertTrue(can_subscribe_user_updates({"role": "user", "telegram_id": 777}, 777))
 
     def test_ws_guard_rejects_other_user(self):
-        self.assertFalse(
-            can_subscribe_user_updates({"role": "user", "telegram_id": 1}, 2)
-        )
+        self.assertFalse(can_subscribe_user_updates({"role": "user", "telegram_id": 1}, 2))
 
     def test_get_jwt_secret_key_raises_if_missing(self):
         with patch.dict(os.environ, {}, clear=True):

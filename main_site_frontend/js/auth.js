@@ -29,7 +29,7 @@ window.handleTelegramLogin = async function(telegramUser) {
             const data = await response.json();
             localStorage.setItem('jwt_token', data.access_token);
             // Если всё ок, кидаем на главную страницу (или на расписание)
-            window.location.href = '/schedule'; 
+            window.location.href = '/schedule';
         } else {
             const errData = await response.json();
             if(errorEl) {
@@ -52,7 +52,7 @@ window.handleTelegramLogin = async function(telegramUser) {
 if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const errorEl = document.getElementById('error');
         const btn = e.target.querySelector('button');
         const username = document.getElementById('username').value;
@@ -95,7 +95,7 @@ if (loginForm) {
 if (registerForm) {
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const errorEl = document.getElementById('reg_error');
         const successEl = document.getElementById('reg_success');
         const btn = e.target.querySelector('button');
@@ -119,13 +119,13 @@ if (registerForm) {
                 const formData = new URLSearchParams();
                 formData.append('username', username);
                 formData.append('password', password);
-                
+
                 const loginResponse = await fetch(`${API_BASE}/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: formData
                 });
-                
+
                 if (loginResponse.ok) {
                     const data = await loginResponse.json();
                     localStorage.setItem('jwt_token', data.access_token);

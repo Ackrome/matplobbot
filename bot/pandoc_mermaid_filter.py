@@ -1,21 +1,22 @@
 #!/usr/bin/env python
 
-import sys
 import json
-import subprocess
-import tempfile
 import os
 import shutil
+import subprocess
+import sys
+import tempfile
 
 # --- Configuration ---
 # Path to the mmdc executable inside the Docker container.
 # We rely on it being in the PATH, which is configured in the Dockerfile.
-MMDC_PATH = shutil.which('mmdc') or 'mmdc'
-PUPPETEER_CONFIG = '/app/bot/puppeteer-config.json'
+MMDC_PATH = shutil.which("mmdc") or "mmdc"
+PUPPETEER_CONFIG = "/app/bot/puppeteer-config.json"
 # A file to log the paths of generated temporary files for later cleanup.
-CLEANUP_LOG_FILE = '/tmp/pandoc_cleanup.log'
+CLEANUP_LOG_FILE = "/tmp/pandoc_cleanup.log"
 
 generated_files = []
+
 
 def render_mermaid_to_image_file(mermaid_code: str) -> str | None:
     """
@@ -23,24 +24,32 @@ def render_mermaid_to_image_file(mermaid_code: str) -> str | None:
     Returns None if rendering fails.
     """
     try:
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.mmd', encoding='utf-8') as infile:
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".mmd", encoding="utf-8"
+        ) as infile:
             infile.write(mermaid_code)
             input_path = infile.name
         generated_files.append(input_path)
 
         # The output path will be in the same directory with a .png extension
-        output_path = os.path.splitext(input_path)[0] + '.png'
+        output_path = os.path.splitext(input_path)[0] + ".png"
         generated_files.append(output_path)
 
         command = [
             MMDC_PATH,
-            '-p', PUPPETEER_CONFIG,
-            '-i', input_path,
-            '-o', output_path,
-            '-b', 'transparent'
+            "-p",
+            PUPPETEER_CONFIG,
+            "-i",
+            input_path,
+            "-o",
+            output_path,
+            "-b",
+            "transparent",
         ]
-        
-        process = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', errors='ignore')
+
+        process = subprocess.run(
+            command, capture_output=True, text=True, encoding="utf-8", errors="ignore"
+        )
 
         if process.returncode != 0 or not os.path.exists(output_path):
             sys.stderr.write(f"Mermaid rendering failed: {process.stderr}\n")
@@ -52,25 +61,24 @@ def render_mermaid_to_image_file(mermaid_code: str) -> str | None:
         sys.stderr.write(f"Exception during Mermaid rendering: {e}\n")
         return None
 
+
 def apply_filter(doc):
     """
     Walks through the pandoc AST and replaces Mermaid code blocks with rendered images.
     """
-    for i, element in enumerate(doc['blocks']):
-        if element['t'] == 'CodeBlock':
-            [[_id, classes, _kv_pairs], code] = element['c']
-            if 'mermaid' in classes:
+    for i, element in enumerate(doc["blocks"]):
+        if element["t"] == "CodeBlock":
+            [[_id, classes, _kv_pairs], code] = element["c"]
+            if "mermaid" in classes:
                 image_path = render_mermaid_to_image_file(code)
                 if image_path:
                     # Replace the CodeBlock with a Para containing the Image
                     # The image path must be absolute for pandoc to find it.
-                    image_node = {
-                        't': 'Image',
-                        'c': [['', [], []], [], [image_path, '']]
-                    }
+                    image_node = {"t": "Image", "c": [["", [], []], [], [image_path, ""]]}
                     # Wrap the image in a paragraph
-                    doc['blocks'][i] = {'t': 'Para', 'c': [image_node]}
+                    doc["blocks"][i] = {"t": "Para", "c": [image_node]}
     return doc
+
 
 def main():
     """
@@ -94,11 +102,12 @@ def main():
                     os.makedirs(log_dir)
                 # --- END: Improvement ---
 
-                with open(CLEANUP_LOG_FILE, 'a', encoding='utf-8') as f:
+                with open(CLEANUP_LOG_FILE, "a", encoding="utf-8") as f:
                     for path in generated_files:
-                        f.write(path + '\n')
+                        f.write(path + "\n")
             except Exception as e:
                 sys.stderr.write(f"Failed to write to cleanup log: {e}\n")
+
 
 if __name__ == "__main__":
     main()

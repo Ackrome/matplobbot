@@ -7,7 +7,7 @@
     --card-bg: #ffffff;        /* white */
     --border-color: #e5e7eb;   /* gray-200 */
     --nav-bg: #ffffff;         /* white */
-    
+
     /* Chat Specific Colors (Light) */
     --chat-bg-color: #99BA92;
     --msg-in-bg: #ffffff;
@@ -84,7 +84,7 @@ html.dark .chat-background {
 
 /* В темной теме текст исходящих может требовать корректировки, если фон темный */
 html.dark .message-bubble.outgoing {
-    color: #ffffff; 
+    color: #ffffff;
 }
 .message-bubble.command {
     border-left: 4px solid #3b82f6; /* Синяя полоска для команд */

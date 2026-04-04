@@ -19,7 +19,7 @@ echo "--- Pulling new images from ghcr.io ---"
 docker compose -f docker-compose.prod.yml pull
 
 echo "--- Restarting services with new images ---"
-# Перезапускаем контейнеры. 
+# Перезапускаем контейнеры.
 # Передаем переменные окружения прямо перед командой для надежности (хотя export выше тоже работает)
 BOT_TAG=${BOT_TAG} API_TAG=${API_TAG} SCHEDULER_TAG=${SCHEDULER_TAG} WORKER_TAG=${WORKER_TAG} docker compose -f 'docker-compose.prod.yml' up -d --remove-orphans
 

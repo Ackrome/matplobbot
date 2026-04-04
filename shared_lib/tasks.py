@@ -1,22 +1,23 @@
-import os
-import re
 import base64
-import tempfile
-import subprocess
-import shutil
 import html
-import zipfile
 import io
 import logging
-from PIL import Image
+import os
+import re
+import shutil
+import subprocess
+import tempfile
+import zipfile
 
 from markdown_it import MarkdownIt
+
 # texmath_plugin REMOVED to manually handle display math robustly
 from mdit_py_plugins.anchors import anchors_plugin
 from mdit_py_plugins.front_matter import front_matter_plugin
+from PIL import Image
 
 from .celery_app import app
-from .constants import LATEX_PREAMBLE, LATEX_POSTAMBLE
+from .constants import LATEX_POSTAMBLE, LATEX_PREAMBLE
 
 logger = logging.getLogger(__name__)
 
@@ -33,169 +34,243 @@ JS_TEMPLATE_PATH = os.path.join(BASE_DIR, "templates", "report.js")
 # Читаем хедер для Pandoc
 PANDOC_HEADER_INCLUDES = ""
 if os.path.exists(PANDOC_HEADER_PATH):
-    with open(PANDOC_HEADER_PATH, 'r', encoding='utf-8') as f:
+    with open(PANDOC_HEADER_PATH, encoding="utf-8") as f:
         PANDOC_HEADER_INCLUDES = f.read()
 
 # ... [Оставлен код для render_latex, render_mermaid, render_pdf_task без изменений] ...
 # ВАЖНО: убедитесь, что функции render_latex, render_mermaid и render_pdf_task остались на месте.
 # Они не меняются, поэтому я их свернул для краткости ответа.
 
-@app.task(bind=True, soft_time_limit=45, name='shared_lib.tasks.render_latex')
+
+@app.task(bind=True, soft_time_limit=45, name="shared_lib.tasks.render_latex")
 def render_latex(self, latex_string: str, padding: int, dpi: int, is_display: bool):
     forbidden_commands = [
-    r'\write18', r'\input', r'\include', r'\openout', r'\newwrite', 
-    r'\immediate', r'\usepackage', r'\documentclass' # Блокируем изменение структуры
-]
+        r"\write18",
+        r"\input",
+        r"\include",
+        r"\openout",
+        r"\newwrite",
+        r"\immediate",
+        r"\usepackage",
+        r"\documentclass",  # Блокируем изменение структуры
+    ]
 
     for cmd in forbidden_commands:
         if cmd in latex_string:
             return {"status": "error", "error": f"Security violation: command {cmd} is forbidden."}
     try:
         processed_latex = latex_string.strip()
-        processed_latex = re.sub(r'(\\end\{([a-zA-Z\*]+)\})(\s*\\tag\{.*?\})', r'\3 \1', processed_latex, flags=re.DOTALL)
-        
-        is_already_math_env = (processed_latex.startswith('$') or 
-                               processed_latex.startswith(r'\[') or 
-                               r'\begin' in processed_latex)
-        
+        processed_latex = re.sub(
+            r"(\\end\{([a-zA-Z\*]+)\})(\s*\\tag\{.*?\})", r"\3 \1", processed_latex, flags=re.DOTALL
+        )
+
+        is_already_math_env = (
+            processed_latex.startswith("$")
+            or processed_latex.startswith(r"\[")
+            or r"\begin" in processed_latex
+        )
+
         if not is_already_math_env:
-            if r'\tag' in processed_latex:
-                processed_latex = f'\\begin{{equation*}}\n{processed_latex}\n\\end{{equation*}}'
+            if r"\tag" in processed_latex:
+                processed_latex = f"\\begin{{equation*}}\n{processed_latex}\n\\end{{equation*}}"
             elif is_display:
-                processed_latex = f'\\[{processed_latex}\\]'
+                processed_latex = f"\\[{processed_latex}\\]"
             else:
-                processed_latex = f'${processed_latex}$'
+                processed_latex = f"${processed_latex}$"
 
         full_latex_code = LATEX_PREAMBLE + processed_latex + LATEX_POSTAMBLE
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            tex_path = os.path.join(temp_dir, 'formula.tex')
-            dvi_path = os.path.join(temp_dir, 'formula.dvi')
-            png_path = os.path.join(temp_dir, 'formula.png')
+            tex_path = os.path.join(temp_dir, "formula.tex")
+            dvi_path = os.path.join(temp_dir, "formula.dvi")
+            png_path = os.path.join(temp_dir, "formula.png")
 
-            with open(tex_path, 'w', encoding='utf-8') as f:
+            with open(tex_path, "w", encoding="utf-8") as f:
                 f.write(full_latex_code)
 
             proc = subprocess.run(
-                ['latex', '-no-shell-escape', '-interaction=nonstopmode', '-output-directory', temp_dir, tex_path],
-                capture_output=True, timeout=30
+                [
+                    "latex",
+                    "-no-shell-escape",
+                    "-interaction=nonstopmode",
+                    "-output-directory",
+                    temp_dir,
+                    tex_path,
+                ],
+                capture_output=True,
+                timeout=30,
             )
-            
+
             if not os.path.exists(dvi_path):
-                log_path = os.path.join(temp_dir, 'formula.log')
+                log_path = os.path.join(temp_dir, "formula.log")
                 error_msg = "Unknown LaTeX error"
                 if os.path.exists(log_path):
-                    with open(log_path, 'r', errors='ignore') as f:
+                    with open(log_path, errors="ignore") as f:
                         log_lines = f.readlines()
-                    errors = [line.strip() for line in log_lines if line.startswith('!')]
+                    errors = [line.strip() for line in log_lines if line.startswith("!")]
                     error_msg = "\n".join(errors[:3]) if errors else "\n".join(log_lines[-10:])
                 return {"status": "error", "error": error_msg}
 
             subprocess.run(
-                ['dvipng', '-D', str(dpi), '-T', 'tight', '-bg', 'Transparent', '-o', png_path, dvi_path],
-                capture_output=True, timeout=10
+                [
+                    "dvipng",
+                    "-D",
+                    str(dpi),
+                    "-T",
+                    "tight",
+                    "-bg",
+                    "Transparent",
+                    "-o",
+                    png_path,
+                    dvi_path,
+                ],
+                capture_output=True,
+                timeout=10,
             )
 
             if not os.path.exists(png_path):
                 return {"status": "error", "error": "dvipng conversion failed"}
 
             with Image.open(png_path) as img:
-                final_width = max(img.width + 2 * padding, 600 if is_display else img.width + 2*padding)
+                final_width = max(
+                    img.width + 2 * padding, 600 if is_display else img.width + 2 * padding
+                )
                 final_height = img.height + 2 * padding
                 new_img = Image.new("RGBA", (final_width, final_height), (0, 0, 0, 0))
                 paste_x = (final_width - img.width) // 2 if is_display else padding
                 new_img.paste(img, (paste_x, padding))
 
                 buf = io.BytesIO()
-                new_img.save(buf, format='PNG')
-                img_str = base64.b64encode(buf.getvalue()).decode('utf-8')
+                new_img.save(buf, format="PNG")
+                img_str = base64.b64encode(buf.getvalue()).decode("utf-8")
                 return {"status": "success", "image": img_str}
 
     except subprocess.TimeoutExpired:
         return {"status": "error", "error": "Rendering timed out."}
     except Exception as e:
         return {"status": "error", "error": str(e)}
-    
-    
-@app.task(bind=True, soft_time_limit=45, name='shared_lib.tasks.render_mermaid')
+
+
+@app.task(bind=True, soft_time_limit=45, name="shared_lib.tasks.render_mermaid")
 def render_mermaid(self, mermaid_code: str):
-    MMDC_PATH = shutil.which('mmdc') or 'mmdc'
+    MMDC_PATH = shutil.which("mmdc") or "mmdc"
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
-            input_path = os.path.join(temp_dir, 'diagram.mmd')
-            output_path = os.path.join(temp_dir, 'diagram.png')
-            
-            with open(input_path, 'w', encoding='utf-8') as f:
+            input_path = os.path.join(temp_dir, "diagram.mmd")
+            output_path = os.path.join(temp_dir, "diagram.png")
+
+            with open(input_path, "w", encoding="utf-8") as f:
                 f.write(mermaid_code)
-                
-            command = [MMDC_PATH, '-p', PUPPETEER_CONFIG_PATH, '-i', input_path, '-o', output_path, '-b', 'transparent']
-            process = subprocess.run(command, capture_output=True, text=True, errors='ignore', timeout=30)
-            
+
+            command = [
+                MMDC_PATH,
+                "-p",
+                PUPPETEER_CONFIG_PATH,
+                "-i",
+                input_path,
+                "-o",
+                output_path,
+                "-b",
+                "transparent",
+            ]
+            process = subprocess.run(
+                command, capture_output=True, text=True, errors="ignore", timeout=30
+            )
+
             if process.returncode != 0 or not os.path.exists(output_path):
                 err = process.stderr or "Unknown Error"
                 return {"status": "error", "error": err.strip()}
-                
-            with open(output_path, 'rb') as f:
-                img_str = base64.b64encode(f.read()).decode('utf-8')
+
+            with open(output_path, "rb") as f:
+                img_str = base64.b64encode(f.read()).decode("utf-8")
                 return {"status": "success", "image": img_str}
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
-@app.task(bind=True, soft_time_limit=120, name='shared_lib.tasks.render_pdf')
+
+@app.task(bind=True, soft_time_limit=120, name="shared_lib.tasks.render_pdf")
 def render_pdf_task(self, markdown_string: str, title: str, author_string: str, date_string: str):
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
-            header_path = os.path.join(temp_dir, 'header.tex')
-            with open(header_path, 'w', encoding='utf-8') as f:
+            header_path = os.path.join(temp_dir, "header.tex")
+            with open(header_path, "w", encoding="utf-8") as f:
                 f.write(PANDOC_HEADER_INCLUDES)
 
-            tex_path = os.path.join(temp_dir, 'document.tex')
-            pdf_path = os.path.join(temp_dir, 'document.pdf')
+            tex_path = os.path.join(temp_dir, "document.tex")
+            pdf_path = os.path.join(temp_dir, "document.pdf")
 
             pandoc_cmd = [
-                'pandoc',
-                '--filter', MERMAID_FILTER_PATH,
-                '--lua-filter', MATH_FILTER_PATH,
-                '--from=gfm-yaml_metadata_block+tex_math_dollars+raw_tex',
-                '--to=latex',
-                '--pdf-engine=xelatex', 
-                '--include-in-header', header_path,
-                '--variable', f'title={title}',
-                '--variable', f'author={author_string}',
-                '--variable', f'date={date_string}',
-                '--variable', 'documentclass=article',
-                '--variable', 'geometry:margin=2cm',
-                '-o', tex_path
+                "pandoc",
+                "--filter",
+                MERMAID_FILTER_PATH,
+                "--lua-filter",
+                MATH_FILTER_PATH,
+                "--from=gfm-yaml_metadata_block+tex_math_dollars+raw_tex",
+                "--to=latex",
+                "--pdf-engine=xelatex",
+                "--include-in-header",
+                header_path,
+                "--variable",
+                f"title={title}",
+                "--variable",
+                f"author={author_string}",
+                "--variable",
+                f"date={date_string}",
+                "--variable",
+                "documentclass=article",
+                "--variable",
+                "geometry:margin=2cm",
+                "-o",
+                tex_path,
             ]
-            
-            if re.search(r'^# ', markdown_string, re.MULTILINE):
-                pandoc_cmd.append('--toc')
 
-            proc_pandoc = subprocess.run(pandoc_cmd, input=markdown_string.encode('utf-8'), capture_output=True, timeout=45)
-            
+            if re.search(r"^# ", markdown_string, re.MULTILINE):
+                pandoc_cmd.append("--toc")
+
+            proc_pandoc = subprocess.run(
+                pandoc_cmd, input=markdown_string.encode("utf-8"), capture_output=True, timeout=45
+            )
+
             if proc_pandoc.returncode != 0:
-                return {"status": "error", "error": f"Pandoc failed: {proc_pandoc.stderr.decode('utf-8', 'ignore')}"}
+                return {
+                    "status": "error",
+                    "error": f"Pandoc failed: {proc_pandoc.stderr.decode('utf-8', 'ignore')}",
+                }
 
             compile_cmd = [
-                'latexmk', '-pdf', '-xelatex', '-interaction=nonstopmode', '-halt-on-error',
-                f'-output-directory={temp_dir}', tex_path
+                "latexmk",
+                "-pdf",
+                "-xelatex",
+                "-interaction=nonstopmode",
+                "-halt-on-error",
+                f"-output-directory={temp_dir}",
+                tex_path,
             ]
-            
-            proc_latex = subprocess.run(compile_cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=60)
+
+            proc_latex = subprocess.run(
+                compile_cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="ignore",
+                timeout=60,
+            )
 
             if not os.path.exists(pdf_path) or proc_latex.returncode != 0:
-                log_file = os.path.join(temp_dir, 'document.log')
+                log_file = os.path.join(temp_dir, "document.log")
                 log_content = ""
                 if os.path.exists(log_file):
-                    with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    with open(log_file, encoding="utf-8", errors="ignore") as f:
                         lines = f.readlines()
-                    error_lines = [l.strip() for l in lines if l.startswith('!')]
-                    log_content = "\n".join(error_lines[:5]) if error_lines else "\n".join(lines[-20:])
-                
+                    error_lines = [l.strip() for l in lines if l.startswith("!")]
+                    log_content = (
+                        "\n".join(error_lines[:5]) if error_lines else "\n".join(lines[-20:])
+                    )
+
                 return {"status": "error", "error": f"LaTeX compilation failed:\n{log_content}"}
 
-            with open(pdf_path, 'rb') as f:
-                pdf_b64 = base64.b64encode(f.read()).decode('utf-8')
+            with open(pdf_path, "rb") as f:
+                pdf_b64 = base64.b64encode(f.read()).decode("utf-8")
                 return {"status": "success", "pdf": pdf_b64}
 
     except subprocess.TimeoutExpired:
@@ -203,24 +278,26 @@ def render_pdf_task(self, markdown_string: str, title: str, author_string: str, 
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
+
 def generate_toc_from_tokens(tokens) -> str:
     """
     Manually generates HTML TOC from markdown-it tokens.
     """
     toc_html = '<nav class="toc"><h4>Содержание</h4><ul>'
     for i in range(len(tokens)):
-        if tokens[i].type == 'heading_open':
-            tag = tokens[i].tag 
+        if tokens[i].type == "heading_open":
+            tag = tokens[i].tag
             level = int(tag[1])
             attrs = tokens[i].attrs or {}
-            anchor_id = attrs.get('id', '')
-            if i + 1 < len(tokens) and tokens[i+1].type == 'inline':
-                text = tokens[i+1].content
+            anchor_id = attrs.get("id", "")
+            if i + 1 < len(tokens) and tokens[i + 1].type == "inline":
+                text = tokens[i + 1].content
                 toc_html += f'<li class="toc-level-{level}"><a href="#{anchor_id}">{html.escape(text)}</a></li>'
-    toc_html += '</ul></nav>'
+    toc_html += "</ul></nav>"
     return toc_html
 
-@app.task(bind=True, soft_time_limit=30, name='shared_lib.tasks.render_html')
+
+@app.task(bind=True, soft_time_limit=30, name="shared_lib.tasks.render_html")
 def render_html_task(self, content: str, page_title: str):
     """
     Renders Markdown to HTML using markdown-it-py.
@@ -231,9 +308,9 @@ def render_html_task(self, content: str, page_title: str):
         # 1. Protect Math: Convert $$...$$ and $...$ to temporary placeholders.
         # FIX: We use 'PHMATHBLOCK{i}PH' instead of '__MATH_BLOCK_{i}__'
         # because markdown parsers often interpret '__' as bold text start/end.
-        
+
         protected_math = []
-        
+
         def protect_block(match):
             idx = len(protected_math)
             placeholder = f"PHMATHBLOCK{idx}PH"
@@ -247,15 +324,15 @@ def render_html_task(self, content: str, page_title: str):
             return placeholder
 
         # Protect Block Math ($$ ... $$)
-        content = re.sub(r'\$\$(.*?)\$\$', protect_block, content, flags=re.DOTALL)
-        
+        content = re.sub(r"\$\$(.*?)\$\$", protect_block, content, flags=re.DOTALL)
+
         # Protect Inline Math ($ ... $)
-        content = re.sub(r'\$([^$\n]+)\$', protect_inline, content)
+        content = re.sub(r"\$([^$\n]+)\$", protect_inline, content)
 
         # 2. Initialize Parser without texmath
         md = (
             MarkdownIt("commonmark", {"html": True, "linkify": True, "typographer": True})
-            .enable('table')
+            .enable("table")
             .use(front_matter_plugin)
             # permalink=False removes the '¶' symbol
             .use(anchors_plugin, min_level=1, max_level=3, permalink=False)
@@ -270,7 +347,7 @@ def render_html_task(self, content: str, page_title: str):
 
         # 5. Restore Math placeholders
         for i, math_code in enumerate(protected_math):
-            if math_code.startswith('$$'):
+            if math_code.startswith("$$"):
                 # Block Math Restoration
                 # Wrap in .katex-display div to enforce block styling and centering via CSS
                 replacement = f'<div class="katex-display">{html.escape(math_code)}</div>'
@@ -283,15 +360,17 @@ def render_html_task(self, content: str, page_title: str):
         # 6. Post-processing for Mermaid
         html_body = html_body.replace(
             '<pre><code class="language-mermaid">', '<pre class="mermaid">'
-        ).replace('</code></pre>', '</pre>')
+        ).replace("</code></pre>", "</pre>")
 
         # 7. Load Styles/Scripts
         css_content = ""
         js_content = ""
         if os.path.exists(CSS_TEMPLATE_PATH):
-            with open(CSS_TEMPLATE_PATH, 'r', encoding='utf-8') as f: css_content = f.read()
+            with open(CSS_TEMPLATE_PATH, encoding="utf-8") as f:
+                css_content = f.read()
         if os.path.exists(JS_TEMPLATE_PATH):
-            with open(JS_TEMPLATE_PATH, 'r', encoding='utf-8') as f: js_content = f.read()
+            with open(JS_TEMPLATE_PATH, encoding="utf-8") as f:
+                js_content = f.read()
 
         full_html_doc = f"""<!DOCTYPE html>
 <html lang="ru">
@@ -311,77 +390,93 @@ def render_html_task(self, content: str, page_title: str):
     <script>{js_content}</script>
 </body>
 </html>"""
-        
+
         return {"status": "success", "html": full_html_doc}
 
     except Exception as e:
         return {"status": "error", "error": str(e)}
-    
+
 
 def parse_latex_log(log_path: str) -> list[dict]:
     """Парсит .log файл LaTeX и возвращает структурированный список ошибок."""
-    errors =[]
+    errors = []
     if not os.path.exists(log_path):
         return errors
-        
-    with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+
+    with open(log_path, encoding="utf-8", errors="ignore") as f:
         lines = f.readlines()
-        
+
     i = 0
     while i < len(lines):
         line = lines[i].strip()
         # Ошибки в LaTeX обычно начинаются с "!"
-        if line.startswith('!'):
+        if line.startswith("!"):
             error_msg = line[1:].strip()
             line_num = 1
-            
+
             # Заглядываем вперед на несколько строк, чтобы найти номер строки "l.42"
             for j in range(1, 8):
                 if i + j < len(lines):
-                    lookahead = lines[i+j].strip()
-                    if lookahead.startswith('l.'):
-                        match = re.search(r'l\.(\d+)', lookahead)
+                    lookahead = lines[i + j].strip()
+                    if lookahead.startswith("l."):
+                        match = re.search(r"l\.(\d+)", lookahead)
                         if match:
                             line_num = int(match.group(1))
                             break
-            
+
             errors.append({"line": line_num, "message": error_msg})
         i += 1
     return errors
 
-@app.task(bind=True, soft_time_limit=60, name='shared_lib.tasks.compile_full_latex')
+
+@app.task(bind=True, soft_time_limit=60, name="shared_lib.tasks.compile_full_latex")
 def compile_full_latex_task(self, latex_code: str):
     """Быстрая компиляция одного файла (Quick Mode)"""
-    forbidden_commands =[r'\write18', r'\openout', r'\newwrite', r'\immediate']
+    forbidden_commands = [r"\write18", r"\openout", r"\newwrite", r"\immediate"]
     for cmd in forbidden_commands:
         if cmd in latex_code:
-            return {"status": "error", "message": f"Security violation: {cmd} is forbidden.", "errors":[{"line": 1, "message": f"Forbidden command: {cmd}"}]}
+            return {
+                "status": "error",
+                "message": f"Security violation: {cmd} is forbidden.",
+                "errors": [{"line": 1, "message": f"Forbidden command: {cmd}"}],
+            }
 
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
-            tex_path = os.path.join(temp_dir, 'main.tex')
-            pdf_path = os.path.join(temp_dir, 'main.pdf')
-            log_path = os.path.join(temp_dir, 'main.log')
+            tex_path = os.path.join(temp_dir, "main.tex")
+            pdf_path = os.path.join(temp_dir, "main.pdf")
+            log_path = os.path.join(temp_dir, "main.log")
 
-            with open(tex_path, 'w', encoding='utf-8') as f:
+            with open(tex_path, "w", encoding="utf-8") as f:
                 f.write(latex_code)
 
-            subprocess.run(['latexmk', '-pdf', '-interaction=nonstopmode', '-halt-on-error', f'-output-directory={temp_dir}', tex_path], capture_output=True, timeout=50)
+            subprocess.run(
+                [
+                    "latexmk",
+                    "-pdf",
+                    "-interaction=nonstopmode",
+                    "-halt-on-error",
+                    f"-output-directory={temp_dir}",
+                    tex_path,
+                ],
+                capture_output=True,
+                timeout=50,
+            )
 
             if not os.path.exists(pdf_path):
                 parsed_errors = parse_latex_log(log_path)
                 # Fallback, если парсер ничего не нашел
                 if not parsed_errors:
-                    parsed_errors =[{"line": 1, "message": "Unknown LaTeX error. Check syntax."}]
+                    parsed_errors = [{"line": 1, "message": "Unknown LaTeX error. Check syntax."}]
                 return {"status": "error", "message": "Compilation failed", "errors": parsed_errors}
 
-            with open(pdf_path, 'rb') as f:
-                return {"status": "success", "pdf": base64.b64encode(f.read()).decode('utf-8')}
+            with open(pdf_path, "rb") as f:
+                return {"status": "success", "pdf": base64.b64encode(f.read()).decode("utf-8")}
     except Exception as e:
-        return {"status": "error", "message": str(e), "errors":[{"line": 1, "message": str(e)}]}
+        return {"status": "error", "message": str(e), "errors": [{"line": 1, "message": str(e)}]}
 
 
-@app.task(bind=True, soft_time_limit=60, name='shared_lib.tasks.compile_project')
+@app.task(bind=True, soft_time_limit=60, name="shared_lib.tasks.compile_project")
 def compile_project_task(self, project_files: list, main_file: str, build_cache_b64: str = None):
     """Многофайловая компиляция с поддержкой Инкрементальной сборки и SyncTeX"""
     try:
@@ -390,61 +485,85 @@ def compile_project_task(self, project_files: list, main_file: str, build_cache_
             if build_cache_b64:
                 try:
                     cache_bytes = base64.b64decode(build_cache_b64)
-                    with zipfile.ZipFile(io.BytesIO(cache_bytes), 'r') as zf:
+                    with zipfile.ZipFile(io.BytesIO(cache_bytes), "r") as zf:
                         zf.extractall(temp_dir)
                 except Exception as e:
                     logger.warning(f"Failed to unpack build cache: {e}")
 
             # 2. Запись актуальных файлов пользователя (перезапишет файлы из кэша, если имена совпадают)
             for pf in project_files:
-                path = pf.get('path')
-                if '..' in path or path.startswith('/'): continue
-                
+                path = pf.get("path")
+                if ".." in path or path.startswith("/"):
+                    continue
+
                 full_path = os.path.join(temp_dir, path)
                 os.makedirs(os.path.dirname(full_path), exist_ok=True)
-                
-                if pf.get('binary'):
-                    with open(full_path, 'wb') as f: f.write(base64.b64decode(pf['binary']))
+
+                if pf.get("binary"):
+                    with open(full_path, "wb") as f:
+                        f.write(base64.b64decode(pf["binary"]))
                 else:
-                    with open(full_path, 'w', encoding='utf-8') as f: f.write(pf.get('text', ''))
+                    with open(full_path, "w", encoding="utf-8") as f:
+                        f.write(pf.get("text", ""))
 
             tex_path = os.path.join(temp_dir, main_file)
-            pdf_path = os.path.join(temp_dir, main_file.replace('.tex', '.pdf'))
-            log_path = os.path.join(temp_dir, main_file.replace('.tex', '.log'))
+            pdf_path = os.path.join(temp_dir, main_file.replace(".tex", ".pdf"))
+            log_path = os.path.join(temp_dir, main_file.replace(".tex", ".log"))
 
             # 3. Компиляция (Добавлен флаг -synctex=1)
-            compile_cmd =[
-                'latexmk', '-pdf', '-interaction=nonstopmode', 
-                '-halt-on-error', '-synctex=1', 
-                f'-output-directory={temp_dir}', tex_path
+            compile_cmd = [
+                "latexmk",
+                "-pdf",
+                "-interaction=nonstopmode",
+                "-halt-on-error",
+                "-synctex=1",
+                f"-output-directory={temp_dir}",
+                tex_path,
             ]
-            subprocess.run(compile_cmd, capture_output=True, text=True, errors='ignore', timeout=50)
+            subprocess.run(compile_cmd, capture_output=True, text=True, errors="ignore", timeout=50)
 
             # 4. Упаковка артефактов в новый кэш
             out_cache_b64 = None
             try:
                 out_zip_io = io.BytesIO()
-                with zipfile.ZipFile(out_zip_io, 'w', zipfile.ZIP_DEFLATED) as zf:
+                with zipfile.ZipFile(out_zip_io, "w", zipfile.ZIP_DEFLATED) as zf:
                     for root, _, files in os.walk(temp_dir):
                         for file in files:
                             # Сохраняем только файлы кэша (исходники не нужны, они есть в БД)
-                            if file.endswith(('.aux', '.fls', '.fdb_latexmk', '.synctex.gz', '.toc', '.bbl', '.out', '.log')):
+                            if file.endswith(
+                                (
+                                    ".aux",
+                                    ".fls",
+                                    ".fdb_latexmk",
+                                    ".synctex.gz",
+                                    ".toc",
+                                    ".bbl",
+                                    ".out",
+                                    ".log",
+                                )
+                            ):
                                 abs_path = os.path.join(root, file)
                                 rel_path = os.path.relpath(abs_path, temp_dir)
                                 zf.write(abs_path, rel_path)
-                out_cache_b64 = base64.b64encode(out_zip_io.getvalue()).decode('utf-8')
+                out_cache_b64 = base64.b64encode(out_zip_io.getvalue()).decode("utf-8")
             except Exception as e:
                 logger.warning(f"Failed to pack build cache: {e}")
 
             # 5. Возврат результатов
             if not os.path.exists(pdf_path):
                 parsed_errors = parse_latex_log(log_path)
-                if not parsed_errors: parsed_errors = [{"line": 1, "message": "Unknown LaTeX error in project."}]
-                return {"status": "error", "message": "Compilation failed", "errors": parsed_errors, "build_cache": out_cache_b64}
+                if not parsed_errors:
+                    parsed_errors = [{"line": 1, "message": "Unknown LaTeX error in project."}]
+                return {
+                    "status": "error",
+                    "message": "Compilation failed",
+                    "errors": parsed_errors,
+                    "build_cache": out_cache_b64,
+                }
 
-            with open(pdf_path, 'rb') as f:
-                pdf_b64 = base64.b64encode(f.read()).decode('utf-8')
+            with open(pdf_path, "rb") as f:
+                pdf_b64 = base64.b64encode(f.read()).decode("utf-8")
                 return {"status": "success", "pdf": pdf_b64, "build_cache": out_cache_b64}
 
     except Exception as e:
-        return {"status": "error", "message": str(e), "errors":[{"line": 1, "message": str(e)}]}
+        return {"status": "error", "message": str(e), "errors": [{"line": 1, "message": str(e)}]}

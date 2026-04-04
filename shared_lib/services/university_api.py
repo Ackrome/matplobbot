@@ -1,19 +1,29 @@
-import aiohttp
-from datetime import datetime
-from typing import List, Dict, Any
 import asyncio
-import random
 import logging
+import random
 import ssl
+from typing import Any
+
+import aiohttp
 import certifi
+
 
 class RuzAPIError(Exception):
     """Custom exception for RUZ API errors."""
+
     pass
+
 
 class RuzAPIClient:
     """Asynchronous API client for ruz.fa.ru."""
-    def __init__(self, session: aiohttp.ClientSession, max_retries: int = 4, initial_delay: float = 1.0, backoff_factor: float = 2.0):
+
+    def __init__(
+        self,
+        session: aiohttp.ClientSession,
+        max_retries: int = 4,
+        initial_delay: float = 1.0,
+        backoff_factor: float = 2.0,
+    ):
         self.HOST = "https://ruz.fa.ru"
         self.session = session
         self.logger = logging.getLogger(__name__)
@@ -21,7 +31,7 @@ class RuzAPIClient:
         self.initial_delay = initial_delay
         self.backoff_factor = backoff_factor
 
-    async def _request(self, sub_url: str) -> Dict[str, Any] | List[Dict[str, Any]]:
+    async def _request(self, sub_url: str) -> dict[str, Any] | list[dict[str, Any]]:
         full_url = self.HOST + sub_url
         ssl_context = ssl.create_default_context(cafile=certifi.where())
         last_exception = None
@@ -29,14 +39,18 @@ class RuzAPIClient:
         for attempt in range(self.max_retries):
             try:
                 # Добавляем явный таймаут на запрос, чтобы не висеть бесконечно
-                async with self.session.get(full_url, ssl=ssl_context, timeout=aiohttp.ClientTimeout(total=15)) as response:
+                async with self.session.get(
+                    full_url, ssl=ssl_context, timeout=aiohttp.ClientTimeout(total=15)
+                ) as response:
                     if response.status == 200:
                         try:
                             json_response = await response.json()
-                            return json_response if isinstance(json_response, list) else[]
+                            return json_response if isinstance(json_response, list) else []
                         except aiohttp.ContentTypeError:
                             # ВУЗ вернул HTML вместо JSON (падает прокси)
-                            raise RuzAPIError("API returned invalid JSON (possibly an HTML error page)")
+                            raise RuzAPIError(
+                                "API returned invalid JSON (possibly an HTML error page)"
+                            )
 
                     if 400 <= response.status < 500:
                         error_text = await response.text()
@@ -45,26 +59,30 @@ class RuzAPIClient:
                     # Для 5xx переходим к блоку except (retry)
                     raise RuzAPIError(f"Server Error {response.status}")
 
-            except (aiohttp.ClientError, asyncio.TimeoutError, RuzAPIError) as e:
+            except (TimeoutError, aiohttp.ClientError, RuzAPIError) as e:
                 last_exception = e
                 self.logger.warning(f"RUZ API attempt {attempt + 1} failed: {str(e)[:100]}")
 
             if attempt < self.max_retries - 1:
-                delay = self.initial_delay * (self.backoff_factor ** attempt)
+                delay = self.initial_delay * (self.backoff_factor**attempt)
                 jitter = delay * random.uniform(-0.1, 0.1)
                 await asyncio.sleep(delay + jitter)
 
         self.logger.error(f"RUZ API totally failed for {full_url}")
         raise RuzAPIError(f"Failed after {self.max_retries} retries. Last error: {last_exception}")
 
-
-    async def search(self, term: str, search_type: str) -> List[Dict[str, Any]]:
+    async def search(self, term: str, search_type: str) -> list[dict[str, Any]]:
         """Generic search function."""
         return await self._request(f"/api/search?term={term}&type={search_type}")
 
-    async def get_schedule(self, entity_type: str, entity_id: str, start: str, finish: str) -> List[Dict[str, Any]]:
+    async def get_schedule(
+        self, entity_type: str, entity_id: str, start: str, finish: str
+    ) -> list[dict[str, Any]]:
         """Generic function to get a schedule."""
-        return await self._request(f"/api/schedule/{entity_type}/{entity_id}?start={start}&finish={finish}&lng=1")
+        return await self._request(
+            f"/api/schedule/{entity_type}/{entity_id}?start={start}&finish={finish}&lng=1"
+        )
+
 
 def create_ruz_api_client(session: aiohttp.ClientSession) -> RuzAPIClient:
     """
