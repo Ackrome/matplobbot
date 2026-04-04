@@ -74,7 +74,7 @@ EOF
                                 # Safer cleanup policy than full system prune.
                                 ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "docker image prune -af --filter 'until=168h' && docker container prune -f --filter 'until=24h'"
 
-                                ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && ./deploy.sh $BOT_TAG $API_TAG $SCHEDULER_TAG $WORKER_TAG"
+                                ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && chmod +x deploy.sh || true && bash ./deploy.sh $BOT_TAG $API_TAG $SCHEDULER_TAG $WORKER_TAG"
                             '''
                         }
                     }
