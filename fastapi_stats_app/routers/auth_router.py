@@ -22,8 +22,8 @@ async def register(user_data: WebAccountCreate, db: AsyncSession = Depends(get_d
         )
     
     hashed_password = get_password_hash(user_data.password)
-    # Регистрация по паролю по умолчанию дает роль админа
-    new_account = WebAccount(username=user_data.username, password_hash=hashed_password, role='admin', preferences={})
+    # Password registration creates regular users by default.
+    new_account = WebAccount(username=user_data.username, password_hash=hashed_password, role='user', preferences={})
     
     db.add(new_account)
     await db.commit()

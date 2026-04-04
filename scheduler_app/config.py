@@ -1,4 +1,5 @@
 import os
+import logging
 
 # --- Telegram Configuration ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")

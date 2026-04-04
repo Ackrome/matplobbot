@@ -1,7 +1,7 @@
-matplobbot-shared
-aiohttp
-aiogram>=3.0.0
-apscheduler
-asyncpg
-python-dotenv
-ics
+matplobbot-shared==0.1.202
+aiohttp==3.10.11
+aiogram==3.18.0
+apscheduler==3.10.4
+asyncpg==0.29.0
+python-dotenv==1.0.1
+ics==0.7.2

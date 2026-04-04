@@ -3,6 +3,8 @@ name: CI-CD Pipeline
 on:
   push:
     branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 env:
   REGISTRY: ghcr.io
@@ -28,14 +30,54 @@ jobs:
         with:
           filters: |
             base:
+              - 'requirements.in'
               - 'requirements.txt'
               - 'Dockerfile.base-python'
               - 'Dockerfile.base-worker'
 
-  # 2. Auto-Versioning (Independent)
+  # 2. Validation Quality Gates
+  validate:
+    name: Validate (Lint, Tests, Types)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r fastapi_stats_app/requirements.txt -r scheduler_app/requirements.txt
+          pip install ruff==0.8.6 mypy==1.13.0
+      - name: Lint checks
+        run: |
+          ruff check . --select E9,F63,F7,F82
+      - name: Unit and integration tests
+        env:
+          JWT_SECRET_KEY: ci-test-secret
+        run: |
+          python -m unittest discover -s tests -v
+      - name: Type checks
+        run: |
+          mypy \
+            fastapi_stats_app/auth.py \
+            fastapi_stats_app/routers/studio_router.py \
+            fastapi_stats_app/routers/ws_router.py \
+            scheduler_app/config.py \
+            scheduler_app/main.py \
+            version_bumper.py \
+            --ignore-missing-imports \
+            --follow-imports=skip \
+            --allow-untyped-defs \
+            --allow-incomplete-defs
+
+  # 3. Auto-Versioning
   auto-version-patch:
     name: Auto-Version Patch
-    if: "!contains(github.event.head_commit.message, 'chore(release)')"
+    needs: [validate]
+    if: |
+      github.event_name == 'push' &&
+      !contains(github.event.head_commit.message, 'chore(release)')
     outputs:
       new_version: ${{ steps.bumper.outputs.new_version }}
       commit_sha: ${{ steps.checkout.outputs.commit_sha }}
@@ -62,14 +104,15 @@ jobs:
         id: bumper
         run: |
           python version_bumper.py patch
-          git add setup.py requirements.txt
+          git add setup.py requirements.in requirements.txt fastapi_stats_app/requirements.txt scheduler_app/requirements.txt
           git commit -m "chore(release): auto-version patch [skip ci]"
           git push origin HEAD:main
 
-  # 3. Publish Shared Lib (Independent)
+  # 4. Publish Shared Lib
   publish-shared-lib:
     name: Publish Shared Lib to PyPI
-    needs: [auto-version-patch]
+    needs: [validate, auto-version-patch]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -84,11 +127,14 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: twine upload dist/*
 
-  # 4. Build Base Images (Conditional)
+  # 5. Build Base Images (Conditional)
   build-base-images:
     name: Build Base Images
-    needs: [check-changes]
-    if: needs.check-changes.outputs.base == 'true'
+    needs: [check-changes, validate]
+    if: |
+      github.event_name == 'push' &&
+      needs.validate.result == 'success' &&
+      needs.check-changes.outputs.base == 'true'
     runs-on: self-hosted
     permissions:
       contents: read
@@ -128,13 +174,13 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # 5. Build Service Images (Dependent on Logic)
+  # 6. Build Service Images (Dependent on Validation + Base Image Logic)
   build-services:
     name: Build Service Images
-    needs: [check-changes, build-base-images]
-    # Run if base images were built successfully OR if they were skipped (because not needed)
+    needs: [check-changes, validate, build-base-images]
     if: |
-      always() && 
+      github.event_name == 'push' &&
+      needs.validate.result == 'success' &&
       (needs.build-base-images.result == 'success' || needs.build-base-images.result == 'skipped') &&
       (needs.check-changes.result == 'success')
     runs-on: self-hosted
@@ -205,11 +251,11 @@ jobs:
         if: always()
         run: docker system prune -f
 
-  # 6. Deploy
+  # 7. Deploy
   trigger-deployment:
     name: Trigger Jenkins Deployment
     needs: [build-services]
-    if: ${{ always() }}
+    if: github.event_name == 'push' && needs.build-services.result == 'success'
     runs-on: self-hosted
     steps:
       - name: Trigger Jenkins Job via cURL

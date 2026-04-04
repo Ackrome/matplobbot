@@ -86,6 +86,10 @@ stats_update_task: asyncio.Task | None = None
 last_sent_stats_data_str: str = ""
 last_checked_actions_count: int = -1
 
+
+def can_subscribe_user_updates(user: dict, target_user_id: int) -> bool:
+    return user.get("role") == "admin" or user.get("telegram_id") == target_user_id
+
 async def periodic_stats_updater():
     global last_sent_stats_data_str, last_checked_actions_count
     logger.info("Starting periodic_stats_updater task.")
@@ -222,9 +226,7 @@ async def websocket_bot_log_endpoint(websocket: WebSocket, user: dict  = Depends
         
 @router.websocket("/ws/users/{user_id}")
 async def websocket_user_updates(websocket: WebSocket, user_id: int, user: dict  = Depends(get_ws_user)):
-    is_admin = user.get("role") == "admin"
-    is_same_user = user.get("telegram_id") == user_id
-    if not (is_admin or is_same_user):
+    if not can_subscribe_user_updates(user, user_id):
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
 
     await websocket.accept()

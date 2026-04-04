@@ -14,7 +14,14 @@ from sqlalchemy import select
 from shared_lib.database import get_db_session_dependency, get_session
 from shared_lib.models import WebAccount, User
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "super-secret-key-12345")
+def _get_jwt_secret_key() -> str:
+    secret_key = os.getenv("JWT_SECRET_KEY")
+    if not secret_key:
+        raise RuntimeError("JWT_SECRET_KEY environment variable must be set")
+    return secret_key
+
+
+SECRET_KEY = _get_jwt_secret_key()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30 # 30 дней сессии

@@ -226,6 +226,37 @@ alembic revision --autogenerate -m "Add new table"
 alembic upgrade head
 ```
 
+### Dependency Locking
+
+- `requirements.in` is the editable dependency source file for base bot/worker images.
+- `requirements.txt` is the lockfile consumed by Docker builds.
+- Regenerate the lockfile after changing `requirements.in`:
+
+```bash
+python -m pip install --upgrade pip pip-tools
+pip-compile --resolver=backtracking --output-file requirements.txt requirements.in
+```
+
+### Auto-Lint (Remote + Local)
+
+`.github/workflows/autolint-autofix.yml` runs on:
+- pull requests to `main`
+- direct pushes to `main`
+
+It executes `pre-commit --all-files` and pushes auto-fixes back automatically.
+To avoid infinite loops, the job skips commits authored by `github-actions[bot]`.
+
+Local hooks are still optional and useful for faster feedback:
+
+```bash
+python -m pip install --upgrade pip pre-commit
+pre-commit install
+pre-commit run --all-files
+```
+
+- Hook config lives in `.pre-commit-config.yaml`.
+- Lint/type tool settings live in `pyproject.toml`.
+
 ### CI/CD Summary
 
 The repository uses GitHub Actions for CI and image publishing, with Jenkins handling deployment orchestration. The shared library is versioned and published before updated service images are built and deployed.

@@ -1,37 +1,56 @@
-Based on `repomix-output.xml`, these are the highest-impact improvements I’d prioritize:
+# TODO
 
-1. Fix broken access control in Studio APIs (serious data leak risk). Many project endpoints don’t enforce `owner_id`, so authenticated users can read/modify other users’ projects.
-   [studio_router.py#L134](/c:/Projects/matplobbot/fastapi_stats_app/routers/studio_router.py#L134), [studio_router.py#L148](/c:/Projects/matplobbot/fastapi_stats_app/routers/studio_router.py#L148), [studio_router.py#L154](/c:/Projects/matplobbot/fastapi_stats_app/routers/studio_router.py#L154), [studio_router.py#L173](/c:/Projects/matplobbot/fastapi_stats_app/routers/studio_router.py#L173), [studio_router.py#L255](/c:/Projects/matplobbot/fastapi_stats_app/routers/studio_router.py#L255), [studio_router.py#L283](/c:/Projects/matplobbot/fastapi_stats_app/routers/studio_router.py#L283)
+Last updated: 2026-04-04
 
-2. Remove privilege escalation in auth registration. New password-based users are created as `admin`.
-   [auth_router.py#L26](/c:/Projects/matplobbot/fastapi_stats_app/routers/auth_router.py#L26)
+## P0 - Security
 
-3. Enforce secure auth defaults. JWT has a hardcoded fallback secret.
-   [auth.py#L17](/c:/Projects/matplobbot/fastapi_stats_app/auth.py#L17)
+- [x] Enforce Studio project ownership checks on all `project_id` endpoints (`studio_router.py`)
+- [x] Restrict stats/admin routes with explicit admin dependency (`stats_router.py`)
+- [x] Restrict `/ws/users/{user_id}` stream to self or admin (`ws_router.py`)
+- [x] Fix privilege escalation in `/auth/register` (new users should not become admin)
+- [x] Remove JWT fallback secret in `auth.py`; fail startup if `JWT_SECRET_KEY` is missing
+- [x] Add authorization tests for Studio ownership and websocket user stream
 
-4. Add role checks for admin-only stats actions (especially sending Telegram messages).
-   [stats_router.py#L188](/c:/Projects/matplobbot/fastapi_stats_app/routers/stats_router.py#L188)
+## P1 - Reliability
 
-5. Lock down WebSocket user streams. Any valid token can subscribe to `/ws/users/{user_id}` for arbitrary users.
-   [ws_router.py#L223](/c:/Projects/matplobbot/fastapi_stats_app/routers/ws_router.py#L223)
+- [x] Fix `scheduler_app/config.py` missing `import logging`
+- [x] Fix `scheduler_app/main.py` shutdown path using out-of-scope `scheduler`
+- [x] Add graceful shutdown for scheduler health server runner/site
 
-6. Fix scheduler runtime bugs.
-   [scheduler_app/config.py#L15](/c:/Projects/matplobbot/scheduler_app/config.py#L15) uses `logging` without import, and [scheduler_app/main.py#L137](/c:/Projects/matplobbot/scheduler_app/main.py#L137) references `scheduler` out of scope on shutdown.
+## P1 - Dependencies and Packaging
 
-7. Clean dependency management. `requirements.txt` has duplicates/unpinned libs and inconsistent shared-lib versioning with `version_bumper.py`.
-   [requirements.txt#L4](/c:/Projects/matplobbot/requirements.txt#L4), [requirements.txt#L9](/c:/Projects/matplobbot/requirements.txt#L9), [requirements.txt#L26](/c:/Projects/matplobbot/requirements.txt#L26), [version_bumper.py#L88](/c:/Projects/matplobbot/version_bumper.py#L88)
+- [x] Clean `requirements.txt` (duplicates, unpinned libs, inconsistent naming)
+- [x] Decide strategy for `matplobbot-shared` pinning and align with `version_bumper.py`
+- [x] Add reproducible lock strategy (`pip-tools`/lockfile or equivalent)
 
-8. Add quality gates in CI (tests/lint/type checks) before publish/deploy. Current pipeline auto-bumps/releases but has no validation stage.
-   [ci-cd.yml#L35](/c:/Projects/matplobbot/.github/workflows/ci-cd.yml#L35)
+## P1 - CI/CD Quality Gates
 
-9. Improve production isolation. Prod compose mounts source code into API container.
-   [docker-compose.prod.yml#L110](/c:/Projects/matplobbot/docker-compose.prod.yml#L110)
+- [x] Add mandatory validation stage before auto-version and publish:
+- [x] Add lint checks
+- [x] Add unit/integration tests
+- [x] Add type checks
+- [x] Block image publish/deploy when validation fails
 
-10. Reduce avoidable load. Bot middleware fetches Telegram avatars on every update; stats WS polls DB every 2s; schedule router creates new HTTP sessions per request.
-   [bot/logger.py#L47](/c:/Projects/matplobbot/bot/logger.py#L47), [ws_router.py#L100](/c:/Projects/matplobbot/fastapi_stats_app/routers/ws_router.py#L100), [schedule_router.py#L16](/c:/Projects/matplobbot/fastapi_stats_app/routers/schedule_router.py#L16)
+## P1 - Deployment Hardening
 
-11. Harden LaTeX project compile path handling. `extractall()` on cache zip and path filtering are too permissive.
-   [tasks.py#L394](/c:/Projects/matplobbot/shared_lib/tasks.py#L394), [tasks.py#L401](/c:/Projects/matplobbot/shared_lib/tasks.py#L401)
+- [ ] Remove source bind mounts from `docker-compose.prod.yml` for API container
+- [ ] Replace root SSH deploy in Jenkins with least-privileged deploy user
+- [ ] Remove `StrictHostKeyChecking=no` and manage known hosts securely
+- [ ] Replace aggressive `docker system prune --all --force` with safer cleanup policy
 
-12. Strengthen deployment security posture. Jenkins deploy uses root SSH with host key checks disabled and aggressive system prune.
-   [Jenkinsfile.groovy#L38](/c:/Projects/matplobbot/Jenkinsfile.groovy#L38), [Jenkinsfile.groovy#L63](/c:/Projects/matplobbot/Jenkinsfile.groovy#L63)
+## P2 - Performance and Scalability
+
+- [ ] Stop fetching Telegram avatars on every update in bot middleware; cache or throttle
+- [ ] Reduce stats websocket polling pressure (event-driven updates or adaptive polling)
+- [ ] Reuse long-lived aiohttp sessions where possible (e.g. schedule router)
+
+## P2 - Task Sandbox Hardening
+
+- [ ] Replace `ZipFile.extractall()` for build cache with validated safe extraction
+- [ ] Strengthen file path validation in project compilation flow (`shared_lib/tasks.py`)
+
+## P2 - Project Tooling
+
+- [x] Add `pyproject.toml` with lint/test/type tool config
+- [x] Add pre-commit hooks
+- [ ] Add security scan step (`pip-audit`/Bandit or equivalent)
