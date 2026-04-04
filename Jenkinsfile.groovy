@@ -49,7 +49,8 @@ pipeline {
                                 SSH_OPTS="-i $SSH_KEY_FILE -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
 
                                 # Keep deployment repo deterministic and recover from local drift.
-                                ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && git fetch origin main && git checkout -B main origin/main && git reset --hard origin/main && git clean -fd"
+                                # Reset first, then switch branch, so tracked local edits cannot block checkout.
+                                ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && git fetch origin main && git reset --hard && git clean -fd && git checkout -B main origin/main && git reset --hard origin/main && git clean -fd"
 
                                 # Generate .env on remote host for production services.
                                 ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cat > $DEPLOY_PATH/.env" <<EOF
