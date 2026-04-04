@@ -24,7 +24,9 @@ if PROXY_URL:
     os.environ["ALL_PROXY"] = socks5h_proxy
 # ------------------------------------
 # РћРїСЂРµРґРµР»СЏРµРј РїСѓС‚Рё РґР»СЏ Р»РѕРіРіРёСЂРѕРІР°РЅРёСЏ FastAPI РїСЂРёР»РѕР¶РµРЅРёСЏ
-LOG_FILE_FASTAPI = os.path.join(LOG_DIR, FASTAPI_LOG_FILE_NAME)  # РСЃРїРѕР»СЊР·СѓРµРј РєРѕРЅСЃС‚Р°РЅС‚С‹ РёР· config
+LOG_FILE_FASTAPI = os.path.join(
+    LOG_DIR, FASTAPI_LOG_FILE_NAME
+)  # РСЃРїРѕР»СЊР·СѓРµРј РєРѕРЅСЃС‚Р°РЅС‚С‹ РёР· config
 
 # РќР°СЃС‚СЂРѕР№РєР° Р»РѕРіРіРёСЂРѕРІР°РЅРёСЏ РґР»СЏ FastAPI РїСЂРёР»РѕР¶РµРЅРёСЏ
 # РСЃРїРѕР»СЊР·СѓРµРј С‚РѕС‚ Р¶Рµ С„РѕСЂРјР°С‚, С‡С‚Рѕ Рё РІ bot/logger.py
@@ -36,7 +38,9 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[logging.FileHandler(LOG_FILE_FASTAPI, encoding="utf-8"), logging.StreamHandler()],
 )
-logger = logging.getLogger(__name__)  # РџРѕР»СѓС‡Р°РµРј Р»РѕРіРіРµСЂ РїРѕСЃР»Рµ Р±Р°Р·РѕРІРѕР№ РєРѕРЅС„РёРіСѓСЂР°С†РёРё
+logger = logging.getLogger(
+    __name__
+)  # РџРѕР»СѓС‡Р°РµРј Р»РѕРіРіРµСЂ РїРѕСЃР»Рµ Р±Р°Р·РѕРІРѕР№ РєРѕРЅС„РёРіСѓСЂР°С†РёРё
 
 # --- РўРµРїРµСЂСЊ РјРѕР¶РЅРѕ Р±РµР·РѕРїР°СЃРЅРѕ РёРјРїРѕСЂС‚РёСЂРѕРІР°С‚СЊ РѕСЃС‚Р°Р»СЊРЅС‹Рµ С‡Р°СЃС‚Рё РїСЂРёР»РѕР¶РµРЅРёСЏ ---
 from fastapi import Depends, FastAPI, Request
@@ -62,9 +66,7 @@ async def lifespan(app: FastAPI):
     # On startup
     logger.info("Application startup: Initializing database pool...")
     await init_db_pool()
-    app.state.shared_http_session = aiohttp.ClientSession(
-        timeout=aiohttp.ClientTimeout(total=30)
-    )
+    app.state.shared_http_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))
     yield
     # On shutdown
     shared_http_session = getattr(app.state, "shared_http_session", None)
