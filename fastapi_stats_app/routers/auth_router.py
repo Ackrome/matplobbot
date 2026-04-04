@@ -22,6 +22,7 @@ from ..auth import (
     verify_password,
     verify_telegram_authorization,
 )
+from ..config import ADMIN_USER_IDS
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -34,13 +35,15 @@ async def register(
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Пользователь с таким именем уже существует",
+            detail="User with this username already exists",
         )
 
     hashed_password = get_password_hash(user_data.password)
-    # Password registration creates regular users by default.
     new_account = WebAccount(
-        username=user_data.username, password_hash=hashed_password, role="user", preferences={}
+        username=user_data.username,
+        password_hash=hashed_password,
+        role="user",
+        preferences={},
     )
 
     db.add(new_account)
@@ -60,7 +63,7 @@ async def login(
     if not account or not verify_password(form_data.password, account.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверный логин или пароль",
+            detail="Invalid username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -74,10 +77,10 @@ async def telegram_login(
 ):
     if not verify_telegram_authorization(tg_data.model_dump()):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Недействительная подпись Telegram"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid Telegram signature",
         )
 
-    # 1. Обновляем/создаем профиль в боте (users)
     full_name = tg_data.first_name
     if tg_data.last_name:
         full_name += f" {tg_data.last_name}"
@@ -93,21 +96,25 @@ async def telegram_login(
         .on_conflict_do_update(
             index_elements=["user_id"],
             set_=dict(
-                username=tg_data.username, full_name=full_name, avatar_pic_url=tg_data.photo_url
+                username=tg_data.username,
+                full_name=full_name,
+                avatar_pic_url=tg_data.photo_url,
             ),
         )
     )
     await db.execute(stmt)
 
-    # 2. Ищем связующий WebAccount по telegram_id
     result = await db.execute(select(WebAccount).where(WebAccount.telegram_id == tg_data.id))
     account = result.scalar_one_or_none()
 
     if not account:
-        # Если нет, прозрачно создаем новый WebAccount для этого пользователя
-        account = WebAccount(role="user", preferences={}, telegram_id=tg_data.id)
+        role = "admin" if tg_data.id in ADMIN_USER_IDS else "user"
+        account = WebAccount(role=role, preferences={}, telegram_id=tg_data.id)
         db.add(account)
-        await db.flush()  # Получаем ID
+        await db.flush()
+    elif tg_data.id in ADMIN_USER_IDS and account.role != "admin":
+        account.role = "admin"
+        db.add(account)
 
     await db.commit()
 

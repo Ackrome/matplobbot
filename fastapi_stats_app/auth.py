@@ -14,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared_lib.database import get_db_session_dependency, get_session
 from shared_lib.models import User, WebAccount
 
+from .config import ADMIN_USER_IDS
+
 
 def _get_jwt_secret_key() -> str:
     secret_key = os.getenv("JWT_SECRET_KEY")
@@ -25,7 +27,7 @@ def _get_jwt_secret_key() -> str:
 SECRET_KEY = _get_jwt_secret_key()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30  # 30 дней сессии
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30  # 30 days
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login", auto_error=False)
@@ -46,6 +48,14 @@ def create_access_token(data: dict):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
+def resolve_account_role(account: WebAccount) -> str:
+    if account.role == "admin":
+        return "admin"
+    if account.telegram_id and account.telegram_id in ADMIN_USER_IDS:
+        return "admin"
+    return account.role
+
+
 def verify_telegram_authorization(data: dict) -> bool:
     if not BOT_TOKEN:
         return False
@@ -64,43 +74,44 @@ def verify_telegram_authorization(data: dict) -> bool:
 
     secret_key = hashlib.sha256(BOT_TOKEN.encode("utf-8")).digest()
     expected_hash = hmac.new(
-        secret_key, data_check_string.encode("utf-8"), hashlib.sha256
+        secret_key,
+        data_check_string.encode("utf-8"),
+        hashlib.sha256,
     ).hexdigest()
 
     return hmac.compare_digest(expected_hash, received_hash)
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db_session_dependency)
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db_session_dependency),
 ) -> dict:
-    """Возвращает единый формат пользователя (словарь), собирая данные из WebAccount и User(Tg)."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Недействительные учетные данные",
+        detail="Invalid credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
     if not token:
         raise credentials_exception
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        sub_id: str = payload.get("sub")  # В payload всегда лежит ID из WebAccount
+        sub_id: str = payload.get("sub")
         if not sub_id:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
 
-    # Ищем WebAccount
     result = await db.execute(select(WebAccount).where(WebAccount.id == int(sub_id)))
     account = result.scalar_one_or_none()
 
     if not account:
         raise credentials_exception
 
-    # По умолчанию для админа
-    display_name = account.username or "Пользователь"
+    display_name = account.username or "User"
     avatar_url = None
 
-    # Если привязан Telegram, берем красивые данные оттуда
     if account.telegram_id:
         tg_result = await db.execute(select(User).where(User.user_id == account.telegram_id))
         tg_user = tg_result.scalar_one_or_none()
@@ -111,11 +122,11 @@ async def get_current_user(
     return {
         "id": account.id,
         "username": display_name,
-        "role": account.role,
+        "role": resolve_account_role(account),
         "telegram_id": account.telegram_id,
         "avatar_url": avatar_url,
         "preferences": account.preferences,
-        "db_obj": account,  # Ссылка на ORM объект для обновления preferences
+        "db_obj": account,
     }
 
 
@@ -132,6 +143,7 @@ async def get_ws_user(websocket: WebSocket) -> dict:
     token = websocket.query_params.get("token")
     if not token:
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         sub_id: str = payload.get("sub")
@@ -146,7 +158,7 @@ async def get_ws_user(websocket: WebSocket) -> dict:
 
             return {
                 "id": account.id,
-                "role": account.role,
+                "role": resolve_account_role(account),
                 "telegram_id": account.telegram_id,
                 "db_obj": account,
             }
