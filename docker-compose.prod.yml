@@ -148,6 +148,8 @@ services:
       dockerfile: Dockerfile.proxy
     restart: unless-stopped
     env_file: ./.env
+    ports:
+      - "127.0.0.1:20170:20170"
     volumes:
       - proxy_cache:/app/cache
     healthcheck:
