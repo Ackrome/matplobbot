@@ -7,7 +7,11 @@ import aiohttp.web
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 
-from scheduler_app.config import BOT_TOKEN, LOG_DIR, SCHEDULER_LOG_FILE
+# Load environment variables from .env before importing config modules that read os.getenv().
+load_dotenv()
+
+from scheduler_app.config import BOT_TOKEN, LOG_DIR, PROXY_URL, SCHEDULER_LOG_FILE
+from scheduler_app.http_client import build_telegram_http_client_config
 from scheduler_app.jobs import (
     check_for_schedule_updates,
     cleanup_old_log_files,
@@ -18,9 +22,6 @@ from scheduler_app.jobs import (
 )
 from shared_lib.database import close_db_pool, get_session, init_db_pool
 from shared_lib.services.university_api import create_ruz_api_client
-
-# Load environment variables from .env file
-load_dotenv()
 
 # --- Logging Setup ---
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -58,28 +59,42 @@ async def main():
 
         # Increase timeout for scheduler tasks that can be slow on large datasets.
         timeout = aiohttp.ClientTimeout(total=120)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            ruz_api_client_instance = create_ruz_api_client(session)
+        telegram_session_kwargs, telegram_request_kwargs = build_telegram_http_client_config(
+            timeout, PROXY_URL
+        )
+        async with (
+            aiohttp.ClientSession(timeout=timeout) as ruz_session,
+            aiohttp.ClientSession(**telegram_session_kwargs) as telegram_session,
+        ):
+            ruz_api_client_instance = create_ruz_api_client(ruz_session)
             scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
 
             scheduler.add_job(
                 send_daily_schedules,
                 trigger="cron",
                 minute="*",
-                kwargs={"http_session": session, "ruz_api_client": ruz_api_client_instance},
+                kwargs={
+                    "http_session": telegram_session,
+                    "telegram_request_kwargs": telegram_request_kwargs,
+                    "ruz_api_client": ruz_api_client_instance,
+                },
             )
             scheduler.add_job(
                 check_for_schedule_updates,
                 trigger="interval",
                 hours=2,
-                kwargs={"http_session": session, "ruz_api_client": ruz_api_client_instance},
+                kwargs={
+                    "http_session": telegram_session,
+                    "telegram_request_kwargs": telegram_request_kwargs,
+                    "ruz_api_client": ruz_api_client_instance,
+                },
             )
             scheduler.add_job(
                 update_schedule_cache,
                 trigger="cron",
                 hour="4,16",
                 minute=0,
-                kwargs={"http_session": session, "ruz_api_client": ruz_api_client_instance},
+                kwargs={"http_session": telegram_session, "ruz_api_client": ruz_api_client_instance},
             )
             scheduler.add_job(
                 prune_inactive_subscriptions,
@@ -91,7 +106,10 @@ async def main():
                 send_admin_summary,
                 trigger="cron",
                 minute="*",
-                kwargs={"http_session": session},
+                kwargs={
+                    "http_session": telegram_session,
+                    "telegram_request_kwargs": telegram_request_kwargs,
+                },
             )
             scheduler.add_job(
                 cleanup_old_log_files,

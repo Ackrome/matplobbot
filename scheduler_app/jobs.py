@@ -41,12 +41,35 @@ async def send_telegram_message(
     text: str,
     message_thread_id: int | None = None,
     reply_markup: dict | None = None,
+    request_kwargs: dict | None = None,
 ) -> dict | None:
     """
     Sends a message using a direct Telegram API call.
     Returns the JSON response result (containing message_id) on success, or None on failure.
     """
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    request_kwargs = request_kwargs or {}
+
+    async def post_payload(payload: dict) -> dict | None:
+        try:
+            async with session.post(url, json=payload, **request_kwargs) as response:
+                if response.status != 200:
+                    logger.error(
+                        f"Failed to send message to chat {chat_id}. Status: {response.status}, Response: {await response.text()}"
+                    )
+                    return None
+
+                resp_json = await response.json()
+                logger.info(f"Sent message to chat {chat_id}.")
+                return resp_json.get("result")
+        except (TimeoutError, aiohttp.ClientError) as exc:
+            logger.error(
+                "Transport error while sending message to chat %s: %s",
+                chat_id,
+                exc,
+                exc_info=True,
+            )
+            return None
 
     if len(text) <= TELEGRAM_MESSAGE_LIMIT:
         payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
@@ -55,49 +78,36 @@ async def send_telegram_message(
         if reply_markup:
             payload["reply_markup"] = reply_markup
 
-        async with session.post(url, json=payload) as response:
-            if response.status != 200:
-                logger.error(
-                    f"Failed to send message to chat {chat_id}. Status: {response.status}, Response: {await response.text()}"
-                )
-                return None
-            else:
-                logger.info(f"Sent message to chat {chat_id}.")
-                resp_json = await response.json()
-                return resp_json.get("result")
-    else:
-        # Message is too long, split it into chunks.
-        # Note: reply_markup will be sent with the LAST chunk only to ensure it's at the bottom.
-        logger.info(
-            f"Message for chat {chat_id} is too long ({len(text)} chars). Splitting into chunks."
-        )
-        last_result = None
-        for i in range(0, len(text), TELEGRAM_MESSAGE_LIMIT):
-            chunk = text[i : i + TELEGRAM_MESSAGE_LIMIT]
-            payload = {"chat_id": chat_id, "text": chunk, "parse_mode": "HTML"}
-            if message_thread_id:
-                payload["message_thread_id"] = message_thread_id
+        return await post_payload(payload)
 
-            # Attach markup only to the last chunk
-            if reply_markup and (i + TELEGRAM_MESSAGE_LIMIT >= len(text)):
-                payload["reply_markup"] = reply_markup
+    logger.info(
+        f"Message for chat {chat_id} is too long ({len(text)} chars). Splitting into chunks."
+    )
+    last_result = None
+    for i in range(0, len(text), TELEGRAM_MESSAGE_LIMIT):
+        chunk = text[i : i + TELEGRAM_MESSAGE_LIMIT]
+        payload = {"chat_id": chat_id, "text": chunk, "parse_mode": "HTML"}
+        if message_thread_id:
+            payload["message_thread_id"] = message_thread_id
 
-            async with session.post(url, json=payload) as response:
-                if response.status != 200:
-                    logger.error(
-                        f"Failed to send chunk to chat {chat_id}. Status: {response.status}, Response: {await response.text()}"
-                    )
-                    break
+        if reply_markup and (i + TELEGRAM_MESSAGE_LIMIT >= len(text)):
+            payload["reply_markup"] = reply_markup
 
-                resp_json = await response.json()
-                last_result = resp_json.get("result")
-                await asyncio.sleep(0.1)  # Small delay
+        last_result = await post_payload(payload)
+        if last_result is None:
+            break
 
-        logger.info(f"Finished sending all chunks to chat {chat_id}.")
-        return last_result
+        await asyncio.sleep(0.1)
+
+    logger.info(f"Finished sending all chunks to chat {chat_id}.")
+    return last_result
 
 
-async def send_daily_schedules(http_session: aiohttp.ClientSession, ruz_api_client: RuzAPIClient):
+async def send_daily_schedules(
+    http_session: aiohttp.ClientSession,
+    ruz_api_client: RuzAPIClient,
+    telegram_request_kwargs: dict | None = None,
+):
     """
     This job runs every minute, checks for subscriptions for the current time,
     and sends the schedule for the next day.
@@ -112,78 +122,111 @@ async def send_daily_schedules(http_session: aiohttp.ClientSession, ruz_api_clie
     end_date_str = end_date.strftime("%Y-%m-%d")
     current_time_str = now_in_moscow.strftime("%H:%M")
 
-    try:
-        # В новом database.py эта функция сама открывает сессию
-        subscriptions = await get_subscriptions_for_notification(current_time_str)
-        if not subscriptions:
-            return
+    subscriptions = await get_subscriptions_for_notification(current_time_str)
+    if not subscriptions:
+        return
+    grouped_subscriptions = collections.defaultdict(list)
+    for sub in subscriptions:
+        entity_key = (sub["entity_type"], sub["entity_id"])
+        grouped_subscriptions[entity_key].append(sub)
 
-        grouped_subscriptions = collections.defaultdict(list)
-        for sub in subscriptions:
-            entity_key = (sub["entity_type"], sub["entity_id"])
-            grouped_subscriptions[entity_key].append(sub)
+    logger.info(
+        f"Found {len(subscriptions)} subscriptions across {len(grouped_subscriptions)} unique entities for {current_time_str}."
+    )
 
-        logger.info(
-            f"Found {len(subscriptions)} subscriptions across {len(grouped_subscriptions)} unique entities for {current_time_str}."
-        )
+    entity_fetch_successes = 0
+    entity_fetch_failures = 0
+    subscriber_attempts = 0
+    delivery_successes = 0
+    delivery_failures = 0
 
-        for entity_key, subs_for_entity in grouped_subscriptions.items():
-            entity_type, entity_id = entity_key
-            entity_name_for_log = subs_for_entity[0].get("entity_name", "Unknown")
+    for entity_key, subs_for_entity in grouped_subscriptions.items():
+        entity_type, entity_id = entity_key
+        entity_name_for_log = subs_for_entity[0].get("entity_name", "Unknown")
 
-            try:
-                logger.info(
-                    f"Fetching schedule for entity '{entity_name_for_log}' ({entity_type}:{entity_id}) for {len(subs_for_entity)} subscribers."
-                )
-                schedule_data = await ruz_api_client.get_schedule(
-                    entity_type, entity_id, start=start_date_str, finish=end_date_str
-                )
+        try:
+            logger.info(
+                f"Fetching schedule for entity '{entity_name_for_log}' ({entity_type}:{entity_id}) for {len(subs_for_entity)} subscribers."
+            )
+            schedule_data = await ruz_api_client.get_schedule(
+                entity_type, entity_id, start=start_date_str, finish=end_date_str
+            )
+            entity_fetch_successes += 1
 
-                for sub in subs_for_entity:
-                    try:
-                        lang = await translator.get_language(sub["user_id"], sub["chat_id"])
-                        recipient_chat_id = sub["chat_id"]
-                        thread_id = sub.get("message_thread_id")
+            for sub in subs_for_entity:
+                subscriber_attempts += 1
+                try:
+                    lang = await translator.get_language(sub["user_id"], sub["chat_id"])
+                    recipient_chat_id = sub["chat_id"]
+                    thread_id = sub.get("message_thread_id")
 
-                        formatted_text = await format_schedule(
-                            schedule_data,
-                            lang,
-                            sub["entity_name"],
-                            sub["entity_type"],
-                            sub["user_id"],
-                            start_date=target_date,
-                            is_week_view=False,
-                            subscription_id=sub["id"],
-                        )
-                        await send_telegram_message(
-                            http_session, recipient_chat_id, formatted_text, thread_id
-                        )
-                        await asyncio.sleep(0.1)
-                    except Exception as e:
-                        logger.error(
-                            f"Failed to send to individual subscriber (sub_id: {sub['id']}, chat_id: {sub['chat_id']}): {e}",
-                            exc_info=True,
-                        )
+                    formatted_text = await format_schedule(
+                        schedule_data,
+                        lang,
+                        sub["entity_name"],
+                        sub["entity_type"],
+                        sub["user_id"],
+                        start_date=target_date,
+                        is_week_view=False,
+                        subscription_id=sub["id"],
+                    )
+                    send_result = await send_telegram_message(
+                        http_session,
+                        recipient_chat_id,
+                        formatted_text,
+                        thread_id,
+                        request_kwargs=telegram_request_kwargs,
+                    )
+                    if send_result is None:
+                        delivery_failures += 1
+                    else:
+                        delivery_successes += 1
+                    await asyncio.sleep(0.1)
+                except Exception as e:
+                    delivery_failures += 1
+                    logger.error(
+                        f"Failed to send to individual subscriber (sub_id: {sub['id']}, chat_id: {sub['chat_id']}): {e}",
+                        exc_info=True,
+                    )
 
-            except Exception as e:
-                logger.error(
-                    f"Failed to process entity group '{entity_name_for_log}': {e}", exc_info=True
-                )
+        except Exception as e:
+            entity_fetch_failures += 1
+            logger.error(
+                f"Failed to process entity group '{entity_name_for_log}': {e}", exc_info=True
+            )
 
-    except Exception as e:
-        logger.error(f"Critical error in send_daily_schedules job: {e}", exc_info=True)
+    logger.info(
+        "Daily schedules job finished. Entity fetches: %s succeeded, %s failed. Deliveries: %s attempted, %s succeeded, %s failed.",
+        entity_fetch_successes,
+        entity_fetch_failures,
+        subscriber_attempts,
+        delivery_successes,
+        delivery_failures,
+    )
+
+    if subscriber_attempts > 0 and delivery_successes == 0 and delivery_failures == subscriber_attempts:
+        raise RuntimeError("Daily schedules job failed: every attempted delivery failed.")
+
+    if (
+        grouped_subscriptions
+        and entity_fetch_successes == 0
+        and entity_fetch_failures == len(grouped_subscriptions)
+    ):
+        raise RuntimeError("Daily schedules job failed: could not fetch any schedule data.")
 
 
 # ... existing imports
-from shared_lib.database import get_cached_schedule  # <--- Добавлен импорт
+from shared_lib.database import get_cached_schedule  # <--- Р”РѕР±Р°РІР»РµРЅ РёРјРїРѕСЂС‚
 
 # ... existing imports
 
-# ... (функция send_telegram_message и send_daily_schedules без изменений) ...
+# ... (С„СѓРЅРєС†РёСЏ send_telegram_message Рё send_daily_schedules Р±РµР· РёР·РјРµРЅРµРЅРёР№) ...
 
 
 async def check_for_schedule_updates(
-    http_session: aiohttp.ClientSession, ruz_api_client: RuzAPIClient
+    http_session: aiohttp.ClientSession,
+    ruz_api_client: RuzAPIClient,
+    telegram_request_kwargs: dict | None = None,
 ):
     """
     Periodically checks all active subscriptions for changes.
@@ -195,7 +238,7 @@ async def check_for_schedule_updates(
     today = datetime.now(moscow_tz).date()
     current_year = today.year
 
-    # Определяем границы семестра для проверки изменений
+    # РћРїСЂРµРґРµР»СЏРµРј РіСЂР°РЅРёС†С‹ СЃРµРјРµСЃС‚СЂР° РґР»СЏ РїСЂРѕРІРµСЂРєРё РёР·РјРµРЅРµРЅРёР№
     if 2 <= today.month <= 6 or (today.month == 7 and today.day < 15):
         start_date = date(current_year, 2, 1)
         end_date = date(current_year, 7, 14)
@@ -215,7 +258,7 @@ async def check_for_schedule_updates(
         if not all_subscriptions:
             return
 
-        # Группируем подписки по сущностям (Group/Teacher/Auditorium)
+        # Р“СЂСѓРїРїРёСЂСѓРµРј РїРѕРґРїРёСЃРєРё РїРѕ СЃСѓС‰РЅРѕСЃС‚СЏРј (Group/Teacher/Auditorium)
         grouped_subscriptions = collections.defaultdict(list)
         for sub in all_subscriptions:
             entity_key = (sub["entity_type"], sub["entity_id"])
@@ -228,18 +271,18 @@ async def check_for_schedule_updates(
             entity_name = subs_for_entity[0]["entity_name"]
 
             try:
-                # 1. Получаем новое расписание из API
+                # 1. РџРѕР»СѓС‡Р°РµРј РЅРѕРІРѕРµ СЂР°СЃРїРёСЃР°РЅРёРµ РёР· API
                 new_schedule_data = await ruz_api_client.get_schedule(
                     entity_type, entity_id, start=start_date_str, finish=end_date_str
                 )
 
-                # Считаем хэш
+                # РЎС‡РёС‚Р°РµРј С…СЌС€
                 new_hash = hashlib.sha256(
                     json.dumps(new_schedule_data, sort_keys=True).encode()
                 ).hexdigest()
 
-                # Берем хэш любого подписчика этой группы (они должны быть одинаковы, если синхронизированы)
-                # Если у кого-то рассинхрон, это исправится при массовом обновлении
+                # Р‘РµСЂРµРј С…СЌС€ Р»СЋР±РѕРіРѕ РїРѕРґРїРёСЃС‡РёРєР° СЌС‚РѕР№ РіСЂСѓРїРїС‹ (РѕРЅРё РґРѕР»Р¶РЅС‹ Р±С‹С‚СЊ РѕРґРёРЅР°РєРѕРІС‹, РµСЃР»Рё СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°РЅС‹)
+                # Р•СЃР»Рё Сѓ РєРѕРіРѕ-С‚Рѕ СЂР°СЃСЃРёРЅС…СЂРѕРЅ, СЌС‚Рѕ РёСЃРїСЂР°РІРёС‚СЃСЏ РїСЂРё РјР°СЃСЃРѕРІРѕРј РѕР±РЅРѕРІР»РµРЅРёРё
                 reference_hash = subs_for_entity[0].get("last_schedule_hash")
 
                 if reference_hash and new_hash != reference_hash:
@@ -247,23 +290,23 @@ async def check_for_schedule_updates(
                         f"Change detected for entity '{entity_name}' ({entity_type}:{entity_id})."
                     )
 
-                    # 2. Получаем СТАРЫЕ данные из БД (CachedSchedule) для сравнения
-                    # Важно сделать это ДО обновления кэша
+                    # 2. РџРѕР»СѓС‡Р°РµРј РЎРўРђР Р«Р• РґР°РЅРЅС‹Рµ РёР· Р‘Р” (CachedSchedule) РґР»СЏ СЃСЂР°РІРЅРµРЅРёСЏ
+                    # Р’Р°Р¶РЅРѕ СЃРґРµР»Р°С‚СЊ СЌС‚Рѕ Р”Рћ РѕР±РЅРѕРІР»РµРЅРёСЏ РєСЌС€Р°
                     old_schedule_data = await get_cached_schedule(entity_type, entity_id)
 
-                    # 3. КРИТИЧЕСКИ ВАЖНО: Сразу обновляем БД (Кэш и Хэши подписок)
-                    # Это предотвращает повторную обработку этой сущности, если отправка сообщений упадет.
+                    # 3. РљР РРўРР§Р•РЎРљР Р’РђР–РќРћ: РЎСЂР°Р·Сѓ РѕР±РЅРѕРІР»СЏРµРј Р‘Р” (РљСЌС€ Рё РҐСЌС€Рё РїРѕРґРїРёСЃРѕРє)
+                    # Р­С‚Рѕ РїСЂРµРґРѕС‚РІСЂР°С‰Р°РµС‚ РїРѕРІС‚РѕСЂРЅСѓСЋ РѕР±СЂР°Р±РѕС‚РєСѓ СЌС‚РѕР№ СЃСѓС‰РЅРѕСЃС‚Рё, РµСЃР»Рё РѕС‚РїСЂР°РІРєР° СЃРѕРѕР±С‰РµРЅРёР№ СѓРїР°РґРµС‚.
                     await upsert_cached_schedule(entity_type, entity_id, new_schedule_data)
                     await batch_update_subscription_hashes(entity_type, entity_id, new_hash)
 
-                    # Также обновляем Redis для совместимости (необязательно, но полезно)
-                    # Обновляем для одного "референсного" пользователя, чтобы не спамить Redis запросами в цикле
-                    # (В будущем логику redis_client.set_user_cache можно убрать, если перешли на CachedSchedule)
+                    # РўР°РєР¶Рµ РѕР±РЅРѕРІР»СЏРµРј Redis РґР»СЏ СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚Рё (РЅРµРѕР±СЏР·Р°С‚РµР»СЊРЅРѕ, РЅРѕ РїРѕР»РµР·РЅРѕ)
+                    # РћР±РЅРѕРІР»СЏРµРј РґР»СЏ РѕРґРЅРѕРіРѕ "СЂРµС„РµСЂРµРЅСЃРЅРѕРіРѕ" РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ, С‡С‚РѕР±С‹ РЅРµ СЃРїР°РјРёС‚СЊ Redis Р·Р°РїСЂРѕСЃР°РјРё РІ С†РёРєР»Рµ
+                    # (Р’ Р±СѓРґСѓС‰РµРј Р»РѕРіРёРєСѓ redis_client.set_user_cache РјРѕР¶РЅРѕ СѓР±СЂР°С‚СЊ, РµСЃР»Рё РїРµСЂРµС€Р»Рё РЅР° CachedSchedule)
                     # await redis_client.set_cache(f"schedule_data:{entity_type}:{entity_id}", json.dumps(new_schedule_data))
 
-                    # 4. Генерируем Diff и отправляем уведомления
+                    # 4. Р“РµРЅРµСЂРёСЂСѓРµРј Diff Рё РѕС‚РїСЂР°РІР»СЏРµРј СѓРІРµРґРѕРјР»РµРЅРёСЏ
                     if old_schedule_data:
-                        # Diff генерируется один раз на язык, чтобы не пересчитывать N раз
+                        # Diff РіРµРЅРµСЂРёСЂСѓРµС‚СЃСЏ РѕРґРёРЅ СЂР°Р· РЅР° СЏР·С‹Рє, С‡С‚РѕР±С‹ РЅРµ РїРµСЂРµСЃС‡РёС‚С‹РІР°С‚СЊ N СЂР°Р·
                         diffs_by_lang = {}
 
                         for sub in subs_for_entity:
@@ -290,6 +333,7 @@ async def check_for_schedule_updates(
                                         sub["chat_id"],
                                         f"{header}\n\n{diffs_by_lang[lang]}",
                                         sub.get("message_thread_id"),
+                                        request_kwargs=telegram_request_kwargs,
                                     )
                             except Exception as inner_e:
                                 logger.error(
@@ -301,11 +345,11 @@ async def check_for_schedule_updates(
                         )
 
                 elif not reference_hash:
-                    # Если хэша нет (первый запуск для этой подписки), просто сохраняем текущий
+                    # Р•СЃР»Рё С…СЌС€Р° РЅРµС‚ (РїРµСЂРІС‹Р№ Р·Р°РїСѓСЃРє РґР»СЏ СЌС‚РѕР№ РїРѕРґРїРёСЃРєРё), РїСЂРѕСЃС‚Рѕ СЃРѕС…СЂР°РЅСЏРµРј С‚РµРєСѓС‰РёР№
                     await batch_update_subscription_hashes(entity_type, entity_id, new_hash)
                     await upsert_cached_schedule(entity_type, entity_id, new_schedule_data)
 
-                # Небольшая пауза между сущностями, чтобы не грузить API/БД пиками
+                # РќРµР±РѕР»СЊС€Р°СЏ РїР°СѓР·Р° РјРµР¶РґСѓ СЃСѓС‰РЅРѕСЃС‚СЏРјРё, С‡С‚РѕР±С‹ РЅРµ РіСЂСѓР·РёС‚СЊ API/Р‘Р” РїРёРєР°РјРё
                 await asyncio.sleep(0.5)
 
             except RuzAPIError as e:
@@ -424,7 +468,10 @@ async def cleanup_old_log_files(days_to_keep: int = 30):
         logger.error(f"Critical error in cleanup_old_log_files job: {e}", exc_info=True)
 
 
-async def send_admin_summary(http_session: aiohttp.ClientSession):
+async def send_admin_summary(
+    http_session: aiohttp.ClientSession,
+    telegram_request_kwargs: dict | None = None,
+):
     """
     Runs every minute, checks if it's time to send a daily summary to admins.
     Generates the summary directly instead of triggering a command via text.
@@ -437,6 +484,10 @@ async def send_admin_summary(http_session: aiohttp.ClientSession):
     moscow_tz = ZoneInfo("Europe/Moscow")
     current_time_str = datetime.now(moscow_tz).strftime("%H:%M")
     current_weekday = datetime.now(moscow_tz).weekday()
+    matched_admins = 0
+    send_attempts = 0
+    send_successes = 0
+    send_failures = 0
 
     for admin_id in ADMIN_USER_IDS:
         try:
@@ -445,13 +496,14 @@ async def send_admin_summary(http_session: aiohttp.ClientSession):
             summary_days = settings.get("admin_summary_days", [0, 1, 2, 3, 4])
 
             if summary_time == current_time_str and current_weekday in summary_days:
+                matched_admins += 1
                 logger.info(f"Time match for admin {admin_id}. Sending daily summary.")
                 lang = await translator.get_language(admin_id)
 
                 # --- 1. Build the Main Summary Text ---
                 summary_parts = []
                 try:
-                    # ВАЖНО: Используем get_session() для получения SQLAlchemy сессии
+                    # Р’РђР–РќРћ: РСЃРїРѕР»СЊР·СѓРµРј get_session() РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ SQLAlchemy СЃРµСЃСЃРёРё
                     async with get_session() as db:
                         summary_data = await get_admin_daily_summary(db)
                     summary_parts.append(
@@ -459,10 +511,20 @@ async def send_admin_summary(http_session: aiohttp.ClientSession):
                     )
                 except Exception as e:
                     logger.error(f"Failed to get stats for admin summary: {e}", exc_info=True)
-                    summary_parts.append("❌ Не удалось загрузить статистику.")
+                    summary_parts.append("вќЊ РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃС‚Р°С‚РёСЃС‚РёРєСѓ.")
 
                 # Send the main summary message (no buttons usually needed here)
-                await send_telegram_message(http_session, admin_id, "\n".join(summary_parts))
+                send_attempts += 1
+                summary_result = await send_telegram_message(
+                    http_session,
+                    admin_id,
+                    "\n".join(summary_parts),
+                    request_kwargs=telegram_request_kwargs,
+                )
+                if summary_result is None:
+                    send_failures += 1
+                else:
+                    send_successes += 1
 
                 # --- 2. Handle Pending Suggestions (With Buttons) ---
                 try:
@@ -473,7 +535,17 @@ async def send_admin_summary(http_session: aiohttp.ClientSession):
                         header_text = "\n\n" + translator.gettext(
                             lang, "admin_summary_pending_offers_header"
                         )
-                        await send_telegram_message(http_session, admin_id, header_text)
+                        send_attempts += 1
+                        header_result = await send_telegram_message(
+                            http_session,
+                            admin_id,
+                            header_text,
+                            request_kwargs=telegram_request_kwargs,
+                        )
+                        if header_result is None:
+                            send_failures += 1
+                        else:
+                            send_successes += 1
 
                         for offer_raw in pending_offers_raw:
                             offer = json.loads(offer_raw)
@@ -496,11 +568,11 @@ async def send_admin_summary(http_session: aiohttp.ClientSession):
                                 "inline_keyboard": [
                                     [
                                         {
-                                            "text": "✅ Одобрить",
+                                            "text": "вњ… РћРґРѕР±СЂРёС‚СЊ",
                                             "callback_data": f"shorter_name_admin:approve:{data_hash}",
                                         },
                                         {
-                                            "text": "❌ Отклонить",
+                                            "text": "вќЊ РћС‚РєР»РѕРЅРёС‚СЊ",
                                             "callback_data": f"shorter_name_admin:decline:{data_hash}",
                                         },
                                     ]
@@ -508,11 +580,17 @@ async def send_admin_summary(http_session: aiohttp.ClientSession):
                             }
 
                             # Send the message and capture result to get message_id
+                            send_attempts += 1
                             msg_result = await send_telegram_message(
-                                http_session, admin_id, notification_text, reply_markup=reply_markup
+                                http_session,
+                                admin_id,
+                                notification_text,
+                                reply_markup=reply_markup,
+                                request_kwargs=telegram_request_kwargs,
                             )
 
                             if msg_result:
+                                send_successes += 1
                                 # --- CRITICAL: Populate Cache for Bot's Callback Handler ---
                                 # The bot handler expects the data to be in Redis to verify the hash and edit the message.
                                 redis_key = f"suggestion_cache:{data_hash}"
@@ -529,6 +607,8 @@ async def send_admin_summary(http_session: aiohttp.ClientSession):
                                 await redis_client.set_cache(
                                     redis_key, payload_to_cache, ttl=604800
                                 )  # 7 days
+                            else:
+                                send_failures += 1
 
                 except Exception as e:
                     logger.error(
@@ -539,3 +619,15 @@ async def send_admin_summary(http_session: aiohttp.ClientSession):
             logger.error(
                 f"Failed to process daily summary loop for admin {admin_id}: {e}", exc_info=True
             )
+
+    if matched_admins:
+        logger.info(
+            "Admin summary job finished. Matched admins: %s. Deliveries: %s attempted, %s succeeded, %s failed.",
+            matched_admins,
+            send_attempts,
+            send_successes,
+            send_failures,
+        )
+
+    if matched_admins > 0 and send_successes == 0 and send_failures > 0:
+        raise RuntimeError("Admin summary job failed: every attempted delivery failed.")
