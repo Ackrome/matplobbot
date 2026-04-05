@@ -70,7 +70,7 @@
     function injectEnhancementStyles() {
         const style = document.createElement("style");
         style.textContent = `
-            #scheduleControls{position:sticky;top:5rem;z-index:35;background:#fff}
+            #scheduleControls{position:relative;z-index:5;background:#fff}
             #scheduleGridContent{transition:opacity .2s ease}
             .schedule-touch-btn{min-height:44px;padding:.7rem 1rem}
             .schedule-empty-card{border:1px solid #dbeafe;background:linear-gradient(135deg,#eff6ff,#ffffff);border-radius:1.25rem;padding:1.25rem;text-align:center;box-shadow:0 18px 48px -36px rgba(37,99,235,.45)}
