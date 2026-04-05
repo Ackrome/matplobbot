@@ -21,37 +21,101 @@ let allAvailableModules =[];
 let selectedModules = new Set();
 let isOfflineMode = false;
 let currentWeekStart = getMonday(new Date());
+let cachedOfflineEntities = [];
+let latestSearchResults = [];
 
 const groupInput = document.getElementById('groupSearch');
 const resultsBox = document.getElementById('searchResults');
 const searchContainer = document.getElementById('searchContainer');
 
+function getUiLanguage() {
+    const source = window.mpbI18n?.getLanguage?.() || document.documentElement.lang || 'ru';
+    return String(source).toLowerCase().startsWith('ru') ? 'ru' : 'en';
+}
+
+function getUiLocale() {
+    return getUiLanguage() === 'ru' ? 'ru-RU' : 'en-US';
+}
+
+function t(key, fallback = '', params = {}) {
+    return window.mpbI18n?.t?.(key, fallback, params) || fallback || key;
+}
+
+function formatUiDate(date, options) {
+    return new Intl.DateTimeFormat(getUiLocale(), options).format(date);
+}
+
+function formatUiDateCapitalized(date, options) {
+    const value = formatUiDate(date, options);
+    return value ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function escapeJsString(value) {
+    return String(value ?? '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'");
+}
+
 
 document.addEventListener('DOMContentLoaded', async () => {
     await initOfflineHistory();
     await loadInitialPreferences(); // Загружаем настройки из API (если залогинен) или LocalStorage
+    window.mpbI18n?.registerTranslator?.(() => {
+        renderOfflineHistory();
+        if (!resultsBox.classList.contains('hidden')) {
+            renderSearchResults(latestSearchResults);
+        }
+        if (currentEntity?.id || fullSchedule.length > 0 || allAvailableModules.length > 0) {
+            renderModuleFilters();
+            filterAndRender();
+        }
+    });
 });
+
+function renderOfflineHistory(list = cachedOfflineEntities) {
+    const container = document.getElementById('cachedEntitiesList');
+    if (!container) return;
+
+    if (!Array.isArray(list) || list.length === 0) {
+        container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400 italic">${escapeHtml(t('schedule.history.empty', 'History is empty'))}</div>`;
+        return;
+    }
+
+    container.innerHTML = list.map(item => {
+        const itemType = escapeJsString(item.type);
+        const itemId = escapeJsString(item.id);
+        const itemLabel = escapeJsString(item.label);
+        const labelText = escapeHtml(item.label);
+        const savedText = escapeHtml(t('schedule.history.saved', 'Saved offline'));
+
+        return `
+            <button onclick="loadSchedule('${itemType}', '${itemId}', '${itemLabel}'); closeOfflinePanel();"
+                    class="group w-full text-left px-4 py-3 bg-white hover:bg-blue-50 rounded-xl transition-all flex items-center justify-between border border-transparent hover:border-blue-100">
+                <div>
+                    <div class="text-xs font-black text-slate-700 group-hover:text-blue-700">${labelText}</div>
+                    <div class="text-[9px] text-slate-400 uppercase tracking-tighter mt-0.5">${savedText}</div>
+                </div>
+                <svg class="w-3 h-3 text-slate-300 group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+        `;
+    }).join('');
+}
 
 async function initOfflineHistory() {
     try {
         const res = await fetch(`${API_BASE}/schedule/cached_list`);
         if (res.ok) {
-            const list = await res.json();
-            const container = document.getElementById('cachedEntitiesList');
-            if (list.length === 0) {
-                container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400 italic">История пуста</div>`;
-                return;
-            }
-            container.innerHTML = list.map(item => `
-                <button onclick="loadSchedule('${item.type}', '${item.id}', '${item.label}'); closeOfflinePanel();"
-                        class="group w-full text-left px-4 py-3 bg-white hover:bg-blue-50 rounded-xl transition-all flex items-center justify-between border border-transparent hover:border-blue-100">
-                    <div>
-                        <div class="text-xs font-black text-slate-700 group-hover:text-blue-700">${item.label}</div>
-                        <div class="text-[9px] text-slate-400 uppercase tracking-tighter mt-0.5">Сохранено локально</div>
-                    </div>
-                    <svg class="w-3 h-3 text-slate-300 group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </button>
-            `).join('');
+            cachedOfflineEntities = await res.json();
+            renderOfflineHistory();
         }
     } catch (e) {
         console.warn("Не удалось загрузить список кэша:", e);
@@ -197,14 +261,18 @@ function copyToClipboard(text, event) {
     navigator.clipboard.writeText(text).then(() => {
         const el = event.currentTarget;
         const originalHtml = el.innerHTML;
-        el.innerHTML = `<span class="text-green-500 font-bold">Скопировано!</span>`;
+        el.innerHTML = `<span class="text-green-500 font-bold">${escapeHtml(t('schedule.copy.done', 'Copied!'))}</span>`;
         setTimeout(() => el.innerHTML = originalHtml, 1500);
     });
 }
 
 groupInput.addEventListener('input', debounce(async (e) => {
     const query = e.target.value.trim();
-    if (query.length < 2) { resultsBox.classList.add('hidden'); return; }
+    if (query.length < 2) {
+        latestSearchResults = [];
+        resultsBox.classList.add('hidden');
+        return;
+    }
 
     try {
         const res = await fetch(`${API_BASE}/schedule/search?term=${encodeURIComponent(query)}`);
@@ -212,22 +280,32 @@ groupInput.addEventListener('input', debounce(async (e) => {
         const data = await res.json();
         renderSearchResults(data);
     } catch (err) {
-        resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-red-500 text-center font-medium">⚠️ Ошибка поиска или сервер недоступен.</div>`;
+        resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-red-500 text-center font-medium">⚠️ ${escapeHtml(t('schedule.search.error', 'Search failed or the server is unavailable.'))}</div>`;
         resultsBox.classList.remove('hidden');
     }
 }, 300));
 
 function renderSearchResults(results) {
-    if (results.length === 0) {
-        resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-slate-500 text-center">Ничего не найдено</div>`;
+    const normalizedResults = Array.isArray(results) ? results : [];
+    latestSearchResults = normalizedResults;
+
+    if (normalizedResults.length === 0) {
+        resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-slate-500 text-center">${escapeHtml(t('schedule.search.empty', 'Nothing found'))}</div>`;
     } else {
-        resultsBox.innerHTML = results.map(item => {
-            const offlineBadge = item.is_offline ? `<span class="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-600">⚡ КЭШ</span>` : '';
+        resultsBox.innerHTML = normalizedResults.map(item => {
+            const offlineBadge = item.is_offline
+                ? `<span class="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-600">⚡ ${escapeHtml(t('schedule.search.cacheBadge', 'CACHE'))}</span>`
+                : '';
+            const itemType = escapeJsString(item.type || 'group');
+            const itemId = escapeJsString(item.id);
+            const itemLabel = escapeJsString(item.label);
+            const labelText = escapeHtml(item.label);
+            const descriptionText = escapeHtml(item.description || '');
             return `
             <div class="px-6 py-3 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-none"
-                 onclick="loadSchedule('${item.type || 'group'}', '${item.id}', '${item.label.replace(/'/g, "\\'")}')">
-                <div class="font-bold text-slate-800 flex items-center">${item.label} ${offlineBadge}</div>
-                <div class="text-xs text-slate-400 mt-0.5">${item.description || ''}</div>
+                 onclick="loadSchedule('${itemType}', '${itemId}', '${itemLabel}')">
+                <div class="font-bold text-slate-800 flex items-center">${labelText} ${offlineBadge}</div>
+                <div class="text-xs text-slate-400 mt-0.5">${descriptionText}</div>
             </div>`;
         }).join('');
     }
@@ -270,7 +348,9 @@ async function loadSchedule(type, id, name, targetDate = null) {
         filterAndRender();
 
     } catch (err) {
-        document.getElementById('desktopSchedule').innerHTML = `<div class="p-10 text-center text-red-500 font-bold">Ошибка загрузки.</div>`;
+        const errorText = escapeHtml(t('schedule.error.load', 'Failed to load schedule.'));
+        document.getElementById('desktopSchedule').innerHTML = `<div class="p-10 text-center text-red-500 font-bold">${errorText}</div>`;
+        document.getElementById('mobileSchedule').innerHTML = `<div class="p-10 text-center text-red-500 font-bold">${errorText}</div>`;
     }
 }
 
@@ -284,10 +364,10 @@ function renderModuleFilters() {
     }
     section.classList.remove('hidden');
     container.innerHTML = allAvailableModules.map(mod => `
-        <button onclick="toggleModule('${mod}')"
+        <button onclick="toggleModule('${escapeJsString(mod)}')"
             class="px-3 py-1.5 rounded-xl border text-xs sm:text-sm font-bold transition-all duration-200
             ${selectedModules.has(mod) ? 'bg-slate-800 border-slate-800 text-white shadow-md' : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'}">
-            ${selectedModules.has(mod) ? '✓ ' : ''}${mod}
+            ${selectedModules.has(mod) ? '✓ ' : ''}${escapeHtml(mod)}
         </button>
     `).join('');
 }
@@ -324,7 +404,7 @@ function filterAndRender() {
     weekEnd.setDate(weekEnd.getDate() + 6);
 
     document.getElementById('weekRangeDisplay').innerText =
-        `${currentWeekStart.toLocaleDateString('ru', {day:'numeric', month:'short'})} — ${weekEnd.toLocaleDateString('ru', {day:'numeric', month:'short'})}`;
+        `${formatUiDate(currentWeekStart, {day:'numeric', month:'short'})} — ${formatUiDate(weekEnd, {day:'numeric', month:'short'})}`;
 
     const filteredLessons = fullSchedule.filter(lesson => {
         if (lesson.module && !selectedModules.has(lesson.module)) return false;
@@ -363,14 +443,14 @@ function renderDesktopGrid(lessons) {
         <table class="w-full table-fixed border-collapse text-left">
             <thead class="bg-slate-50/50 border-b border-slate-100">
                 <tr>
-                    <th class="w-16 sm:w-20 p-3 text-center text-xs font-bold text-slate-400 border-r border-slate-200">Время</th>`;
+                    <th class="w-16 sm:w-20 p-3 text-center text-xs font-bold text-slate-400 border-r border-slate-200">${escapeHtml(t('schedule.table.time', 'Time'))}</th>`;
 
     weekDates.forEach(d => {
         const isToday = isSameDay(d, now);
         html += `<th class="p-3 border-r border-slate-200 last:border-r-0 ${isToday ? 'bg-blue-50/70' : ''} relative">
             ${isToday ? '<div class="absolute top-0 left-0 w-full h-1 bg-blue-500"></div>' : ''}
             <div class="flex flex-col items-center gap-0.5">
-                <span class="text-xs uppercase tracking-widest font-bold ${isToday ? 'text-blue-600' : 'text-slate-500'}">${d.toLocaleDateString('ru', {weekday: 'short'})}</span>
+                <span class="text-xs uppercase tracking-widest font-bold ${isToday ? 'text-blue-600' : 'text-slate-500'}">${escapeHtml(formatUiDate(d, {weekday: 'short'}))}</span>
                 <span class="text-xl font-black ${isToday ? 'text-blue-700' : 'text-slate-800'}">${d.getDate()}</span>
             </div>
         </th>`;
@@ -413,7 +493,7 @@ function renderDesktopGrid(lessons) {
 function renderMobileFeed(lessons) {
     const container = document.getElementById('mobileSchedule');
     if (lessons.length === 0) {
-        container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm">Нет занятий на этой неделе.</div>`;
+        container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm">${escapeHtml(t('schedule.state.emptyWeek', 'No classes this week.'))}</div>`;
         return;
     }
 
@@ -430,18 +510,23 @@ function renderMobileFeed(lessons) {
     sortedDates.forEach(dateStr => {
         const d = parseDate(dateStr);
         const isToday = isSameDay(d, new Date());
+        const dayTitle = formatUiDateCapitalized(d, {weekday: 'long'});
+        const dayDate = formatUiDate(d, {day: 'numeric', month: 'long'});
 
         html += `
-        <div class="relative">
-            <div class="sticky top-[56px] md:top-[64px] z-20 bg-white px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                <div class="font-black text-slate-800 capitalize">${d.toLocaleDateString('ru', {weekday: 'long'})}</div>
-                <div class="text-xs font-bold ${isToday ? 'text-blue-600' : 'text-slate-400'}">${d.toLocaleDateString('ru', {day: 'numeric', month: 'long'})}</div>
+        <section class="schedule-day-section relative">
+            <div class="schedule-day-header ${isToday ? 'schedule-day-header--today' : ''}">
+                <div>
+                    <div class="schedule-day-header-label">${escapeHtml(dayDate)}</div>
+                    <div class="schedule-day-header-title">${escapeHtml(dayTitle)}</div>
+                </div>
+                ${isToday ? `<span class="schedule-day-pill">${escapeHtml(t('schedule.day.today', 'Today'))}</span>` : ''}
             </div>
 
-            <div class="flex flex-col divide-y divide-slate-50">
+            <div class="schedule-day-lessons">
                 ${byDate[dateStr].sort((a,b) => a.beginLesson.localeCompare(b.beginLesson)).map(l => renderCard(l, false)).join('')}
             </div>
-        </div>`;
+        </section>`;
     });
     container.innerHTML = html;
 }
@@ -450,40 +535,50 @@ function renderCard(l, isDesktop) {
     const color = getBadgeColor(l.kindOfWork);
     const useShort = document.getElementById('useShortNames').checked;
     const discName = useShort ? l.discipline_short : l.discipline_full;
+    const safeKind = escapeHtml(l.kindOfWork || '');
+    const safeModule = escapeHtml(l.module || '');
+    const safeDiscipline = escapeHtml(discName || '');
+    const safeAuditorium = escapeHtml(l.auditorium || '');
+    const safeAuditoriumJs = escapeJsString(l.auditorium || '');
+    const safeLecturer = escapeHtml(l.lecturer_title || '');
+    const safeLecturerJs = escapeJsString(l.lecturer_title || '');
+    const roomTitle = escapeHtml(t('schedule.copy.room', 'Copy room'));
+    const teacherTitle = escapeHtml(t('schedule.copy.teacher', 'Copy lecturer'));
 
     if (isDesktop) {
-        const teacherTokens = (l.lecturer_title || '').split(' ');
+        const teacherTokens = String(l.lecturer_title || '').split(' ').filter(Boolean);
         const teacherShort = teacherTokens.length > 2
             ? `${teacherTokens[0]} ${teacherTokens[1][0]}.${teacherTokens[2][0]}.`
             : l.lecturer_title;
+        const safeTeacherShort = escapeHtml(teacherShort || '');
 
         return `
         <div class="p-2.5 sm:p-3 rounded-2xl border ${color.border} ${color.bg} shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md flex flex-col h-full min-h-[110px]">
             <div class="flex justify-between items-start gap-1 mb-1.5">
-                <div class="text-[9px] font-black uppercase tracking-wider ${color.text} truncate" title="${l.kindOfWork}">
-                    ${l.kindOfWork}
+                <div class="text-[9px] font-black uppercase tracking-wider ${color.text} truncate" title="${safeKind}">
+                    ${safeKind}
                 </div>
                 ${l.module ? `
-                    <span class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-white text-slate-600 truncate max-w-[60px] border border-slate-100 shadow-sm" title="${l.module}">
-                        ${l.module}
+                    <span class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-white text-slate-600 truncate max-w-[60px] border border-slate-100 shadow-sm" title="${safeModule}">
+                        ${safeModule}
                     </span>` : ''}
             </div>
 
-            <div class="font-bold text-slate-800 text-[13px] leading-snug line-clamp-3 mb-2 flex-grow" title="${discName}">
-                ${discName}
+            <div class="font-bold text-slate-800 text-[13px] leading-snug line-clamp-3 mb-2 flex-grow" title="${safeDiscipline}">
+                ${safeDiscipline}
             </div>
 
             <div class="flex flex-col gap-1">
                 <div class="flex items-center gap-1 text-[10px] font-medium text-slate-600 hover:text-blue-600 cursor-pointer transition-colors"
-                     onclick="copyToClipboard('${l.auditorium}', event)" title="Копировать аудиторию">
+                     onclick="copyToClipboard('${safeAuditoriumJs}', event)" title="${roomTitle}">
                     <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                    <span class="truncate">${l.auditorium}</span>
+                    <span class="truncate">${safeAuditorium}</span>
                 </div>
                 ${teacherShort ? `
                 <div class="flex items-center gap-1 text-[10px] font-medium text-slate-600 hover:text-blue-600 cursor-pointer transition-colors"
-                     onclick="copyToClipboard('${l.lecturer_title}', event)" title="Копировать ФИО">
+                     onclick="copyToClipboard('${safeLecturerJs}', event)" title="${teacherTitle}">
                     <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-                    <span class="truncate">${teacherShort}</span>
+                    <span class="truncate">${safeTeacherShort}</span>
                 </div>` : ''}
             </div>
         </div>`;
@@ -492,46 +587,48 @@ function renderCard(l, isDesktop) {
     const mobileBadgeBg = color.bg.includes('/') ? color.bg.split('/')[0] : color.bg;
 
     return `
-    <div class="p-4 bg-white hover:bg-slate-50 transition-colors flex flex-col gap-2">
+    <article class="schedule-feed-card flex flex-col gap-3 p-4">
         <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-2">
-                <span class="font-black text-sm text-slate-900">${l.beginLesson}</span>
-                <span class="text-[10px] font-bold text-slate-300 line-through decoration-slate-200">${l.endLesson}</span>
+                <span class="font-black text-sm text-slate-900">${escapeHtml(l.beginLesson || '')}</span>
+                <span class="text-[10px] font-bold text-slate-300 line-through decoration-slate-200">${escapeHtml(l.endLesson || '')}</span>
             </div>
             <span class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${color.text} ${mobileBadgeBg} border ${color.border}">
-                ${l.kindOfWork}
+                ${safeKind}
             </span>
         </div>
 
         <div>
-            <div class="font-bold text-slate-900 text-sm leading-snug mb-1">${discName}</div>
+            <div class="font-bold text-slate-900 text-sm leading-snug mb-1">${safeDiscipline}</div>
             ${l.module ? `
                 <span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
-                    ${l.module}
+                    ${safeModule}
                 </span>` : ''}
         </div>
 
         <div class="grid grid-cols-2 gap-2 mt-1">
             <div class="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 truncate cursor-pointer active:text-blue-600"
-                 onclick="copyToClipboard('${l.auditorium}', event)">
+                 onclick="copyToClipboard('${safeAuditoriumJs}', event)"
+                 title="${roomTitle}">
                 <svg class="w-3.5 h-3.5 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" stroke-width="2"></path></svg>
-                <span class="truncate">${l.auditorium}</span>
+                <span class="truncate">${safeAuditorium}</span>
             </div>
             <div class="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 truncate cursor-pointer active:text-blue-600"
-                 onclick="copyToClipboard('${l.lecturer_title}', event)">
+                 onclick="copyToClipboard('${safeLecturerJs}', event)"
+                 title="${teacherTitle}">
                 <svg class="w-3.5 h-3.5 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" stroke-width="2"></path></svg>
-                <span class="truncate">${l.lecturer_title}</span>
+                <span class="truncate">${safeLecturer}</span>
             </div>
         </div>
-    </div>`;
+    </article>`;
 }
 
 function getBadgeColor(kind) {
     if (!kind) return { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600' };
     const k = kind.toLowerCase();
-    if (k.includes('лекц')) return { bg: 'bg-emerald-50/60', border: 'border-emerald-200', text: 'text-emerald-700' };
-    if (k.includes('практ') || k.includes('семин')) return { bg: 'bg-amber-50/60', border: 'border-amber-200', text: 'text-amber-700' };
-    if (k.includes('экзамен') || k.includes('зачет') || k.includes('аттест')) return { bg: 'bg-rose-50/60', border: 'border-rose-200', text: 'text-rose-700' };
+    if (k.includes('лекц') || k.includes('lecture')) return { bg: 'bg-emerald-50/60', border: 'border-emerald-200', text: 'text-emerald-700' };
+    if (k.includes('практ') || k.includes('семин') || k.includes('practice') || k.includes('seminar')) return { bg: 'bg-amber-50/60', border: 'border-amber-200', text: 'text-amber-700' };
+    if (k.includes('экзамен') || k.includes('зачет') || k.includes('аттест') || k.includes('exam') || k.includes('credit') || k.includes('test')) return { bg: 'bg-rose-50/60', border: 'border-rose-200', text: 'text-rose-700' };
     return { bg: 'bg-blue-50/60', border: 'border-blue-200', text: 'text-blue-700' };
 }
 

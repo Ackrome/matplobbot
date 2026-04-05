@@ -29,7 +29,57 @@ const I18N = {
         "help.prevPage": "Previous table page",
         "help.close": "Close dialogs",
         "help.open": "Open shortcuts help",
-        "help.hint": "Shortcuts work when a text input is not focused."
+        "help.hint": "Shortcuts work when a text input is not focused.",
+        "index.meta.title": "Ivan Tishchenko | Portfolio",
+        "index.hero.badge": "Open for projects",
+        "index.hero.title.top": "Building digital",
+        "index.hero.title.accent": "tools",
+        "index.hero.text": "A personal builder hub with projects, automation, and useful services for everyday work.",
+        "index.hero.primaryCta": "View projects",
+        "index.projects.title": "Featured projects",
+        "index.projects.text": "A collection of tools built to solve real tasks.",
+        "index.project.type.bot": "Telegram Bot",
+        "index.project.description.matplobbot": "A smart assistant for students with schedule automation, alerts, and performance stats right in the messenger.",
+        "index.project.link.more": "Learn more",
+        "index.footer.rights": "© 2026 Ivan Tishchenko. All rights reserved.",
+        "schedule.meta.title": "Schedule | ITISHCHENKO",
+        "schedule.heading": "Schedule",
+        "schedule.offline.available": "Available offline",
+        "schedule.search.placeholder": "Find a group or lecturer...",
+        "schedule.today": "Today",
+        "schedule.filters.mobile": "Filters and modules",
+        "schedule.filters.desktop": "Subgroups and modules",
+        "schedule.filters.shortNames": "Short names",
+        "schedule.filters.all": "All",
+        "schedule.filters.clear": "Reset",
+        "schedule.offline.warning": "University service is unavailable. Loaded a cached copy.",
+        "schedule.state.default": "Choose a schedule",
+        "schedule.context.reset": "Reset",
+        "schedule.action.today": "Today",
+        "schedule.action.tomorrow": "Tomorrow",
+        "schedule.action.thisWeek": "This week",
+        "schedule.action.nextWeek": "Next week",
+        "schedule.view.auto": "Auto",
+        "schedule.view.table": "Table",
+        "schedule.view.cards": "Cards",
+        "schedule.context.none": "No group selected",
+        "schedule.context.loadedRange": "Loaded {start} — {end}",
+        "schedule.history.empty": "History is empty",
+        "schedule.history.saved": "Saved offline",
+        "schedule.search.error": "Search failed or the server is unavailable.",
+        "schedule.search.empty": "Nothing found",
+        "schedule.search.cacheBadge": "CACHE",
+        "schedule.error.load": "Failed to load schedule.",
+        "schedule.table.time": "Time",
+        "schedule.state.emptyWeek": "No classes this week.",
+        "schedule.state.emptyPeriod": "No classes for this period.",
+        "schedule.copy.done": "Copied!",
+        "schedule.copy.room": "Copy room",
+        "schedule.copy.teacher": "Copy lecturer",
+        "schedule.action.retry": "Retry",
+        "schedule.action.clearFilters": "Clear filters",
+        "schedule.action.changeGroup": "Change group",
+        "schedule.day.today": "Today"
     },
     ru: {
         "nav.home": "Главная",
@@ -58,7 +108,57 @@ const I18N = {
         "help.prevPage": "Предыдущая страница таблицы",
         "help.close": "Закрыть диалоги",
         "help.open": "Открыть справку по клавишам",
-        "help.hint": "Сочетания работают, если курсор не в поле ввода."
+        "help.hint": "Сочетания работают, если курсор не в поле ввода.",
+        "index.meta.title": "Иван Тищенко | Портфолио",
+        "index.hero.badge": "Открыт для проектов",
+        "index.hero.title.top": "Создаю цифровые",
+        "index.hero.title.accent": "инструменты",
+        "index.hero.text": "Персональный хаб разработчика. Проекты, автоматизация и полезные сервисы для ежедневной работы.",
+        "index.hero.primaryCta": "Смотреть проекты",
+        "index.projects.title": "Избранные проекты",
+        "index.projects.text": "Коллекция инструментов, которые я разработал для решения реальных задач.",
+        "index.project.type.bot": "Telegram Bot",
+        "index.project.description.matplobbot": "Умный помощник для студентов: автоматизация расписания, уведомления и статистика успеваемости прямо в мессенджере.",
+        "index.project.link.more": "Подробнее",
+        "index.footer.rights": "© 2026 Ivan Tishchenko. Все права защищены.",
+        "schedule.meta.title": "Расписание | ITISHCHENKO",
+        "schedule.heading": "Расписание",
+        "schedule.offline.available": "Доступно оффлайн",
+        "schedule.search.placeholder": "Найти группу или ФИО...",
+        "schedule.today": "Сегодня",
+        "schedule.filters.mobile": "Фильтры и модули",
+        "schedule.filters.desktop": "Подгруппы и модули",
+        "schedule.filters.shortNames": "Короткие названия",
+        "schedule.filters.all": "Всё",
+        "schedule.filters.clear": "Сброс",
+        "schedule.offline.warning": "ВУЗ недоступен. Загружена копия.",
+        "schedule.state.default": "Выберите расписание",
+        "schedule.context.reset": "Сброс",
+        "schedule.action.today": "Сегодня",
+        "schedule.action.tomorrow": "Завтра",
+        "schedule.action.thisWeek": "Эта неделя",
+        "schedule.action.nextWeek": "Следующая неделя",
+        "schedule.view.auto": "Авто",
+        "schedule.view.table": "Таблица",
+        "schedule.view.cards": "Карточки",
+        "schedule.context.none": "Группа не выбрана",
+        "schedule.context.loadedRange": "Загружено {start} — {end}",
+        "schedule.history.empty": "История пуста",
+        "schedule.history.saved": "Сохранено локально",
+        "schedule.search.error": "Ошибка поиска или сервер недоступен.",
+        "schedule.search.empty": "Ничего не найдено",
+        "schedule.search.cacheBadge": "КЭШ",
+        "schedule.error.load": "Ошибка загрузки.",
+        "schedule.table.time": "Время",
+        "schedule.state.emptyWeek": "Нет занятий на этой неделе.",
+        "schedule.state.emptyPeriod": "Нет занятий за выбранный период.",
+        "schedule.copy.done": "Скопировано!",
+        "schedule.copy.room": "Копировать аудиторию",
+        "schedule.copy.teacher": "Копировать преподавателя",
+        "schedule.action.retry": "Повторить",
+        "schedule.action.clearFilters": "Сбросить фильтры",
+        "schedule.action.changeGroup": "Сменить группу",
+        "schedule.day.today": "Сегодня"
     }
 };
 
@@ -76,8 +176,10 @@ const navState = {
     paletteOpen: false,
     helpOpen: false,
     commandQuery: "",
-    selectedCommandIndex: 0
+    selectedCommandIndex: 0,
+    activeSection: ""
 };
+const pageTranslators = new Set();
 
 function getStoredLanguage() {
     const saved = localStorage.getItem(UI_LANG_KEY);
@@ -99,9 +201,20 @@ function setLanguage(lang, { broadcast = true } = {}) {
     document.documentElement.lang = lang;
     renderNavbar();
     applyTranslations();
+    runPageTranslators();
     if (broadcast) {
         window.dispatchEvent(new CustomEvent("mpb-language-change", { detail: { lang } }));
     }
+}
+
+function runPageTranslators() {
+    pageTranslators.forEach((translator) => {
+        try {
+            translator(navState.lang, translate);
+        } catch (error) {
+            console.warn("Page translator failed", error);
+        }
+    });
 }
 
 function applyTranslations() {
@@ -134,8 +247,11 @@ function normalizePath(path) {
 
 function isActiveNavItem(item) {
     const pathname = normalizePath(window.location.pathname);
+    if (item.href === "/") {
+        return pathname === "/" && window.location.hash !== "#projects" && navState.activeSection !== "projects";
+    }
     if (item.href === "/#projects") {
-        return pathname === "/" && window.location.hash === "#projects";
+        return pathname === "/" && (window.location.hash === "#projects" || navState.activeSection === "projects");
     }
     return pathname === normalizePath(item.href);
 }
@@ -218,8 +334,8 @@ function renderLanguageToggle(isMobile = false) {
         : "hidden lg:flex items-center gap-1 rounded-full bg-slate-100 p-1";
     return `
         <div class="${base}">
-            <button type="button" data-lang="en" class="js-lang-switch px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${navState.lang === "en" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}">${translate("lang.en")}</button>
-            <button type="button" data-lang="ru" class="js-lang-switch px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${navState.lang === "ru" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}">${translate("lang.ru")}</button>
+            <button type="button" data-lang="en" aria-pressed="${navState.lang === "en"}" class="js-lang-switch px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${navState.lang === "en" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}">${translate("lang.en")}</button>
+            <button type="button" data-lang="ru" aria-pressed="${navState.lang === "ru"}" class="js-lang-switch px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${navState.lang === "ru" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}">${translate("lang.ru")}</button>
         </div>
     `;
 }
@@ -309,16 +425,44 @@ function setupMobileMenu() {
     if (!button || !menu) return;
 
     button.setAttribute("aria-label", translate("nav.menu"));
+    button.setAttribute("aria-controls", "mobile-menu");
+    button.setAttribute("aria-expanded", "false");
     button.addEventListener("click", () => {
         menu.classList.toggle("hidden");
+        button.setAttribute("aria-expanded", String(!menu.classList.contains("hidden")));
     });
 
     menu.addEventListener("click", (event) => {
         const target = event.target;
         if (target instanceof HTMLElement && target.closest("a")) {
             menu.classList.add("hidden");
+            button.setAttribute("aria-expanded", "false");
         }
     });
+}
+
+function setupHomeSectionSpy() {
+    if (normalizePath(window.location.pathname) !== "/") return;
+    const projectsSection = document.getElementById("projects");
+    if (!(projectsSection instanceof HTMLElement)) return;
+
+    const observer = new IntersectionObserver(
+        (entries) => {
+            const nextSection = entries.some((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.35)
+                ? "projects"
+                : "";
+            if (navState.activeSection !== nextSection && window.location.hash !== "#projects") {
+                navState.activeSection = nextSection;
+                renderNavbar();
+            }
+        },
+        {
+            threshold: [0.2, 0.35, 0.6],
+            rootMargin: "-120px 0px -35% 0px",
+        }
+    );
+
+    observer.observe(projectsSection);
 }
 
 function setupNavbarScrollBehavior() {
@@ -595,8 +739,10 @@ function registerGlobalHandlers() {
 
         if (event.key === "Escape") {
             const mobileMenu = document.getElementById("mobile-menu");
+            const mobileMenuButton = document.getElementById("mobile-menu-button");
             if (mobileMenu && !mobileMenu.classList.contains("hidden")) {
                 mobileMenu.classList.add("hidden");
+                mobileMenuButton?.setAttribute("aria-expanded", "false");
             }
             toggleShortcutHelp(false);
             closeCommandPalette();
@@ -629,6 +775,12 @@ function registerGlobalHandlers() {
 
         if (event.key.toLowerCase() === "p") {
             window.dispatchEvent(new CustomEvent("mpb-shortcut-pagination", { detail: { direction: "prev" } }));
+            return;
+        }
+
+        if (event.altKey && event.key.toLowerCase() === "l") {
+            event.preventDefault();
+            setLanguage(navState.lang === "ru" ? "en" : "ru");
         }
     });
 
@@ -648,7 +800,18 @@ function exposePublicI18nApi() {
         getLanguage: () => navState.lang,
         setLanguage: (lang) => setLanguage(lang),
         t: (key, fallback = "", params = {}) => translate(key, fallback, params),
-        applyTranslations
+        applyTranslations,
+        registerTranslator: (fn) => {
+            if (typeof fn !== "function") return () => {};
+            pageTranslators.add(fn);
+            try {
+                fn(navState.lang, translate);
+            } catch (error) {
+                console.warn("Page translator registration failed", error);
+            }
+            return () => pageTranslators.delete(fn);
+        },
+        unregisterTranslator: (fn) => pageTranslators.delete(fn),
     };
 }
 
@@ -659,8 +822,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     setupMobileMenu();
     setupNavbarScrollBehavior();
+    setupHomeSectionSpy();
     registerGlobalHandlers();
     checkAuthAndRenderNavbar();
     ensureOverlays();
     applyTranslations();
+    runPageTranslators();
+    window.addEventListener("hashchange", renderNavbar);
+    window.addEventListener("popstate", renderNavbar);
 });

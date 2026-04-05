@@ -6,6 +6,31 @@
         viewMode: "auto",
     };
 
+    function getUiLanguage() {
+        const source = window.mpbI18n?.getLanguage?.() || document.documentElement.lang || "ru";
+        return String(source).toLowerCase().startsWith("ru") ? "ru" : "en";
+    }
+
+    function getUiLocale() {
+        return getUiLanguage() === "ru" ? "ru-RU" : "en-US";
+    }
+
+    function t(key, fallback = "", params = {}) {
+        return window.mpbI18n?.t?.(key, fallback, params) || fallback || key;
+    }
+
+    function formatUiDate(date, options) {
+        return new Intl.DateTimeFormat(getUiLocale(), options).format(date);
+    }
+
+    function formatLoadedBound(value) {
+        if (!value) return "-";
+        const parsed = parseDate(value);
+        return Number.isNaN(parsed.getTime())
+            ? value
+            : formatUiDate(parsed, { day: "numeric", month: "short", year: "numeric" });
+    }
+
     function loadUiPrefs() {
         try {
             const payload = JSON.parse(localStorage.getItem(UI_PREFS_KEY) || "{}");
@@ -40,10 +65,29 @@
             #scheduleControls{position:sticky;top:5rem;z-index:35;background:#fff}
             #scheduleGridContent{transition:opacity .2s ease}
             .schedule-touch-btn{min-height:44px;padding:.7rem 1rem}
-            .schedule-mobile-card{line-height:1.35}
-            .schedule-empty-card{border:1px solid #e2e8f0;background:#f8fafc;border-radius:1rem;padding:1rem;text-align:center}
-            .schedule-empty-actions{display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;margin-top:.75rem}
-            .schedule-empty-actions button,.schedule-empty-actions a{border:1px solid #cbd5e1;border-radius:.7rem;padding:.5rem .75rem;font-size:.75rem;font-weight:700}
+            .schedule-empty-card{border:1px solid #dbeafe;background:linear-gradient(135deg,#eff6ff,#ffffff);border-radius:1.25rem;padding:1.25rem;text-align:center;box-shadow:0 18px 48px -36px rgba(37,99,235,.45)}
+            .schedule-empty-actions{display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;margin-top:.9rem}
+            .schedule-empty-actions button,.schedule-empty-actions a{border:1px solid #cbd5e1;border-radius:.8rem;padding:.55rem .9rem;font-size:.75rem;font-weight:700;background:#fff}
+            .schedule-cards-feed{padding:.75rem;background:linear-gradient(180deg,#f8fbff 0%,#fff 22%)}
+            .schedule-day-section{margin-bottom:1rem;border:1px solid #dbeafe;border-radius:1.4rem;overflow:hidden;background:linear-gradient(180deg,#eff6ff 0%,#fff 36%);box-shadow:0 24px 40px -34px rgba(37,99,235,.35)}
+            .schedule-day-header{position:sticky;top:calc(5rem + .5rem);z-index:20;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1rem 1.15rem;border-bottom:1px solid #dbeafe;background:linear-gradient(135deg,#dbeafe 0%,#eff6ff 55%,#f8fafc 100%)}
+            .schedule-day-header--today{background:linear-gradient(135deg,#bfdbfe 0%,#dbeafe 45%,#eff6ff 100%)}
+            .schedule-day-header-label{text-transform:uppercase;letter-spacing:.12em;font-size:.68rem;font-weight:800;color:#64748b}
+            .schedule-day-header-title{margin-top:.35rem;font-size:1.35rem;line-height:1.1;font-weight:900;color:#0f172a}
+            .schedule-day-pill{padding:.38rem .7rem;border-radius:999px;background:#1d4ed8;color:#fff;font-size:.72rem;font-weight:700;box-shadow:0 10px 20px -16px rgba(29,78,216,.7)}
+            .schedule-day-lessons{display:flex;flex-direction:column;background:#fff}
+            .schedule-feed-card{background:rgba(255,255,255,.92);transition:transform .18s ease,box-shadow .18s ease,background-color .18s ease}
+            .schedule-feed-card + .schedule-feed-card{border-top:1px solid #e2e8f0}
+            .schedule-feed-card:hover{background:#f8fbff}
+            @media (max-width:1023px){.schedule-day-header-title{font-size:1.15rem}}
+            @media (min-width:1024px){
+                .schedule-cards-feed.schedule-cards-desktop{padding:1rem}
+                .schedule-cards-feed.schedule-cards-desktop .schedule-day-section{margin-bottom:1.25rem}
+                .schedule-cards-feed.schedule-cards-desktop .schedule-day-header{top:calc(5rem + 1rem);padding:1.1rem 1.35rem}
+                .schedule-cards-feed.schedule-cards-desktop .schedule-day-lessons{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;padding:1rem;background:transparent}
+                .schedule-cards-feed.schedule-cards-desktop .schedule-feed-card{border:1px solid #e2e8f0;border-radius:1rem;box-shadow:0 20px 35px -30px rgba(15,23,42,.35)}
+                .schedule-cards-feed.schedule-cards-desktop .schedule-feed-card + .schedule-feed-card{border-top:none}
+            }
         `;
         document.head.appendChild(style);
     }
@@ -54,7 +98,7 @@
 
         const contextBar = document.createElement("div");
         contextBar.id = "scheduleContextBar";
-        contextBar.className = "border-b border-slate-100 bg-white/95 px-3 py-3 md:px-4";
+        contextBar.className = "border-b border-slate-100 bg-white/95 px-3 py-3 shadow-[0_12px_32px_-24px_rgba(15,23,42,0.25)] md:px-4";
         contextBar.innerHTML = `
             <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div class="text-xs md:text-sm text-slate-600">
@@ -65,23 +109,43 @@
                     <span id="contextRange">-</span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button type="button" class="schedule-touch-btn rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100" id="scheduleResetContextBtn">Reset</button>
+                    <button type="button" class="schedule-touch-btn rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100" id="scheduleResetContextBtn"></button>
                 </div>
             </div>
             <div class="mt-2 flex flex-wrap gap-2">
-                <button type="button" class="schedule-touch-btn rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100" id="jumpTodayBtn">Today</button>
-                <button type="button" class="schedule-touch-btn rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100" id="jumpTomorrowBtn">Tomorrow</button>
-                <button type="button" class="schedule-touch-btn rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100" id="jumpThisWeekBtn">This week</button>
-                <button type="button" class="schedule-touch-btn rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100" id="jumpNextWeekBtn">Next week</button>
+                <button type="button" class="schedule-touch-btn rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100" id="jumpTodayBtn"></button>
+                <button type="button" class="schedule-touch-btn rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100" id="jumpTomorrowBtn"></button>
+                <button type="button" class="schedule-touch-btn rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100" id="jumpThisWeekBtn"></button>
+                <button type="button" class="schedule-touch-btn rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100" id="jumpNextWeekBtn"></button>
                 <div class="ml-auto flex items-center rounded-xl border border-slate-300 bg-white p-1 text-xs">
-                    <button type="button" id="viewAutoBtn" class="rounded-lg px-2 py-1 font-semibold text-slate-700">Auto</button>
-                    <button type="button" id="viewTableBtn" class="rounded-lg px-2 py-1 font-semibold text-slate-700">Table</button>
-                    <button type="button" id="viewCardsBtn" class="rounded-lg px-2 py-1 font-semibold text-slate-700">Cards</button>
+                    <button type="button" id="viewAutoBtn" class="rounded-lg px-2 py-1 font-semibold text-slate-700"></button>
+                    <button type="button" id="viewTableBtn" class="rounded-lg px-2 py-1 font-semibold text-slate-700"></button>
+                    <button type="button" id="viewCardsBtn" class="rounded-lg px-2 py-1 font-semibold text-slate-700"></button>
                 </div>
             </div>
         `;
 
         controls.prepend(contextBar);
+    }
+
+    function syncContextBarLabels() {
+        const labels = {
+            scheduleResetContextBtn: ["schedule.context.reset", "Reset"],
+            jumpTodayBtn: ["schedule.action.today", "Today"],
+            jumpTomorrowBtn: ["schedule.action.tomorrow", "Tomorrow"],
+            jumpThisWeekBtn: ["schedule.action.thisWeek", "This week"],
+            jumpNextWeekBtn: ["schedule.action.nextWeek", "Next week"],
+            viewAutoBtn: ["schedule.view.auto", "Auto"],
+            viewTableBtn: ["schedule.view.table", "Table"],
+            viewCardsBtn: ["schedule.view.cards", "Cards"],
+        };
+
+        Object.entries(labels).forEach(([id, [key, fallback]]) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = t(key, fallback);
+            }
+        });
     }
 
     function setViewMode(mode) {
@@ -93,11 +157,14 @@
         const auto = mode === "auto";
         const table = mode === "table";
         const cards = mode === "cards";
+        const showDesktop = table || (auto && window.innerWidth >= 1024);
+        const showCardsFeed = cards || (auto && window.innerWidth < 1024);
 
-        desktop.classList.toggle("hidden", cards || (auto && window.innerWidth < 1024));
-        desktop.classList.toggle("block", table);
-        mobile.classList.toggle("hidden", table || (auto && window.innerWidth >= 1024));
-        mobile.classList.toggle("block", cards);
+        desktop.style.display = showDesktop ? "block" : "none";
+        mobile.style.display = showCardsFeed ? "flex" : "none";
+        desktop.classList.toggle("hidden", !showDesktop);
+        mobile.classList.toggle("hidden", !showCardsFeed);
+        mobile.classList.toggle("schedule-cards-desktop", cards && window.innerWidth >= 1024);
 
         const isActive = (id, active) => {
             const btn = document.getElementById(id);
@@ -122,9 +189,12 @@
         const weekEnd = new Date(currentWeekStart);
         weekEnd.setDate(weekEnd.getDate() + 6);
 
-        entityEl.textContent = currentEntity?.name || "No group selected";
-        weekEl.textContent = `${currentWeekStart.toLocaleDateString()} - ${weekEnd.toLocaleDateString()}`;
-        rangeEl.textContent = `${loadedBounds.start || "-"} to ${loadedBounds.end || "-"}`;
+        entityEl.textContent = currentEntity?.name || t("schedule.context.none", "No group selected");
+        weekEl.textContent = `${formatUiDate(currentWeekStart, { day: "numeric", month: "short", year: "numeric" })} — ${formatUiDate(weekEnd, { day: "numeric", month: "short", year: "numeric" })}`;
+        rangeEl.textContent = t("schedule.context.loadedRange", "Loaded {start} — {end}", {
+            start: formatLoadedBound(loadedBounds.start),
+            end: formatLoadedBound(loadedBounds.end),
+        });
     }
 
     function enhanceDesktopTableOverflow() {
@@ -139,9 +209,9 @@
             <div class="schedule-empty-card">
                 <p class="text-sm font-semibold text-slate-700">${text}</p>
                 <div class="schedule-empty-actions">
-                    <button type="button" data-schedule-action="retry">Retry</button>
-                    <button type="button" data-schedule-action="clear">Clear filters</button>
-                    <button type="button" data-schedule-action="reset">Change group</button>
+                    <button type="button" data-schedule-action="retry">${t("schedule.action.retry", "Retry")}</button>
+                    <button type="button" data-schedule-action="clear">${t("schedule.action.clearFilters", "Clear filters")}</button>
+                    <button type="button" data-schedule-action="reset">${t("schedule.action.changeGroup", "Change group")}</button>
                 </div>
             </div>
         `;
@@ -153,7 +223,7 @@
         const container = document.getElementById("mobileSchedule");
         if (!container) return;
         if (!Array.isArray(lessons) || lessons.length === 0) {
-            renderEmptyStateWithCta(container, "No classes for this period.");
+            renderEmptyStateWithCta(container, t("schedule.state.emptyPeriod", "No classes for this period."));
         }
     };
 
@@ -164,7 +234,7 @@
         const container = document.getElementById("desktopSchedule");
         if (!container) return;
         if (!Array.isArray(lessons) || lessons.length === 0) {
-            renderEmptyStateWithCta(container, "No classes for this period.");
+            renderEmptyStateWithCta(container, t("schedule.state.emptyPeriod", "No classes for this period."));
         }
     };
 
@@ -196,8 +266,8 @@
                 savePreferences();
             }
             if (action === "reset") {
-                document.getElementById("groupSearch").focus();
-                document.getElementById("groupSearch").select();
+                document.getElementById("groupSearch")?.focus();
+                document.getElementById("groupSearch")?.select();
             }
         });
     }
@@ -245,9 +315,15 @@
         loadUiPrefs();
         injectEnhancementStyles();
         ensureContextBar();
+        syncContextBarLabels();
         bindToolbar();
         bindGlobalActions();
         updateContextBar();
         setViewMode(uiState.viewMode);
+        window.mpbI18n?.registerTranslator?.(() => {
+            syncContextBarLabels();
+            updateContextBar();
+            setViewMode(uiState.viewMode);
+        });
     });
 })();

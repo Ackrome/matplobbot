@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Иван Тищенко | Portfolio</title>
+    <title data-i18n="index.meta.title">Иван Тищенко | Portfolio</title>
 
     <!-- Иконки сайта -->
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
@@ -55,13 +55,13 @@
         .nav-visible { transform: translateY(0); opacity: 1; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900 antialiased selection:bg-blue-100 selection:text-blue-900">
+<body id="page-top" class="bg-slate-50 text-slate-900 antialiased selection:bg-blue-100 selection:text-blue-900">
 
     <nav class="glass fixed top-0 w-full z-50 transition-all duration-300 nav-visible" id="navbar">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-20">
                 <!-- Logo -->
-                <a href="#" class="flex-shrink-0 flex items-center space-x-2 group">
+                <a href="#page-top" class="flex-shrink-0 flex items-center space-x-2 group">
                     <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-500/30 group-hover:scale-105 transition-transform">
                         IT
                     </div>
@@ -84,7 +84,7 @@
 
                 <!-- Mobile menu button -->
                 <div class="md:hidden flex items-center">
-                    <button id="mobile-menu-button" class="text-slate-600 hover:text-blue-600 focus:outline-none p-2 rounded-lg hover:bg-slate-100 transition-colors">
+                    <button id="mobile-menu-button" data-i18n-aria-label="nav.menu" class="text-slate-600 hover:text-blue-600 focus:outline-none p-2 rounded-lg hover:bg-slate-100 transition-colors">
                         <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
                         </svg>
@@ -116,20 +116,20 @@
             <div class="relative max-w-5xl mx-auto px-4 text-center z-10 pt-20 fade-in">
                 <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 backdrop-blur-sm border border-slate-200 shadow-sm mb-8 animate-bounce-slow">
                     <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                    <span class="text-sm font-medium text-slate-600">Открыт для проектов</span>
+                    <span data-i18n="index.hero.badge" class="text-sm font-medium text-slate-600">Открыт для проектов</span>
                 </div>
 
                 <h1 class="text-5xl md:text-7xl lg:text-8xl font-extrabold mb-8 tracking-tight text-slate-900 leading-[1.1]">
-                    Создаю цифровые <br>
-                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">инструменты</span>
+                    <span data-i18n="index.hero.title.top">Создаю цифровые</span> <br>
+                    <span data-i18n="index.hero.title.accent" class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">инструменты</span>
                 </h1>
 
-                <p class="text-xl md:text-2xl text-slate-600 max-w-3xl mx-auto mb-12 leading-relaxed">
-                    Персональный хаб разработчика. Проекты, автоматизация и полезные сервисы для себя, всех и вся.
+                <p data-i18n="index.hero.text" class="text-xl md:text-2xl text-slate-600 max-w-3xl mx-auto mb-12 leading-relaxed">
+                    Персональный хаб разработчика. Проекты, автоматизация и полезные сервисы для ежедневной работы.
                 </p>
 
                 <div class="flex flex-col sm:flex-row justify-center gap-4">
-                    <a href="#projects" class="inline-flex items-center justify-center px-8 py-4 text-base font-bold text-white transition-all duration-200 bg-slate-900 rounded-full hover:bg-slate-800 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 shadow-xl shadow-slate-900/20">
+                    <a href="#projects" data-i18n="index.hero.primaryCta" class="inline-flex items-center justify-center px-8 py-4 text-base font-bold text-white transition-all duration-200 bg-slate-900 rounded-full hover:bg-slate-800 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 shadow-xl shadow-slate-900/20">
                         Смотреть проекты
                     </a>
                 </div>
@@ -141,11 +141,11 @@
         </section>
 
         <!-- Projects Section -->
-        <section id="projects" class="py-24 bg-white relative">
+        <section id="projects" class="scroll-mt-28 py-24 bg-white relative">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="text-center mb-16 fade-in">
-                    <h2 class="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Избранные проекты</h2>
-                    <p class="text-lg text-slate-500 max-w-2xl mx-auto">
+                    <h2 data-i18n="index.projects.title" class="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Избранные проекты</h2>
+                    <p data-i18n="index.projects.text" class="text-lg text-slate-500 max-w-2xl mx-auto">
                         Коллекция инструментов, которые я разработал для решения реальных задач.
                     </p>
                 </div>
@@ -156,7 +156,7 @@
                         <div class="relative h-64 overflow-hidden">
                             <img src="https://image.qwenlm.ai/public_source/5ce42e79-3a6d-43e2-aa70-b846219e4f49/1daba1615-31a8-4e57-b558-6919144a1b3d.png" alt="Matplobbot" class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500">
                             <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-6">
-                                <span class="text-white font-medium">Telegram Bot</span>
+                                <span data-i18n="index.project.type.bot" class="text-white font-medium">Telegram Bot</span>
                             </div>
                         </div>
                         <div class="p-6">
@@ -165,11 +165,12 @@
                                 <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Telegram API</span>
                             </div>
                             <h3 class="text-xl font-bold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors">Matplobbot</h3>
-                            <p class="text-slate-600 mb-6 line-clamp-2">
-                                Умный помощник для студентов. Автоматизация расписания, уведомления и статистика успеваемости прямо в мессенджере.
+                            <p data-i18n="index.project.description.matplobbot" class="text-slate-600 mb-6 line-clamp-2">
+                                Умный помощник для студентов: автоматизация расписания, уведомления и статистика успеваемости прямо в мессенджере.
                             </p>
                             <a href="#" class="inline-flex items-center text-blue-600 font-semibold hover:text-blue-700 transition-colors">
-                                Подробнее <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+                                <span data-i18n="index.project.link.more">Подробнее</span>
+                                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
                             </a>
                         </div>
                     </div>
@@ -197,11 +198,13 @@
                     </div>
                 </div>
                 <div class="border-t border-slate-100 pt-8 flex flex-col md:flex-row justify-between items-center">
-                    <p class="text-sm text-slate-500">&copy; 2026 Ivan Tishchenko. All rights reserved.</p>
-
+                    <p data-i18n="index.footer.rights" class="text-sm text-slate-500">&copy; 2026 Ivan Tishchenko. All rights reserved.</p>
+                </div>
+            </div>
+        </footer>
     </main>
 
-    <script src="/js/navbar.js?v=11"></script>
+    <script src="/js/navbar.js?v=12"></script>
     <script>
         const observerOptions = { root: null, rootMargin: '0px', threshold: 0.1 };
         const observer = new IntersectionObserver((entries, localObserver) => {
