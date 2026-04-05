@@ -94,7 +94,10 @@ async def main():
                 trigger="cron",
                 hour="4,16",
                 minute=0,
-                kwargs={"http_session": telegram_session, "ruz_api_client": ruz_api_client_instance},
+                kwargs={
+                    "http_session": telegram_session,
+                    "ruz_api_client": ruz_api_client_instance,
+                },
             )
             scheduler.add_job(
                 prune_inactive_subscriptions,

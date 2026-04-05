@@ -204,7 +204,11 @@ async def send_daily_schedules(
         delivery_failures,
     )
 
-    if subscriber_attempts > 0 and delivery_successes == 0 and delivery_failures == subscriber_attempts:
+    if (
+        subscriber_attempts > 0
+        and delivery_successes == 0
+        and delivery_failures == subscriber_attempts
+    ):
         raise RuntimeError("Daily schedules job failed: every attempted delivery failed.")
 
     if (
@@ -511,7 +515,9 @@ async def send_admin_summary(
                     )
                 except Exception as e:
                     logger.error(f"Failed to get stats for admin summary: {e}", exc_info=True)
-                    summary_parts.append("вќЊ РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃС‚Р°С‚РёСЃС‚РёРєСѓ.")
+                    summary_parts.append(
+                        "вќЊ РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃС‚Р°С‚РёСЃС‚РёРєСѓ."
+                    )
 
                 # Send the main summary message (no buttons usually needed here)
                 send_attempts += 1
