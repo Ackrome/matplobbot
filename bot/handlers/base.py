@@ -22,6 +22,7 @@ from .github import GitHubManager
 from .library import LibraryManager
 from .rendering import RenderingManager
 from .schedule import ScheduleManager
+from .search_center import SearchCenterManager
 
 if TYPE_CHECKING:
     from .settings import SettingsManager  # Only for type checking
@@ -66,6 +67,7 @@ class BaseManager:
         library_manager: LibraryManager,
         github_manager: GitHubManager,
         schedule_manager: ScheduleManager,
+        search_center_manager: SearchCenterManager,
         rendering_manager: RenderingManager,
         admin_manager: AdminManager,
         settings_manager: "SettingsManager",
@@ -75,6 +77,7 @@ class BaseManager:
         self.library_manager = library_manager
         self.github_manager = github_manager
         self.schedule_manager = schedule_manager
+        self.search_center_manager = search_center_manager
         self.rendering_manager = rendering_manager
         self.admin_manager = admin_manager
         self.settings_manager = settings_manager
@@ -392,6 +395,8 @@ class BaseManager:
         handler_map = {
             "matp_all": self.library_manager.matp_all_command_inline,
             "matp_search": self.library_manager.search_command,
+            "search": self.search_center_manager.command_global_search,
+            "search_presets": self.search_center_manager.command_search_presets,
             "schedule": self.schedule_manager.cmd_schedule,
             "myschedule": self.schedule_manager.cmd_my_schedule,
             "lec_search": self.github_manager.lec_search_command,
@@ -413,12 +418,9 @@ class BaseManager:
         # For certain commands, we need to pass the user object from the callback, not the message
         message = callback.message
 
-        # --- FIX: Message objects are immutable in aiogram 3.x.
-        # We must create a new object or pass the user explicitly.
-        # Since the handlers expect 'message', we create a copy with the replaced user.
-        if command_suffix in ["myschedule", "update", "clear_cache"]:
-            # Use model_copy to create a new Message instance with updated from_user
-            message = message.model_copy(update={"from_user": callback.from_user})
+        # Help callbacks originate from bot-authored messages, so we rewrite `from_user`
+        # to the human who tapped the button before routing to regular message handlers.
+        message = message.model_copy(update={"from_user": callback.from_user})
 
         # Inspect the handler to see if it needs the 'state' argument
         handler_signature = inspect.signature(handler_func)

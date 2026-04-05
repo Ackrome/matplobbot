@@ -18,12 +18,12 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from shared_lib.i18n import translator
 from shared_lib.redis_client import redis_client
-from shared_lib.services.semantic_search import search_engine
 
 from .. import database
 from .. import keyboards as kb
 from ..config import *
 from ..services import library_display
+from ..services.search_center import search_library_examples
 
 
 class Search(StatesGroup):
@@ -246,6 +246,13 @@ class LibraryManager:
                 )
             builder.row(*pagination_buttons)
 
+        builder.row(
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "search_preset_save_button"),
+                callback_data="search_preset_save:library",
+            )
+        )
+
         return builder.as_markup()
 
     async def _perform_full_text_search(self, query: str) -> list[dict]:
@@ -254,8 +261,7 @@ class LibraryManager:
         """
         try:
             # search теперь async метод, await'им его напрямую
-            results = await search_engine.search(query, source_type="lib", top_k=20)
-            return results
+            return await search_library_examples(query, limit=20)
         except Exception as e:
             logging.error(f"Semantic search failed: {e}", exc_info=True)
             return []

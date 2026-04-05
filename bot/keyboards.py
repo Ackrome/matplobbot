@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 # Define base commands that are always available
 BASE_COMMANDS = [
+    "/search",
+    "/search_presets",
     "/schedule",
     "/myschedule",
     "/matp_all",
@@ -118,6 +120,18 @@ async def get_help_inline_keyboard(user_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text=translator.gettext(lang, "help_btn_matp_search"),
                 callback_data="help_cmd_matp_search",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "help_btn_search"),
+                callback_data="help_cmd_search",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "help_btn_search_presets"),
+                callback_data="help_cmd_search_presets",
             )
         ],
         [

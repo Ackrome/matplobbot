@@ -6,6 +6,7 @@ from .github import GitHubManager
 from .library import LibraryManager
 from .rendering import RenderingManager
 from .schedule import ScheduleManager
+from .search_center import SearchCenterManager
 from .settings import SettingsManager
 from .suggestions import SuggestionsManager
 
@@ -23,6 +24,11 @@ def setup_handlers(dp: Router, bot, ruz_api_client):
     schedule_manager = ScheduleManager(
         ruz_api_client
     )  # schedule_manager doesn't depend on base/settings
+    search_center_manager = SearchCenterManager(
+        library_manager,
+        github_manager,
+        schedule_manager,
+    )
     suggestions_manager = SuggestionsManager(bot)
 
     settings_manager = SettingsManager(
@@ -34,6 +40,7 @@ def setup_handlers(dp: Router, bot, ruz_api_client):
         library_manager,
         github_manager,
         schedule_manager,
+        search_center_manager,
         rendering_manager,
         admin_manager,
         settings_manager,
@@ -46,6 +53,7 @@ def setup_handlers(dp: Router, bot, ruz_api_client):
     dp.include_router(base_manager.router)
     dp.include_router(library_manager.router)
     dp.include_router(github_manager.router)
+    dp.include_router(search_center_manager.router)
     dp.include_router(rendering_manager.router)
     dp.include_router(admin_manager.router)
     dp.include_router(schedule_manager.router)

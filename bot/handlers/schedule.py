@@ -166,12 +166,27 @@ class ScheduleManager:
             "schedule_search",
             {"query": query, "search_type": search_type, "results": results},
         )
-        keyboard = build_search_results_keyboard(results, search_type)
+        keyboard = await self._build_schedule_search_results_keyboard(lang, results, search_type)
         await message.answer(
             translator.gettext(lang, "schedule_results_found", count=len(results)),
             reply_markup=keyboard,
         )
         await status_msg.delete()
+
+    async def _build_schedule_search_results_keyboard(
+        self, lang: str, results: list[dict], search_type: str
+    ):
+        base_markup = build_search_results_keyboard(results, search_type)
+        builder = InlineKeyboardBuilder()
+        for row in base_markup.inline_keyboard:
+            builder.row(*row)
+        builder.row(
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "search_preset_save_button"),
+                callback_data="search_preset_save:schedule",
+            )
+        )
+        return builder.as_markup()
 
     async def handle_search_query(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
@@ -348,7 +363,9 @@ class ScheduleManager:
         if not cached_data:
             await callback.message.edit_text(translator.gettext(lang, "search_results_outdated"))
             return
-        keyboard = build_search_results_keyboard(cached_data["results"], cached_data["search_type"])
+        keyboard = await self._build_schedule_search_results_keyboard(
+            lang, cached_data["results"], cached_data["search_type"]
+        )
         await callback.message.edit_text(
             translator.gettext(lang, "schedule_results_found", count=len(cached_data["results"])),
             reply_markup=keyboard,

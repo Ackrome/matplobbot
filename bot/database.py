@@ -22,6 +22,12 @@ from shared_lib.database import (
     get_or_create_calendar_secret as get_or_create_calendar_secret,
 )
 from shared_lib.database import (
+    get_user_search_preset as get_user_search_preset,
+)
+from shared_lib.database import (
+    get_user_search_presets as get_user_search_presets,
+)
+from shared_lib.database import (
     get_session as get_session,
 )
 from shared_lib.database import (
@@ -55,7 +61,13 @@ from shared_lib.database import (
     remove_favorite as remove_favorite,
 )
 from shared_lib.database import (
+    delete_user_search_preset as delete_user_search_preset,
+)
+from shared_lib.database import (
     remove_user_repo as remove_user_repo,
+)
+from shared_lib.database import (
+    save_user_search_preset as save_user_search_preset,
 )
 from shared_lib.database import (
     set_onboarding_completed as set_onboarding_completed,
@@ -83,6 +95,7 @@ DEFAULT_SETTINGS = {
     "md_display_mode": "md_file",
     "latex_dpi": 300,
     "language": "en",
+    "search_presets": [],
 }
 
 __all__ = [
@@ -111,4 +124,8 @@ __all__ = [
     "get_session",
     "get_admin_daily_summary",
     "upsert_discipline_module",
+    "get_user_search_presets",
+    "get_user_search_preset",
+    "save_user_search_preset",
+    "delete_user_search_preset",
 ]

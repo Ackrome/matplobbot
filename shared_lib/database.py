@@ -90,7 +90,29 @@ DEFAULT_SETTINGS = {
     "admin_daily_summary_time": "09:00",
     "admin_summary_days": [0, 1, 2, 3, 4],
     "show_module_details": True,
+    "search_presets": [],
 }
+
+MAX_SEARCH_PRESETS = 15
+
+
+def upsert_search_preset_entries(
+    existing_presets: list[dict], preset: dict, max_items: int = MAX_SEARCH_PRESETS
+) -> list[dict]:
+    """Insert or update a saved search preset in a plain list of preset dicts."""
+    normalized_preset = json.loads(json.dumps(preset))
+    filtered = [item for item in existing_presets if item.get("id") != normalized_preset.get("id")]
+    filtered.insert(0, normalized_preset)
+    filtered.sort(
+        key=lambda item: item.get("updated_at") or item.get("created_at") or "",
+        reverse=True,
+    )
+    return filtered[:max_items]
+
+
+def delete_search_preset_entries(existing_presets: list[dict], preset_id: str) -> list[dict]:
+    """Remove a saved search preset from a plain list of preset dicts."""
+    return [item for item in existing_presets if item.get("id") != preset_id]
 
 
 async def log_user_action(
@@ -203,6 +225,79 @@ async def delete_all_user_data(user_id: int) -> bool:
         result = await session.execute(delete(User).where(User.user_id == user_id))
         await session.commit()
         return result.rowcount > 0
+
+
+async def get_user_search_presets(user_id: int, search_kind: str | None = None) -> list[dict]:
+    settings = await get_user_settings(user_id)
+    presets = settings.get("search_presets", [])
+    if not isinstance(presets, list):
+        return []
+
+    normalized_presets = [item for item in presets if isinstance(item, dict)]
+    if search_kind:
+        normalized_presets = [
+            item for item in normalized_presets if item.get("search_kind") == search_kind
+        ]
+
+    return sorted(
+        normalized_presets,
+        key=lambda item: item.get("updated_at") or item.get("created_at") or "",
+        reverse=True,
+    )
+
+
+async def get_user_search_preset(user_id: int, preset_id: str) -> dict | None:
+    presets = await get_user_search_presets(user_id)
+    return next((item for item in presets if item.get("id") == preset_id), None)
+
+
+async def save_user_search_preset(
+    user_id: int,
+    name: str,
+    search_kind: str,
+    query: str,
+    filters: dict | None = None,
+    preset_id: str | None = None,
+) -> dict:
+    settings = await get_user_settings(user_id)
+    existing_presets = settings.get("search_presets", [])
+    existing_preset = None
+    if preset_id:
+        existing_preset = next(
+            (
+                item
+                for item in existing_presets
+                if isinstance(item, dict) and item.get("id") == preset_id
+            ),
+            None,
+        )
+
+    timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    preset = {
+        "id": preset_id or uuid.uuid4().hex[:12],
+        "name": name.strip(),
+        "search_kind": search_kind,
+        "query": query,
+        "filters": json.loads(json.dumps(filters or {})),
+        "created_at": (existing_preset or {}).get("created_at", timestamp),
+        "updated_at": timestamp,
+    }
+
+    settings["search_presets"] = upsert_search_preset_entries(existing_presets, preset)
+    await update_user_settings_db(user_id, settings)
+    return preset
+
+
+async def delete_user_search_preset(user_id: int, preset_id: str) -> bool:
+    settings = await get_user_settings(user_id)
+    existing_presets = settings.get("search_presets", [])
+    updated_presets = delete_search_preset_entries(existing_presets, preset_id)
+    if len(updated_presets) == len(existing_presets):
+        return False
+
+    settings["search_presets"] = updated_presets
+    await update_user_settings_db(user_id, settings)
+    return True
 
 
 async def is_onboarding_completed(user_id: int) -> bool:

@@ -23,13 +23,13 @@ from cachetools import TTLCache
 
 from shared_lib.i18n import translator
 from shared_lib.redis_client import redis_client
-from shared_lib.services.semantic_search import search_engine
 
 from .. import database
 from .. import keyboards as kb
 from ..config import *
 from ..services import github_display
 from ..services.repo_indexer import index_github_repository
+from ..services.search_center import search_repository_markdown
 
 router = Router()
 
@@ -220,6 +220,14 @@ class GitHubManager:
                 )
             builder.row(*pagination_buttons)
 
+        lang = await translator.get_language(user_id)
+        builder.row(
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "search_preset_save_button"),
+                callback_data="search_preset_save:github",
+            )
+        )
+
         return builder.as_markup()
 
     async def _search_github_md(self, query: str, repo_path: str) -> list[dict] | None:
@@ -328,6 +336,7 @@ class GitHubManager:
         user_data = await state.get_data()
         repo_to_search = user_data.get("repo_to_search")
         user_id = message.from_user.id
+        lang = await translator.get_language(user_id, message.chat.id)
         query = message.text
 
         status_msg = await message.answer(
@@ -335,9 +344,9 @@ class GitHubManager:
         )
         # Используем наш векторный движок
         # source_type = "repo:owner/name"
-        search_key = f"repo:{repo_to_search}"
 
-        results = await search_engine.search(query, source_type=search_key, top_k=10)
+        results = await search_repository_markdown(query, repo_to_search, limit=10)
+        formatted_results = [{"path": item["path"], "score": item["score"]} for item in results]
 
         if not results:
             # Fallback на старый поиск через GitHub API, если векторы не дали результата (или база пуста)
@@ -348,6 +357,11 @@ class GitHubManager:
         # Формируем результаты для кэша и клавиатуры
         # Нам нужно адаптировать формат результатов под то, что ждет _get_md_search_results_keyboard
         # Ожидается список dict c ключом 'path'
+
+        await self._handle_md_search_success(
+            status_msg, user_id, query, repo_to_search, formatted_results
+        )
+        return
 
         formatted_results = []
         seen_files = set()

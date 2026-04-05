@@ -64,6 +64,11 @@ async def set_bot_commands(bot: Bot):
         types.BotCommand(
             command="matp_search", description=get_cmd_desc("ru", "help_btn_matp_search")
         ),
+        types.BotCommand(command="search", description=get_cmd_desc("ru", "help_btn_search")),
+        types.BotCommand(
+            command="search_presets",
+            description=get_cmd_desc("ru", "help_btn_search_presets"),
+        ),
         types.BotCommand(command="lec_all", description=get_cmd_desc("ru", "help_btn_lec_all")),
         types.BotCommand(
             command="lec_search", description=get_cmd_desc("ru", "help_btn_lec_search")
@@ -92,6 +97,11 @@ async def set_bot_commands(bot: Bot):
         types.BotCommand(command="matp_all", description=get_cmd_desc("en", "help_btn_matp_all")),
         types.BotCommand(
             command="matp_search", description=get_cmd_desc("en", "help_btn_matp_search")
+        ),
+        types.BotCommand(command="search", description=get_cmd_desc("en", "help_btn_search")),
+        types.BotCommand(
+            command="search_presets",
+            description=get_cmd_desc("en", "help_btn_search_presets"),
         ),
         types.BotCommand(command="lec_all", description=get_cmd_desc("en", "help_btn_lec_all")),
         types.BotCommand(
