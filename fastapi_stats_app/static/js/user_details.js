@@ -105,6 +105,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 loadingStatusElement.textContent = `Ошибка: ${error.message}`;
                 actionsBodyElement.innerHTML = `<div class="text-red-500 text-center w-full p-4">Не удалось загрузить данные.</div>`;
                 actionsBodyElement.classList.remove('opacity-50');
+
+                const retryWrapper = document.createElement('div');
+                retryWrapper.className = 'w-full text-center pb-4';
+                retryWrapper.innerHTML = `
+                    <button
+                        id="retry-user-details-btn"
+                        type="button"
+                        class="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 transition"
+                    >
+                        Retry
+                    </button>
+                `;
+                actionsBodyElement.appendChild(retryWrapper);
+
+                const retryButton = document.getElementById('retry-user-details-btn');
+                if (retryButton) {
+                    retryButton.addEventListener('click', () => fetchAndRenderPage(page));
+                }
             });
     }
 

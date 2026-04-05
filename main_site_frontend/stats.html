@@ -2,8 +2,9 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Статистика | ITISHCHENKO</title>
-    <!-- Иконки сайта -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stats Dashboard | ITISHCHENKO</title>
+
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
@@ -11,25 +12,142 @@
     <link rel="icon" sizes="192x192" href="/android-chrome-192x192.png">
     <link rel="icon" sizes="512x512" href="/android-chrome-512x512.png">
     <link rel="manifest" href="/site.webmanifest">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        /* Стили универсальной шапки */
-        .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255, 255, 255, 0.3); }
-        .nav-hidden { transform: translateY(-100%); opacity: 0; }
-        .nav-visible { transform: translateY(0); opacity: 1; }
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+        }
+
+        .nav-hidden {
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+
+        .nav-visible {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .focus-ring:focus-visible {
+            outline: 2px solid #2563eb;
+            outline-offset: 2px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 9999px;
+            display: inline-block;
+        }
+
+        .status-online {
+            background-color: #16a34a;
+        }
+
+        .status-connecting {
+            background-color: #eab308;
+            animation: pulse 1.4s infinite;
+        }
+
+        .status-offline {
+            background-color: #dc2626;
+        }
+
+        .status-warning {
+            background-color: #f97316;
+        }
+
+        .table-sort-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.75rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: #64748b;
+            font-weight: 700;
+        }
+
+        .table-sort-btn:hover {
+            color: #0f172a;
+        }
+
+        .table-sort-icon {
+            font-size: 0.75rem;
+            opacity: 0.65;
+        }
+
+        .range-btn.active {
+            background-color: #1d4ed8;
+            color: #ffffff;
+            border-color: #1d4ed8;
+            box-shadow: 0 8px 18px -10px rgba(37, 99, 235, 0.8);
+        }
+
+        .skeleton {
+            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.2s infinite;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: 200% 0;
+            }
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.45;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            #leaderboard-scroll {
+                max-height: 24rem;
+            }
+        }
     </style>
+
     <script>
         if (!localStorage.getItem('jwt_token')) {
             window.location.href = '/login';
         }
     </script>
 </head>
-<body class="bg-slate-50 font-['Inter'] text-slate-900">
+<body class="bg-slate-50 text-slate-900">
 
-    <!-- УНИВЕРСАЛЬНАЯ ШАПКА -->
     <nav class="glass fixed top-0 w-full z-50 transition-all duration-300 nav-visible" id="navbar">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-20">
@@ -38,17 +156,17 @@
                     <span class="text-lg font-bold text-slate-800">Ivan Tishchenko</span>
                 </a>
                 <div class="hidden md:flex space-x-8 items-center" id="desktop-nav-links">
-                    <a href="/#projects" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Проекты</a>
-                    <a href="/schedule" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Расписание</a>
+                    <a href="/#projects" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Projects</a>
+                    <a href="/schedule" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Schedule</a>
                     <div id="desktop-auth-container" class="flex items-center gap-4">
                         <a href="/login" class="group relative px-6 py-2.5 bg-slate-900 text-white rounded-full font-medium overflow-hidden shadow-lg shadow-slate-900/20 hover:shadow-slate-900/40 transition-all">
-                            <span class="relative z-10 flex items-center gap-2">Авторизация</span>
+                            <span class="relative z-10 flex items-center gap-2">Sign In</span>
                             <div class="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                         </a>
                     </div>
                 </div>
                 <div class="md:hidden flex items-center">
-                    <button id="mobile-menu-button" class="text-slate-600 hover:text-blue-600 focus:outline-none p-2 rounded-lg hover:bg-slate-100 transition-colors">
+                    <button id="mobile-menu-button" class="focus-ring text-slate-600 hover:text-blue-600 focus:outline-none p-2 rounded-lg hover:bg-slate-100 transition-colors" aria-label="Toggle menu">
                         <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
                     </button>
                 </div>
@@ -56,51 +174,159 @@
         </div>
         <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-slate-100 absolute w-full shadow-xl">
             <div class="px-4 pt-2 pb-6 space-y-1" id="mobile-nav-links">
-                <a href="/#projects" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Проекты</a>
-                <a href="/schedule" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Расписание</a>
+                <a href="/#projects" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Projects</a>
+                <a href="/schedule" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Schedule</a>
                 <div id="mobile-auth-container">
-                    <a href="/login" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">Авторизация</a>
+                    <a href="/login" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">Sign In</a>
                 </div>
             </div>
         </div>
     </nav>
 
-    <!-- ОТСТУП СВЕРХУ (pt-32) -->
-    <main class="pt-32 pb-20 max-w-7xl mx-auto px-6">
-        <!-- KPI Карточки -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10" id="kpi-container">
-            <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-                <p class="text-slate-400 text-sm font-bold uppercase tracking-wider mb-2">Всего действий</p>
-                <h2 class="text-4xl font-black text-slate-900" id="totalActions">...</h2>
-            </div>
-        </div>
+    <main class="pt-28 pb-16 max-w-7xl mx-auto px-4 sm:px-6">
+        <section class="mb-5" aria-live="polite">
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm">
+                <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700" id="connectionBadge">
+                            <span class="status-dot status-connecting" id="connectionDot" aria-hidden="true"></span>
+                            <span id="connectionText">Connecting...</span>
+                        </span>
+                        <span class="text-sm text-slate-500">Last updated: <strong class="text-slate-700" id="lastUpdated">-</strong></span>
+                    </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-                <h3 class="text-xl font-bold mb-6">Активность пользователей</h3>
-                <canvas id="activityChart"></canvas>
-            </div>
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                        <div class="flex flex-wrap items-center gap-2" id="rangePresetGroup" role="group" aria-label="Date range presets">
+                            <button type="button" class="focus-ring range-btn active px-3 py-2 text-sm border border-slate-300 rounded-xl bg-white font-medium" data-range="today">Today</button>
+                            <button type="button" class="focus-ring range-btn px-3 py-2 text-sm border border-slate-300 rounded-xl bg-white font-medium" data-range="7d">7d</button>
+                            <button type="button" class="focus-ring range-btn px-3 py-2 text-sm border border-slate-300 rounded-xl bg-white font-medium" data-range="30d">30d</button>
+                            <button type="button" class="focus-ring range-btn px-3 py-2 text-sm border border-slate-300 rounded-xl bg-white font-medium" data-range="custom">Custom</button>
+                        </div>
 
-            <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-                <h3 class="text-xl font-bold mb-6">🏆 Таблица лидеров</h3>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left">
-                        <thead>
-                            <tr class="text-slate-400 text-xs uppercase font-bold border-b border-slate-100">
-                                <th class="pb-4">Пользователь</th>
-                                <th class="pb-4 text-right">Действия</th>
+                        <div class="flex items-center gap-2">
+                            <label for="rangeFrom" class="sr-only">From date</label>
+                            <input id="rangeFrom" type="date" class="focus-ring w-36 px-3 py-2 text-sm border border-slate-300 rounded-xl" disabled>
+                            <label for="rangeTo" class="sr-only">To date</label>
+                            <input id="rangeTo" type="date" class="focus-ring w-36 px-3 py-2 text-sm border border-slate-300 rounded-xl" disabled>
+                            <button id="applyCustomRange" type="button" class="focus-ring px-3 py-2 text-sm rounded-xl bg-slate-800 text-white hover:bg-slate-700" disabled>Apply</button>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <button id="retryAllBtn" type="button" class="focus-ring px-3 py-2 text-sm rounded-xl bg-blue-600 text-white hover:bg-blue-700">Retry</button>
+                            <button id="toggleDiagnosticsBtn" type="button" class="focus-ring px-3 py-2 text-sm rounded-xl border border-slate-300 bg-white hover:bg-slate-100">Diagnostics</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="globalErrorBanner" class="hidden mt-4 flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+                    <span id="globalErrorText">Request failed.</span>
+                    <button type="button" id="dismissGlobalError" class="focus-ring text-red-700 underline">Dismiss</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="diagnosticsPanel" class="hidden mb-5">
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm">
+                <h2 class="text-base font-bold text-slate-800 mb-3">Admin Diagnostics</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 text-sm">
+                    <div class="rounded-xl bg-slate-50 border border-slate-200 p-3"><p class="text-slate-500">Last API latency</p><p id="diagLastLatency" class="font-semibold text-slate-800">-</p></div>
+                    <div class="rounded-xl bg-slate-50 border border-slate-200 p-3"><p class="text-slate-500">Avg API latency</p><p id="diagAvgLatency" class="font-semibold text-slate-800">-</p></div>
+                    <div class="rounded-xl bg-slate-50 border border-slate-200 p-3"><p class="text-slate-500">Failed requests</p><p id="diagFailedRequests" class="font-semibold text-slate-800">0</p></div>
+                    <div class="rounded-xl bg-slate-50 border border-slate-200 p-3"><p class="text-slate-500">WS reconnects</p><p id="diagWsReconnects" class="font-semibold text-slate-800">0</p></div>
+                    <div class="rounded-xl bg-slate-50 border border-slate-200 p-3"><p class="text-slate-500">Last sync source</p><p id="diagLastSyncSource" class="font-semibold text-slate-800">-</p></div>
+                    <div class="rounded-xl bg-slate-50 border border-slate-200 p-3 sm:col-span-2 xl:col-span-1"><p class="text-slate-500">Last sync error</p><p id="diagLastError" class="font-semibold text-slate-800 break-words">-</p></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6" id="kpi-container">
+            <article class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                <p class="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Total actions</p>
+                <h2 class="text-3xl sm:text-4xl font-black text-slate-900" id="totalActions">...</h2>
+            </article>
+            <article class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                <p class="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Visible leaderboard users</p>
+                <h2 class="text-3xl sm:text-4xl font-black text-slate-900" id="visibleUsers">...</h2>
+            </article>
+            <article class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                <p class="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Current range</p>
+                <h2 class="text-2xl sm:text-3xl font-black text-slate-900" id="currentRangeLabel">Today</h2>
+            </article>
+        </section>
+
+        <section class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+            <article class="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                    <h3 class="text-lg font-bold">User activity</h3>
+                    <div class="flex items-center gap-3">
+                        <span id="activityStatus" class="text-xs text-slate-500" role="status" aria-live="polite">Loading...</span>
+                        <button id="retryActivityBtn" type="button" class="focus-ring hidden px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700">Retry</button>
+                    </div>
+                </div>
+                <div class="relative min-h-[260px]">
+                    <canvas id="activityChart" aria-label="Activity chart" role="img"></canvas>
+                    <div id="activitySkeleton" class="absolute inset-0 rounded-xl skeleton"></div>
+                </div>
+            </article>
+
+            <article class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <h3 class="text-lg font-bold">Leaderboard</h3>
+                    <div class="flex items-center gap-3">
+                        <span id="leaderboardStatus" class="text-xs text-slate-500" role="status" aria-live="polite">Loading...</span>
+                        <button id="retryLeaderboardBtn" type="button" class="focus-ring hidden px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700">Retry</button>
+                    </div>
+                </div>
+
+                <div id="leaderboard-scroll" class="overflow-auto max-h-[30rem]">
+                    <table class="w-full text-left text-sm min-w-[560px]" aria-describedby="leaderboardCaption">
+                        <caption id="leaderboardCaption" class="sr-only">Leaderboard with sorting and pagination</caption>
+                        <thead class="sticky top-0 z-10 bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th scope="col" class="px-4 py-3">
+                                    <button type="button" class="focus-ring table-sort-btn" data-sort="rank"># <span class="table-sort-icon" aria-hidden="true">-</span></button>
+                                </th>
+                                <th scope="col" class="px-4 py-3" aria-sort="none">
+                                    <button type="button" class="focus-ring table-sort-btn" data-sort="full_name">User <span class="table-sort-icon" aria-hidden="true">-</span></button>
+                                </th>
+                                <th scope="col" class="px-4 py-3" aria-sort="none">
+                                    <button type="button" class="focus-ring table-sort-btn" data-sort="actions_count">Actions <span class="table-sort-icon" aria-hidden="true">-</span></button>
+                                </th>
+                                <th scope="col" class="px-4 py-3" aria-sort="none">
+                                    <button type="button" class="focus-ring table-sort-btn" data-sort="last_action_time">Last active <span class="table-sort-icon" aria-hidden="true">-</span></button>
+                                </th>
                             </tr>
                         </thead>
                         <tbody id="leaderboardBody">
-                            <!-- JS вставит строки сюда -->
+                            <tr><td colspan="4" class="px-4 py-4"><div class="h-4 w-full skeleton rounded"></div></td></tr>
+                            <tr><td colspan="4" class="px-4 py-4"><div class="h-4 w-full skeleton rounded"></div></td></tr>
+                            <tr><td colspan="4" class="px-4 py-4"><div class="h-4 w-full skeleton rounded"></div></td></tr>
                         </tbody>
                     </table>
                 </div>
-            </div>
-        </div>
+
+                <div class="px-4 sm:px-6 py-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <p id="leaderboardMeta" class="text-xs text-slate-500">-</p>
+                    <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+                        <label class="text-xs text-slate-500" for="leaderboardPageSize">Rows</label>
+                        <select id="leaderboardPageSize" class="focus-ring px-2 py-1.5 text-sm border border-slate-300 rounded-lg bg-white">
+                            <option value="5">5</option>
+                            <option value="10" selected>10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                        </select>
+                        <button id="leaderboardPrev" type="button" class="focus-ring px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-100">Prev</button>
+                        <span id="leaderboardPageInfo" class="text-xs text-slate-500 min-w-[72px] text-center">1 / 1</span>
+                        <button id="leaderboardNext" type="button" class="focus-ring px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-100">Next</button>
+                    </div>
+                </div>
+            </article>
+        </section>
     </main>
 
+    <div id="toastContainer" class="fixed top-24 right-4 z-50 flex flex-col gap-2 pointer-events-none" aria-live="polite" aria-atomic="true"></div>
+
     <script src="/js/navbar.js?v=4"></script>
-    <script src="/js/stats.js?v=4"></script>
+    <script src="/js/stats.js?v=5"></script>
 </body>
 </html>
