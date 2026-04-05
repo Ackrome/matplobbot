@@ -1,4 +1,4 @@
-matplobbot-shared==0.1.222
+matplobbot-shared==0.1.223
 aiohttp==3.13.4
 aiogram==3.27.0
 apscheduler==3.10.4
