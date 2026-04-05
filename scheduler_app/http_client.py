@@ -9,8 +9,8 @@ def normalize_proxy_url(proxy_url: str | None) -> str | None:
     if not proxy_url:
         return None
 
-    if proxy_url.startswith("socks5://"):
-        return proxy_url.replace("socks5://", "socks5h://", 1)
+    if proxy_url.startswith("socks5h://"):
+        return proxy_url.replace("socks5h://", "socks5://", 1)
 
     return proxy_url
 

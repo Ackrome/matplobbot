@@ -41,10 +41,14 @@ class _AsyncSessionContext:
 
 
 class TestSchedulerHttpClient(unittest.TestCase):
-    def test_normalize_proxy_url_uses_socks5h_for_socks_proxy(self):
+    def test_normalize_proxy_url_keeps_connector_compatible_socks_scheme(self):
         self.assertEqual(
             normalize_proxy_url("socks5://proxy:20170"),
-            "socks5h://proxy:20170",
+            "socks5://proxy:20170",
+        )
+        self.assertEqual(
+            normalize_proxy_url("socks5h://proxy:20170"),
+            "socks5://proxy:20170",
         )
 
     def test_build_telegram_http_client_config_uses_socks_connector_for_socks_proxy(self):
@@ -65,7 +69,7 @@ class TestSchedulerHttpClient(unittest.TestCase):
         self.assertEqual(session_kwargs["timeout"], timeout)
         self.assertEqual(session_kwargs["connector"], "connector-sentinel")
         self.assertEqual(request_kwargs, {})
-        fake_proxy_connector.from_url.assert_called_once_with("socks5h://proxy:20170")
+        fake_proxy_connector.from_url.assert_called_once_with("socks5://proxy:20170")
 
     def test_build_telegram_http_client_config_uses_request_proxy_for_http_proxy(self):
         timeout = aiohttp.ClientTimeout(total=30)
