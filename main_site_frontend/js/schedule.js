@@ -363,13 +363,44 @@ function renderModuleFilters() {
         return;
     }
     section.classList.remove('hidden');
-    container.innerHTML = allAvailableModules.map(mod => `
-        <button onclick="toggleModule('${escapeJsString(mod)}')"
-            class="px-3 py-1.5 rounded-xl border text-xs sm:text-sm font-bold transition-all duration-200
-            ${selectedModules.has(mod) ? 'bg-slate-800 border-slate-800 text-white shadow-md' : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'}">
-            ${selectedModules.has(mod) ? '✓ ' : ''}${escapeHtml(mod)}
-        </button>
-    `).join('');
+    const selected = allAvailableModules.filter((mod) => selectedModules.has(mod));
+    const available = allAvailableModules.filter((mod) => !selectedModules.has(mod));
+
+    function renderModuleChip(mod, isSelected) {
+        return `
+            <button onclick="toggleModule('${escapeJsString(mod)}')"
+                class="inline-flex max-w-full items-center gap-2 rounded-xl border px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-200
+                ${isSelected
+                    ? 'bg-slate-900 border-slate-900 text-white shadow-lg shadow-slate-900/15'
+                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-blue-200 hover:text-slate-700'}">
+                ${isSelected ? '<span class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/15 text-[10px]">✓</span>' : ''}
+                <span class="truncate">${escapeHtml(mod)}</span>
+            </button>
+        `;
+    }
+
+    function renderModuleGroup(labelKey, fallback, items, toneClass) {
+        if (items.length === 0) return '';
+
+        return `
+            <section class="rounded-2xl border ${toneClass} p-3">
+                <div class="mb-3 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+                    <span>${escapeHtml(t(labelKey, fallback))}</span>
+                    <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500 shadow-sm">${items.length}</span>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    ${items.map((mod) => renderModuleChip(mod, labelKey === 'schedule.filters.selected')).join('')}
+                </div>
+            </section>
+        `;
+    }
+
+    container.innerHTML = `
+        <div class="space-y-3">
+            ${renderModuleGroup('schedule.filters.selected', 'Selected', selected, 'border-slate-200 bg-slate-50/80')}
+            ${renderModuleGroup('schedule.filters.available', 'Available', available, 'border-blue-100 bg-blue-50/40')}
+        </div>
+    `;
 }
 
 function toggleModule(mod) {
@@ -587,37 +618,37 @@ function renderCard(l, isDesktop) {
     const mobileBadgeBg = color.bg.includes('/') ? color.bg.split('/')[0] : color.bg;
 
     return `
-    <article class="schedule-feed-card flex flex-col gap-3 p-4">
-        <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2">
-                <span class="font-black text-sm text-slate-900">${escapeHtml(l.beginLesson || '')}</span>
-                <span class="text-[10px] font-bold text-slate-300 line-through decoration-slate-200">${escapeHtml(l.endLesson || '')}</span>
+    <article class="schedule-feed-card">
+        <div class="schedule-feed-card-head">
+            <div class="schedule-feed-card-time">
+                <span class="schedule-feed-card-start">${escapeHtml(l.beginLesson || '')}</span>
+                <span class="schedule-feed-card-end">${escapeHtml(l.endLesson || '')}</span>
             </div>
-            <span class="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${color.text} ${mobileBadgeBg} border ${color.border}">
+            <span class="schedule-feed-card-kind px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${color.text} ${mobileBadgeBg} border ${color.border}">
                 ${safeKind}
             </span>
         </div>
 
-        <div>
-            <div class="font-bold text-slate-900 text-sm leading-snug mb-1">${safeDiscipline}</div>
+        <div class="schedule-feed-card-body">
+            <div class="schedule-feed-card-title">${safeDiscipline}</div>
             ${l.module ? `
-                <span class="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                <span class="schedule-feed-card-module inline-flex w-fit max-w-full rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-500">
                     ${safeModule}
                 </span>` : ''}
         </div>
 
-        <div class="grid grid-cols-2 gap-2 mt-1">
-            <div class="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 truncate cursor-pointer active:text-blue-600"
+        <div class="schedule-feed-card-meta">
+            <div class="schedule-feed-card-meta-item cursor-pointer active:text-blue-600"
                  onclick="copyToClipboard('${safeAuditoriumJs}', event)"
                  title="${roomTitle}">
                 <svg class="w-3.5 h-3.5 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" stroke-width="2"></path></svg>
-                <span class="truncate">${safeAuditorium}</span>
+                <span>${safeAuditorium}</span>
             </div>
-            <div class="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 truncate cursor-pointer active:text-blue-600"
+            <div class="schedule-feed-card-meta-item cursor-pointer active:text-blue-600"
                  onclick="copyToClipboard('${safeLecturerJs}', event)"
                  title="${teacherTitle}">
                 <svg class="w-3.5 h-3.5 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" stroke-width="2"></path></svg>
-                <span class="truncate">${safeLecturer}</span>
+                <span>${safeLecturer}</span>
             </div>
         </div>
     </article>`;

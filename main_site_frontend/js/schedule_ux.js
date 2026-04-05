@@ -76,17 +76,30 @@
             .schedule-day-header-title{margin-top:.35rem;font-size:1.35rem;line-height:1.1;font-weight:900;color:#0f172a}
             .schedule-day-pill{padding:.38rem .7rem;border-radius:999px;background:#1d4ed8;color:#fff;font-size:.72rem;font-weight:700;box-shadow:0 10px 20px -16px rgba(29,78,216,.7)}
             .schedule-day-lessons{display:flex;flex-direction:column;background:#fff}
-            .schedule-feed-card{background:rgba(255,255,255,.92);transition:transform .18s ease,box-shadow .18s ease,background-color .18s ease}
+            .schedule-feed-card{display:flex;flex-direction:column;gap:.8rem;padding:1rem;background:rgba(255,255,255,.96);transition:transform .18s ease,box-shadow .18s ease,background-color .18s ease}
             .schedule-feed-card + .schedule-feed-card{border-top:1px solid #e2e8f0}
             .schedule-feed-card:hover{background:#f8fbff}
+            .schedule-feed-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem}
+            .schedule-feed-card-time{display:flex;align-items:baseline;gap:.45rem;min-width:0}
+            .schedule-feed-card-start{font-size:1.35rem;line-height:1;font-weight:900;color:#0f172a}
+            .schedule-feed-card-end{font-size:.8rem;font-weight:700;color:#94a3b8;text-decoration:line-through;text-decoration-color:#cbd5e1}
+            .schedule-feed-card-kind{flex-shrink:0}
+            .schedule-feed-card-body{display:flex;flex-direction:column;gap:.55rem;min-width:0}
+            .schedule-feed-card-title{font-size:1rem;line-height:1.35;font-weight:800;color:#0f172a;overflow-wrap:anywhere}
+            .schedule-feed-card-module{overflow-wrap:anywhere}
+            .schedule-feed-card-meta{display:grid;grid-template-columns:minmax(0,1fr);gap:.55rem}
+            .schedule-feed-card-meta-item{display:flex;align-items:flex-start;gap:.55rem;min-width:0;font-size:.88rem;line-height:1.35;font-weight:600;color:#64748b}
+            .schedule-feed-card-meta-item span{min-width:0;overflow-wrap:anywhere}
             @media (max-width:1023px){.schedule-day-header-title{font-size:1.15rem}}
             @media (min-width:1024px){
                 .schedule-cards-feed.schedule-cards-desktop{padding:1rem}
                 .schedule-cards-feed.schedule-cards-desktop .schedule-day-section{margin-bottom:1.25rem}
-                .schedule-cards-feed.schedule-cards-desktop .schedule-day-header{top:calc(5rem + 1rem);padding:1.1rem 1.35rem}
-                .schedule-cards-feed.schedule-cards-desktop .schedule-day-lessons{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;padding:1rem;background:transparent}
-                .schedule-cards-feed.schedule-cards-desktop .schedule-feed-card{border:1px solid #e2e8f0;border-radius:1rem;box-shadow:0 20px 35px -30px rgba(15,23,42,.35)}
+                .schedule-cards-feed.schedule-cards-desktop .schedule-day-header{position:static;padding:1.15rem 1.35rem}
+                .schedule-cards-feed.schedule-cards-desktop .schedule-day-lessons{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:1rem;padding:1rem;background:transparent}
+                .schedule-cards-feed.schedule-cards-desktop .schedule-feed-card{min-height:15rem;border:1px solid #e2e8f0;border-radius:1rem;padding:1.1rem 1.15rem;box-shadow:0 20px 35px -30px rgba(15,23,42,.35)}
                 .schedule-cards-feed.schedule-cards-desktop .schedule-feed-card + .schedule-feed-card{border-top:none}
+                .schedule-cards-feed.schedule-cards-desktop .schedule-feed-card-title{font-size:1.04rem}
+                .schedule-cards-feed.schedule-cards-desktop .schedule-feed-card-meta{gap:.65rem}
             }
         `;
         document.head.appendChild(style);
