@@ -118,7 +118,9 @@ class SearchCenterManager:
         lang = await translator.get_language(user_id, message.chat.id)
         repo_paths = await database.get_user_repos(user_id)
         current_context = await redis_client.get_user_cache(user_id, "global_search") or {}
-        active_filters = normalize_global_filters(filters or current_context.get("filters"), repo_paths)
+        active_filters = normalize_global_filters(
+            filters or current_context.get("filters"), repo_paths
+        )
 
         working_message = status_message or await message.answer(
             translator.gettext(lang, "search_in_progress", query=query)
@@ -148,7 +150,9 @@ class SearchCenterManager:
             return translator.gettext(lang, "global_search_prompt", filters=filters_text)
 
         if not results:
-            return translator.gettext(lang, "global_search_no_results", query=query, filters=filters_text)
+            return translator.gettext(
+                lang, "global_search_no_results", query=query, filters=filters_text
+            )
 
         total_pages = (len(results) + SEARCH_RESULTS_PER_PAGE - 1) // SEARCH_RESULTS_PER_PAGE
         safe_page = min(page, max(total_pages - 1, 0))
@@ -287,7 +291,9 @@ class SearchCenterManager:
             return
 
         repo_paths = await database.get_user_repos(user_id)
-        updated_filters, changed = toggle_global_source(context.get("filters") or {}, source, repo_paths)
+        updated_filters, changed = toggle_global_source(
+            context.get("filters") or {}, source, repo_paths
+        )
         if not changed:
             await callback.answer(
                 translator.gettext(lang, "global_search_toggle_keep_one"), show_alert=True
@@ -299,7 +305,9 @@ class SearchCenterManager:
 
         query = context.get("query", "")
         if query:
-            await callback.message.edit_text(translator.gettext(lang, "search_in_progress", query=query))
+            await callback.message.edit_text(
+                translator.gettext(lang, "search_in_progress", query=query)
+            )
             await self._run_global_search(
                 callback.message,
                 user_id,
@@ -332,7 +340,9 @@ class SearchCenterManager:
 
         query = context.get("query", "")
         if query:
-            await callback.message.edit_text(translator.gettext(lang, "search_in_progress", query=query))
+            await callback.message.edit_text(
+                translator.gettext(lang, "search_in_progress", query=query)
+            )
             await self._run_global_search(
                 callback.message,
                 user_id,
@@ -589,7 +599,9 @@ class SearchCenterManager:
 
     async def _run_library_search(self, message: Message, user_id: int, query: str):
         lang = await translator.get_language(user_id, message.chat.id)
-        status_msg = await message.answer(translator.gettext(lang, "search_in_progress", query=query))
+        status_msg = await message.answer(
+            translator.gettext(lang, "search_in_progress", query=query)
+        )
         results = await search_library_examples(query, limit=20)
 
         formatted_results = [{"path": item["path"], "score": item["score"]} for item in results]

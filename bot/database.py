@@ -13,6 +13,9 @@ from shared_lib.database import (
     clear_latex_cache as clear_latex_cache,
 )
 from shared_lib.database import (
+    delete_user_search_preset as delete_user_search_preset,
+)
+from shared_lib.database import (
     get_admin_daily_summary as get_admin_daily_summary,
 )
 from shared_lib.database import (
@@ -20,12 +23,6 @@ from shared_lib.database import (
 )
 from shared_lib.database import (
     get_or_create_calendar_secret as get_or_create_calendar_secret,
-)
-from shared_lib.database import (
-    get_user_search_preset as get_user_search_preset,
-)
-from shared_lib.database import (
-    get_user_search_presets as get_user_search_presets,
 )
 from shared_lib.database import (
     get_session as get_session,
@@ -38,6 +35,12 @@ from shared_lib.database import (
 )
 from shared_lib.database import (
     get_user_repos as get_user_repos,
+)
+from shared_lib.database import (
+    get_user_search_preset as get_user_search_preset,
+)
+from shared_lib.database import (
+    get_user_search_presets as get_user_search_presets,
 )
 from shared_lib.database import (
     get_user_settings as get_user_settings,
@@ -59,9 +62,6 @@ from shared_lib.database import (
 )
 from shared_lib.database import (
     remove_favorite as remove_favorite,
-)
-from shared_lib.database import (
-    delete_user_search_preset as delete_user_search_preset,
 )
 from shared_lib.database import (
     remove_user_repo as remove_user_repo,

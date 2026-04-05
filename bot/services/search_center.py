@@ -24,16 +24,16 @@ def build_default_global_filters(repo_paths: list[str]) -> dict[str, list[str]]:
     return {"sources": sources, "repo_paths": unique_repos}
 
 
-def normalize_global_filters(filters: dict[str, Any] | None, repo_paths: list[str]) -> dict[str, list[str]]:
+def normalize_global_filters(
+    filters: dict[str, Any] | None, repo_paths: list[str]
+) -> dict[str, list[str]]:
     available_repos = list(dict.fromkeys(repo_paths))
     default_filters = build_default_global_filters(available_repos)
     if not filters:
         return default_filters
 
     requested_sources = [
-        source
-        for source in dict.fromkeys(filters.get("sources") or [])
-        if source in GLOBAL_SOURCES
+        source for source in dict.fromkeys(filters.get("sources") or []) if source in GLOBAL_SOURCES
     ]
     sources = requested_sources or default_filters["sources"]
 
@@ -41,7 +41,9 @@ def normalize_global_filters(filters: dict[str, Any] | None, repo_paths: list[st
         selected_repos: list[str] = []
     else:
         requested_repos = filters.get("repo_paths") or available_repos
-        selected_repos = [repo for repo in dict.fromkeys(requested_repos) if repo in available_repos]
+        selected_repos = [
+            repo for repo in dict.fromkeys(requested_repos) if repo in available_repos
+        ]
 
     return {"sources": sources, "repo_paths": selected_repos}
 
@@ -68,7 +70,9 @@ def toggle_global_source(
     return normalize_global_filters(updated, repo_paths), True
 
 
-def toggle_global_repo(filters: dict[str, Any], repo_path: str, repo_paths: list[str]) -> dict[str, list[str]]:
+def toggle_global_repo(
+    filters: dict[str, Any], repo_path: str, repo_paths: list[str]
+) -> dict[str, list[str]]:
     normalized = normalize_global_filters(filters, repo_paths)
     selected_repos = list(normalized["repo_paths"])
     if repo_path in selected_repos:
@@ -145,7 +149,9 @@ async def search_repository_markdown(
     query: str, repo_path: str, limit: int = 10
 ) -> list[dict[str, Any]]:
     try:
-        raw_results = await search_engine.search(query, source_type=f"repo:{repo_path}", top_k=limit)
+        raw_results = await search_engine.search(
+            query, source_type=f"repo:{repo_path}", top_k=limit
+        )
     except Exception as exc:
         logger.error("GitHub semantic search failed for %s: %s", repo_path, exc, exc_info=True)
         return []
@@ -160,7 +166,10 @@ async def search_linked_github_markdown(
         return []
 
     results_per_repo = await asyncio.gather(
-        *[search_repository_markdown(query, repo_path, limit=per_repo_limit) for repo_path in repo_paths]
+        *[
+            search_repository_markdown(query, repo_path, limit=per_repo_limit)
+            for repo_path in repo_paths
+        ]
     )
     merged_results = [item for repo_results in results_per_repo for item in repo_results]
     merged_results.sort(key=lambda item: float(item.get("score") or 0), reverse=True)

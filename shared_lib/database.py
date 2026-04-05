@@ -272,7 +272,7 @@ async def save_user_search_preset(
             None,
         )
 
-    timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    timestamp = datetime.datetime.now(datetime.UTC).isoformat()
     preset = {
         "id": preset_id or uuid.uuid4().hex[:12],
         "name": name.strip(),
