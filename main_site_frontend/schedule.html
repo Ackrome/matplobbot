@@ -124,14 +124,13 @@
                     </div>
 
                     <div id="moduleFilterSection" class="p-3 md:p-5">
-                        <button onclick="toggleFiltersMobile()" class="md:hidden flex items-center justify-between w-full text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                            <span data-i18n="schedule.filters.mobile">Фильтры и модули</span>
+                        <button type="button" id="filterToggleBtn" class="flex items-center justify-between w-full text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">
+                            <span data-i18n="schedule.filters.desktop">Фильтры и модули</span>
                             <svg id="filterArrow" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </button>
 
-                        <div id="filterContent" class="hidden md:block">
-                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-                                <h3 data-i18n="schedule.filters.desktop" class="hidden md:block text-xs font-bold text-slate-400 uppercase tracking-widest">Подгруппы и модули</h3>
+                        <div id="filterContent" class="space-y-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                 <div class="flex items-center justify-between sm:justify-start gap-4 w-full sm:w-auto">
                                     <label class="flex items-center cursor-pointer group">
                                         <div class="relative">
@@ -171,7 +170,7 @@
     </main>
 
     <script src="/js/navbar.js?v=13"></script>
-    <script src="/js/schedule.js?v=12"></script>
-    <script src="/js/schedule_ux.js?v=3"></script>
+    <script src="/js/schedule.js?v=13"></script>
+    <script src="/js/schedule_ux.js?v=4"></script>
 </body>
 </html>

@@ -4,6 +4,7 @@
     const UI_PREFS_KEY = "mpb_schedule_ui_prefs";
     const uiState = {
         viewMode: "auto",
+        filtersCollapsed: window.innerWidth < 768,
     };
 
     function getUiLanguage() {
@@ -37,6 +38,11 @@
             if (["auto", "table", "cards"].includes(payload.view_mode)) {
                 uiState.viewMode = payload.view_mode;
             }
+            if (typeof payload.filters_collapsed === "boolean") {
+                uiState.filtersCollapsed = payload.filters_collapsed;
+            } else {
+                uiState.filtersCollapsed = window.innerWidth < 768;
+            }
             if (payload.week_start) {
                 const parsed = parseDate(payload.week_start);
                 if (!Number.isNaN(parsed.getTime())) {
@@ -45,6 +51,7 @@
             }
         } catch {
             uiState.viewMode = "auto";
+            uiState.filtersCollapsed = window.innerWidth < 768;
         }
     }
 
@@ -53,6 +60,7 @@
             UI_PREFS_KEY,
             JSON.stringify({
                 view_mode: uiState.viewMode,
+                filters_collapsed: uiState.filtersCollapsed,
                 week_start: getISODateStr(currentWeekStart),
                 entity: currentEntity,
             })
@@ -70,7 +78,7 @@
             .schedule-empty-actions button,.schedule-empty-actions a{border:1px solid #cbd5e1;border-radius:.8rem;padding:.55rem .9rem;font-size:.75rem;font-weight:700;background:#fff}
             .schedule-cards-feed{padding:.75rem;background:linear-gradient(180deg,#f8fbff 0%,#fff 22%)}
             .schedule-day-section{margin-bottom:1rem;border:1px solid #dbeafe;border-radius:1.4rem;overflow:hidden;background:linear-gradient(180deg,#eff6ff 0%,#fff 36%);box-shadow:0 24px 40px -34px rgba(37,99,235,.35)}
-            .schedule-day-header{position:sticky;top:calc(5rem + .5rem);z-index:20;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1rem 1.15rem;border-bottom:1px solid #dbeafe;background:linear-gradient(135deg,#dbeafe 0%,#eff6ff 55%,#f8fafc 100%)}
+            .schedule-day-header{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1rem 1.15rem;border-bottom:1px solid #dbeafe;background:linear-gradient(135deg,#dbeafe 0%,#eff6ff 55%,#f8fafc 100%)}
             .schedule-day-header--today{background:linear-gradient(135deg,#bfdbfe 0%,#dbeafe 45%,#eff6ff 100%)}
             .schedule-day-header-label{text-transform:uppercase;letter-spacing:.12em;font-size:.68rem;font-weight:800;color:#64748b}
             .schedule-day-header-title{margin-top:.35rem;font-size:1.35rem;line-height:1.1;font-weight:900;color:#0f172a}
@@ -139,6 +147,27 @@
         `;
 
         controls.prepend(contextBar);
+    }
+
+    function applyFilterVisibility() {
+        const section = document.getElementById("moduleFilterSection");
+        const content = document.getElementById("filterContent");
+        const arrow = document.getElementById("filterArrow");
+        const button = document.getElementById("filterToggleBtn");
+        if (!content || !arrow || !button) return;
+
+        const collapsed = uiState.filtersCollapsed;
+        content.classList.toggle("hidden", collapsed);
+        arrow.classList.toggle("rotate-180", !collapsed);
+        button.setAttribute("aria-expanded", String(!collapsed));
+    }
+
+    function toggleFilterSection(forceCollapsed) {
+        uiState.filtersCollapsed = typeof forceCollapsed === "boolean"
+            ? forceCollapsed
+            : !uiState.filtersCollapsed;
+        applyFilterVisibility();
+        saveUiPrefs();
     }
 
     function syncContextBarLabels() {
@@ -258,6 +287,7 @@
         rawFilterAndRender(...args);
         setTimeout(() => content?.classList.remove("opacity-60"), 120);
         updateContextBar();
+        applyFilterVisibility();
         setViewMode(uiState.viewMode);
         saveUiPrefs();
     };
@@ -286,6 +316,7 @@
     }
 
     function bindToolbar() {
+        document.getElementById("filterToggleBtn")?.addEventListener("click", () => toggleFilterSection());
         document.getElementById("jumpTodayBtn")?.addEventListener("click", () => setTodayWeek());
         document.getElementById("jumpTomorrowBtn")?.addEventListener("click", async () => {
             const tomorrow = new Date();
@@ -320,6 +351,7 @@
     loadSchedule = async function patchedLoadSchedule(...args) {
         await rawLoadSchedule(...args);
         updateContextBar();
+        applyFilterVisibility();
         setViewMode(uiState.viewMode);
         saveUiPrefs();
     };
@@ -332,11 +364,14 @@
         bindToolbar();
         bindGlobalActions();
         updateContextBar();
+        applyFilterVisibility();
         setViewMode(uiState.viewMode);
         window.mpbI18n?.registerTranslator?.(() => {
             syncContextBarLabels();
             updateContextBar();
+            applyFilterVisibility();
             setViewMode(uiState.viewMode);
         });
+        window.toggleScheduleFilters = () => toggleFilterSection();
     });
 })();

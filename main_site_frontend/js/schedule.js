@@ -708,15 +708,5 @@ document.addEventListener('click', (e) => {
 });
 
 function toggleFiltersMobile() {
-    const content = document.getElementById('filterContent');
-    const arrow = document.getElementById('filterArrow');
-    const isHidden = content.classList.contains('hidden');
-
-    if (isHidden) {
-        content.classList.remove('hidden');
-        arrow.classList.add('rotate-180');
-    } else {
-        content.classList.add('hidden');
-        arrow.classList.remove('rotate-180');
-    }
+    window.toggleScheduleFilters?.();
 }
