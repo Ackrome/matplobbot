@@ -23,6 +23,8 @@
         .split { display: flex; flex-direction: row; height: calc(100vh - 64px); }
         .gutter { background-color: #f1f5f9; cursor: col-resize; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;}
         .file-item.active { background-color: #e0e7ff; border-left: 3px solid #4f46e5; font-weight: 600;}
+        .nav-hidden { transform: translateY(-100%); opacity: 0; }
+        .nav-visible { transform: translateY(0); opacity: 1; }
 
         /* Стили для Live Preview Markdown */
         #live-preview-content { font-family: 'Inter', sans-serif; line-height: 1.6; padding: 2rem; max-width: 800px; margin: 0 auto; background: white; min-height: 100%; box-shadow: 0 0 15px rgba(0,0,0,0.05); }
@@ -33,12 +35,13 @@
 <body class="bg-slate-50 text-slate-900 h-full flex flex-col">
 
     <!-- Navbar -->
-    <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0 z-10">
+    <header id="navbar" class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0 z-30 transition-all duration-300 nav-visible">
 
 
 
         <div class="flex items-center gap-4">
             <a href="/" class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md">IT</a>
+            <div id="desktop-nav-links" class="hidden 2xl:flex items-center gap-2"></div>
 
             <div class="bg-slate-100 p-1 rounded-lg flex gap-1 items-center">
                 <button id="mode-quick" class="px-3 py-1.5 text-sm font-medium rounded-md bg-white shadow-sm text-blue-700 transition-all">Quick Snippet</button>
@@ -53,6 +56,9 @@
         </div>
 
         <div class="flex items-center gap-2">
+            <button id="mobile-menu-button" class="2xl:hidden p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" aria-label="Toggle menu">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
+            </button>
             <!-- Экспорт -->
             <button id="btn-send-tg" onclick="sendToTelegram()" class="hidden p-2 text-slate-500 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Отправить мне в Telegram">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
@@ -71,6 +77,9 @@
             </button>
         </div>
     </header>
+    <div id="mobile-menu" class="hidden 2xl:hidden border-b border-slate-200 bg-white shadow-sm z-20">
+        <div id="mobile-nav-links" class="px-3 py-3 space-y-1"></div>
+    </div>
         <!-- MOBILE TABS (Видны только на мобилках) -->
         <div id="mobile-tabs" class="md:hidden flex bg-white border-b border-slate-200 shrink-0 shadow-sm z-20 relative">
             <button id="tab-btn-sidebar" onclick="switchMobileTab('sidebar-pane')" class="flex-1 py-3 text-xs font-bold text-blue-600 border-b-2 border-blue-600 transition-colors">Файлы</button>
@@ -184,6 +193,7 @@
     </div>
 
     <!-- Загрузка нашего скрипта -->
+    <script src="/js/navbar.js?v=11"></script>
     <script src="/js/studio.js?v=7"></script>
 </body>
 </html>

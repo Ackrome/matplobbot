@@ -1,0 +1,36 @@
+name: Stats Visual Baseline
+
+on:
+  pull_request:
+    paths:
+      - "main_site_frontend/**"
+      - "tests/visual/**"
+      - ".github/workflows/stats-visual-regression.yml"
+  workflow_dispatch:
+
+jobs:
+  capture-stats-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Playwright
+        run: |
+          npm init -y
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Capture Desktop and Mobile Baselines
+        run: node tests/visual/stats_baseline_capture.mjs
+
+      - name: Upload Baseline Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: stats-visual-baselines
+          path: tests/visual/artifacts/

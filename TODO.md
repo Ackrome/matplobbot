@@ -1,4 +1,4 @@
-# TODO
+﻿# TODO
 
 Last updated: 2026-04-05
 
@@ -22,25 +22,25 @@ Last updated: 2026-04-05
 - [ ] Add export options for user stats (JSON and weekly PDF report in addition to CSV).
 - [ ] Add localization completeness pass for all user-visible bot and dashboard texts (RU/EN keys + fallback behavior).
 
-### P2 - Site UI/UX Improvements
-- [x] Improve mobile responsiveness for dashboard cards/tables (breakpoints, spacing, touch targets).
-- [x] Improve table UX (sortable columns + consistent pagination controls).
-- [x] Add visible "last updated" and websocket connection status indicator on live stats pages.
-- [x] Add inline retry actions for failed data blocks (leaderboard, activity feed, user details fetch).
-- [x] Add consistent notification pattern (toast/banner) for success, warning, and API failures.
-- [x] Preserve filter/sort/date-range state in URL query params for shareable/reload-safe views.
-- [x] Add accessibility pass (keyboard navigation, focus states, semantic labels, contrast checks).
-- [x] Add skeleton loaders to reduce layout jumps while data is loading.
-- [x] Add quick date-range presets in analytics views (today, 7d, 30d, custom).
-- [x] Add user-facing diagnostics panel for admins (API latency, failed request count, last sync error).
 
 ## Completed In This Iteration
-- [x] Reused long-lived `aiohttp` session for schedule routes via FastAPI lifespan (`app.state.shared_http_session`).
-- [x] Updated schedule endpoints to use shared HTTP session instead of per-request session creation.
-- [x] Added dashboard websocket connection badge details (status text + last sync timestamp).
-- [x] Added widget status handling (loading/empty/error/ok) for leaderboard and chart sections.
-- [x] Added inline retry controls for global stats reconnect and modal user-list fetch failures.
-- [x] Added dashboard toast notifications for realtime data and connection errors.
-- [x] Reworked `main_site_frontend/stats.html` for responsive admin UX: touch-friendly controls, sticky/sortable leaderboard headers, consistent pagination controls, and loading skeletons.
-- [x] Rebuilt `main_site_frontend/js/stats.js` with URL-synced state (`sort/order/page/page_size/range`), quick date presets (`today/7d/30d/custom`), websocket connection badge + last-updated sync, and admin diagnostics panel.
-- [x] Added inline retry action for user-profile history fetch failure in `fastapi_stats_app/static/js/user_details.js`.
+- [x] Add explicit empty-state cards with contextual CTA buttons (retry, reset filters, open docs) for each widget.
+- [x] Add table density toggle (compact/default) and persist preference in localStorage.
+- [x] Add column visibility controls for leaderboard tables and persist selected columns.
+- [x] Add a global command palette (`Ctrl/Cmd+K`) for quick navigation to stats/schedule/studio/admin pages.
+- [x] Add keyboard shortcut hints and a help modal (pagination, search focus, refresh, close dialogs).
+- [x] Add chart interaction polish: hover crosshair, point tooltips with delta vs previous period, zoom/reset controls.
+- [x] Add timezone selector for analytics timestamps and persist per-user preference.
+- [x] Add stronger perceived performance: prefetch next leaderboard page and warm up critical API requests on page open.
+- [x] Add responsive mobile filter drawer/bottom sheet for date range, sort, and page size controls.
+- [x] Add sticky action bar on mobile for common actions (retry, reset filters, open diagnostics).
+- [x] Add visual regression safety task: baseline screenshots for stats page (desktop + mobile) in CI.
+- [x] Add UI telemetry hooks for UX metrics (time-to-first-data, retries used, failed widget loads) with admin-only dashboard view.
+- [x] Ensure navbar coverage and consistency across all pages (active-route highlight, auth-aware links, desktop/mobile parity, and no broken/missing nav entries).
+- [x] Improve schedule page information architecture: sticky filter/header zone with clear current context (group, week, date range) and one-click reset.
+- [x] Improve schedule page navigation UX: quick jump controls for today/tomorrow/this week/next week.
+- [x] Improve schedule page loading UX: skeletons for table/cards and smoother transitions when filters change.
+- [x] Improve schedule page mobile UX: larger touch targets, day cards readability, and horizontal overflow handling for timetable grids.
+- [x] Improve schedule page empty/error states with actionable CTAs (retry, change group, clear filters).
+- [x] Add schedule page personalization UX (remember last selected group/view mode/date range).
+- [x] Add explicit UI language toggle (RU/EN) and enforce consistent button labels to prevent mixed Russian/English text on the same screen.
