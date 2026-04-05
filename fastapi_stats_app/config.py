@@ -27,3 +27,4 @@ def _parse_admin_user_ids() -> set[int]:
 
 
 ADMIN_USER_IDS = _parse_admin_user_ids()
+PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "").rstrip("/")

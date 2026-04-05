@@ -21,8 +21,8 @@ Last updated: 2026-04-05
 - [ ] Add export options for user stats (JSON and weekly PDF report in addition to CSV).
 - [ ] Add localization completeness pass for all user-visible bot and dashboard texts (RU/EN keys + fallback behavior).
 - [ ] Add schedule last parsed time (to both site and bot) to show when it was parsed from university api.
-- [ ] Add toggle "show full lecturer name" in table view of schedule.
-- [ ] Add ical subscription integration to site (only for authorized users)
+- [x] Add toggle "show full lecturer name" in table view of schedule.
+- [x] Add ical subscription integration to site (only for authorized users)
 
 
 ## Completed In This Iteration

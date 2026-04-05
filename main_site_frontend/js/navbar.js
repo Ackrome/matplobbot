@@ -50,6 +50,7 @@ const I18N = {
         "schedule.filters.mobile": "Filters and modules",
         "schedule.filters.desktop": "Filters and modules",
         "schedule.filters.shortNames": "Short names",
+        "schedule.filters.fullLecturer": "Full lecturer name",
         "schedule.filters.all": "All",
         "schedule.filters.clear": "Reset",
         "schedule.filters.selected": "Selected",
@@ -78,6 +79,18 @@ const I18N = {
         "schedule.copy.done": "Copied!",
         "schedule.copy.room": "Copy room",
         "schedule.copy.teacher": "Copy lecturer",
+        "schedule.calendar.eyebrow": "Sync",
+        "schedule.calendar.title": "Calendar subscription",
+        "schedule.calendar.description": "Connect your personal ICS feed to Apple Calendar, Google Calendar, or any other calendar app.",
+        "schedule.calendar.loading": "Loading your personal subscription link...",
+        "schedule.calendar.error": "Failed to load the calendar subscription.",
+        "schedule.calendar.unavailable": "Calendar subscription is available for Telegram-linked accounts with bot schedule subscriptions.",
+        "schedule.calendar.resetDone": "The subscription link was updated. The previous link is now disabled.",
+        "schedule.calendar.urlLabel": "Subscription URL",
+        "schedule.calendar.copy": "Copy link",
+        "schedule.calendar.apple": "Open on iOS / Mac",
+        "schedule.calendar.reset": "Reset link",
+        "schedule.calendar.instructions": "Use the iOS / Mac button for Apple Calendar. For Google Calendar, copy the HTTPS URL and add it from URL in the web version.",
         "schedule.action.retry": "Retry",
         "schedule.action.clearFilters": "Clear filters",
         "schedule.action.changeGroup": "Change group",
@@ -165,6 +178,22 @@ const I18N = {
         "schedule.day.today": "Сегодня"
     }
 };
+
+Object.assign(I18N.ru, {
+    "schedule.filters.fullLecturer": "Полное имя преподавателя",
+    "schedule.calendar.eyebrow": "Синхронизация",
+    "schedule.calendar.title": "Подписка на календарь",
+    "schedule.calendar.description": "Подключите персональную ICS-ленту к Apple Calendar, Google Calendar или любому другому приложению календаря.",
+    "schedule.calendar.loading": "Загружаем вашу персональную ссылку...",
+    "schedule.calendar.error": "Не удалось загрузить подписку на календарь.",
+    "schedule.calendar.unavailable": "Подписка на календарь доступна для аккаунтов, связанных с Telegram и подписками бота на расписание.",
+    "schedule.calendar.resetDone": "Ссылка обновлена. Предыдущая ссылка больше не работает.",
+    "schedule.calendar.urlLabel": "Ссылка подписки",
+    "schedule.calendar.copy": "Скопировать ссылку",
+    "schedule.calendar.apple": "Открыть на iOS / Mac",
+    "schedule.calendar.reset": "Сбросить ссылку",
+    "schedule.calendar.instructions": "Для Apple Calendar используйте кнопку iOS / Mac. Для Google Calendar скопируйте HTTPS-ссылку и добавьте ее по URL в веб-версии."
+});
 
 const NAV_ITEMS = [
     { href: "/", key: "nav.home" },

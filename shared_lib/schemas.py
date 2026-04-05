@@ -215,3 +215,11 @@ class CurrentUserResponse(BaseModel):
     preferences: dict[str, Any] = Field(default_factory=dict)
 
     model_config = BASE_CONFIG
+
+
+class CalendarSubscriptionResponse(BaseModel):
+    enabled: bool = False
+    http_url: str | None = None
+    webcal_url: str | None = None
+
+    model_config = BASE_CONFIG

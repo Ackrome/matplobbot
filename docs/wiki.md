@@ -1,12 +1,12 @@
 # Bot Feature Wiki
 
-This document covers the user-facing bot features currently described here:
+This document covers the user-facing bot, scheduler, and website features currently described here:
 
 - unified global search via `/search`
 - saved search presets via `/search_presets`
+- schedule table lecturer-name toggle on the website
+- website iCal subscription links for authorized users
 - scheduler proxy support via `PROXY_URL`
-
-These features apply to the Telegram bot and scheduler service, not the website frontend.
 
 ## Quick Index
 
@@ -22,6 +22,13 @@ These features apply to the Telegram bot and scheduler service, not the website 
 | Feature | Entry point | Purpose |
 | --- | --- | --- |
 | Scheduler proxy support | `PROXY_URL` env var | Route scheduler Telegram delivery through a proxy |
+
+### Website Schedule Features
+
+| Feature | Entry point | Purpose |
+| --- | --- | --- |
+| Full lecturer name toggle | Website schedule page filters | Show the full lecturer name in desktop table cards |
+| iCal subscription links | Website schedule page for authorized users | Copy or rotate a personal calendar subscription link |
 
 ## Unified Global Search
 
@@ -384,6 +391,62 @@ If the expected cache is missing or does not contain a valid query, the bot refu
 - Reopening a preset always runs a fresh search.
 - A GitHub preset becomes non-runnable if its repository is no longer linked, but it remains visible until deleted.
 
+## Website Schedule Features
+
+### Full Lecturer Name Toggle
+
+#### Purpose
+
+The website schedule page now includes a separate filter for lecturer display in the desktop table view.
+
+With this toggle enabled:
+
+- desktop lesson cards show the full lecturer name
+- copy-to-clipboard still copies the full lecturer name
+- mobile cards stay unchanged and continue to show the full lecturer name as before
+
+#### How To Use It
+
+1. Open the website schedule page.
+2. Load any group, lecturer, or auditorium schedule.
+3. Open the filters panel.
+4. Toggle `Full lecturer name`.
+
+The preference is stored in the same website schedule preferences payload as the existing module and short-name options, so it persists for signed-in users and in local browser storage.
+
+### Website iCal Subscription Links
+
+#### Purpose
+
+Authorized website users can now open the schedule page and manage their personal calendar subscription link directly from the site.
+
+The website reuses the same private calendar feed format as the bot:
+
+- HTTPS link for copy/paste into calendar clients such as Google Calendar
+- `webcal://` link for Apple Calendar style subscription flows
+
+#### How To Use It
+
+1. Sign in on the website.
+2. Open the schedule page.
+3. Find the `Calendar subscription` card above the main schedule block.
+4. Use `Copy link` for Google Calendar or other ICS clients.
+5. Use `Open on iOS / Mac` for Apple Calendar compatible devices.
+6. Use `Reset link` to revoke the old URL and issue a new one.
+
+#### Availability Rules
+
+- the card is shown only for authorized website users
+- the subscription becomes active only for accounts linked to Telegram schedule subscriptions
+- if the account is authorized but not linked to Telegram schedule data, the website shows an unavailable state instead of a link
+
+#### Backend Endpoints
+
+The website uses these authenticated API endpoints:
+
+- `GET /api/cal/subscription`
+- `POST /api/cal/subscription/reset`
+
 ## Scheduler Proxy Support
 
 ### Purpose
@@ -421,6 +484,8 @@ If a scheduler delivery window is reached and every attempted send fails:
 
 - `/search` adds a single search surface for library and linked GitHub Markdown content.
 - `/search_presets` adds persistent saved searches for library, GitHub, schedule, and global search.
+- website schedule now supports a persistent `Full lecturer name` toggle for desktop table cards
+- authorized website users can manage personal iCal subscription links from the schedule page
 - active search sessions live in Redis
 - saved presets live in `User.settings`
 - scheduler Telegram delivery can use `PROXY_URL`

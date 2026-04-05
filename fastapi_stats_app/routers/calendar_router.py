@@ -1,17 +1,87 @@
 import logging
 from datetime import date, timedelta
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from shared_lib.database import get_user_id_by_calendar_secret, get_user_subscriptions
+from shared_lib.database import (
+    get_or_create_calendar_secret,
+    get_user_id_by_calendar_secret,
+    get_user_subscriptions,
+    regenerate_calendar_secret,
+)
 from shared_lib.redis_client import redis_client
+from shared_lib.schemas import CalendarSubscriptionResponse
 from shared_lib.services.schedule_service import (
     generate_ical_from_aggregated_schedule,
     get_aggregated_schedule,
 )
 
+from ..auth import get_current_user
+from ..config import PUBLIC_API_URL
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _get_calendar_base_url(request: Request) -> str:
+    if PUBLIC_API_URL:
+        return PUBLIC_API_URL
+    return str(request.base_url).rstrip("/")
+
+
+def _build_calendar_subscription_response(
+    request: Request, secret: str
+) -> CalendarSubscriptionResponse:
+    http_url = f"{_get_calendar_base_url(request)}/api/cal/{secret}.ics"
+    if http_url.startswith("https://"):
+        webcal_url = http_url.replace("https://", "webcal://", 1)
+    elif http_url.startswith("http://"):
+        webcal_url = http_url.replace("http://", "webcal://", 1)
+    else:
+        webcal_url = http_url
+
+    return CalendarSubscriptionResponse(
+        enabled=True,
+        http_url=http_url,
+        webcal_url=webcal_url,
+    )
+
+
+@router.get(
+    "/cal/subscription",
+    response_model=CalendarSubscriptionResponse,
+    summary="Get the authorized user's personal calendar subscription links",
+)
+async def get_calendar_subscription(
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    telegram_id = current_user.get("telegram_id")
+    if not telegram_id:
+        return CalendarSubscriptionResponse(enabled=False)
+
+    secret = await get_or_create_calendar_secret(telegram_id)
+    return _build_calendar_subscription_response(request, secret)
+
+
+@router.post(
+    "/cal/subscription/reset",
+    response_model=CalendarSubscriptionResponse,
+    summary="Rotate the authorized user's calendar subscription link",
+)
+async def reset_calendar_subscription(
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    telegram_id = current_user.get("telegram_id")
+    if not telegram_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Calendar subscription is unavailable for this account",
+        )
+
+    secret = await regenerate_calendar_secret(telegram_id)
+    return _build_calendar_subscription_response(request, secret)
 
 
 @router.api_route(

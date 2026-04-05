@@ -23,6 +23,8 @@ let isOfflineMode = false;
 let currentWeekStart = getMonday(new Date());
 let cachedOfflineEntities = [];
 let latestSearchResults = [];
+let scheduleAuthUser = null;
+let calendarSubscriptionState = createDefaultCalendarSubscriptionState();
 
 const groupInput = document.getElementById('groupSearch');
 const resultsBox = document.getElementById('searchResults');
@@ -65,6 +67,28 @@ function escapeJsString(value) {
         .replace(/'/g, "\\'");
 }
 
+function createDefaultCalendarSubscriptionState() {
+    return {
+        loading: false,
+        enabled: false,
+        httpUrl: '',
+        webcalUrl: '',
+        hasError: false,
+        justReset: false
+    };
+}
+
+window.addEventListener('mpb-auth-ready', (event) => {
+    scheduleAuthUser = event.detail?.user || null;
+    if (!scheduleAuthUser) {
+        calendarSubscriptionState = createDefaultCalendarSubscriptionState();
+        renderCalendarSubscription();
+        return;
+    }
+
+    refreshCalendarSubscription();
+});
+
 
 document.addEventListener('DOMContentLoaded', async () => {
     await initOfflineHistory();
@@ -78,6 +102,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderModuleFilters();
             filterAndRender();
         }
+        renderCalendarSubscription();
     });
 });
 
@@ -170,6 +195,9 @@ async function loadInitialPreferences() {
         if (prefsToApply.useShortNames !== undefined) {
             document.getElementById('useShortNames').checked = prefsToApply.useShortNames;
         }
+        if (prefsToApply.showFullLecturerName !== undefined) {
+            document.getElementById('showFullLecturerName').checked = prefsToApply.showFullLecturerName;
+        }
 
         if (prefsToApply.entity && prefsToApply.entity.id) {
             if (prefsToApply.modules && prefsToApply.modules.length > 0) {
@@ -184,7 +212,8 @@ async function savePreferences() {
     const prefs = {
         entity: currentEntity,
         modules: Array.from(selectedModules), // Конвертируем Set в Array для JSON
-        useShortNames: document.getElementById('useShortNames').checked
+        useShortNames: document.getElementById('useShortNames').checked,
+        showFullLecturerName: document.getElementById('showFullLecturerName').checked
     };
 
     // Всегда сохраняем локально
@@ -213,6 +242,228 @@ async function pushPreferencesToAPI(prefs, token) {
 }
 
 // === ОСТАЛЬНОЙ КОД БЕЗ ИЗМЕНЕНИЙ ===
+
+function renderCalendarSubscription() {
+    const container = document.getElementById('calendarSubscriptionSection');
+    if (!container) return;
+
+    if (!scheduleAuthUser) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+    }
+
+    container.classList.remove('hidden');
+
+    const title = escapeHtml(t('schedule.calendar.title', 'Calendar subscription'));
+    const description = escapeHtml(
+        t(
+            'schedule.calendar.description',
+            'Connect your personal ICS feed to Apple Calendar, Google Calendar, or any other calendar app.'
+        )
+    );
+
+    let bodyHtml = '';
+
+    if (calendarSubscriptionState.loading) {
+        bodyHtml = `
+            <div class="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm font-medium text-slate-500">
+                ${escapeHtml(t('schedule.calendar.loading', 'Loading your personal subscription link...'))}
+            </div>
+        `;
+    } else if (calendarSubscriptionState.hasError) {
+        bodyHtml = `
+            <div class="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+                ${escapeHtml(t('schedule.calendar.error', 'Failed to load the calendar subscription.'))}
+            </div>
+            <button type="button"
+                    onclick="refreshCalendarSubscription()"
+                    class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-blue-200 hover:text-blue-600">
+                ${escapeHtml(t('schedule.action.retry', 'Retry'))}
+            </button>
+        `;
+    } else if (!calendarSubscriptionState.enabled) {
+        bodyHtml = `
+            <div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                ${escapeHtml(t('schedule.calendar.unavailable', 'Calendar subscription is available for Telegram-linked accounts with bot schedule subscriptions.'))}
+            </div>
+        `;
+    } else {
+        const resetNotice = calendarSubscriptionState.justReset
+            ? `
+                <div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                    ${escapeHtml(t('schedule.calendar.resetDone', 'The subscription link was updated. The previous link is now disabled.'))}
+                </div>
+            `
+            : '';
+
+        bodyHtml = `
+            ${resetNotice}
+            <div class="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3">
+                <div class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
+                    ${escapeHtml(t('schedule.calendar.urlLabel', 'Subscription URL'))}
+                </div>
+                <code class="mt-2 block break-all text-xs font-medium text-slate-700">${escapeHtml(calendarSubscriptionState.httpUrl)}</code>
+            </div>
+            <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <button type="button"
+                        onclick="copyCalendarSubscriptionLink(event)"
+                        class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-blue-200 hover:text-blue-600">
+                    ${escapeHtml(t('schedule.calendar.copy', 'Copy link'))}
+                </button>
+                <a href="${escapeHtml(calendarSubscriptionState.webcalUrl)}"
+                   class="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700">
+                    ${escapeHtml(t('schedule.calendar.apple', 'Open on iOS / Mac'))}
+                </a>
+                <button type="button"
+                        onclick="resetCalendarSubscription()"
+                        class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-200">
+                    ${escapeHtml(t('schedule.calendar.reset', 'Reset link'))}
+                </button>
+            </div>
+            <p class="text-xs leading-6 text-slate-500">
+                ${escapeHtml(t('schedule.calendar.instructions', 'Use the iOS / Mac button for Apple Calendar. For Google Calendar, copy the HTTPS URL and add it from URL in the web version.'))}
+            </p>
+        `;
+    }
+
+    container.innerHTML = `
+        <div class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 p-4 shadow-sm md:p-6">
+            <div class="flex flex-col gap-4">
+                <div>
+                    <div class="text-[11px] font-black uppercase tracking-[0.25em] text-emerald-500">
+                        ${escapeHtml(t('schedule.calendar.eyebrow', 'Sync'))}
+                    </div>
+                    <h2 class="mt-2 text-lg font-black tracking-tight text-slate-900 md:text-xl">${title}</h2>
+                    <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">${description}</p>
+                </div>
+                <div class="flex flex-col gap-3">
+                    ${bodyHtml}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+async function refreshCalendarSubscription() {
+    if (!scheduleAuthUser) {
+        calendarSubscriptionState = createDefaultCalendarSubscriptionState();
+        renderCalendarSubscription();
+        return;
+    }
+
+    const token = localStorage.getItem('jwt_token');
+    if (!token) {
+        scheduleAuthUser = null;
+        calendarSubscriptionState = createDefaultCalendarSubscriptionState();
+        renderCalendarSubscription();
+        return;
+    }
+
+    calendarSubscriptionState = {
+        ...calendarSubscriptionState,
+        loading: true,
+        hasError: false,
+        justReset: false
+    };
+    renderCalendarSubscription();
+
+    try {
+        const response = await fetch(`${API_BASE}/cal/subscription`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.status === 401) {
+            scheduleAuthUser = null;
+            calendarSubscriptionState = createDefaultCalendarSubscriptionState();
+            renderCalendarSubscription();
+            return;
+        }
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        calendarSubscriptionState = {
+            loading: false,
+            enabled: Boolean(data.enabled && data.http_url && data.webcal_url),
+            httpUrl: data.http_url || '',
+            webcalUrl: data.webcal_url || '',
+            hasError: false,
+            justReset: false
+        };
+    } catch (error) {
+        console.error('Failed to load calendar subscription', error);
+        calendarSubscriptionState = {
+            ...createDefaultCalendarSubscriptionState(),
+            hasError: true
+        };
+    }
+
+    renderCalendarSubscription();
+}
+
+function copyCalendarSubscriptionLink(event) {
+    if (!calendarSubscriptionState.httpUrl) return;
+    copyToClipboard(calendarSubscriptionState.httpUrl, event);
+}
+
+async function resetCalendarSubscription() {
+    if (!scheduleAuthUser) return;
+
+    const token = localStorage.getItem('jwt_token');
+    if (!token) {
+        scheduleAuthUser = null;
+        calendarSubscriptionState = createDefaultCalendarSubscriptionState();
+        renderCalendarSubscription();
+        return;
+    }
+
+    calendarSubscriptionState = {
+        ...calendarSubscriptionState,
+        loading: true,
+        hasError: false,
+        justReset: false
+    };
+    renderCalendarSubscription();
+
+    try {
+        const response = await fetch(`${API_BASE}/cal/subscription/reset`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.status === 401) {
+            scheduleAuthUser = null;
+            calendarSubscriptionState = createDefaultCalendarSubscriptionState();
+            renderCalendarSubscription();
+            return;
+        }
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        calendarSubscriptionState = {
+            loading: false,
+            enabled: Boolean(data.enabled && data.http_url && data.webcal_url),
+            httpUrl: data.http_url || '',
+            webcalUrl: data.webcal_url || '',
+            hasError: false,
+            justReset: true
+        };
+    } catch (error) {
+        console.error('Failed to reset calendar subscription', error);
+        calendarSubscriptionState = {
+            ...createDefaultCalendarSubscriptionState(),
+            hasError: true
+        };
+    }
+
+    renderCalendarSubscription();
+}
 
 function parseDate(dateStr) {
     const [y, m, d] = dateStr.replace(/\./g, '-').split('-');
@@ -565,6 +816,7 @@ function renderMobileFeed(lessons) {
 function renderCard(l, isDesktop) {
     const color = getBadgeColor(l.kindOfWork);
     const useShort = document.getElementById('useShortNames').checked;
+    const showFullLecturerName = document.getElementById('showFullLecturerName').checked;
     const discName = useShort ? l.discipline_short : l.discipline_full;
     const safeKind = escapeHtml(l.kindOfWork || '');
     const safeModule = escapeHtml(l.module || '');
@@ -581,7 +833,8 @@ function renderCard(l, isDesktop) {
         const teacherShort = teacherTokens.length > 2
             ? `${teacherTokens[0]} ${teacherTokens[1][0]}.${teacherTokens[2][0]}.`
             : l.lecturer_title;
-        const safeTeacherShort = escapeHtml(teacherShort || '');
+        const teacherLabel = showFullLecturerName ? l.lecturer_title : teacherShort;
+        const safeTeacherLabel = escapeHtml(teacherLabel || '');
 
         return `
         <div class="p-2.5 sm:p-3 rounded-2xl border ${color.border} ${color.bg} shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md flex flex-col h-full min-h-[110px]">
@@ -605,11 +858,11 @@ function renderCard(l, isDesktop) {
                     <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     <span class="truncate">${safeAuditorium}</span>
                 </div>
-                ${teacherShort ? `
+                ${teacherLabel ? `
                 <div class="flex items-center gap-1 text-[10px] font-medium text-slate-600 hover:text-blue-600 cursor-pointer transition-colors"
                      onclick="copyToClipboard('${safeLecturerJs}', event)" title="${teacherTitle}">
                     <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-                    <span class="truncate">${safeTeacherShort}</span>
+                    <span class="truncate">${safeTeacherLabel}</span>
                 </div>` : ''}
             </div>
         </div>`;
