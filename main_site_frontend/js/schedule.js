@@ -1,6 +1,7 @@
 // main_site_frontend/js/schedule.js
 const API_BASE = "https://api.ivantishchenko.ru/api";
 const STORAGE_KEY = "mpb_user_preferences";
+const CALENDAR_SECTION_COLLAPSED_KEY = "mpb_calendar_sync_collapsed";
 
 const FIXED_TIMES =[
     { start: '08:30', end: '10:00' },
@@ -25,6 +26,7 @@ let cachedOfflineEntities = [];
 let latestSearchResults = [];
 let scheduleAuthUser = null;
 let calendarSubscriptionState = createDefaultCalendarSubscriptionState();
+let isCalendarSubscriptionCollapsed = loadCalendarSectionCollapsed();
 
 const groupInput = document.getElementById('groupSearch');
 const resultsBox = document.getElementById('searchResults');
@@ -76,6 +78,26 @@ function createDefaultCalendarSubscriptionState() {
         hasError: false,
         justReset: false
     };
+}
+
+function loadCalendarSectionCollapsed() {
+    try {
+        return localStorage.getItem(CALENDAR_SECTION_COLLAPSED_KEY) === 'true';
+    } catch (error) {
+        return false;
+    }
+}
+
+function setCalendarSectionCollapsed(nextValue) {
+    isCalendarSubscriptionCollapsed = Boolean(nextValue);
+    try {
+        localStorage.setItem(CALENDAR_SECTION_COLLAPSED_KEY, isCalendarSubscriptionCollapsed ? 'true' : 'false');
+    } catch (error) {}
+}
+
+function toggleCalendarSubscriptionSection() {
+    setCalendarSectionCollapsed(!isCalendarSubscriptionCollapsed);
+    renderCalendarSubscription();
 }
 
 window.addEventListener('mpb-auth-ready', (event) => {
@@ -262,17 +284,31 @@ function renderCalendarSubscription() {
             'Connect your personal ICS feed to Apple Calendar, Google Calendar, or any other calendar app.'
         )
     );
+    const settingsTitle = escapeHtml(t('schedule.calendar.settingsTitle', 'What this sync includes'));
+    const toggleText = escapeHtml(
+        t(
+            isCalendarSubscriptionCollapsed ? 'schedule.calendar.expand' : 'schedule.calendar.collapse',
+            isCalendarSubscriptionCollapsed ? 'Expand' : 'Collapse'
+        )
+    );
+    const statusBadge = calendarSubscriptionState.enabled
+        ? escapeHtml(t('schedule.calendar.statusReady', 'Ready'))
+        : escapeHtml(t('schedule.calendar.statusSetup', 'Setup'));
+    const statusBadgeClass = calendarSubscriptionState.enabled
+        ? 'border-emerald-200 bg-emerald-100 text-emerald-700'
+        : 'border-amber-200 bg-amber-100 text-amber-700';
+    const toggleIconClass = isCalendarSubscriptionCollapsed ? '' : 'rotate-180';
 
-    let bodyHtml = '';
+    let stateHtml = '';
 
     if (calendarSubscriptionState.loading) {
-        bodyHtml = `
+        stateHtml = `
             <div class="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm font-medium text-slate-500">
                 ${escapeHtml(t('schedule.calendar.loading', 'Loading your personal subscription link...'))}
             </div>
         `;
     } else if (calendarSubscriptionState.hasError) {
-        bodyHtml = `
+        stateHtml = `
             <div class="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
                 ${escapeHtml(t('schedule.calendar.error', 'Failed to load the calendar subscription.'))}
             </div>
@@ -283,7 +319,7 @@ function renderCalendarSubscription() {
             </button>
         `;
     } else if (!calendarSubscriptionState.enabled) {
-        bodyHtml = `
+        stateHtml = `
             <div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700">
                 ${escapeHtml(t('schedule.calendar.unavailable', 'Calendar subscription is available for Telegram-linked accounts with bot schedule subscriptions.'))}
             </div>
@@ -297,7 +333,7 @@ function renderCalendarSubscription() {
             `
             : '';
 
-        bodyHtml = `
+        stateHtml = `
             ${resetNotice}
             <div class="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3">
                 <div class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
@@ -321,26 +357,97 @@ function renderCalendarSubscription() {
                     ${escapeHtml(t('schedule.calendar.reset', 'Reset link'))}
                 </button>
             </div>
-            <p class="text-xs leading-6 text-slate-500">
-                ${escapeHtml(t('schedule.calendar.instructions', 'Use the iOS / Mac button for Apple Calendar. For Google Calendar, copy the HTTPS URL and add it from URL in the web version.'))}
-            </p>
         `;
     }
 
-    container.innerHTML = `
-        <div class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 p-4 shadow-sm md:p-6">
-            <div class="flex flex-col gap-4">
-                <div>
-                    <div class="text-[11px] font-black uppercase tracking-[0.25em] text-emerald-500">
-                        ${escapeHtml(t('schedule.calendar.eyebrow', 'Sync'))}
+    const settingsHtml = `
+        <div class="rounded-2xl border border-slate-200 bg-white/80 p-4">
+            <div class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
+                ${settingsTitle}
+            </div>
+            <div class="mt-3 grid gap-3 md:grid-cols-2">
+                <div class="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+                        ${escapeHtml(t('schedule.calendar.setting.source.label', 'Source'))}
                     </div>
-                    <h2 class="mt-2 text-lg font-black tracking-tight text-slate-900 md:text-xl">${title}</h2>
-                    <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">${description}</p>
+                    <div class="mt-1 text-sm font-semibold text-slate-700">
+                        ${escapeHtml(t('schedule.calendar.setting.source.value', 'Your active Telegram schedule subscriptions'))}
+                    </div>
                 </div>
-                <div class="flex flex-col gap-3">
-                    ${bodyHtml}
+                <div class="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+                        ${escapeHtml(t('schedule.calendar.setting.scope.label', 'Scope'))}
+                    </div>
+                    <div class="mt-1 text-sm font-semibold text-slate-700">
+                        ${escapeHtml(t('schedule.calendar.setting.scope.value', 'Lessons, lecturers, rooms, and active personal schedule filters'))}
+                    </div>
+                </div>
+                <div class="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+                        ${escapeHtml(t('schedule.calendar.setting.window.label', 'Time window'))}
+                    </div>
+                    <div class="mt-1 text-sm font-semibold text-slate-700">
+                        ${escapeHtml(t('schedule.calendar.setting.window.value', 'Recent 14 days plus the next 90 days of schedule'))}
+                    </div>
+                </div>
+                <div class="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+                        ${escapeHtml(t('schedule.calendar.setting.access.label', 'Access'))}
+                    </div>
+                    <div class="mt-1 text-sm font-semibold text-slate-700">
+                        ${escapeHtml(t('schedule.calendar.setting.access.value', 'Private secret link. Reset it any time to revoke the previous URL.'))}
+                    </div>
                 </div>
             </div>
+        </div>
+    `;
+
+    const instructionsHtml = `
+        <p class="text-xs leading-6 text-slate-500">
+            ${escapeHtml(t('schedule.calendar.instructions', 'Use the iOS / Mac button for Apple Calendar. For Google Calendar, copy the HTTPS URL and add it from URL in the web version.'))}
+        </p>
+    `;
+
+    const panelBodyHtml = isCalendarSubscriptionCollapsed
+        ? ''
+        : `
+            <div class="mt-4 flex flex-col gap-3 border-t border-emerald-100 pt-4">
+                <p class="max-w-3xl text-sm leading-6 text-slate-600">${description}</p>
+                ${settingsHtml}
+                <div class="flex flex-col gap-3">
+                    ${stateHtml}
+                    ${instructionsHtml}
+                </div>
+            </div>
+        `;
+
+    container.innerHTML = `
+        <div class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 p-4 shadow-sm md:p-6">
+            <div class="text-[11px] font-black uppercase tracking-[0.25em] text-emerald-500">
+                ${escapeHtml(t('schedule.calendar.eyebrow', 'Sync'))}
+            </div>
+            <button type="button"
+                    onclick="toggleCalendarSubscriptionSection()"
+                    class="mt-2 flex w-full items-start justify-between gap-4 text-left">
+                <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h2 class="text-lg font-black tracking-tight text-slate-900 md:text-xl">${title}</h2>
+                        <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${statusBadgeClass}">
+                            ${statusBadge}
+                        </span>
+                    </div>
+                    <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                        ${escapeHtml(t('schedule.calendar.summary', 'Personal calendar feed for your active schedule subscriptions and filters.'))}
+                    </p>
+                </div>
+                <span class="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm">
+                    ${toggleText}
+                    <svg class="h-4 w-4 transition-transform ${toggleIconClass}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </span>
+            </button>
+            ${panelBodyHtml}
         </div>
     `;
 }

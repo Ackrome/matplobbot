@@ -429,16 +429,18 @@ The website reuses the same private calendar feed format as the bot:
 
 1. Sign in on the website.
 2. Open the schedule page.
-3. Find the `Calendar subscription` card above the main schedule block.
-4. Use `Copy link` for Google Calendar or other ICS clients.
-5. Use `Open on iOS / Mac` for Apple Calendar compatible devices.
-6. Use `Reset link` to revoke the old URL and issue a new one.
+3. Find the collapsible `Calendar subscription` section above the main schedule block.
+4. Expand the section to review what the sync includes and how the private link behaves.
+5. Use `Copy link` for Google Calendar or other ICS clients.
+6. Use `Open on iOS / Mac` for Apple Calendar compatible devices.
+7. Use `Reset link` to revoke the old URL and issue a new one.
 
 #### Availability Rules
 
 - the card is shown only for authorized website users
 - the subscription becomes active only for accounts linked to Telegram schedule subscriptions
 - if the account is authorized but not linked to Telegram schedule data, the website shows an unavailable state instead of a link
+- the expanded panel explains the source, scope, time window, and access model of the sync feed
 
 #### Backend Endpoints
 

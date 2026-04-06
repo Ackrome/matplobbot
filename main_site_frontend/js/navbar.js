@@ -90,6 +90,20 @@ const I18N = {
         "schedule.calendar.copy": "Copy link",
         "schedule.calendar.apple": "Open on iOS / Mac",
         "schedule.calendar.reset": "Reset link",
+        "schedule.calendar.summary": "Personal calendar feed for your active schedule subscriptions and filters.",
+        "schedule.calendar.settingsTitle": "What this sync includes",
+        "schedule.calendar.expand": "Expand",
+        "schedule.calendar.collapse": "Collapse",
+        "schedule.calendar.statusReady": "Ready",
+        "schedule.calendar.statusSetup": "Setup",
+        "schedule.calendar.setting.source.label": "Source",
+        "schedule.calendar.setting.source.value": "Your active Telegram schedule subscriptions",
+        "schedule.calendar.setting.scope.label": "Scope",
+        "schedule.calendar.setting.scope.value": "Lessons, lecturers, rooms, and active personal schedule filters",
+        "schedule.calendar.setting.window.label": "Time window",
+        "schedule.calendar.setting.window.value": "Recent 14 days plus the next 90 days of schedule",
+        "schedule.calendar.setting.access.label": "Access",
+        "schedule.calendar.setting.access.value": "Private secret link. Reset it any time to revoke the previous URL.",
         "schedule.calendar.instructions": "Use the iOS / Mac button for Apple Calendar. For Google Calendar, copy the HTTPS URL and add it from URL in the web version.",
         "schedule.action.retry": "Retry",
         "schedule.action.clearFilters": "Clear filters",
@@ -193,6 +207,23 @@ Object.assign(I18N.ru, {
     "schedule.calendar.apple": "Открыть на iOS / Mac",
     "schedule.calendar.reset": "Сбросить ссылку",
     "schedule.calendar.instructions": "Для Apple Calendar используйте кнопку iOS / Mac. Для Google Calendar скопируйте HTTPS-ссылку и добавьте ее по URL в веб-версии."
+});
+
+Object.assign(I18N.ru, {
+    "schedule.calendar.summary": "Персональная календарная лента для ваших активных подписок и фильтров расписания.",
+    "schedule.calendar.settingsTitle": "Что входит в синхронизацию",
+    "schedule.calendar.expand": "Развернуть",
+    "schedule.calendar.collapse": "Свернуть",
+    "schedule.calendar.statusReady": "Готово",
+    "schedule.calendar.statusSetup": "Настройка",
+    "schedule.calendar.setting.source.label": "Источник",
+    "schedule.calendar.setting.source.value": "Ваши активные Telegram-подписки на расписание",
+    "schedule.calendar.setting.scope.label": "Состав",
+    "schedule.calendar.setting.scope.value": "Занятия, преподаватели, аудитории и активные персональные фильтры расписания",
+    "schedule.calendar.setting.window.label": "Период",
+    "schedule.calendar.setting.window.value": "Последние 14 дней и следующие 90 дней расписания",
+    "schedule.calendar.setting.access.label": "Доступ",
+    "schedule.calendar.setting.access.value": "Приватная секретная ссылка. Ее можно сбросить в любой момент, чтобы отозвать прежний URL."
 });
 
 const NAV_ITEMS = [
