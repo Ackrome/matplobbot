@@ -233,10 +233,24 @@
 
         entityEl.textContent = currentEntity?.name || t("schedule.context.none", "No group selected");
         weekEl.textContent = `${formatUiDate(currentWeekStart, { day: "numeric", month: "short", year: "numeric" })} — ${formatUiDate(weekEnd, { day: "numeric", month: "short", year: "numeric" })}`;
-        rangeEl.textContent = t("schedule.context.loadedRange", "Loaded {start} — {end}", {
+        const loadedRangeText = t("schedule.context.loadedRange", "Loaded {start} — {end}", {
             start: formatLoadedBound(loadedBounds.start),
             end: formatLoadedBound(loadedBounds.end),
         });
+        const parsedDate = sourceUpdatedAt ? new Date(sourceUpdatedAt) : null;
+        const parsedValue = parsedDate && !Number.isNaN(parsedDate.getTime())
+            ? formatUiDate(parsedDate, {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+            })
+            : t("schedule.context.parsedUnknown", "Parsed time unknown");
+        const parsedText = t("schedule.context.parsedAt", "Parsed: {value}", {
+            value: parsedValue,
+        });
+        rangeEl.textContent = `${loadedRangeText} | ${parsedText}`;
     }
 
     function enhanceDesktopTableOverflow() {

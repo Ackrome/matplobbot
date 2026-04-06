@@ -497,6 +497,118 @@ Public feed URLs remain available through the existing secret link and now also 
 
 Both public feed routes support `?download=1` and now return `ETag` / `Last-Modified` headers for calendar clients.
 
+### Schedule Last Parsed Time
+
+#### Purpose
+
+Both bot and website schedule views now show when the source schedule was last parsed and cached from the university API.
+
+#### Where It Appears
+
+- Bot `/schedule` responses:
+  - day view from search result
+  - day view from calendar
+  - week view
+  - `/myschedule` per-subscription daily updates
+- Website schedule page:
+  - context bar line now includes the loaded range and source parsed timestamp
+
+#### Data Source
+
+- Backend reads `cached_schedules.updated_at` for the selected entity.
+- API endpoint `GET /api/schedule/data/{type}/{id}` now includes:
+
+```json
+{
+  "source_updated_at": "2026-04-06T10:30:00+00:00"
+}
+```
+
+#### Notes
+
+- If no cached timestamp exists yet, the UI falls back to a localized "unknown parsed time" message.
+- Bot display is formatted in Moscow time.
+
+### Bot Calendar Link: Telegram-Filtered Feed
+
+#### Purpose
+
+When users open the calendar link from the bot, the generated feed should respect Telegram subscription/module filtering choices.
+
+#### Behavior
+
+- The bot now sends a link to:
+
+```text
+/api/cal/{secret}/telegram.ics
+```
+
+- This feed is generated from active Telegram schedule subscriptions and applies Telegram-side filters, including selected modules where configured.
+
+#### Public Endpoints
+
+- `GET /api/cal/{secret}/telegram.ics`
+- `GET /api/cal/{secret}/telegram/basic.ics`
+
+Both support `HEAD` and optional `?download=1`.
+
+### User Stats Export Formats
+
+#### Purpose
+
+Admin user detail export now supports multiple formats from one endpoint.
+
+#### Endpoint
+
+`GET /api/stats/users/{user_id}/export_actions`
+
+#### Query Parameters
+
+- `format=json|csv|weekly_pdf` (default `json`)
+- `download=1` (used for downloadable JSON file mode)
+
+#### Examples
+
+- JSON payload (API response):
+
+```text
+/api/stats/users/123/export_actions
+```
+
+- Download JSON file:
+
+```text
+/api/stats/users/123/export_actions?format=json&download=1
+```
+
+- Download CSV file:
+
+```text
+/api/stats/users/123/export_actions?format=csv
+```
+
+- Download weekly PDF report:
+
+```text
+/api/stats/users/123/export_actions?format=weekly_pdf
+```
+
+#### UI
+
+The user detail dashboard page now has separate export actions for CSV, JSON, and weekly PDF.
+
+### Localization Completeness And Fallback
+
+#### What Was Added
+
+- New RU/EN keys for updated bot schedule flows and error/status messages.
+- Key-parity safety test for locale files.
+- Translator fallback behavior test (missing key in selected locale falls back to default locale, then to `_key_` marker).
+
+#### Tests
+
+- `tests/test_localization_completeness.py`
+
 ## Scheduler Proxy Support
 
 ### Purpose

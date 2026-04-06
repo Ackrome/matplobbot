@@ -5,6 +5,7 @@ import json
 import logging
 import re
 from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
@@ -27,6 +28,7 @@ from bot.keyboards import (
 )
 from shared_lib.database import (
     get_cached_schedule,
+    get_cached_schedule_updated_at,
     get_session,
     get_subscription_by_id,
     get_subscription_modules,
@@ -51,6 +53,7 @@ from shared_lib.services.university_api import RuzAPIClient  # Import the class 
 
 router = Router()
 module_name_cache = {}
+MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
 
 class ScheduleStates(StatesGroup):
@@ -106,6 +109,36 @@ class ScheduleManager:
         self.router.callback_query(F.data == "mysch_cal_link")(self.handle_cal_link)
         self.router.callback_query(F.data == "mysch_cal_revoke")(self.handle_cal_revoke)
 
+    async def _append_source_parsed_time(
+        self, text: str, lang: str, entity_type: str, entity_id: str
+    ) -> str:
+        updated_at = await get_cached_schedule_updated_at(entity_type, entity_id)
+        if not updated_at:
+            return text
+
+        if updated_at.tzinfo is None:
+            updated_local = updated_at.replace(tzinfo=MOSCOW_TZ)
+        else:
+            updated_local = updated_at.astimezone(MOSCOW_TZ)
+
+        return (
+            text
+            + "\n\n"
+            + translator.gettext(
+                lang,
+                "schedule_source_parsed_at",
+                parsed_at=updated_local.strftime("%d.%m.%Y %H:%M"),
+            )
+        )
+
+    @staticmethod
+    def _api_unavailable_no_cache_text(lang: str) -> str:
+        return translator.gettext(lang, "schedule_api_unavailable_no_cache")
+
+    @staticmethod
+    def _offline_warning_text(lang: str) -> str:
+        return translator.gettext(lang, "schedule_offline_cache_warning")
+
     async def cmd_schedule(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
         lang = await translator.get_language(user_id, message.chat.id)
@@ -158,7 +191,8 @@ class ScheduleManager:
         # Если это оффлайн результаты, предупреждаем пользователя сообщением
         if any(r.get("is_offline") for r in results):
             await message.answer(
-                "⚠️ <i>Нет связи с вузом. Показаны сохраненные копии из базы.</i>", parse_mode="HTML"
+                translator.gettext(lang, "schedule_offline_results_warning"),
+                parse_mode="HTML",
             )
 
         await redis_client.set_user_cache(
@@ -220,12 +254,7 @@ class ScheduleManager:
                     self.api_client, entity_type, entity_id, api_date_str, api_date_str
                 )
             except ConnectionError:
-                error_msg = (
-                    "❌ ВУЗ недоступен, а сохраненной копии расписания у меня пока нет. Попробуйте позже."
-                    if lang == "ru"
-                    else "❌ University server is down and I have no cached copy. Please try again later."
-                )
-                await callback.message.edit_text(error_msg)
+                await callback.message.edit_text(self._api_unavailable_no_cache_text(lang))
                 return
 
             entity_name = await self._resolve_entity_name(
@@ -246,12 +275,11 @@ class ScheduleManager:
             )
 
             if is_offline:
-                offline_warning = (
-                    "⚠️ <i>Нет связи с сервером ВУЗа. Показана последняя сохраненная копия.</i>\n\n"
-                    if lang == "ru"
-                    else "⚠️ <i>No connection to university server. Showing latest cached copy.</i>\n\n"
-                )
-                formatted_text = offline_warning + formatted_text
+                formatted_text = self._offline_warning_text(lang) + "\n\n" + formatted_text
+
+            formatted_text = await self._append_source_parsed_time(
+                formatted_text, lang, entity_type, entity_id
+            )
 
             await callback.message.edit_text(formatted_text, parse_mode="HTML")
             await self._send_actions_menu(
@@ -521,12 +549,7 @@ class ScheduleManager:
                     self.api_client, entity_type, original_entity_id, api_date_str, api_date_str
                 )
             except ConnectionError:
-                error_msg = (
-                    "❌ ВУЗ недоступен, а сохраненной копии расписания у меня пока нет. Попробуйте позже."
-                    if lang == "ru"
-                    else "❌ University server is down and I have no cached copy. Please try again later."
-                )
-                await callback.message.edit_text(error_msg)
+                await callback.message.edit_text(self._api_unavailable_no_cache_text(lang))
                 return
 
             entity_name = await self._resolve_entity_name(
@@ -543,12 +566,11 @@ class ScheduleManager:
             )
 
             if is_offline:
-                offline_warning = (
-                    "⚠️ <i>Нет связи с сервером ВУЗа. Показана последняя сохраненная копия.</i>\n\n"
-                    if lang == "ru"
-                    else "⚠️ <i>No connection to university server. Showing latest cached copy.</i>\n\n"
-                )
-                formatted_text = offline_warning + formatted_text
+                formatted_text = self._offline_warning_text(lang) + "\n\n" + formatted_text
+
+            formatted_text = await self._append_source_parsed_time(
+                formatted_text, lang, entity_type, original_entity_id
+            )
 
             await callback.message.edit_text(formatted_text, parse_mode="HTML")
             date_info = {
@@ -595,12 +617,7 @@ class ScheduleManager:
                     self.api_client, entity_type, original_entity_id, api_start_str, api_end_str
                 )
             except ConnectionError:
-                error_msg = (
-                    "❌ ВУЗ недоступен, а сохраненной копии расписания у меня пока нет. Попробуйте позже."
-                    if lang == "ru"
-                    else "❌ University server is down and I have no cached copy. Please try again later."
-                )
-                await callback.message.edit_text(error_msg)
+                await callback.message.edit_text(self._api_unavailable_no_cache_text(lang))
                 return
 
             entity_name = await self._resolve_entity_name(
@@ -618,12 +635,11 @@ class ScheduleManager:
             )
 
             if is_offline:
-                offline_warning = (
-                    "⚠️ <i>Нет связи с сервером ВУЗа. Показана последняя сохраненная копия.</i>\n\n"
-                    if lang == "ru"
-                    else "⚠️ <i>No connection to university server. Showing latest cached copy.</i>\n\n"
-                )
-                formatted_text = offline_warning + formatted_text
+                formatted_text = self._offline_warning_text(lang) + "\n\n" + formatted_text
+
+            formatted_text = await self._append_source_parsed_time(
+                formatted_text, lang, entity_type, original_entity_id
+            )
 
             await callback.message.edit_text(formatted_text, parse_mode="HTML")
             date_info = {
@@ -803,7 +819,9 @@ class ScheduleManager:
                             entity_name=sub_data["sub_entity_name"],
                             time_str=time_str,
                         )
-                        + "\n\n👇 <b>Внимание:</b> Обнаружены учебные модули. Отметьте те, которые вы посещаете:\n"
+                        + "\n\n"
+                        + translator.gettext(lang, "schedule_modules_detected_notice")
+                        + "\n"
                         + details_text,
                         reply_markup=builder.as_markup(),
                         parse_mode="HTML",
@@ -857,12 +875,14 @@ class ScheduleManager:
             )
 
             if is_offline:
-                offline_warning = (
-                    "⚠️ <i>Нет связи с сервером ВУЗа. Показана последняя сохраненная копия.</i>\n\n"
-                    if lang == "ru"
-                    else "⚠️ <i>No connection to university server. Showing latest cached copy.</i>\n\n"
-                )
-                formatted_text = offline_warning + formatted_text
+                formatted_text = self._offline_warning_text(lang) + "\n\n" + formatted_text
+
+            formatted_text = await self._append_source_parsed_time(
+                formatted_text,
+                lang,
+                sub["entity_type"],
+                sub["entity_id"],
+            )
 
             await message.answer(formatted_text, parse_mode="HTML")
         except TelegramForbiddenError:
@@ -939,19 +959,22 @@ class ScheduleManager:
             _, sub_id_str, mod_hash = callback.data.split(":")
             sub_id = int(sub_id_str)
         except ValueError:
-            await callback.answer("Неверные данные кнопки.", show_alert=True)
+            lang = await translator.get_language(callback.from_user.id)
+            await callback.answer(translator.gettext(lang, "module_invalid_button_data"), show_alert=True)
             return
 
+        lang = await translator.get_language(callback.from_user.id)
         sub_info = await get_subscription_by_id(sub_id)
         if not sub_info:
-            await callback.answer("Подписка не найдена.", show_alert=True)
+            await callback.answer(translator.gettext(lang, "module_subscription_not_found"), show_alert=True)
             await callback.message.delete()
             return
 
         full_schedule = await get_cached_schedule(sub_info["entity_type"], sub_info["entity_id"])
         if not full_schedule:
             await callback.answer(
-                "Расписание устарело, попробуйте подписаться заново.", show_alert=True
+                translator.gettext(lang, "module_schedule_outdated"),
+                show_alert=True,
             )
             return
 
@@ -965,7 +988,8 @@ class ScheduleManager:
 
         if not target_module_name:
             await callback.answer(
-                "Модуль не найден (возможно, изменилось расписание).", show_alert=True
+                translator.gettext(lang, "module_not_found"),
+                show_alert=True,
             )
             return
 
@@ -973,10 +997,10 @@ class ScheduleManager:
 
         if target_module_name in selected_modules:
             selected_modules.remove(target_module_name)
-            action_text = "скрыт"
+            action_status = translator.gettext(lang, "module_status_hidden")
         else:
             selected_modules.append(target_module_name)
-            action_text = "выбран"
+            action_status = translator.gettext(lang, "module_status_shown")
 
         await update_subscription_modules(sub_id, selected_modules)
 
@@ -987,7 +1011,14 @@ class ScheduleManager:
         except Exception:
             pass
 
-        await callback.answer(f"Модуль '{target_module_name}' {action_text}.")
+        await callback.answer(
+            translator.gettext(
+                lang,
+                "module_toggle_answer",
+                module_name=target_module_name,
+                status=action_status,
+            )
+        )
 
     async def handle_module_save(self, callback: CallbackQuery):
         _, sub_id_str = callback.data.split(":")
@@ -1055,8 +1086,10 @@ class ScheduleManager:
         )
 
         try:
+            month_year = start_date.strftime("%B %Y")
             await callback.message.edit_text(
-                f"📅 Календарь на {start_date.strftime('%B %Y')}", reply_markup=keyboard
+                translator.gettext(lang, "myschedule_calendar_title", month_year=month_year),
+                reply_markup=keyboard,
             )
         except:
             pass
@@ -1102,7 +1135,10 @@ class ScheduleManager:
         )
 
         if not schedule:
-            await callback.answer("На этот день занятий нет (с учетом фильтров).", show_alert=True)
+            await callback.answer(
+                translator.gettext(lang, "myschedule_no_lessons_filtered"),
+                show_alert=True,
+            )
 
         formatted_lessons = []
         for l in schedule:
@@ -1113,12 +1149,20 @@ class ScheduleManager:
             formatted_lessons.append(l_copy)
 
         if not schedule:
-            text = f"Сводка на {target_date.strftime('%d.%m')}:\n\nЗанятий нет."
+            text = (
+                translator.gettext(
+                    lang, "myschedule_summary_for_date", date_str=target_date.strftime("%d.%m")
+                )
+                + "\n\n"
+                + translator.gettext(lang, "myschedule_no_lessons_filtered")
+            )
         else:
             text = await format_schedule(
                 formatted_lessons,
                 lang,
-                f"Сводка на {target_date.strftime('%d.%m')}",
+                translator.gettext(
+                    lang, "myschedule_summary_for_date", date_str=target_date.strftime("%d.%m")
+                ),
                 "mixed",
                 user_id,
                 target_date,
@@ -1128,11 +1172,17 @@ class ScheduleManager:
 
         date_str = target_date.strftime("%Y-%m-%d")
         builder.row(
-            InlineKeyboardButton(text="📲 Экспорт iCal", callback_data=f"mysch_ical:{date_str}:1")
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "myschedule_ical_today_button"),
+                callback_data=f"mysch_ical:{date_str}:1",
+            )
         )
 
         builder.row(
-            InlineKeyboardButton(text="⬅️ Назад к календарю", callback_data="mysch_back_cal")
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "kb_back_to_calendar_button"),
+                callback_data="mysch_back_cal",
+            )
         )
 
         await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
@@ -1145,7 +1195,11 @@ class ScheduleManager:
         active_subs = [s for s in subs if s["is_active"]]
 
         kb = await get_myschedule_filters_keyboard(filters, active_subs, user_id)
-        await callback.message.edit_text("⚙️ Настройка отображения:", reply_markup=kb)
+        lang = await translator.get_language(user_id)
+        await callback.message.edit_text(
+            translator.gettext(lang, "kb_header_schedule_filters"),
+            reply_markup=kb,
+        )
         await callback.answer()
 
     async def handle_myschedule_toggle_filter(self, callback: CallbackQuery):
@@ -1201,7 +1255,7 @@ class ScheduleManager:
         user_id = callback.from_user.id
         lang = await translator.get_language(user_id)
 
-        await callback.message.edit_text("⏳ Формирую сводку на неделю...")
+        await callback.message.edit_text(translator.gettext(lang, "myschedule_week_loading"))
 
         subs, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
         active_subs = [s for s in subs if s["is_active"]]
@@ -1219,23 +1273,32 @@ class ScheduleManager:
             )
             formatted_lessons.append(l_copy)
 
-        header = f"Сводка: {start_date.strftime('%d.%m')} - {end_date.strftime('%d.%m')}"
+        header = translator.gettext(
+            lang,
+            "myschedule_week_summary_header",
+            start_date=start_date.strftime("%d.%m"),
+            end_date=end_date.strftime("%d.%m"),
+        )
 
         text = await format_schedule(
             formatted_lessons, lang, header, "mixed", user_id, start_date, is_week_view=True
         )
 
         if len(text) > 4000:
-            text = text[:4000] + "\n\n...(сообщение обрезано, слишком много пар)..."
+            text = text[:4000] + "\n\n" + translator.gettext(lang, "myschedule_text_truncated")
 
         builder = InlineKeyboardBuilder()
         builder.row(
             InlineKeyboardButton(
-                text="📲 Экспорт iCal (Неделя)", callback_data=f"mysch_ical:{start_date_str}:7"
+                text=translator.gettext(lang, "myschedule_ical_week_button"),
+                callback_data=f"mysch_ical:{start_date_str}:7",
             )
         )
         builder.row(
-            InlineKeyboardButton(text="⬅️ Назад к календарю", callback_data="mysch_back_cal")
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "kb_back_to_calendar_button"),
+                callback_data="mysch_back_cal",
+            )
         )
 
         try:
@@ -1245,7 +1308,7 @@ class ScheduleManager:
         except Exception:
             await callback.message.answer_document(
                 BufferedInputFile(text.encode("utf-8"), filename="schedule.txt"),
-                caption="Текст расписания слишком длинный для одного сообщения.",
+                caption=translator.gettext(lang, "myschedule_text_too_long_caption"),
                 reply_markup=builder.as_markup(),
             )
         await callback.answer()
@@ -1257,13 +1320,15 @@ class ScheduleManager:
             days_count = int(days_count_str)
             end_date = start_date + timedelta(days=days_count - 1)
         except ValueError:
-            await callback.answer("Ошибка данных.", show_alert=True)
+            user_id = callback.from_user.id
+            lang = await translator.get_language(user_id)
+            await callback.answer(translator.gettext(lang, "myschedule_invalid_data"), show_alert=True)
             return
 
         user_id = callback.from_user.id
         lang = await translator.get_language(user_id)
 
-        await callback.answer("Генерация файла...")
+        await callback.answer(translator.gettext(lang, "myschedule_file_generating"))
 
         subs, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
         active_subs = [s for s in subs if s["is_active"]]
@@ -1274,7 +1339,7 @@ class ScheduleManager:
         )
 
         if not schedule:
-            await callback.message.answer("Нет занятий для экспорта.")
+            await callback.message.answer(translator.gettext(lang, "myschedule_export_no_lessons"))
             return
 
         ical_data = generate_ical_from_aggregated_schedule(schedule)
@@ -1340,28 +1405,35 @@ class ScheduleManager:
 
     async def _send_cal_link_message(self, message: Message, user_id: int, is_edit: bool = False):
         secret = await database.get_or_create_calendar_secret(user_id)
+        lang = await translator.get_language(user_id)
 
         from bot.config import PUBLIC_API_URL
 
         base_url = PUBLIC_API_URL.rstrip("/")
-        http_link = f"{base_url}/api/cal/{secret}.ics"
+        http_link = f"{base_url}/api/cal/{secret}/telegram.ics"
 
         text = (
-            "🔗 <b>Ваша персональная ссылка на расписание</b>\n\n"
-            f"<code>{http_link}</code>\n\n"
-            "<b>Как добавить, чтобы оно обновлялось само:</b>\n"
-            "• <b>iOS (iPhone/Mac):</b> Нажмите кнопку ниже. Если не сработает, то Настройки -> Календарь -> Учетные записи -> Добавить -> Другое -> Календарь по подписке.\n"
-            "• <b>Google Calendar:</b> Откройте <u>веб-версию (на ПК)</u>, нажмите «+» рядом с «Другие календари» -> «Добавить по URL» и вставьте ссылку выше.\n\n"
-            "<i>Расписание выгружается на 3 месяца вперед и обновляется автоматически.</i>"
+            translator.gettext(lang, "cal_link_header")
+            + "\n\n"
+            + f"<code>{http_link}</code>\n\n"
+            + translator.gettext(lang, "cal_link_instructions")
         )
 
         builder = InlineKeyboardBuilder()
-        builder.row(InlineKeyboardButton(text="📱 Добавить на iOS / Mac", url=http_link))
         builder.row(
-            InlineKeyboardButton(text="🔄 Сбросить ссылку", callback_data="mysch_cal_revoke")
+            InlineKeyboardButton(text=translator.gettext(lang, "cal_link_ios_button"), url=http_link)
         )
         builder.row(
-            InlineKeyboardButton(text="⬅️ Назад в календарь", callback_data="mysch_back_cal")
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "cal_link_reset_button"),
+                callback_data="mysch_cal_revoke",
+            )
+        )
+        builder.row(
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "kb_back_to_calendar_button"),
+                callback_data="mysch_back_cal",
+            )
         )
 
         if is_edit:
@@ -1375,7 +1447,9 @@ class ScheduleManager:
 
     async def handle_cal_revoke(self, callback: CallbackQuery):
         await database.regenerate_calendar_secret(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id)
         await callback.answer(
-            "Ссылка обновлена. Старая больше не работает и отключена.", show_alert=True
+            translator.gettext(lang, "cal_link_reset_success"),
+            show_alert=True,
         )
         await self._send_cal_link_message(callback.message, callback.from_user.id, is_edit=True)

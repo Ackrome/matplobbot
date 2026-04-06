@@ -2,6 +2,7 @@ import os
 import sys
 import types
 import unittest
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 FASTAPI_AVAILABLE = True
@@ -122,3 +123,39 @@ class TestScheduleSearchAPI(unittest.TestCase):
         self.assertEqual(payload[1]["type"], "person")
         self.assertTrue(payload[1]["is_offline"])
         cached_search.assert_awaited_once_with(self.fake_db, "ivan", "person")
+
+    def test_schedule_data_includes_source_updated_at(self):
+        fake_schedule = [
+            {
+                "date": "2026-04-06",
+                "discipline": "Math",
+                "group": "M80-101",
+                "beginLesson": "10:10",
+                "endLesson": "11:40",
+                "auditorium": "A-101",
+                "kindOfWork": "Lecture",
+            }
+        ]
+        parsed_at = datetime(2026, 4, 6, 10, 30, tzinfo=UTC)
+
+        with (
+            patch.object(schedule_router, "create_ruz_api_client", return_value=object()),
+            patch.object(
+                schedule_router,
+                "get_schedule_with_cache_fallback",
+                AsyncMock(return_value=(fake_schedule, False)),
+            ),
+            patch.object(schedule_router, "get_all_short_names", AsyncMock(return_value={})),
+            patch.object(schedule_router, "get_discipline_modules_map", AsyncMock(return_value={})),
+            patch.object(schedule_router, "get_unique_modules_hybrid", AsyncMock(return_value=[])),
+            patch.object(
+                schedule_router,
+                "get_cached_schedule_updated_at",
+                AsyncMock(return_value=parsed_at),
+            ),
+        ):
+            response = self.client.get("/api/schedule/data/group/group-1")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["source_updated_at"], parsed_at.isoformat())

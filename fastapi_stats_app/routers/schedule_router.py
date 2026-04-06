@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared_lib.database import (
     get_all_short_names,
+    get_cached_schedule_updated_at,
     get_db_session_dependency,
     get_discipline_modules_map,
     search_cached_entities,
@@ -263,11 +264,13 @@ async def get_schedule_data(
             lesson["module"] = mapped_mod if mapped_mod else explicit_mod
 
         modules = await get_unique_modules_hybrid(schedule)
+        source_updated_at = await get_cached_schedule_updated_at(type, id)
 
         return {
             "schedule": schedule,
             "available_modules": modules,
             "is_offline": is_offline,
+            "source_updated_at": source_updated_at.isoformat() if source_updated_at else None,
             "loaded_bounds": {
                 "start": start,
                 "end": finish,

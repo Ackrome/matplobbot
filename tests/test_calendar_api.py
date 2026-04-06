@@ -356,3 +356,51 @@ class TestCalendarAPI(unittest.TestCase):
         self.assertIn("ETag", response.headers)
         self.assertEqual(response.headers["Cache-Control"], "private, max-age=0, must-revalidate")
         self.assertIn("inline; filename=", response.headers["Content-Disposition"])
+
+    def test_public_telegram_filtered_feed_uses_aggregated_schedule(self):
+        active_subscriptions = [
+            {
+                "id": 77,
+                "is_active": True,
+                "entity_type": "group",
+                "entity_id": "group-1",
+                "entity_name": "Group 1",
+            }
+        ]
+
+        with (
+            patch.object(
+                calendar_router,
+                "get_user_id_by_calendar_secret",
+                AsyncMock(return_value=12345),
+            ),
+            patch.object(
+                calendar_router,
+                "get_user_subscriptions",
+                AsyncMock(return_value=(active_subscriptions, 1)),
+            ),
+            patch.object(
+                calendar_router.redis_client,
+                "get_user_cache",
+                AsyncMock(return_value={"excluded_subs": [], "excluded_types": []}),
+            ),
+            patch.object(
+                calendar_router,
+                "get_aggregated_schedule",
+                AsyncMock(return_value=[]),
+            ) as aggregated_mock,
+            patch.object(
+                calendar_router,
+                "generate_profile_ical_from_aggregated_schedule",
+                lambda *args, **kwargs: b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n",
+            ),
+        ):
+            response = self.client.get("/api/cal/secret123/telegram.ics")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/calendar", response.headers.get("content-type", ""))
+        self.assertIn(
+            'inline; filename="matplobbot-telegram-filtered.ics"',
+            response.headers.get("content-disposition", ""),
+        )
+        aggregated_mock.assert_awaited()

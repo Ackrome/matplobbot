@@ -16,6 +16,7 @@ const FIXED_TIMES =[
 
 let fullSchedule =[];
 let loadedBounds = { start: null, end: null };
+let sourceUpdatedAt = null;
 let currentEntity = { type: null, id: null, name: null };
 
 let allAvailableModules =[];
@@ -708,6 +709,7 @@ async function loadSchedule(type, id, name, targetDate = null) {
 
     document.getElementById('desktopSchedule').innerHTML = `<div class="p-8"><div class="skeleton h-64 w-full rounded-3xl"></div></div>`;
     document.getElementById('mobileSchedule').innerHTML = `<div class="skeleton h-64 w-full rounded-3xl"></div>`;
+    sourceUpdatedAt = null;
 
     let url = `${API_BASE}/schedule/data/${type}/${id}`;
     if (targetDate) url += `?base_date=${targetDate}`;
@@ -721,6 +723,7 @@ async function loadSchedule(type, id, name, targetDate = null) {
         fullSchedule = data.schedule || [];
         allAvailableModules = data.available_modules ||[];
         loadedBounds = data.loaded_bounds || {start: "2000-01-01", end: "2099-01-01"};
+        sourceUpdatedAt = data.source_updated_at || null;
 
         if (!targetDate && selectedModules.size === 0) {
             selectedModules = new Set(allAvailableModules);

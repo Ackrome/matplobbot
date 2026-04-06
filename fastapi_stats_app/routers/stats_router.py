@@ -1,11 +1,16 @@
 # fastapi_stats_app/routers/stats_router.py
+import csv
+import html
+import json
 import logging
 import math
 import os
+from datetime import UTC, datetime, timedelta
+from io import StringIO
 from typing import Any
 
 import aiohttp
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +27,6 @@ from shared_lib.database import (
 from shared_lib.redis_client import redis_client
 from shared_lib.schemas import (
     ActionUsersResponse,
-    ExportActionsResponse,
     SendMessageRequest,
     UserProfileResponse,
 )
@@ -34,6 +38,154 @@ logger = logging.getLogger(__name__)
 
 CACHE_TTL = 300
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+SUPPORTED_USER_EXPORT_FORMATS = {"json", "csv", "weekly_pdf"}
+
+
+def _parse_export_timestamp(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
+    except ValueError:
+        return None
+
+
+def _build_actions_csv(actions: list[dict[str, Any]]) -> str:
+    buffer = StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerow(["id", "action_type", "action_details", "timestamp"])
+    for action in actions:
+        writer.writerow(
+            [
+                action.get("id", ""),
+                action.get("action_type", ""),
+                action.get("action_details", ""),
+                action.get("timestamp", ""),
+            ]
+        )
+    # UTF-8 BOM helps spreadsheet apps open Cyrillic data correctly.
+    return "\ufeff" + buffer.getvalue()
+
+
+def _build_weekly_pdf_html(
+    *,
+    user_id: int,
+    week_start_date: datetime,
+    week_end_date: datetime,
+    weekly_actions: list[dict[str, Any]],
+) -> str:
+    action_type_counts: dict[str, int] = {}
+    for action in weekly_actions:
+        action_type = str(action.get("action_type") or "unknown")
+        action_type_counts[action_type] = action_type_counts.get(action_type, 0) + 1
+
+    summary_rows = "".join(
+        (
+            "<tr>"
+            f"<td>{html.escape(action_type)}</td>"
+            f"<td>{count}</td>"
+            "</tr>"
+        )
+        for action_type, count in sorted(
+            action_type_counts.items(), key=lambda item: (-item[1], item[0])
+        )
+    )
+    if not summary_rows:
+        summary_rows = "<tr><td colspan='2'>No activity</td></tr>"
+
+    action_rows = "".join(
+        (
+            "<tr>"
+            f"<td>{html.escape(str(action.get('timestamp') or '-'))}</td>"
+            f"<td>{html.escape(str(action.get('action_type') or '-'))}</td>"
+            f"<td>{html.escape(str(action.get('action_details') or '-'))}</td>"
+            "</tr>"
+        )
+        for action in weekly_actions[:300]
+    )
+    if not action_rows:
+        action_rows = "<tr><td colspan='3'>No actions in this period.</td></tr>"
+
+    period_label = (
+        f"{week_start_date.strftime('%Y-%m-%d')} - {week_end_date.strftime('%Y-%m-%d')}"
+    )
+    return f"""
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body {{
+      font-family: Arial, sans-serif;
+      color: #111827;
+      margin: 24px;
+      font-size: 12px;
+      line-height: 1.35;
+    }}
+    h1 {{ margin: 0 0 8px; font-size: 20px; }}
+    h2 {{ margin: 20px 0 8px; font-size: 14px; }}
+    .meta {{ margin-bottom: 12px; color: #4b5563; }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+      table-layout: fixed;
+      word-wrap: break-word;
+    }}
+    th, td {{
+      border: 1px solid #d1d5db;
+      padding: 6px 8px;
+      vertical-align: top;
+      text-align: left;
+    }}
+    th {{
+      background: #f3f4f6;
+      font-weight: 700;
+    }}
+  </style>
+</head>
+<body>
+  <h1>Weekly User Activity Report</h1>
+  <div class="meta">User ID: {user_id}<br/>Period: {period_label}<br/>Total actions: {len(weekly_actions)}</div>
+
+  <h2>Action Type Summary</h2>
+  <table>
+    <thead>
+      <tr><th style="width: 70%;">Action Type</th><th style="width: 30%;">Count</th></tr>
+    </thead>
+    <tbody>{summary_rows}</tbody>
+  </table>
+
+  <h2>Action Log (up to 300 latest entries)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 26%;">Timestamp</th>
+        <th style="width: 22%;">Type</th>
+        <th style="width: 52%;">Details</th>
+      </tr>
+    </thead>
+    <tbody>{action_rows}</tbody>
+  </table>
+</body>
+</html>
+"""
+
+
+def _build_weekly_pdf_bytes(html_content: str) -> bytes:
+    try:
+        from weasyprint import HTML
+    except Exception as error:  # pragma: no cover - environment-dependent import
+        raise HTTPException(
+            status_code=503,
+            detail=f"PDF export is unavailable on this server: {error}",
+        ) from error
+
+    try:
+        return HTML(string=html_content).write_pdf()
+    except Exception as error:  # pragma: no cover - rendering failure
+        logger.error("Failed to render weekly stats PDF: %s", error, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to render weekly PDF report") from error
 
 
 @router.get(
@@ -176,18 +328,79 @@ async def get_action_users(
     "/users/{user_id}/export_actions",
     summary="Экспорт действий",
     description="Выгружает полную историю действий пользователя.",
-    response_model=ExportActionsResponse,
     dependencies=[Depends(require_admin)],
 )
 async def export_user_actions(
-    user_id: int, db: AsyncSession = Depends(get_db_session_dependency)
-) -> Any:
+    user_id: int,
+    format: str = Query(
+        "json",
+        description="Supported formats: json, csv, weekly_pdf",
+    ),
+    download: bool = Query(
+        False,
+        description="When format=json, return a downloadable file instead of JSON payload.",
+    ),
+    db: AsyncSession = Depends(get_db_session_dependency),
+) -> Any | Response:
+    normalized_format = format.strip().lower()
+    if normalized_format not in SUPPORTED_USER_EXPORT_FORMATS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported export format '{format}'. Use one of: {sorted(SUPPORTED_USER_EXPORT_FORMATS)}",
+        )
+
     try:
         actions = await get_all_user_actions(db, user_id)
-        return {"actions": actions}
     except Exception as e:
         logger.error(f"Database error exporting actions for user {user_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Database Error")
+
+    if normalized_format == "json":
+        payload = {"actions": actions}
+        if not download:
+            return payload
+        filename = f"user_{user_id}_actions.json"
+        return Response(
+            content=json.dumps(payload, ensure_ascii=False, indent=2),
+            media_type="application/json; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    if normalized_format == "csv":
+        csv_content = _build_actions_csv(actions)
+        filename = f"user_{user_id}_actions.csv"
+        return Response(
+            content=csv_content,
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    week_end = datetime.now(UTC)
+    week_start = week_end - timedelta(days=6)
+    weekly_actions = [
+        action
+        for action in actions
+        if (parsed := _parse_export_timestamp(str(action.get("timestamp") or "")))
+        and week_start.date() <= parsed.date() <= week_end.date()
+    ]
+    weekly_actions.sort(
+        key=lambda action: _parse_export_timestamp(str(action.get("timestamp") or ""))
+        or datetime.min.replace(tzinfo=UTC),
+        reverse=True,
+    )
+    weekly_html = _build_weekly_pdf_html(
+        user_id=user_id,
+        week_start_date=week_start,
+        week_end_date=week_end,
+        weekly_actions=weekly_actions,
+    )
+    pdf_bytes = _build_weekly_pdf_bytes(weekly_html)
+    filename = f"user_{user_id}_weekly_report_{week_end.strftime('%Y%m%d')}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post(

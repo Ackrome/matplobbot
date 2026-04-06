@@ -729,6 +729,21 @@ async def get_cached_schedule(entity_type: str, entity_id: str) -> list | None:
         return result.scalar()
 
 
+async def get_cached_schedule_updated_at(
+    entity_type: str, entity_id: str
+) -> datetime.datetime | None:
+    async with get_session() as session:
+        result = await session.execute(
+            select(CachedSchedule.updated_at).where(
+                and_(
+                    CachedSchedule.entity_type == entity_type,
+                    CachedSchedule.entity_id == str(entity_id),
+                )
+            )
+        )
+        return result.scalar()
+
+
 # --- Short Names ---
 async def add_short_name(full_name: str, short_name: str, admin_id: int):
     async with get_session() as session:

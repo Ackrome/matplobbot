@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Легкая прозрачность при загрузке
         actionsBodyElement.classList.add('opacity-50');
 
-        fetch(`/api/users/${userId}/profile?page=${page}&sort_by=${currentSortBy}&sort_order=${currentSortOrder}`)
+        fetch(`/api/stats/users/${userId}/profile?page=${page}&sort_by=${currentSortBy}&sort_order=${currentSortOrder}`)
             .then(response => {
                 if (!response.ok) {
                     if (response.status === 404) throw new Error('Пользователь не найден.');
@@ -294,7 +294,7 @@ document.addEventListener('DOMContentLoaded', function() {
         sendBtn.disabled = true;
         messageInput.disabled = true;
 
-        fetch(`/api/users/${userId}/send_message`, {
+        fetch(`/api/stats/users/${userId}/send_message`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text: text })
@@ -395,9 +395,28 @@ document.addEventListener('DOMContentLoaded', function() {
     searchInput.addEventListener('input', debounce(applySearchFilter, 300));
 
     // Экспорт CSV
-    document.getElementById('download-all-csv-btn').addEventListener('click', () => {
-       window.location.href = `/api/users/${userId}/export_actions`;
-    });
+    function triggerExport(format) {
+        const url = new URL(`/api/stats/users/${userId}/export_actions`, window.location.origin);
+        url.searchParams.set('format', format);
+        if (format === 'json') {
+            url.searchParams.set('download', '1');
+        }
+        window.location.href = url.toString();
+    }
+
+    const downloadCsvButton = document.getElementById('download-all-csv-btn');
+    const downloadJsonButton = document.getElementById('download-all-json-btn');
+    const downloadWeeklyPdfButton = document.getElementById('download-weekly-pdf-btn');
+
+    if (downloadCsvButton) {
+        downloadCsvButton.addEventListener('click', () => triggerExport('csv'));
+    }
+    if (downloadJsonButton) {
+        downloadJsonButton.addEventListener('click', () => triggerExport('json'));
+    }
+    if (downloadWeeklyPdfButton) {
+        downloadWeeklyPdfButton.addEventListener('click', () => triggerExport('weekly_pdf'));
+    }
 
     // --- INITIALIZATION ---
     fetchAndRenderPage(1);

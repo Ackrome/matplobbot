@@ -18,6 +18,7 @@ from shared_lib.database import (
     regenerate_calendar_secret,
 )
 from shared_lib.models import CachedSchedule, WebAccount
+from shared_lib.redis_client import redis_client
 from shared_lib.schemas import (
     CalendarSubscriptionProfileCreateRequest,
     CalendarSubscriptionProfileSelectRequest,
@@ -26,6 +27,7 @@ from shared_lib.schemas import (
 )
 from shared_lib.services.schedule_service import (
     generate_profile_ical_from_aggregated_schedule,
+    get_aggregated_schedule,
     get_calendar_aggregated_schedule,
 )
 
@@ -849,6 +851,50 @@ async def _render_public_calendar_feed(
     )
 
 
+async def _render_telegram_filtered_feed(
+    request: Request,
+    secret_token: str,
+    download: bool,
+) -> Response:
+    clean_token = secret_token.replace(".ics", "")
+    telegram_user_id = await get_user_id_by_calendar_secret(clean_token)
+    if not telegram_user_id:
+        raise HTTPException(status_code=404, detail="Calendar not found")
+
+    all_subs, _ = await get_user_subscriptions(telegram_user_id, page=0, page_size=100)
+    active_subs = [subscription for subscription in all_subs if subscription["is_active"]]
+    raw_filters = await redis_client.get_user_cache(telegram_user_id, "mysch_filters")
+    filters = raw_filters if isinstance(raw_filters, dict) else {"excluded_subs": [], "excluded_types": []}
+
+    today = date.today()
+    start_date = today - timedelta(days=CALENDAR_WINDOW_PAST_DAYS)
+    end_date = today + timedelta(days=CALENDAR_WINDOW_FUTURE_DAYS)
+    aggregated_schedule = await get_aggregated_schedule(
+        telegram_user_id,
+        active_subs,
+        start_date,
+        end_date,
+        filters,
+    )
+
+    ical_bytes = generate_profile_ical_from_aggregated_schedule(
+        aggregated_schedule,
+        calendar_name="Matplobbot Telegram filtered schedule",
+        calendar_description="Personal schedule feed filtered by Telegram subscription settings.",
+        timezone_name=CALENDAR_TIMEZONE,
+    )
+    disposition = "attachment" if download else "inline"
+    return Response(
+        content=b"" if request.method == "HEAD" else ical_bytes,
+        media_type="text/calendar; charset=utf-8",
+        headers={
+            "Content-Disposition": f'{disposition}; filename="matplobbot-telegram-filtered.ics"',
+            "Cache-Control": "private, max-age=0, must-revalidate",
+            "Pragma": "no-cache",
+        },
+    )
+
+
 @router.api_route(
     "/cal/{secret_token}/basic.ics",
     methods=["GET", "HEAD"],
@@ -878,6 +924,37 @@ async def get_webcal_schedule(
     except Exception as error:
         logger.error(
             "Error generating calendar feed for secret %s: %s",
+            secret_token,
+            error,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Internal Error")
+
+
+@router.api_route(
+    "/cal/{secret_token}/telegram.ics",
+    methods=["GET", "HEAD"],
+    summary="Public Telegram-filtered personal schedule iCal feed",
+)
+@router.api_route(
+    "/cal/{secret_token}/telegram/basic.ics",
+    methods=["GET", "HEAD"],
+    summary="Public Telegram-filtered personal schedule iCal feed",
+)
+async def get_webcal_schedule_telegram_filtered(
+    request: Request,
+    secret_token: str,
+    download: bool = Query(False),
+    db: AsyncSession = Depends(get_db_session_dependency),
+):
+    try:
+        _ = db  # keep DB dependency lifecycle consistent with other public feed handlers
+        return await _render_telegram_filtered_feed(request, secret_token, download)
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.error(
+            "Error generating Telegram-filtered calendar feed for secret %s: %s",
             secret_token,
             error,
             exc_info=True,
