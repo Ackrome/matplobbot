@@ -39,7 +39,9 @@ class TestCalendarAPI(unittest.TestCase):
         self.fake_db.add = lambda _obj: None
         self.fake_db.commit = AsyncMock()
         self.fake_db.refresh = AsyncMock()
-        self.app.dependency_overrides[calendar_router.get_db_session_dependency] = lambda: self.fake_db
+        self.app.dependency_overrides[calendar_router.get_db_session_dependency] = (
+            lambda: self.fake_db
+        )
 
     def tearDown(self):
         self.app.dependency_overrides.clear()
@@ -109,8 +111,14 @@ class TestCalendarAPI(unittest.TestCase):
         self.assertTrue(payload["enabled"])
         self.assertTrue(payload["sync_enabled"])
         self.assertEqual(payload["selected_profile_id"], "all")
-        self.assertEqual(payload["http_url"], "https://api.example.com/api/cal/abcdef1234567890abcdef1234567890.ics")
-        self.assertEqual(payload["webcal_url"], "webcal://api.example.com/api/cal/abcdef1234567890abcdef1234567890.ics")
+        self.assertEqual(
+            payload["http_url"],
+            "https://api.example.com/api/cal/abcdef1234567890abcdef1234567890.ics",
+        )
+        self.assertEqual(
+            payload["webcal_url"],
+            "webcal://api.example.com/api/cal/abcdef1234567890abcdef1234567890.ics",
+        )
         self.assertIn("...", payload["masked_http_url"])
         self.assertEqual(payload["source_summary"]["active_subscriptions"], 1)
         self.assertGreaterEqual(len(payload["profiles"]), 2)
@@ -174,8 +182,14 @@ class TestCalendarAPI(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["http_url"], "https://api.example.com/api/cal/fedcba0987654321fedcba0987654321.ics")
-        self.assertEqual(payload["webcal_url"], "webcal://api.example.com/api/cal/fedcba0987654321fedcba0987654321.ics")
+        self.assertEqual(
+            payload["http_url"],
+            "https://api.example.com/api/cal/fedcba0987654321fedcba0987654321.ics",
+        )
+        self.assertEqual(
+            payload["webcal_url"],
+            "webcal://api.example.com/api/cal/fedcba0987654321fedcba0987654321.ics",
+        )
         regenerate_secret.assert_awaited_once_with(54321)
 
     def test_reset_subscription_requires_telegram_link(self):
@@ -279,7 +293,9 @@ class TestCalendarAPI(unittest.TestCase):
         payload = response.json()
         self.assertTrue(payload["selected_profile_id"].startswith("custom-"))
         custom_profile = next(
-            profile for profile in payload["profiles"] if profile["id"] == payload["selected_profile_id"]
+            profile
+            for profile in payload["profiles"]
+            if profile["id"] == payload["selected_profile_id"]
         )
         self.assertEqual(custom_profile["lesson_mode"], "exams_only")
         self.assertEqual(custom_profile["modules"], ["Core"])

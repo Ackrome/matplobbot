@@ -212,7 +212,9 @@ def _serialize_calendar_sync_state(state: dict) -> dict:
     }
 
 
-async def _save_calendar_sync_state(account: WebAccount | None, db: AsyncSession, state: dict) -> None:
+async def _save_calendar_sync_state(
+    account: WebAccount | None, db: AsyncSession, state: dict
+) -> None:
     if not account:
         return
 
@@ -390,9 +392,7 @@ def _build_profile_health(
     ]
     next_event_at, next_event_label = _build_next_event(filtered_schedule)
     last_accessed_at = (
-        sync_state.get("profile_status", {})
-        .get(profile["id"], {})
-        .get("last_accessed_at")
+        sync_state.get("profile_status", {}).get(profile["id"], {}).get("last_accessed_at")
     )
 
     if not included_sources:
@@ -440,9 +440,7 @@ def _update_profile_access(sync_state: dict, profile_id: str) -> dict:
         {CALENDAR_SYNC_KEY: _serialize_calendar_sync_state(sync_state)}
     )
     next_state.setdefault("profile_status", {})
-    next_state["profile_status"][profile_id] = {
-        "last_accessed_at": datetime.now(UTC).isoformat()
-    }
+    next_state["profile_status"][profile_id] = {"last_accessed_at": datetime.now(UTC).isoformat()}
     return next_state
 
 
@@ -499,7 +497,9 @@ async def _build_calendar_subscription_response(
                 "subscription_count": _count_profile_subscriptions(profile, active_subs),
                 "scope_label": _profile_scope_label(profile),
                 "links": links,
-                "health": _build_profile_health(profile, filtered_schedule, source_update_map, sync_state),
+                "health": _build_profile_health(
+                    profile, filtered_schedule, source_update_map, sync_state
+                ),
             }
         )
 
@@ -507,7 +507,9 @@ async def _build_calendar_subscription_response(
     selected_links = selected_profile["links"] if selected_profile else {}
 
     return CalendarSubscriptionResponse(
-        enabled=bool(sync_state.get("enabled", True) and eligibility["available"] and selected_profile),
+        enabled=bool(
+            sync_state.get("enabled", True) and eligibility["available"] and selected_profile
+        ),
         sync_enabled=bool(sync_state.get("enabled", True)),
         selected_profile_id=selected_profile_id,
         profile_limit=CALENDAR_PROFILE_LIMIT,
@@ -599,7 +601,9 @@ async def toggle_calendar_subscription(
     sync_state = _normalize_calendar_sync_state(current_user.get("preferences"))
     sync_state["enabled"] = bool(payload.enabled)
     await _save_calendar_sync_state(account, db, sync_state)
-    current_user["preferences"] = account.preferences if account else current_user.get("preferences", {})
+    current_user["preferences"] = (
+        account.preferences if account else current_user.get("preferences", {})
+    )
     current_user["db_obj"] = account
     return await _build_calendar_subscription_response(request, current_user, db)
 
@@ -623,7 +627,9 @@ async def select_calendar_subscription_profile(
 
     sync_state["selected_profile_id"] = payload.profile_id
     await _save_calendar_sync_state(account, db, sync_state)
-    current_user["preferences"] = account.preferences if account else current_user.get("preferences", {})
+    current_user["preferences"] = (
+        account.preferences if account else current_user.get("preferences", {})
+    )
     current_user["db_obj"] = account
     return await _build_calendar_subscription_response(request, current_user, db)
 
@@ -694,7 +700,9 @@ async def create_calendar_subscription_profile(
         sync_state["selected_profile_id"] = profile_id
 
     await _save_calendar_sync_state(account, db, sync_state)
-    current_user["preferences"] = account.preferences if account else current_user.get("preferences", {})
+    current_user["preferences"] = (
+        account.preferences if account else current_user.get("preferences", {})
+    )
     current_user["db_obj"] = account
     return await _build_calendar_subscription_response(request, current_user, db)
 
@@ -726,7 +734,9 @@ async def delete_calendar_subscription_profile(
         sync_state["selected_profile_id"] = DEFAULT_PROFILE_ID
 
     await _save_calendar_sync_state(account, db, sync_state)
-    current_user["preferences"] = account.preferences if account else current_user.get("preferences", {})
+    current_user["preferences"] = (
+        account.preferences if account else current_user.get("preferences", {})
+    )
     current_user["db_obj"] = account
     return await _build_calendar_subscription_response(request, current_user, db)
 
@@ -787,13 +797,11 @@ async def _render_public_calendar_feed(
         calendar_description=_build_calendar_description(profile),
         timezone_name=CALENDAR_TIMEZONE,
     )
-    etag = f"\"{hashlib.sha256(ical_bytes).hexdigest()}\""
+    etag = f'"{hashlib.sha256(ical_bytes).hexdigest()}"'
 
     source_updated_at = health.get("source_updated_at")
     last_modified_dt = (
-        datetime.fromisoformat(source_updated_at)
-        if source_updated_at
-        else datetime.now(UTC)
+        datetime.fromisoformat(source_updated_at) if source_updated_at else datetime.now(UTC)
     )
     last_modified_dt = last_modified_dt.astimezone(UTC).replace(microsecond=0)
 
