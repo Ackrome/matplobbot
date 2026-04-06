@@ -98,9 +98,7 @@ async def _search_single_entity_type(
             entity_type,
         )
         cached_results = await search_cached_entities(db, term, entity_type)
-        normalized_cached = _normalize_search_results(
-            cached_results, entity_type, is_offline=True
-        )
+        normalized_cached = _normalize_search_results(cached_results, entity_type, is_offline=True)
         if normalized_cached:
             return normalized_cached, False
         if strict_unavailable:

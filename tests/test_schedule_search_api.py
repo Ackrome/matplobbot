@@ -32,7 +32,9 @@ class TestScheduleSearchAPI(unittest.TestCase):
         self.app.include_router(schedule_router.router, prefix="/api")
         self.client = TestClient(self.app)
         self.fake_db = AsyncMock()
-        self.app.dependency_overrides[schedule_router.get_db_session_dependency] = lambda: self.fake_db
+        self.app.dependency_overrides[schedule_router.get_db_session_dependency] = (
+            lambda: self.fake_db
+        )
         self.app.dependency_overrides[schedule_router.get_shared_http_session] = lambda: object()
 
     def tearDown(self):
@@ -120,4 +122,3 @@ class TestScheduleSearchAPI(unittest.TestCase):
         self.assertEqual(payload[1]["type"], "person")
         self.assertTrue(payload[1]["is_offline"])
         cached_search.assert_awaited_once_with(self.fake_db, "ivan", "person")
-
