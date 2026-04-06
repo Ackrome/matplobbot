@@ -597,6 +597,35 @@ Admin user detail export now supports multiple formats from one endpoint.
 
 The user detail dashboard page now has separate export actions for CSV, JSON, and weekly PDF.
 
+### Stats Action Users Endpoint
+
+#### Purpose
+
+The admin dashboard "users by action" drill-down now uses a canonical API route that matches frontend requests.
+
+#### Endpoint
+
+Canonical route:
+
+```text
+GET /api/stats/action_users
+```
+
+Backward-compatible legacy alias (still supported):
+
+```text
+GET /api/stats/stats/action_users
+```
+
+#### Query Parameters
+
+- `action_type` (required)
+- `action_details` (required)
+- `page` (optional, default `1`)
+- `page_size` (optional, default `15`)
+- `sort_by` (optional, default `full_name`)
+- `sort_order` (optional, default `asc`)
+
 ### Localization Completeness And Fallback
 
 #### What Was Added

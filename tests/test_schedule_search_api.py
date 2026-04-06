@@ -124,6 +124,29 @@ class TestScheduleSearchAPI(unittest.TestCase):
         self.assertTrue(payload[1]["is_offline"])
         cached_search.assert_awaited_once_with(self.fake_db, "ivan", "person")
 
+    def test_search_without_type_returns_503_when_all_sources_are_unavailable(self):
+        fake_client = types.SimpleNamespace(
+            search=AsyncMock(
+                side_effect=[
+                    schedule_router.RuzAPIError("group search failed"),
+                    schedule_router.RuzAPIError("person search failed"),
+                    schedule_router.RuzAPIError("auditorium search failed"),
+                ]
+            )
+        )
+
+        with (
+            patch.object(schedule_router, "create_ruz_api_client", return_value=fake_client),
+            patch.object(
+                schedule_router,
+                "search_cached_entities",
+                AsyncMock(return_value=[]),
+            ),
+        ):
+            response = self.client.get("/api/schedule/search", params={"term": "ivan"})
+
+        self.assertEqual(response.status_code, 503)
+
     def test_schedule_data_includes_source_updated_at(self):
         fake_schedule = [
             {

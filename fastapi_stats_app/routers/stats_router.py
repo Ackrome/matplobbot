@@ -262,6 +262,11 @@ async def get_user_profile(
 
 @router.get(
     "/stats/action_users",
+    include_in_schema=False,
+    dependencies=[Depends(require_admin)],
+)
+@router.get(
+    "/action_users",
     summary="Пользователи по действию",
     description="Возвращает список пользователей, совершивших конкретное действие.",
     response_model=ActionUsersResponse,

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import date, datetime, timedelta
 
@@ -159,16 +160,22 @@ async def search_entity(
         return results
 
     results_by_type: dict[str, list[dict]] = {}
+    search_results = await asyncio.gather(
+        *[
+            _search_single_entity_type(
+                term,
+                entity_type,
+                db,
+                client,
+                strict_unavailable=False,
+            )
+            for entity_type in SEARCH_ENTITY_TYPES
+        ]
+    )
     unavailable_types = 0
-
-    for entity_type in SEARCH_ENTITY_TYPES:
-        results, is_unavailable = await _search_single_entity_type(
-            term,
-            entity_type,
-            db,
-            client,
-            strict_unavailable=False,
-        )
+    for entity_type, (results, is_unavailable) in zip(
+        SEARCH_ENTITY_TYPES, search_results, strict=False
+    ):
         results_by_type[entity_type] = results
         if is_unavailable:
             unavailable_types += 1
@@ -184,23 +191,6 @@ async def search_entity(
         )
 
     return []
-
-    client = create_ruz_api_client(http_session)
-    try:
-        return await client.search(term, type)
-    except RuzAPIError:
-        logger.warning(f"RUZ API Search failed for '{term}'. Falling back to local cache.")
-        cached_results = await search_cached_entities(db, term, type)
-        if cached_results:
-            return cached_results
-        raise HTTPException(
-            status_code=503,
-            detail="API ВУЗа недоступно, а в кэше совпадений не найдено",
-        )
-    except Exception as e:
-        logger.error(f"Unexpected error during search: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
-
 
 @router.get("/cached_list")
 async def get_cached_list(db: AsyncSession = Depends(get_db_session_dependency)):
@@ -281,3 +271,4 @@ async def get_schedule_data(
     except Exception as e:
         logger.error(f"Failed to fetch schedule for website: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
+
