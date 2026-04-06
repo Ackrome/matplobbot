@@ -1,5 +1,5 @@
 # shared_lib/schemas.py
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -217,9 +217,100 @@ class CurrentUserResponse(BaseModel):
     model_config = BASE_CONFIG
 
 
-class CalendarSubscriptionResponse(BaseModel):
-    enabled: bool = False
-    http_url: str | None = None
-    webcal_url: str | None = None
+class CalendarSubscriptionEligibility(BaseModel):
+    available: bool = False
+    has_telegram_link: bool = False
+    has_active_subscriptions: bool = False
+    reasons: list[str] = Field(default_factory=list)
+    detail: str | None = None
 
     model_config = BASE_CONFIG
+
+
+class CalendarSubscriptionSourceSummary(BaseModel):
+    total_subscriptions: int = 0
+    active_subscriptions: int = 0
+    active_entities: int = 0
+
+    model_config = BASE_CONFIG
+
+
+class CalendarSubscriptionLinks(BaseModel):
+    http_url: str | None = None
+    webcal_url: str | None = None
+    download_url: str | None = None
+    preview_url: str | None = None
+    masked_http_url: str | None = None
+
+    model_config = BASE_CONFIG
+
+
+class CalendarSubscriptionHealth(BaseModel):
+    event_count: int = 0
+    next_event_at: str | None = None
+    next_event_label: str | None = None
+    last_generated_at: str | None = None
+    source_updated_at: str | None = None
+    cache_status: str = "empty"
+    used_cached_sources: int = 0
+    total_sources: int = 0
+    last_accessed_at: str | None = None
+
+    model_config = BASE_CONFIG
+
+
+class CalendarSubscriptionProfile(BaseModel):
+    id: str
+    name: str
+    kind: Literal["built_in", "custom"] = "built_in"
+    lesson_mode: Literal["all", "exams_only"] = "all"
+    selected: bool = False
+    can_delete: bool = False
+    entity_type: str | None = None
+    entity_id: str | None = None
+    entity_name: str | None = None
+    modules: list[str] = Field(default_factory=list)
+    module_count: int = 0
+    subscription_count: int = 0
+    scope_label: str | None = None
+    links: CalendarSubscriptionLinks = Field(default_factory=CalendarSubscriptionLinks)
+    health: CalendarSubscriptionHealth = Field(default_factory=CalendarSubscriptionHealth)
+
+    model_config = BASE_CONFIG
+
+
+class CalendarSubscriptionResponse(BaseModel):
+    enabled: bool = False
+    sync_enabled: bool = True
+    selected_profile_id: str | None = None
+    profile_limit: int = 0
+    http_url: str | None = None
+    webcal_url: str | None = None
+    download_url: str | None = None
+    preview_url: str | None = None
+    masked_http_url: str | None = None
+    eligibility: CalendarSubscriptionEligibility = Field(
+        default_factory=CalendarSubscriptionEligibility
+    )
+    source_summary: CalendarSubscriptionSourceSummary = Field(
+        default_factory=CalendarSubscriptionSourceSummary
+    )
+    profiles: list[CalendarSubscriptionProfile] = Field(default_factory=list)
+
+    model_config = BASE_CONFIG
+
+
+class CalendarSubscriptionToggleRequest(BaseModel):
+    enabled: bool
+
+
+class CalendarSubscriptionProfileCreateRequest(BaseModel):
+    entity_type: str = Field(..., min_length=1, max_length=32)
+    entity_id: str = Field(..., min_length=1, max_length=128)
+    entity_name: str = Field(..., min_length=1, max_length=255)
+    lesson_mode: Literal["all", "exams_only"] = "all"
+    modules: list[str] = Field(default_factory=list)
+
+
+class CalendarSubscriptionProfileSelectRequest(BaseModel):
+    profile_id: str = Field(..., min_length=1, max_length=64)

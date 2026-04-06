@@ -53,7 +53,7 @@ from shared_lib.database import close_db_pool, init_db_pool
 from .auth import get_current_user  # РРјРїРѕСЂС‚РёСЂСѓРµРј РЅР°С€Сѓ С„СѓРЅРєС†РёСЋ
 from .routers import (
     auth_router,
-    calendar_router,
+    calendar_router_v2 as calendar_router,
     schedule_router,
     stats_router,
     studio_router,

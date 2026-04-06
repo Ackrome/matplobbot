@@ -63,6 +63,17 @@ def _get_lesson_visuals(kind: str) -> tuple[str, str]:
     return LESSON_STYLES.get(kind, ("🟦", kind))
 
 
+def _get_simple_lesson_type(kind: str) -> str:
+    normalized_kind = (kind or "").lower()
+    if "лекци" in normalized_kind:
+        return "Lecture"
+    if "практич" in normalized_kind or "семинар" in normalized_kind or "лаборат" in normalized_kind:
+        return "Seminar"
+    if "экзам" in normalized_kind or "аттестация" in normalized_kind or "зачет" in normalized_kind:
+        return "Exam"
+    return "Other"
+
+
 def _get_discipline_name(full_name: str, use_short_names: bool, short_names_map: dict) -> str:
     if not use_short_names:
         return full_name
@@ -582,6 +593,120 @@ def generate_ical_from_aggregated_schedule(schedule_data: list[dict[str, Any]]) 
     return final_bytes
 
 
+def generate_profile_ical_from_aggregated_schedule(
+    schedule_data: list[dict[str, Any]],
+    calendar_name: str = "Расписание (Matplobbot)",
+    calendar_description: str = "Личный календарь расписания Matplobbot",
+    timezone_name: str = "Europe/Moscow",
+) -> bytes:
+    """
+    Генерирует iCal-файл для веб-подписок с более стабильными UID и расширенными метаданными.
+    """
+    from ics import Calendar, Event
+
+    cal = Calendar()
+    calendar_tz = ZoneInfo(timezone_name)
+
+    if schedule_data:
+        for lesson in schedule_data:
+            try:
+                event = Event()
+                emoji, type_name = _get_lesson_visuals(lesson["kindOfWork"])
+
+                source = lesson.get("source_entity", "")
+                source_prefix = f"[{source}] " if source else ""
+                event.name = f"{source_prefix}{emoji} {lesson['discipline']} ({type_name})"
+
+                lesson_date = datetime.strptime(lesson["date"], "%Y-%m-%d").date()
+                start_time = time.fromisoformat(lesson["beginLesson"])
+                end_time = time.fromisoformat(lesson["endLesson"])
+
+                event.begin = datetime.combine(lesson_date, start_time, tzinfo=calendar_tz)
+                event.end = datetime.combine(lesson_date, end_time, tzinfo=calendar_tz)
+
+                location_parts = [
+                    str(lesson.get("auditorium", "")).strip(),
+                    str(lesson.get("building", "")).strip(),
+                ]
+                event.location = ", ".join(part for part in location_parts if part)
+
+                oid = lesson.get("lessonOid")
+                entity_type = lesson.get("source_entity_type", "schedule")
+                entity_id = lesson.get("source_entity_id", "unknown")
+                if oid:
+                    event.uid = f"lesson-{entity_type}-{entity_id}-{oid}@matplobbot.ru"
+                else:
+                    unique_str = "_".join(
+                        [
+                            str(lesson.get("date", "")),
+                            str(lesson.get("beginLesson", "")),
+                            str(lesson.get("discipline", "")),
+                            str(entity_type),
+                            str(entity_id),
+                            str(lesson.get("group", "")),
+                        ]
+                    )
+                    event.uid = f"hash-{hashlib.md5(unique_str.encode()).hexdigest()}@matplobbot.ru"
+
+                desc_lines = []
+                if source:
+                    desc_lines.append(f"Источник: {source}")
+                desc_lines.append(f"Тип: {type_name}")
+
+                lecturer = str(lesson.get("lecturer_title", "")).replace("_", " ").strip()
+                if lecturer:
+                    desc_lines.append(f"Преподаватель: {lecturer}")
+
+                groups = str(lesson.get("group", "")).strip()
+                if groups:
+                    desc_lines.append(f"Группы: {groups}")
+
+                module_name = str(lesson.get("module", "")).strip()
+                if module_name:
+                    desc_lines.append(f"Модуль: {module_name}")
+
+                auditorium = str(lesson.get("auditorium", "")).strip()
+                building = str(lesson.get("building", "")).strip()
+                if auditorium or building:
+                    desc_lines.append(
+                        f"Аудитория: {', '.join(part for part in [auditorium, building] if part)}"
+                    )
+
+                desc_lines.append(
+                    f"Время: {lesson.get('date', '')} {lesson.get('beginLesson', '')}-{lesson.get('endLesson', '')}"
+                )
+                event.description = "\n".join(desc_lines)
+
+                if isinstance(cal.events, list):
+                    cal.events.append(event)
+                else:
+                    cal.events.add(event)
+            except Exception as e:
+                logging.warning(f"Profile iCal Gen Error: {e}")
+                continue
+
+    raw_ics_str = cal.serialize()
+    headers_to_inject = [
+        f"X-WR-CALNAME:{calendar_name}",
+        f"X-WR-CALDESC:{calendar_description}",
+        f"X-WR-TIMEZONE:{timezone_name}",
+        "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
+        "X-PUBLISHED-TTL:PT1H",
+        "PRODID:-//Matplobbot//Schedule//RU",
+    ]
+
+    raw_ics_str = re.sub(r"PRODID:.*?\n", "", raw_ics_str)
+
+    injection_point = "VERSION:2.0"
+    if injection_point in raw_ics_str:
+        raw_ics_str = raw_ics_str.replace(
+            injection_point, f"{injection_point}\n" + "\n".join(headers_to_inject)
+        )
+
+    final_bytes = _enforce_rfc5545_folding(raw_ics_str)
+    return final_bytes
+
+
 def get_semester_bounds() -> tuple[str, str]:
     """
     Возвращает даты начала и конца текущего/предстоящего семестра
@@ -725,6 +850,76 @@ async def get_aggregated_schedule(
 
     # Сортируем по времени
     aggregated_lessons.sort(key=lambda x: (x["date"], x["beginLesson"]))
+    return aggregated_lessons
+
+
+async def get_calendar_aggregated_schedule(
+    subscriptions: list[dict],
+    start_date: date,
+    end_date: date,
+    excluded_types: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Собирает агрегированное расписание для веб-подписок без привязки к Telegram-фильтрам.
+    """
+    excluded_types = excluded_types or []
+    aggregated_lessons: list[dict[str, Any]] = []
+    seen_lesson_keys: set[tuple[Any, ...]] = set()
+    discipline_to_module = await get_discipline_modules_map()
+
+    from shared_lib.database import get_cached_schedule
+
+    for sub in subscriptions:
+        cached_data = await get_cached_schedule(sub["entity_type"], sub["entity_id"])
+        if not cached_data:
+            continue
+
+        for lesson in cached_data:
+            try:
+                lesson_date = datetime.strptime(lesson["date"], "%Y-%m-%d").date()
+            except (KeyError, ValueError):
+                continue
+
+            if not (start_date <= lesson_date <= end_date):
+                continue
+
+            simple_type = _get_simple_lesson_type(lesson.get("kindOfWork", ""))
+            if simple_type in excluded_types:
+                continue
+
+            group_value = lesson.get("group")
+            explicit_module = get_module_name(group_value) if isinstance(group_value, str) else None
+            discipline_name = lesson.get("discipline", "")
+            mapped_module = discipline_to_module.get(discipline_name)
+
+            lesson_copy = lesson.copy()
+            lesson_copy["source_entity"] = sub["entity_name"]
+            lesson_copy["source_subscription_id"] = sub["id"]
+            lesson_copy["source_entity_type"] = sub["entity_type"]
+            lesson_copy["source_entity_id"] = str(sub["entity_id"])
+            lesson_copy["module"] = mapped_module if mapped_module else explicit_module
+            lesson_copy["simple_type"] = simple_type
+
+            dedupe_key = (
+                lesson_copy.get("source_entity_type"),
+                lesson_copy.get("source_entity_id"),
+                lesson_copy.get("lessonOid")
+                or (
+                    lesson_copy.get("date"),
+                    lesson_copy.get("beginLesson"),
+                    lesson_copy.get("endLesson"),
+                    lesson_copy.get("discipline"),
+                    lesson_copy.get("group"),
+                    lesson_copy.get("auditorium"),
+                ),
+            )
+            if dedupe_key in seen_lesson_keys:
+                continue
+
+            seen_lesson_keys.add(dedupe_key)
+            aggregated_lessons.append(lesson_copy)
+
+    aggregated_lessons.sort(key=lambda item: (item["date"], item["beginLesson"]))
     return aggregated_lessons
 
 

@@ -420,27 +420,43 @@ The preference is stored in the same website schedule preferences payload as the
 
 Authorized website users can now open the schedule page and manage their personal calendar subscription link directly from the site.
 
-The website reuses the same private calendar feed format as the bot:
+The website now manages a richer iCal sync model on its own side:
 
-- HTTPS link for copy/paste into calendar clients such as Google Calendar
-- `webcal://` link for Apple Calendar style subscription flows
+- multiple private feed profiles per user
+- built-in feeds for `All classes` and `Exams only`
+- custom feeds saved from the current website schedule page
+- masked private URLs by default with reveal/copy controls
+- Apple, Google, and Outlook specific subscribe instructions
+- test and download actions for the raw `.ics` feed
+- feed health metadata such as event count, next event, cache status, source update time, and last external access
 
 #### How To Use It
 
 1. Sign in on the website.
 2. Open the schedule page.
 3. Find the collapsible `Calendar subscription` section above the main schedule block.
-4. Expand the section to review what the sync includes and how the private link behaves.
-5. Use `Copy link` for Google Calendar or other ICS clients.
-6. Use `Open on iOS / Mac` for Apple Calendar compatible devices.
-7. Use `Reset link` to revoke the old URL and issue a new one.
+4. Expand the section to review eligibility, active subscription counts, feed health, and the currently selected sync profile.
+5. Choose a profile:
+   - `All classes`
+   - `Exams only`
+   - or a saved preset created from the current website schedule page
+6. Use `Copy link` for Google Calendar or other HTTPS ICS clients.
+7. Use `Reveal link` only when you need to inspect the full private URL directly.
+8. Use `Open on iOS / Mac` for Apple Calendar compatible devices.
+9. Use `Test feed` to open the raw `.ics` URL in a new tab.
+10. Use `Download .ics` to fetch the feed once.
+11. Use `Save current view` to create a separate website-owned feed for the currently opened schedule page and its selected modules.
+12. Use `Disable sync` to stop all website calendar feeds temporarily without rotating the secret.
+13. Use `Reset link` to revoke the old private URL and issue a new one immediately.
 
 #### Availability Rules
 
 - the card is shown only for authorized website users
 - the subscription becomes active only for accounts linked to Telegram schedule subscriptions
 - if the account is authorized but not linked to Telegram schedule data, the website shows an unavailable state instead of a link
-- the expanded panel explains the source, scope, time window, and access model of the sync feed
+- website iCal settings are stored in website account preferences and do not reuse Telegram quick filters from Redis
+- the expanded panel explains the source, scope, time window, access model, and current feed health of each sync profile
+- disabling sync makes the public feed URLs stop serving updates until sync is enabled again
 
 #### Backend Endpoints
 
@@ -448,6 +464,17 @@ The website uses these authenticated API endpoints:
 
 - `GET /api/cal/subscription`
 - `POST /api/cal/subscription/reset`
+- `POST /api/cal/subscription/toggle`
+- `POST /api/cal/subscription/select`
+- `POST /api/cal/subscription/profiles`
+- `DELETE /api/cal/subscription/profiles/{profile_id}`
+
+Public feed URLs remain available through the existing secret link and now also support profile-specific routes:
+
+- `GET /api/cal/{secret}.ics`
+- `GET /api/cal/{secret}/profiles/{profile_id}.ics`
+
+Both public feed routes support `?download=1` and now return `ETag` / `Last-Modified` headers for calendar clients.
 
 ## Scheduler Proxy Support
 
@@ -487,7 +514,7 @@ If a scheduler delivery window is reached and every attempted send fails:
 - `/search` adds a single search surface for library and linked GitHub Markdown content.
 - `/search_presets` adds persistent saved searches for library, GitHub, schedule, and global search.
 - website schedule now supports a persistent `Full lecturer name` toggle for desktop table cards
-- authorized website users can manage personal iCal subscription links from the schedule page
+- authorized website users can manage profile-based iCal sync feeds from the schedule page, including current-page presets, masked links, platform guidance, and feed health metadata
 - active search sessions live in Redis
 - saved presets live in `User.settings`
 - scheduler Telegram delivery can use `PROXY_URL`
