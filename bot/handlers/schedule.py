@@ -960,13 +960,17 @@ class ScheduleManager:
             sub_id = int(sub_id_str)
         except ValueError:
             lang = await translator.get_language(callback.from_user.id)
-            await callback.answer(translator.gettext(lang, "module_invalid_button_data"), show_alert=True)
+            await callback.answer(
+                translator.gettext(lang, "module_invalid_button_data"), show_alert=True
+            )
             return
 
         lang = await translator.get_language(callback.from_user.id)
         sub_info = await get_subscription_by_id(sub_id)
         if not sub_info:
-            await callback.answer(translator.gettext(lang, "module_subscription_not_found"), show_alert=True)
+            await callback.answer(
+                translator.gettext(lang, "module_subscription_not_found"), show_alert=True
+            )
             await callback.message.delete()
             return
 
@@ -1322,7 +1326,9 @@ class ScheduleManager:
         except ValueError:
             user_id = callback.from_user.id
             lang = await translator.get_language(user_id)
-            await callback.answer(translator.gettext(lang, "myschedule_invalid_data"), show_alert=True)
+            await callback.answer(
+                translator.gettext(lang, "myschedule_invalid_data"), show_alert=True
+            )
             return
 
         user_id = callback.from_user.id
@@ -1421,7 +1427,9 @@ class ScheduleManager:
 
         builder = InlineKeyboardBuilder()
         builder.row(
-            InlineKeyboardButton(text=translator.gettext(lang, "cal_link_ios_button"), url=http_link)
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "cal_link_ios_button"), url=http_link
+            )
         )
         builder.row(
             InlineKeyboardButton(

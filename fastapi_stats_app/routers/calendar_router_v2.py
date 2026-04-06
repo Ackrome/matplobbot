@@ -864,7 +864,11 @@ async def _render_telegram_filtered_feed(
     all_subs, _ = await get_user_subscriptions(telegram_user_id, page=0, page_size=100)
     active_subs = [subscription for subscription in all_subs if subscription["is_active"]]
     raw_filters = await redis_client.get_user_cache(telegram_user_id, "mysch_filters")
-    filters = raw_filters if isinstance(raw_filters, dict) else {"excluded_subs": [], "excluded_types": []}
+    filters = (
+        raw_filters
+        if isinstance(raw_filters, dict)
+        else {"excluded_subs": [], "excluded_types": []}
+    )
 
     today = date.today()
     start_date = today - timedelta(days=CALENDAR_WINDOW_PAST_DAYS)

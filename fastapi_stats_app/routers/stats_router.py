@@ -80,12 +80,7 @@ def _build_weekly_pdf_html(
         action_type_counts[action_type] = action_type_counts.get(action_type, 0) + 1
 
     summary_rows = "".join(
-        (
-            "<tr>"
-            f"<td>{html.escape(action_type)}</td>"
-            f"<td>{count}</td>"
-            "</tr>"
-        )
+        ("<tr>" f"<td>{html.escape(action_type)}</td>" f"<td>{count}</td>" "</tr>")
         for action_type, count in sorted(
             action_type_counts.items(), key=lambda item: (-item[1], item[0])
         )
@@ -106,9 +101,7 @@ def _build_weekly_pdf_html(
     if not action_rows:
         action_rows = "<tr><td colspan='3'>No actions in this period.</td></tr>"
 
-    period_label = (
-        f"{week_start_date.strftime('%Y-%m-%d')} - {week_end_date.strftime('%Y-%m-%d')}"
-    )
+    period_label = f"{week_start_date.strftime('%Y-%m-%d')} - {week_end_date.strftime('%Y-%m-%d')}"
     return f"""
 <!doctype html>
 <html>

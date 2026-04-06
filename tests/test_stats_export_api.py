@@ -37,7 +37,9 @@ class TestStatsExportAPI(unittest.TestCase):
                 "timestamp": "2026-04-06 10:00:00",
             }
         ]
-        with patch.object(stats_router, "get_all_user_actions", new=AsyncMock(return_value=fake_actions)):
+        with patch.object(
+            stats_router, "get_all_user_actions", new=AsyncMock(return_value=fake_actions)
+        ):
             response = self.client.get("/api/stats/users/1/export_actions")
 
         self.assertEqual(response.status_code, 200)
@@ -52,7 +54,9 @@ class TestStatsExportAPI(unittest.TestCase):
                 "timestamp": "2026-04-05 09:15:00",
             }
         ]
-        with patch.object(stats_router, "get_all_user_actions", new=AsyncMock(return_value=fake_actions)):
+        with patch.object(
+            stats_router, "get_all_user_actions", new=AsyncMock(return_value=fake_actions)
+        ):
             response = self.client.get("/api/stats/users/1/export_actions?format=csv")
 
         self.assertEqual(response.status_code, 200)
@@ -71,7 +75,9 @@ class TestStatsExportAPI(unittest.TestCase):
             }
         ]
         with (
-            patch.object(stats_router, "get_all_user_actions", new=AsyncMock(return_value=fake_actions)),
+            patch.object(
+                stats_router, "get_all_user_actions", new=AsyncMock(return_value=fake_actions)
+            ),
             patch.object(stats_router, "_build_weekly_pdf_bytes", return_value=b"%PDF-1.4\nfake"),
         ):
             response = self.client.get("/api/stats/users/1/export_actions?format=weekly_pdf")
