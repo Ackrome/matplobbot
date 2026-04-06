@@ -326,6 +326,7 @@ async def get_action_users(
     "/users/{user_id}/export_actions",
     summary="Экспорт действий",
     description="Выгружает полную историю действий пользователя.",
+    response_model=None,
     dependencies=[Depends(require_admin)],
 )
 async def export_user_actions(
