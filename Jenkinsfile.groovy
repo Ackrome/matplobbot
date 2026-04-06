@@ -6,10 +6,12 @@ pipeline {
         string(name: 'WORKER_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag for the worker')
         string(name: 'API_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag for the API')
         string(name: 'SCHEDULER_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag for the scheduler')
-        string(name: 'DEPLOY_HOST_FINGERPRINT', defaultValue: '', description: 'Optional pinned SHA256 host key fingerprint for DEPLOY_HOST (format: SHA256:...)')
+        string(name: 'DEPLOY_HOST_FINGERPRINT', defaultValue: '', description: 'Optional override for pinned SHA256 host key fingerprint from APP_VM_SHA256')
     }
 
+
     environment {
+        DEFAULT_DEPLOY_HOST_FINGERPRINT = credentials('APP_VM_SHA256')
         DEPLOY_HOST = 'app-vm.panthera-banjo.ts.net'
         DEPLOY_PATH = '~/matplobbot'
 
@@ -50,24 +52,27 @@ pipeline {
                                 mkdir -p "$HOME/.ssh"
                                 touch "$HOME/.ssh/known_hosts"
 
-                                # Optional strict host key pinning by fingerprint.
-                                # If not configured yet, we keep TOFU mode with a visible warning.
-                                if [ -n "${DEPLOY_HOST_FINGERPRINT:-}" ]; then
-                                  SCANNED_FP="$(ssh-keyscan -t ed25519 "$DEPLOY_HOST" 2>/dev/null | ssh-keygen -lf - -E sha256 | awk 'NR==1 {print $2}')"
-                                  if [ -z "$SCANNED_FP" ]; then
-                                    echo "ERROR: failed to read host fingerprint for $DEPLOY_HOST"
-                                    exit 1
-                                  fi
-                                  if [ "$SCANNED_FP" != "$DEPLOY_HOST_FINGERPRINT" ]; then
-                                    echo "ERROR: host fingerprint mismatch for $DEPLOY_HOST"
-                                    echo "Expected: $DEPLOY_HOST_FINGERPRINT"
-                                    echo "Actual:   $SCANNED_FP"
-                                    exit 1
-                                  fi
-                                  echo "Host fingerprint verified for $DEPLOY_HOST"
-                                else
-                                  echo "WARNING: DEPLOY_HOST_FINGERPRINT is not set; using TOFU host-key trust"
+                                # Strict host key pinning by fingerprint.
+                                # The Jenkins credential APP_VM_SHA256 is the default source.
+                                # The DEPLOY_HOST_FINGERPRINT build parameter can override it when needed.
+                                EFFECTIVE_DEPLOY_HOST_FINGERPRINT="${DEPLOY_HOST_FINGERPRINT:-${DEFAULT_DEPLOY_HOST_FINGERPRINT:-}}"
+                                if [ -z "$EFFECTIVE_DEPLOY_HOST_FINGERPRINT" ]; then
+                                  echo "ERROR: no deploy host fingerprint configured. Set Jenkins credential APP_VM_SHA256 or provide DEPLOY_HOST_FINGERPRINT."
+                                  exit 1
                                 fi
+
+                                SCANNED_FP="$(ssh-keyscan -t ed25519 "$DEPLOY_HOST" 2>/dev/null | ssh-keygen -lf - -E sha256 | awk 'NR==1 {print $2}')"
+                                if [ -z "$SCANNED_FP" ]; then
+                                  echo "ERROR: failed to read host fingerprint for $DEPLOY_HOST"
+                                  exit 1
+                                fi
+                                if [ "$SCANNED_FP" != "$EFFECTIVE_DEPLOY_HOST_FINGERPRINT" ]; then
+                                  echo "ERROR: host fingerprint mismatch for $DEPLOY_HOST"
+                                  echo "Expected: $EFFECTIVE_DEPLOY_HOST_FINGERPRINT"
+                                  echo "Actual:   $SCANNED_FP"
+                                  exit 1
+                                fi
+                                echo "Host fingerprint verified for $DEPLOY_HOST"
 
                                 ssh-keyscan -H "$DEPLOY_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
                                 sort -u "$HOME/.ssh/known_hosts" -o "$HOME/.ssh/known_hosts"
@@ -125,6 +130,26 @@ BASH
                             chmod 600 "$SSH_KEY_FILE"
                             mkdir -p "$HOME/.ssh"
                             touch "$HOME/.ssh/known_hosts"
+
+                            EFFECTIVE_DEPLOY_HOST_FINGERPRINT="${DEPLOY_HOST_FINGERPRINT:-${DEFAULT_DEPLOY_HOST_FINGERPRINT:-}}"
+                            if [ -z "$EFFECTIVE_DEPLOY_HOST_FINGERPRINT" ]; then
+                              echo "ERROR: no deploy host fingerprint configured. Set Jenkins credential APP_VM_SHA256 or provide DEPLOY_HOST_FINGERPRINT."
+                              exit 1
+                            fi
+
+                            SCANNED_FP="$(ssh-keyscan -t ed25519 "$DEPLOY_HOST" 2>/dev/null | ssh-keygen -lf - -E sha256 | awk 'NR==1 {print $2}')"
+                            if [ -z "$SCANNED_FP" ]; then
+                              echo "ERROR: failed to read host fingerprint for $DEPLOY_HOST"
+                              exit 1
+                            fi
+                            if [ "$SCANNED_FP" != "$EFFECTIVE_DEPLOY_HOST_FINGERPRINT" ]; then
+                              echo "ERROR: host fingerprint mismatch for $DEPLOY_HOST"
+                              echo "Expected: $EFFECTIVE_DEPLOY_HOST_FINGERPRINT"
+                              echo "Actual:   $SCANNED_FP"
+                              exit 1
+                            fi
+                            echo "Host fingerprint verified for $DEPLOY_HOST"
+
                             ssh-keyscan -H "$DEPLOY_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
                             sort -u "$HOME/.ssh/known_hosts" -o "$HOME/.ssh/known_hosts"
 
@@ -272,6 +297,26 @@ ${clippedLogTail}
                             chmod 600 "$SSH_KEY_FILE"
                             mkdir -p "$HOME/.ssh"
                             touch "$HOME/.ssh/known_hosts"
+
+                            EFFECTIVE_DEPLOY_HOST_FINGERPRINT="${DEPLOY_HOST_FINGERPRINT:-${DEFAULT_DEPLOY_HOST_FINGERPRINT:-}}"
+                            if [ -z "$EFFECTIVE_DEPLOY_HOST_FINGERPRINT" ]; then
+                              echo "ERROR: no deploy host fingerprint configured. Set Jenkins credential APP_VM_SHA256 or provide DEPLOY_HOST_FINGERPRINT."
+                              exit 1
+                            fi
+
+                            SCANNED_FP="$(ssh-keyscan -t ed25519 "$DEPLOY_HOST" 2>/dev/null | ssh-keygen -lf - -E sha256 | awk 'NR==1 {print $2}')"
+                            if [ -z "$SCANNED_FP" ]; then
+                              echo "ERROR: failed to read host fingerprint for $DEPLOY_HOST"
+                              exit 1
+                            fi
+                            if [ "$SCANNED_FP" != "$EFFECTIVE_DEPLOY_HOST_FINGERPRINT" ]; then
+                              echo "ERROR: host fingerprint mismatch for $DEPLOY_HOST"
+                              echo "Expected: $EFFECTIVE_DEPLOY_HOST_FINGERPRINT"
+                              echo "Actual:   $SCANNED_FP"
+                              exit 1
+                            fi
+                            echo "Host fingerprint verified for $DEPLOY_HOST"
+
                             ssh-keyscan -H "$DEPLOY_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
                             sort -u "$HOME/.ssh/known_hosts" -o "$HOME/.ssh/known_hosts"
                             SSH_OPTS="-i $SSH_KEY_FILE -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"

@@ -509,6 +509,21 @@ If a scheduler delivery window is reached and every attempted send fails:
 - the failure is visible in logs
 - the run no longer appears successful only because APScheduler itself stayed alive
 
+## Jenkins Deploy Host Fingerprint
+
+Jenkins deploy SSH now verifies the deploy host against a pinned SHA256 host fingerprint before opening an SSH session.
+
+### Setup
+
+1. In Jenkins, create a Secret Text credential with id `APP_VM_SHA256`.
+2. Put the deploy host ED25519 fingerprint there in the form `SHA256:...`.
+3. The pipeline reads that credential by default for deploy, smoke-check, and deploy-host fallback notification SSH access.
+
+### Optional Override
+
+- The build parameter `DEPLOY_HOST_FINGERPRINT` can still be used as a one-off override.
+- If both the override and `APP_VM_SHA256` are empty, the pipeline now fails instead of falling back to TOFU host trust.
+
 ## Maintainer Summary
 
 - `/search` adds a single search surface for library and linked GitHub Markdown content.
@@ -517,4 +532,5 @@ If a scheduler delivery window is reached and every attempted send fails:
 - authorized website users can manage profile-based iCal sync feeds from the schedule page, including current-page presets, masked links, platform guidance, and feed health metadata
 - active search sessions live in Redis
 - saved presets live in `User.settings`
+- Jenkins deploy SSH uses pinned host fingerprint verification from `APP_VM_SHA256` by default
 - scheduler Telegram delivery can use `PROXY_URL`
