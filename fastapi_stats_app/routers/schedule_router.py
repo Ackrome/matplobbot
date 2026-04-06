@@ -192,6 +192,7 @@ async def search_entity(
 
     return []
 
+
 @router.get("/cached_list")
 async def get_cached_list(db: AsyncSession = Depends(get_db_session_dependency)):
     """Возвращает список недавно закэшированных групп для правой панели."""
@@ -271,4 +272,3 @@ async def get_schedule_data(
     except Exception as e:
         logger.error(f"Failed to fetch schedule for website: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
-
