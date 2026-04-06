@@ -45,7 +45,7 @@ const I18N = {
         "schedule.meta.title": "Schedule | ITISHCHENKO",
         "schedule.heading": "Schedule",
         "schedule.offline.available": "Available offline",
-        "schedule.search.placeholder": "Find a group or lecturer...",
+        "schedule.search.placeholder": "Find a group, lecturer, or auditorium...",
         "schedule.today": "Today",
         "schedule.filters.mobile": "Filters and modules",
         "schedule.filters.desktop": "Filters and modules",
@@ -72,6 +72,9 @@ const I18N = {
         "schedule.search.error": "Search failed or the server is unavailable.",
         "schedule.search.empty": "Nothing found",
         "schedule.search.cacheBadge": "CACHE",
+        "schedule.search.type.group": "Group",
+        "schedule.search.type.person": "Lecturer",
+        "schedule.search.type.auditorium": "Auditorium",
         "schedule.error.load": "Failed to load schedule.",
         "schedule.table.time": "Time",
         "schedule.state.emptyWeek": "No classes this week.",
@@ -194,6 +197,10 @@ const I18N = {
 };
 
 Object.assign(I18N.ru, {
+    "schedule.search.placeholder": "РќР°Р№С‚Рё РіСЂСѓРїРїСѓ, РїСЂРµРїРѕРґР°РІР°С‚РµР»СЏ РёР»Рё Р°СѓРґРёС‚РѕСЂРёСЋ...",
+    "schedule.search.type.group": "Р“СЂСѓРїРїР°",
+    "schedule.search.type.person": "РџСЂРµРїРѕРґР°РІР°С‚РµР»СЊ",
+    "schedule.search.type.auditorium": "РђСѓРґРёС‚РѕСЂРёСЏ",
     "schedule.filters.fullLecturer": "Полное имя преподавателя",
     "schedule.calendar.eyebrow": "Синхронизация",
     "schedule.calendar.title": "Подписка на календарь",

@@ -27,8 +27,29 @@ This document covers the user-facing bot, scheduler, and website features curren
 
 | Feature | Entry point | Purpose |
 | --- | --- | --- |
+| Unified schedule search | Website schedule page search bar | Find groups, lecturers, and auditoriums from one search field |
 | Full lecturer name toggle | Website schedule page filters | Show the full lecturer name in desktop table cards |
 | iCal subscription links | Website schedule page for authorized users | Copy or rotate a personal calendar subscription link |
+
+## Website Schedule Search
+
+### Purpose
+
+The website schedule search bar supports mixed search across:
+
+- groups
+- lecturers
+- auditoriums
+
+Users no longer need a separate search mode for each schedule entity type.
+
+### User Flow
+
+1. Open the website schedule page.
+2. Type at least two characters into the search bar.
+3. The dropdown returns matching groups, lecturers, and auditoriums together.
+4. Each result shows its entity type badge.
+5. Clicking any result loads the matching schedule in the same page.
 
 ## Unified Global Search
 
@@ -528,6 +549,7 @@ Jenkins deploy SSH now verifies the deploy host against a pinned SHA256 host fin
 
 - `/search` adds a single search surface for library and linked GitHub Markdown content.
 - `/search_presets` adds persistent saved searches for library, GitHub, schedule, and global search.
+- website schedule search now returns groups, lecturers, and auditoriums from one search field
 - website schedule now supports a persistent `Full lecturer name` toggle for desktop table cards
 - authorized website users can manage profile-based iCal sync feeds from the schedule page, including current-page presets, masked links, platform guidance, and feed health metadata
 - active search sessions live in Redis

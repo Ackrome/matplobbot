@@ -21,6 +21,21 @@ from shared_lib.services.university_api import RuzAPIError, create_ruz_api_clien
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 logger = logging.getLogger(__name__)
+SEARCH_ENTITY_TYPES = ("group", "person", "auditorium")
+SEARCH_TYPE_ALIASES = {
+    "all": "all",
+    "group": "group",
+    "person": "person",
+    "lecturer": "person",
+    "teacher": "person",
+    "auditorium": "auditorium",
+    "room": "auditorium",
+}
+SEARCH_TYPE_DESCRIPTIONS = {
+    "group": "Group",
+    "person": "Lecturer",
+    "auditorium": "Auditorium",
+}
 
 
 def get_shared_http_session(request: Request) -> aiohttp.ClientSession:
@@ -30,13 +45,147 @@ def get_shared_http_session(request: Request) -> aiohttp.ClientSession:
     return http_session
 
 
+def _normalize_search_type(search_type: str | None) -> str:
+    normalized = SEARCH_TYPE_ALIASES.get((search_type or "all").strip().lower())
+    if not normalized:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported schedule search type. Use all, group, person, or auditorium.",
+        )
+    return normalized
+
+
+def _normalize_search_results(
+    raw_results: list[dict] | None, entity_type: str, *, is_offline: bool = False
+) -> list[dict]:
+    normalized_results = []
+    default_description = SEARCH_TYPE_DESCRIPTIONS[entity_type]
+
+    for item in raw_results or []:
+        item_id = str(item.get("id") or "").strip()
+        label = str(item.get("label") or item.get("name") or "").strip()
+        if not item_id or not label:
+            continue
+
+        normalized_results.append(
+            {
+                "id": item_id,
+                "label": label,
+                "description": str(item.get("description") or default_description),
+                "type": entity_type,
+                "is_offline": bool(item.get("is_offline", is_offline)),
+            }
+        )
+
+    return normalized_results
+
+
+async def _search_single_entity_type(
+    term: str,
+    entity_type: str,
+    db: AsyncSession,
+    client,
+    *,
+    strict_unavailable: bool,
+) -> tuple[list[dict], bool]:
+    try:
+        api_results = await client.search(term, entity_type)
+        return _normalize_search_results(api_results, entity_type), False
+    except RuzAPIError:
+        logger.warning(
+            "RUZ API search failed for '%s' (%s). Falling back to local cache.",
+            term,
+            entity_type,
+        )
+        cached_results = await search_cached_entities(db, term, entity_type)
+        normalized_cached = _normalize_search_results(
+            cached_results, entity_type, is_offline=True
+        )
+        if normalized_cached:
+            return normalized_cached, False
+        if strict_unavailable:
+            raise HTTPException(
+                status_code=503,
+                detail="University search is unavailable and no cached matches were found.",
+            )
+        return [], True
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Unexpected error during schedule search for '%s' (%s): %s",
+            term,
+            entity_type,
+            e,
+            exc_info=True,
+        )
+        if strict_unavailable:
+            raise HTTPException(status_code=500, detail="Internal server error")
+        return [], True
+
+
+def _merge_search_results(results_by_type: dict[str, list[dict]]) -> list[dict]:
+    merged_results = []
+    seen_ids: set[tuple[str, str]] = set()
+
+    for entity_type in SEARCH_ENTITY_TYPES:
+        for item in results_by_type.get(entity_type, []):
+            identity = (item["type"], item["id"])
+            if identity in seen_ids:
+                continue
+            seen_ids.add(identity)
+            merged_results.append(item)
+
+    return merged_results[:30]
+
+
 @router.get("/search")
 async def search_entity(
     term: str,
-    type: str = "group",
+    type: str = "all",
     db: AsyncSession = Depends(get_db_session_dependency),
     http_session: aiohttp.ClientSession = Depends(get_shared_http_session),
 ):
+    search_type = _normalize_search_type(type)
+    client = create_ruz_api_client(http_session)
+
+    if search_type != "all":
+        results, _ = await _search_single_entity_type(
+            term,
+            search_type,
+            db,
+            client,
+            strict_unavailable=True,
+        )
+        return results
+
+    results_by_type: dict[str, list[dict]] = {}
+    unavailable_types = 0
+
+    for entity_type in SEARCH_ENTITY_TYPES:
+        results, is_unavailable = await _search_single_entity_type(
+            term,
+            entity_type,
+            db,
+            client,
+            strict_unavailable=False,
+        )
+        results_by_type[entity_type] = results
+        if is_unavailable:
+            unavailable_types += 1
+
+    merged_results = _merge_search_results(results_by_type)
+    if merged_results:
+        return merged_results
+
+    if unavailable_types == len(SEARCH_ENTITY_TYPES):
+        raise HTTPException(
+            status_code=503,
+            detail="University search is unavailable and no cached matches were found.",
+        )
+
+    return []
+
     client = create_ruz_api_client(http_session)
     try:
         return await client.search(term, type)

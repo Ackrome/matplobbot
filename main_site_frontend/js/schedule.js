@@ -633,7 +633,7 @@ groupInput.addEventListener('input', debounce(async (e) => {
     }
 
     try {
-        const res = await fetch(`${API_BASE}/schedule/search?term=${encodeURIComponent(query)}`);
+        const res = await fetch(`${API_BASE}/schedule/search?term=${encodeURIComponent(query)}&type=all`);
         if (!res.ok) throw new Error("API Error");
         const data = await res.json();
         renderSearchResults(data);
@@ -643,6 +643,29 @@ groupInput.addEventListener('input', debounce(async (e) => {
     }
 }, 300));
 
+function getSearchResultTypeMeta(type) {
+    const normalizedType = String(type || 'group').toLowerCase();
+
+    if (normalizedType === 'person') {
+        return {
+            label: t('schedule.search.type.person', 'Lecturer'),
+            badgeClass: 'bg-sky-100 text-sky-700'
+        };
+    }
+
+    if (normalizedType === 'auditorium') {
+        return {
+            label: t('schedule.search.type.auditorium', 'Auditorium'),
+            badgeClass: 'bg-emerald-100 text-emerald-700'
+        };
+    }
+
+    return {
+        label: t('schedule.search.type.group', 'Group'),
+        badgeClass: 'bg-violet-100 text-violet-700'
+    };
+}
+
 function renderSearchResults(results) {
     const normalizedResults = Array.isArray(results) ? results : [];
     latestSearchResults = normalizedResults;
@@ -651,6 +674,7 @@ function renderSearchResults(results) {
         resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-slate-500 text-center">${escapeHtml(t('schedule.search.empty', 'Nothing found'))}</div>`;
     } else {
         resultsBox.innerHTML = normalizedResults.map(item => {
+            const typeMeta = getSearchResultTypeMeta(item.type);
             const offlineBadge = item.is_offline
                 ? `<span class="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-600">⚡ ${escapeHtml(t('schedule.search.cacheBadge', 'CACHE'))}</span>`
                 : '';
@@ -658,11 +682,15 @@ function renderSearchResults(results) {
             const itemId = escapeJsString(item.id);
             const itemLabel = escapeJsString(item.label);
             const labelText = escapeHtml(item.label);
-            const descriptionText = escapeHtml(item.description || '');
+            const descriptionText = escapeHtml(item.description || typeMeta.label);
             return `
             <div class="px-6 py-3 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-none"
                  onclick="loadSchedule('${itemType}', '${itemId}', '${itemLabel}')">
-                <div class="font-bold text-slate-800 flex items-center">${labelText} ${offlineBadge}</div>
+                <div class="font-bold text-slate-800 flex items-center flex-wrap gap-2">
+                    <span>${labelText}</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${typeMeta.badgeClass}">${escapeHtml(typeMeta.label)}</span>
+                    ${offlineBadge}
+                </div>
                 <div class="text-xs text-slate-400 mt-0.5">${descriptionText}</div>
             </div>`;
         }).join('');
