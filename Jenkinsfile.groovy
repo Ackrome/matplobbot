@@ -80,8 +80,37 @@ pipeline {
                                 SSH_OPTS="-i $SSH_KEY_FILE -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
 
                                 # Keep deployment repo deterministic and recover from local drift.
+                                # If deploy path exists but is not a git worktree, preserve it and bootstrap fresh clone.
                                 # Reset first, then switch branch, so tracked local edits cannot block checkout.
-                                ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && git fetch origin main && git reset --hard && git clean -fd && git checkout -B main origin/main && git reset --hard origin/main && git clean -fd"
+                                ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' REPO_URL='https://github.com/Ackrome/matplobbot' bash -se" <<'REMOTE_EOF'
+set -euo pipefail
+
+DEPLOY_DIR="${DEPLOY_PATH/#\~/$HOME}"
+if [ -e "$DEPLOY_DIR" ] && [ ! -d "$DEPLOY_DIR" ]; then
+  echo "ERROR: deploy path is not a directory: $DEPLOY_DIR"
+  exit 1
+fi
+
+if ! git -C "$DEPLOY_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  mkdir -p "$DEPLOY_DIR"
+  if [ -n "$(ls -A "$DEPLOY_DIR" 2>/dev/null)" ]; then
+    BACKUP_DIR="${DEPLOY_DIR}.pre_git_$(date +%Y%m%d%H%M%S)"
+    mv "$DEPLOY_DIR" "$BACKUP_DIR"
+    mkdir -p "$DEPLOY_DIR"
+    echo "Existing non-git deploy directory moved to $BACKUP_DIR"
+  fi
+  git clone --origin origin "$REPO_URL" "$DEPLOY_DIR"
+fi
+
+cd "$DEPLOY_DIR"
+git remote set-url origin "$REPO_URL"
+git fetch origin main
+git reset --hard
+git clean -fd
+git checkout -B main origin/main
+git reset --hard origin/main
+git clean -fd
+REMOTE_EOF
 
                                 # Generate .env on remote host for production services.
                                 ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cat > $DEPLOY_PATH/.env" <<EOF
