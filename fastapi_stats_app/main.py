@@ -11,7 +11,6 @@ from fastapi_stats_app.config import (  # РРјРїРѕСЂС‚РёСЂСѓ�
     FASTAPI_LOG_FILE_NAME,
     LOG_DIR,
 )
-
 from shared_lib.request_context import configure_correlation_logging
 
 load_dotenv()  # Р—Р°РіСЂСѓР¶Р°РµРј .env
