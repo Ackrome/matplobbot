@@ -8,7 +8,9 @@ except ModuleNotFoundError:
     SHARED_DB_AVAILABLE = False
 
 
-@unittest.skipUnless(SHARED_DB_AVAILABLE, "database dependencies are not installed in this environment")
+@unittest.skipUnless(
+    SHARED_DB_AVAILABLE, "database dependencies are not installed in this environment"
+)
 class TestMyScheduleFiltersSettings(unittest.IsolatedAsyncioTestCase):
     async def test_normalize_filters_sanitizes_values(self):
         normalized = shared_database.normalize_myschedule_filters(
@@ -30,7 +32,10 @@ class TestMyScheduleFiltersSettings(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(filters, {"excluded_subs": [], "excluded_types": []})
 
     async def test_save_user_myschedule_filters_persists_normalized_payload(self):
-        fake_settings = {"language": "en", "myschedule_filters": {"excluded_subs": [], "excluded_types": []}}
+        fake_settings = {
+            "language": "en",
+            "myschedule_filters": {"excluded_subs": [], "excluded_types": []},
+        }
         with (
             patch.object(
                 shared_database,

@@ -107,7 +107,9 @@ def _emit_admin_send_audit(
     }
     if error:
         payload["error"] = error
-    logger.info("admin_send_message_audit=%s", json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    logger.info(
+        "admin_send_message_audit=%s", json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    )
 
 
 def _parse_export_timestamp(value: str | None) -> datetime | None:

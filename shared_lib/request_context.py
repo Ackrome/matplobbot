@@ -1,8 +1,8 @@
 import contextvars
 import logging
 import uuid
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 CORRELATION_ID_HEADER = "X-Request-ID"
 _correlation_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(

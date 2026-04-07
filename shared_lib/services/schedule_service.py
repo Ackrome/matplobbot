@@ -51,6 +51,7 @@ async def get_schedule_fallback_counters() -> dict[str, int]:
             counters[key] = 0
     return counters
 
+
 # --- Configuration for Lesson Styles ---
 LESSON_STYLES = {
     "Практические (семинарские) занятия": ("🟨", "Семинар"),

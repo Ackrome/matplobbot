@@ -34,6 +34,9 @@ from shared_lib.database import (
     get_subscriptions_for_notification as get_subscriptions_for_notification,
 )
 from shared_lib.database import (
+    get_user_myschedule_filters as get_user_myschedule_filters,
+)
+from shared_lib.database import (
     get_user_repos as get_user_repos,
 )
 from shared_lib.database import (
@@ -41,9 +44,6 @@ from shared_lib.database import (
 )
 from shared_lib.database import (
     get_user_search_presets as get_user_search_presets,
-)
-from shared_lib.database import (
-    get_user_myschedule_filters as get_user_myschedule_filters,
 )
 from shared_lib.database import (
     get_user_settings as get_user_settings,
@@ -70,13 +70,13 @@ from shared_lib.database import (
     remove_user_repo as remove_user_repo,
 )
 from shared_lib.database import (
+    save_user_myschedule_filters as save_user_myschedule_filters,
+)
+from shared_lib.database import (
     save_user_search_preset as save_user_search_preset,
 )
 from shared_lib.database import (
     set_onboarding_completed as set_onboarding_completed,
-)
-from shared_lib.database import (
-    save_user_myschedule_filters as save_user_myschedule_filters,
 )
 from shared_lib.database import (
     update_subscription_hash as update_subscription_hash,
