@@ -1043,13 +1043,34 @@ class ScheduleManager:
         await callback.answer()
 
     async def _get_user_filters(self, user_id: int) -> dict:
-        raw = await redis_client.get_user_cache(user_id, "mysch_filters")
-        if raw:
-            return raw
-        return {"excluded_subs": [], "excluded_types": []}
+        db_filters = await database.get_user_myschedule_filters(user_id)
+        redis_filters = await redis_client.get_user_cache(user_id, "mysch_filters")
+
+        if redis_filters:
+            normalized_redis = {
+                "excluded_subs": [
+                    int(item)
+                    for item in redis_filters.get("excluded_subs", [])
+                    if str(item).strip().isdigit()
+                ],
+                "excluded_types": [
+                    str(item)
+                    for item in redis_filters.get("excluded_types", [])
+                    if str(item) in {"Lecture", "Seminar", "Exam", "Other"}
+                ],
+            }
+            if (
+                db_filters == {"excluded_subs": [], "excluded_types": []}
+                and normalized_redis != db_filters
+            ):
+                db_filters = await database.save_user_myschedule_filters(user_id, normalized_redis)
+
+        await redis_client.set_user_cache(user_id, "mysch_filters", db_filters, ttl=3600)
+        return db_filters
 
     async def _save_user_filters(self, user_id: int, filters: dict):
-        await redis_client.set_user_cache(user_id, "mysch_filters", filters, ttl=3600)
+        normalized = await database.save_user_myschedule_filters(user_id, filters)
+        await redis_client.set_user_cache(user_id, "mysch_filters", normalized, ttl=3600)
 
     async def _render_calendar(self, callback: CallbackQuery, year: int, month: int):
         user_id = callback.from_user.id

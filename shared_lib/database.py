@@ -91,9 +91,35 @@ DEFAULT_SETTINGS = {
     "admin_summary_days": [0, 1, 2, 3, 4],
     "show_module_details": True,
     "search_presets": [],
+    "myschedule_filters": {"excluded_subs": [], "excluded_types": []},
 }
 
 MAX_SEARCH_PRESETS = 15
+MYSCHEDULE_FILTER_ALLOWED_TYPES = {"Lecture", "Seminar", "Exam", "Other"}
+
+
+def normalize_myschedule_filters(filters: dict | None) -> dict:
+    raw = filters if isinstance(filters, dict) else {}
+    excluded_subs_raw = raw.get("excluded_subs", [])
+    excluded_types_raw = raw.get("excluded_types", [])
+
+    excluded_subs: list[int] = []
+    for item in excluded_subs_raw if isinstance(excluded_subs_raw, list) else []:
+        try:
+            excluded_subs.append(int(item))
+        except (TypeError, ValueError):
+            continue
+
+    excluded_types: list[str] = []
+    for item in excluded_types_raw if isinstance(excluded_types_raw, list) else []:
+        normalized = str(item).strip()
+        if normalized in MYSCHEDULE_FILTER_ALLOWED_TYPES:
+            excluded_types.append(normalized)
+
+    # Keep insertion order stable while removing duplicates.
+    unique_subs = list(dict.fromkeys(excluded_subs))
+    unique_types = list(dict.fromkeys(excluded_types))
+    return {"excluded_subs": unique_subs, "excluded_types": unique_types}
 
 
 def upsert_search_preset_entries(
@@ -209,6 +235,19 @@ async def update_user_settings_db(user_id: int, settings: dict):
     async with get_session() as session:
         await session.execute(update(User).where(User.user_id == user_id).values(settings=settings))
         await session.commit()
+
+
+async def get_user_myschedule_filters(user_id: int) -> dict:
+    settings = await get_user_settings(user_id)
+    return normalize_myschedule_filters(settings.get("myschedule_filters"))
+
+
+async def save_user_myschedule_filters(user_id: int, filters: dict) -> dict:
+    settings = await get_user_settings(user_id)
+    normalized = normalize_myschedule_filters(filters)
+    settings["myschedule_filters"] = normalized
+    await update_user_settings_db(user_id, settings)
+    return normalized
 
 
 async def update_chat_settings_db(chat_id: int, settings: dict):

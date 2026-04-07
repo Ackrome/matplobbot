@@ -16,10 +16,13 @@ from shared_lib.database import (
 )
 from shared_lib.services.schedule_service import (
     get_module_name,
+    get_schedule_fallback_counters,
     get_schedule_with_cache_fallback,
     get_unique_modules_hybrid,
 )
 from shared_lib.services.university_api import RuzAPIError, create_ruz_api_client
+
+from ..auth import require_admin
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 logger = logging.getLogger(__name__)
@@ -212,6 +215,15 @@ async def get_cached_list(db: AsyncSession = Depends(get_db_session_dependency))
         for r in result
         if r.group_name
     ]
+
+
+@router.get(
+    "/fallback_counters",
+    dependencies=[Depends(require_admin)],
+)
+async def get_fallback_counters():
+    """Returns counters for schedule source outcomes: API success, cache fallback, and no cache."""
+    return await get_schedule_fallback_counters()
 
 
 @router.get("/data/{type}/{id}")

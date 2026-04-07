@@ -9,17 +9,30 @@ Last updated: 2026-04-07
   - blocked/external: needs Jenkins credential rotation + host user provisioning.
 
 ### P1 - Reliability and Data Safety
-- [ ] Persist `/myschedule` filters in DB-backed user settings (not Redis-only 1h TTL) to avoid silent filter resets.
-- [ ] Add integration test coverage for admin stats endpoints actually used by frontend (`/api/stats/action_users`, profile pagination/sort matrix).
+- [x] Persist `/myschedule` filters in DB-backed user settings (not Redis-only 1h TTL) to avoid silent filter resets.
+- [x] Add integration test coverage for admin stats endpoints actually used by frontend (`/api/stats/action_users`, profile pagination/sort matrix).
+
+### P1 - Security and Observability
+- [x] Add rate limiting and explicit audit metadata for `POST /api/stats/users/{user_id}/send_message` (admin id, target id, timestamp, result).
+- [x] Add explicit allowlists for `sort_by` and `sort_order` in stats/profile endpoints to prevent accidental unsafe query paths in future refactors.
+- [x] Add per-request correlation id in FastAPI logs and propagate it into scheduler-triggered/admin operations for easier incident tracing.
+- [x] Add metrics or counters for schedule API fallback usage (`RUZ API success`, `cache fallback`, `no cache`) to track upstream health.
 
 ### P2 - API and Dashboard
 - [ ] Add range parameters for user action export (`date_from`, `date_to`, timezone) so weekly PDF and CSV are not fixed to "last 7 days only".
 - [ ] Add dashboard UI state for API partial degradation (for example when one stats widget fails but others still load).
 - [ ] Add explicit OpenAPI docs/examples for schedule search `type` aliases (`lecturer`, `teacher`, `room`) to reduce frontend/client ambiguity.
+- [ ] Add validation/error response for invalid `base_date` format in `GET /api/schedule/data/{type}/{id}` (current path can raise 500 instead of 400/422).
+- [ ] Define deprecation plan for legacy stats alias `/api/stats/stats/action_users` and remove it after frontend migration window.
 
 ### P2 - Bot UX
 - [ ] Add optional "quick set" onboarding step after `/start` for schedule entity + notification time (skip allowed).
 - [ ] Add `/myschedule` filter presets (for example "only exams", "hide auditorium subscriptions", custom named sets).
+
+### P2 - Quality and Documentation
+- [ ] Add test for deterministic ordering in unified schedule search results when mixed entity types return equal match quality.
+- [ ] Fix mojibake RU OpenAPI summary/description text in FastAPI routers to restore readable API docs.
+- [ ] Add wiki section describing schedule search offline fallback semantics and `is_offline` flag behavior for frontend maintainers.
 
 
 
@@ -27,6 +40,7 @@ Last updated: 2026-04-07
 ## P3
 
 - [ ] Qdrant for search
+- [ ] Add CI matrix run for Python 3.11 and 3.12 to catch version-specific typing/FastAPI regressions earlier.
 
 
 ## Completed In This Iteration

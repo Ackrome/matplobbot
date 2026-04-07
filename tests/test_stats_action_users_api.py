@@ -75,3 +75,58 @@ class TestStatsActionUsersAPI(unittest.TestCase):
         payload = response.json()
         self.assertEqual(len(payload["users"]), 1)
         self.assertEqual(payload["users"][0]["full_name"], "Test User")
+
+    def test_action_users_pagination_sort_matrix(self):
+        with patch.object(
+            stats_router,
+            "get_users_for_action",
+            new=AsyncMock(return_value=self._fake_db_result()),
+        ) as mocked_get_action_users:
+            matrix = [
+                ("full_name", "asc", 1, 15),
+                ("full_name", "desc", 2, 10),
+                ("user_id", "asc", 3, 5),
+                ("username", "desc", 1, 20),
+            ]
+            for sort_by, sort_order, page, page_size in matrix:
+                response = self.client.get(
+                    "/api/stats/action_users",
+                    params={
+                        "action_type": "command",
+                        "action_details": "/start",
+                        "page": page,
+                        "page_size": page_size,
+                        "sort_by": sort_by,
+                        "sort_order": sort_order,
+                    },
+                )
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertEqual(payload["pagination"]["sort_by"], sort_by)
+                self.assertEqual(payload["pagination"]["sort_order"], sort_order)
+                self.assertEqual(payload["pagination"]["current_page"], page)
+                self.assertEqual(payload["pagination"]["page_size"], page_size)
+
+            self.assertEqual(mocked_get_action_users.await_count, len(matrix))
+
+    def test_action_users_rejects_invalid_sort_by(self):
+        response = self.client.get(
+            "/api/stats/action_users",
+            params={
+                "action_type": "command",
+                "action_details": "/start",
+                "sort_by": "unsafe_sql",
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_action_users_rejects_invalid_sort_order(self):
+        response = self.client.get(
+            "/api/stats/action_users",
+            params={
+                "action_type": "command",
+                "action_details": "/start",
+                "sort_order": "drop_table",
+            },
+        )
+        self.assertEqual(response.status_code, 422)

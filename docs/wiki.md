@@ -626,6 +626,99 @@ GET /api/stats/stats/action_users
 - `sort_by` (optional, default `full_name`)
 - `sort_order` (optional, default `asc`)
 
+### Stats Sort Allowlists
+
+#### Purpose
+
+Stats profile and action-users APIs now use explicit allowlists for sorting params.
+
+#### Allowed Values
+
+`GET /api/stats/users/{user_id}/profile`
+
+- `sort_by`: `id`, `action_type`, `action_details`, `timestamp`
+- `sort_order`: `asc`, `desc`
+
+`GET /api/stats/action_users`
+
+- `sort_by`: `user_id`, `full_name`, `username`
+- `sort_order`: `asc`, `desc`
+
+Invalid values are now rejected with `422` instead of silently falling back.
+
+### Admin Message Rate Limit And Audit Metadata
+
+#### Purpose
+
+`POST /api/stats/users/{user_id}/send_message` now has abuse protection and structured audit logs.
+
+#### Behavior
+
+- per-admin rate limit is enforced (default: `12` requests per `60` seconds)
+- limit can be changed with env var:
+
+```text
+ADMIN_SEND_MESSAGE_RATE_LIMIT
+```
+
+- each request writes an audit log entry with:
+  - `admin_id`
+  - `target_id`
+  - `timestamp`
+  - `result` (`success`, `rate_limited`, `telegram_error`, `network_error`, etc.)
+  - `correlation_id`
+
+#### Response
+
+Successful responses now include:
+
+```json
+{
+  "status": "success",
+  "correlation_id": "..."
+}
+```
+
+### Correlation ID In API/Scheduler Logs
+
+#### Purpose
+
+FastAPI and scheduler logs now include correlation ids for incident tracing.
+
+#### FastAPI Usage
+
+- middleware sets request id from `X-Request-ID` if provided
+- otherwise generates one automatically
+- response returns `X-Request-ID` header
+- log format includes `[cid=...]`
+
+#### Scheduler/Admin Propagation
+
+- scheduler jobs now generate operation correlation ids and include them in job logs
+- admin send-message audit logs include the same correlation id
+
+### Schedule Fallback Counters
+
+#### Purpose
+
+Track upstream schedule source health over time.
+
+#### Counters
+
+The shared schedule fetch path now increments Redis-backed counters:
+
+- `ruz_api_success`
+- `cache_fallback`
+- `no_cache`
+
+#### Endpoint
+
+Admin-only endpoint to read counters:
+
+```text
+GET /api/schedule/fallback_counters
+```
+
 ### Localization Completeness And Fallback
 
 #### What Was Added

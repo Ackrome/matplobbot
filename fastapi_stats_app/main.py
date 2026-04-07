@@ -12,6 +12,8 @@ from fastapi_stats_app.config import (  # РРјРїРѕСЂС‚РёСЂСѓ�
     LOG_DIR,
 )
 
+from shared_lib.request_context import configure_correlation_logging
+
 load_dotenv()  # Р—Р°РіСЂСѓР¶Р°РµРј .env
 
 # --- РџРђРўР§ Р”Р›РЇ РџР РћРљРЎР (РєР°Рє РІ Р±РѕС‚Рµ) ---
@@ -34,10 +36,11 @@ LOG_FILE_FASTAPI = os.path.join(
 os.makedirs(LOG_DIR, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(name)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s",
+    format="%(asctime)s - %(levelname)s - [cid=%(correlation_id)s] - %(name)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[logging.FileHandler(LOG_FILE_FASTAPI, encoding="utf-8"), logging.StreamHandler()],
 )
+configure_correlation_logging()
 logger = logging.getLogger(
     __name__
 )  # РџРѕР»СѓС‡Р°РµРј Р»РѕРіРіРµСЂ РїРѕСЃР»Рµ Р±Р°Р·РѕРІРѕР№ РєРѕРЅС„РёРіСѓСЂР°С†РёРё
@@ -51,6 +54,7 @@ from fastapi.templating import Jinja2Templates
 from shared_lib.database import close_db_pool, init_db_pool
 
 from .auth import get_current_user  # РРјРїРѕСЂС‚РёСЂСѓРµРј РЅР°С€Сѓ С„СѓРЅРєС†РёСЋ
+from .middleware import CorrelationIdMiddleware
 from .routers import (
     auth_router,
     schedule_router,
@@ -79,6 +83,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Bot Stats API", version="0.1.0", lifespan=lifespan)
+app.add_middleware(CorrelationIdMiddleware)
 
 # РќР°СЃС‚СЂРѕР№РєР° CORS РґР»СЏ С„СЂРѕРЅС‚РµРЅРґР°
 app.add_middleware(

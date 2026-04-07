@@ -15,6 +15,7 @@ try:
     fake_schedule_service = types.ModuleType("shared_lib.services.schedule_service")
     fake_schedule_service.get_module_name = lambda *_args, **_kwargs: None
     fake_schedule_service.get_schedule_with_cache_fallback = AsyncMock(return_value=([], False))
+    fake_schedule_service.get_schedule_fallback_counters = AsyncMock(return_value={})
     fake_schedule_service.get_unique_modules_hybrid = AsyncMock(return_value=[])
 
     with patch.dict(
@@ -182,3 +183,31 @@ class TestScheduleSearchAPI(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["source_updated_at"], parsed_at.isoformat())
+
+    def test_schedule_fallback_counters_endpoint(self):
+        self.app.dependency_overrides[schedule_router.require_admin] = lambda: {
+            "id": 1,
+            "role": "admin",
+        }
+        with patch.object(
+            schedule_router,
+            "get_schedule_fallback_counters",
+            AsyncMock(
+                return_value={
+                    "ruz_api_success": 10,
+                    "cache_fallback": 3,
+                    "no_cache": 1,
+                }
+            ),
+        ):
+            response = self.client.get("/api/schedule/fallback_counters")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "ruz_api_success": 10,
+                "cache_fallback": 3,
+                "no_cache": 1,
+            },
+        )

@@ -19,9 +19,37 @@ from shared_lib.database import (
     get_user_settings,
 )
 from shared_lib.i18n import translator
+from shared_lib.redis_client import redis_client
 
 # Cache for short names to avoid frequent DB calls
 short_name_cache = TTLCache(maxsize=1, ttl=300)  # Cache for 5 minutes
+SCHEDULE_FALLBACK_METRIC_KEY = "metrics:schedule_fallback_usage"
+SCHEDULE_FALLBACK_METRIC_FIELDS = ("ruz_api_success", "cache_fallback", "no_cache")
+
+
+async def _record_schedule_fallback_metric(outcome: str) -> None:
+    if outcome not in SCHEDULE_FALLBACK_METRIC_FIELDS:
+        return
+    try:
+        await redis_client.client.hincrby(SCHEDULE_FALLBACK_METRIC_KEY, outcome, 1)
+    except Exception as exc:
+        logging.warning("Failed to update schedule fallback metric '%s': %s", outcome, exc)
+
+
+async def get_schedule_fallback_counters() -> dict[str, int]:
+    counters = {key: 0 for key in SCHEDULE_FALLBACK_METRIC_FIELDS}
+    try:
+        raw = await redis_client.client.hgetall(SCHEDULE_FALLBACK_METRIC_KEY)
+    except Exception as exc:
+        logging.warning("Failed to read schedule fallback counters: %s", exc)
+        return counters
+
+    for key in SCHEDULE_FALLBACK_METRIC_FIELDS:
+        try:
+            counters[key] = int(raw.get(key, 0))
+        except (TypeError, ValueError):
+            counters[key] = 0
+    return counters
 
 # --- Configuration for Lesson Styles ---
 LESSON_STYLES = {
@@ -998,6 +1026,7 @@ async def get_schedule_with_cache_fallback(
 
     # 2. Если кэш старый или его нет - идем в API за ВЕCЬМ семестром
     api_error = False
+    fetched_from_api = False
     if not cache_is_fresh:
         try:
             # Берем широкие рамки семестра, а не один день!
@@ -1009,6 +1038,7 @@ async def get_schedule_with_cache_fallback(
             api_data = await ruz_api_client.get_schedule(
                 entity_type, entity_id, start=sem_start, finish=sem_end
             )
+            fetched_from_api = True
 
             # ТРЕБОВАНИЕ: Сохраняем в БД, только если пришло не пустое
             if api_data and len(api_data) > 0:
@@ -1029,6 +1059,7 @@ async def get_schedule_with_cache_fallback(
 
     # 3. Фатальная ошибка: кэша нет вообще, и API лежит
     if not cached_data:
+        await _record_schedule_fallback_metric("no_cache")
         raise ConnectionError("Расписание недоступно. API ВУЗа не отвечает, а кэш пуст.")
 
     # 4. Фильтруем данные (из кэша или свежие) под запрошенные даты
@@ -1047,6 +1078,10 @@ async def get_schedule_with_cache_fallback(
             continue
 
     # Если была ошибка API, но мы отдали старый кэш -> is_offline_mode = True
-    is_offline = api_error or (not cache_is_fresh and not cached_data)
+    if api_error:
+        await _record_schedule_fallback_metric("cache_fallback")
+    elif fetched_from_api:
+        await _record_schedule_fallback_metric("ruz_api_success")
+    is_offline = api_error
 
     return filtered_schedule, is_offline

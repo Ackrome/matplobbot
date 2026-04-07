@@ -23,6 +23,7 @@ from shared_lib.database import (
 )
 from shared_lib.i18n import translator
 from shared_lib.redis_client import redis_client
+from shared_lib.request_context import generate_correlation_id, set_correlation_id
 from shared_lib.services.schedule_service import diff_schedules, format_schedule
 
 # We need to import these from the bot's services.
@@ -112,6 +113,10 @@ async def send_daily_schedules(
     This job runs every minute, checks for subscriptions for the current time,
     and sends the schedule for the next day.
     """
+    correlation_id = generate_correlation_id(prefix="sched-daily")
+    set_correlation_id(correlation_id)
+    logger.info("Starting daily schedules job (cid=%s).", correlation_id)
+
     # Use timezone-aware datetime for Moscow
     moscow_tz = ZoneInfo("Europe/Moscow")
     now_in_moscow = datetime.now(moscow_tz)
@@ -131,7 +136,11 @@ async def send_daily_schedules(
         grouped_subscriptions[entity_key].append(sub)
 
     logger.info(
-        f"Found {len(subscriptions)} subscriptions across {len(grouped_subscriptions)} unique entities for {current_time_str}."
+        "Found %s subscriptions across %s unique entities for %s (cid=%s).",
+        len(subscriptions),
+        len(grouped_subscriptions),
+        current_time_str,
+        correlation_id,
     )
 
     entity_fetch_successes = 0
@@ -146,7 +155,12 @@ async def send_daily_schedules(
 
         try:
             logger.info(
-                f"Fetching schedule for entity '{entity_name_for_log}' ({entity_type}:{entity_id}) for {len(subs_for_entity)} subscribers."
+                "Fetching schedule for entity '%s' (%s:%s) for %s subscribers (cid=%s).",
+                entity_name_for_log,
+                entity_type,
+                entity_id,
+                len(subs_for_entity),
+                correlation_id,
             )
             schedule_data = await ruz_api_client.get_schedule(
                 entity_type, entity_id, start=start_date_str, finish=end_date_str
@@ -185,18 +199,27 @@ async def send_daily_schedules(
                 except Exception as e:
                     delivery_failures += 1
                     logger.error(
-                        f"Failed to send to individual subscriber (sub_id: {sub['id']}, chat_id: {sub['chat_id']}): {e}",
+                        "Failed to send to individual subscriber (sub_id: %s, chat_id: %s, cid=%s): %s",
+                        sub["id"],
+                        sub["chat_id"],
+                        correlation_id,
+                        e,
                         exc_info=True,
                     )
 
         except Exception as e:
             entity_fetch_failures += 1
             logger.error(
-                f"Failed to process entity group '{entity_name_for_log}': {e}", exc_info=True
+                "Failed to process entity group '%s' (cid=%s): %s",
+                entity_name_for_log,
+                correlation_id,
+                e,
+                exc_info=True,
             )
 
     logger.info(
-        "Daily schedules job finished. Entity fetches: %s succeeded, %s failed. Deliveries: %s attempted, %s succeeded, %s failed.",
+        "Daily schedules job finished (cid=%s). Entity fetches: %s succeeded, %s failed. Deliveries: %s attempted, %s succeeded, %s failed.",
+        correlation_id,
         entity_fetch_successes,
         entity_fetch_failures,
         subscriber_attempts,
@@ -480,6 +503,10 @@ async def send_admin_summary(
     Runs every minute, checks if it's time to send a daily summary to admins.
     Generates the summary directly instead of triggering a command via text.
     """
+    correlation_id = generate_correlation_id(prefix="sched-admin")
+    set_correlation_id(correlation_id)
+    logger.info("Starting admin summary job (cid=%s).", correlation_id)
+
     from .config import ADMIN_USER_IDS
 
     if not ADMIN_USER_IDS:
@@ -501,7 +528,11 @@ async def send_admin_summary(
 
             if summary_time == current_time_str and current_weekday in summary_days:
                 matched_admins += 1
-                logger.info(f"Time match for admin {admin_id}. Sending daily summary.")
+                logger.info(
+                    "Time match for admin %s. Sending daily summary (cid=%s).",
+                    admin_id,
+                    correlation_id,
+                )
                 lang = await translator.get_language(admin_id)
 
                 # --- 1. Build the Main Summary Text ---
@@ -618,17 +649,25 @@ async def send_admin_summary(
 
                 except Exception as e:
                     logger.error(
-                        f"Failed to process pending offers in scheduler: {e}", exc_info=True
+                        "Failed to process pending offers in scheduler (cid=%s): %s",
+                        correlation_id,
+                        e,
+                        exc_info=True,
                     )
 
         except Exception as e:
             logger.error(
-                f"Failed to process daily summary loop for admin {admin_id}: {e}", exc_info=True
+                "Failed to process daily summary loop for admin %s (cid=%s): %s",
+                admin_id,
+                correlation_id,
+                e,
+                exc_info=True,
             )
 
     if matched_admins:
         logger.info(
-            "Admin summary job finished. Matched admins: %s. Deliveries: %s attempted, %s succeeded, %s failed.",
+            "Admin summary job finished (cid=%s). Matched admins: %s. Deliveries: %s attempted, %s succeeded, %s failed.",
+            correlation_id,
             matched_admins,
             send_attempts,
             send_successes,

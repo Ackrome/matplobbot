@@ -21,19 +21,21 @@ from scheduler_app.jobs import (
     update_schedule_cache,
 )
 from shared_lib.database import close_db_pool, get_session, init_db_pool
+from shared_lib.request_context import configure_correlation_logging
 from shared_lib.services.university_api import create_ruz_api_client
 
 # --- Logging Setup ---
 os.makedirs(LOG_DIR, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(name)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s",
+    format="%(asctime)s - %(levelname)s - [cid=%(correlation_id)s] - %(name)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
         logging.FileHandler(os.path.join(LOG_DIR, SCHEDULER_LOG_FILE), encoding="utf-8"),
         logging.StreamHandler(),
     ],
 )
+configure_correlation_logging()
 aps_logger = logging.getLogger("apscheduler")
 aps_logger.propagate = True
 if aps_logger.handlers:

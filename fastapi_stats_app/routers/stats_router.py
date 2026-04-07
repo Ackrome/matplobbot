@@ -7,10 +7,10 @@ import math
 import os
 from datetime import UTC, datetime, timedelta
 from io import StringIO
-from typing import Any
+from typing import Any, Literal
 
 import aiohttp
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +25,7 @@ from shared_lib.database import (
     log_user_action,
 )
 from shared_lib.redis_client import redis_client
+from shared_lib.request_context import generate_correlation_id, get_correlation_id
 from shared_lib.schemas import (
     ActionUsersResponse,
     SendMessageRequest,
@@ -39,6 +40,74 @@ logger = logging.getLogger(__name__)
 CACHE_TTL = 300
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 SUPPORTED_USER_EXPORT_FORMATS = {"json", "csv", "weekly_pdf"}
+PROFILE_SORT_BY_ALLOWED = ("id", "action_type", "action_details", "timestamp")
+ACTION_USERS_SORT_BY_ALLOWED = ("user_id", "full_name", "username")
+SORT_ORDER_ALLOWED = ("asc", "desc")
+ADMIN_SEND_MESSAGE_RATE_LIMIT_PER_MINUTE = int(os.getenv("ADMIN_SEND_MESSAGE_RATE_LIMIT", "12"))
+ADMIN_SEND_MESSAGE_WINDOW_SECONDS = 60
+
+
+def _resolve_correlation_id(request: Request) -> str:
+    from_context = get_correlation_id()
+    if from_context and from_context != "-":
+        return from_context
+    from_header = (request.headers.get("X-Request-ID") or "").strip()
+    if from_header:
+        return from_header
+    return generate_correlation_id(prefix="http-fallback")
+
+
+def _resolve_admin_id(current_user: dict | None) -> int | str:
+    if not current_user:
+        return "unknown"
+    return current_user.get("telegram_id") or current_user.get("id") or "unknown"
+
+
+async def _enforce_send_message_rate_limit(admin_id: int | str) -> None:
+    bucket = int(datetime.now(UTC).timestamp()) // ADMIN_SEND_MESSAGE_WINDOW_SECONDS
+    rate_key = f"rate_limit:stats:send_message:{admin_id}:{bucket}"
+
+    try:
+        current_count = await redis_client.client.incr(rate_key)
+        if current_count == 1:
+            await redis_client.client.expire(rate_key, ADMIN_SEND_MESSAGE_WINDOW_SECONDS + 1)
+    except Exception as exc:
+        logger.warning(
+            "Rate limit backend unavailable for admin send_message (admin_id=%s): %s",
+            admin_id,
+            exc,
+        )
+        return
+
+    if current_count > ADMIN_SEND_MESSAGE_RATE_LIMIT_PER_MINUTE:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Rate limit exceeded for admin send_message. "
+                f"Try again in about {ADMIN_SEND_MESSAGE_WINDOW_SECONDS} seconds."
+            ),
+        )
+
+
+def _emit_admin_send_audit(
+    *,
+    admin_id: int | str,
+    target_id: int,
+    correlation_id: str,
+    timestamp: datetime,
+    result: str,
+    error: str | None = None,
+) -> None:
+    payload = {
+        "admin_id": admin_id,
+        "target_id": target_id,
+        "timestamp": timestamp.isoformat(),
+        "result": result,
+        "correlation_id": correlation_id,
+    }
+    if error:
+        payload["error"] = error
+    logger.info("admin_send_message_audit=%s", json.dumps(payload, ensure_ascii=False, sort_keys=True))
 
 
 def _parse_export_timestamp(value: str | None) -> datetime | None:
@@ -211,8 +280,14 @@ async def get_user_profile(
     user_id: int,
     page: int = Query(1, ge=1, description="Номер страницы"),
     page_size: int = Query(50, ge=1, le=200, description="Размер страницы"),
-    sort_by: str = Query("timestamp", description="Поле сортировки"),
-    sort_order: str = Query("desc", description="Порядок сортировки"),
+    sort_by: Literal["id", "action_type", "action_details", "timestamp"] = Query(
+        "timestamp",
+        description="Allowed: id, action_type, action_details, timestamp",
+    ),
+    sort_order: Literal["asc", "desc"] = Query(
+        "desc",
+        description="Allowed: asc, desc",
+    ),
     db: AsyncSession = Depends(get_db_session_dependency),
 ) -> Any:
     cache_key = f"user_profile:{user_id}:p{page}:s{page_size}:{sort_by}:{sort_order}"
@@ -277,8 +352,14 @@ async def get_action_users(
     action_details: str = Query(..., description="Содержание действия"),
     page: int = Query(1, ge=1, description="Номер страницы"),
     page_size: int = Query(15, ge=1, le=100, description="Размер страницы"),
-    sort_by: str = Query("full_name", description="Поле сортировки"),
-    sort_order: str = Query("asc", description="Порядок сортировки"),
+    sort_by: Literal["user_id", "full_name", "username"] = Query(
+        "full_name",
+        description="Allowed: user_id, full_name, username",
+    ),
+    sort_order: Literal["asc", "desc"] = Query(
+        "asc",
+        description="Allowed: asc, desc",
+    ),
     db: AsyncSession = Depends(get_db_session_dependency),
 ) -> Any:
     cache_key = (
@@ -407,15 +488,52 @@ async def export_user_actions(
     summary="Отправить сообщение пользователю",
     description="Отправляет сообщение в Telegram и сохраняет его в БД как исходящее от админа.",
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(require_admin)],
 )
-async def send_message_to_user(user_id: int, message_data: SendMessageRequest):
+async def send_message_to_user(
+    user_id: int,
+    message_data: SendMessageRequest,
+    request: Request,
+    current_user: dict = Depends(require_admin),
+):
+    request_timestamp = datetime.now(UTC)
+    correlation_id = _resolve_correlation_id(request)
+    admin_id = _resolve_admin_id(current_user)
+
     if not BOT_TOKEN:
+        _emit_admin_send_audit(
+            admin_id=admin_id,
+            target_id=user_id,
+            correlation_id=correlation_id,
+            timestamp=request_timestamp,
+            result="server_misconfigured",
+            error="BOT_TOKEN is not configured",
+        )
         raise HTTPException(status_code=500, detail="BOT_TOKEN не настроен на сервере.")
 
     text = message_data.text.strip()
     if not text:
+        _emit_admin_send_audit(
+            admin_id=admin_id,
+            target_id=user_id,
+            correlation_id=correlation_id,
+            timestamp=request_timestamp,
+            result="validation_failed",
+            error="message text is empty",
+        )
         raise HTTPException(status_code=400, detail="Сообщение не может быть пустым")
+
+    try:
+        await _enforce_send_message_rate_limit(admin_id)
+    except HTTPException as exc:
+        _emit_admin_send_audit(
+            admin_id=admin_id,
+            target_id=user_id,
+            correlation_id=correlation_id,
+            timestamp=request_timestamp,
+            result="rate_limited",
+            error=str(exc.detail),
+        )
+        raise
 
     tg_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": user_id, "text": text, "parse_mode": "HTML"}
@@ -425,10 +543,26 @@ async def send_message_to_user(user_id: int, message_data: SendMessageRequest):
             async with session.post(tg_url, json=payload) as response:
                 if response.status != 200:
                     error_text = await response.text()
+                    _emit_admin_send_audit(
+                        admin_id=admin_id,
+                        target_id=user_id,
+                        correlation_id=correlation_id,
+                        timestamp=request_timestamp,
+                        result="telegram_error",
+                        error=error_text[:500],
+                    )
                     logger.error(f"Failed to send message to {user_id}: {error_text}")
                     raise HTTPException(status_code=400, detail=f"Telegram API Error: {error_text}")
 
     except aiohttp.ClientError as e:
+        _emit_admin_send_audit(
+            admin_id=admin_id,
+            target_id=user_id,
+            correlation_id=correlation_id,
+            timestamp=request_timestamp,
+            result="network_error",
+            error=str(e),
+        )
         logger.error(f"Network error sending message to {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Ошибка сети при отправке в Telegram")
 
@@ -444,7 +578,14 @@ async def send_message_to_user(user_id: int, message_data: SendMessageRequest):
     except Exception as e:
         logger.error(f"Error logging admin message to DB for user {user_id}: {e}", exc_info=True)
 
-    return {"status": "success"}
+    _emit_admin_send_audit(
+        admin_id=admin_id,
+        target_id=user_id,
+        correlation_id=correlation_id,
+        timestamp=request_timestamp,
+        result="success",
+    )
+    return {"status": "success", "correlation_id": correlation_id}
 
 
 @router.get("/leaderboard")
