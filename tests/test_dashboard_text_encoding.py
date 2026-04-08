@@ -1,4 +1,4 @@
-﻿import unittest
+import unittest
 from pathlib import Path
 
 
@@ -6,9 +6,7 @@ def _is_invalid_cyrillic(char: str) -> bool:
     code = ord(char)
     # Cyrillic block, but not Russian letters (U+0410..U+044F, U+0401, U+0451)
     return (
-        0x0400 <= code <= 0x04FF
-        and code not in {0x0401, 0x0451}
-        and not (0x0410 <= code <= 0x044F)
+        0x0400 <= code <= 0x04FF and code not in {0x0401, 0x0451} and not (0x0410 <= code <= 0x044F)
     )
 
 
