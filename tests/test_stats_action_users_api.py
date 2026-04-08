@@ -75,6 +75,19 @@ class TestStatsActionUsersAPI(unittest.TestCase):
         payload = response.json()
         self.assertEqual(len(payload["users"]), 1)
         self.assertEqual(payload["users"][0]["full_name"], "Test User")
+        self.assertEqual(response.headers.get("Deprecation"), "true")
+        self.assertIn("Use /api/stats/action_users", response.headers.get("Warning", ""))
+        self.assertTrue(response.headers.get("Sunset"))
+
+    def test_action_users_legacy_route_can_be_disabled(self):
+        with patch.object(stats_router, "LEGACY_ACTION_USERS_ALIAS_ENABLED", False):
+            response = self.client.get(
+                "/api/stats/stats/action_users",
+                params={"action_type": "command", "action_details": "/start"},
+            )
+
+        self.assertEqual(response.status_code, 410)
+        self.assertIn("/api/stats/action_users", response.json().get("detail", ""))
 
     def test_action_users_pagination_sort_matrix(self):
         with patch.object(

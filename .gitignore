@@ -1,5 +1,6 @@
 .env
 **/__pycache__/
+.pycache_tmp/
 **/idea.md
 venv/
 *.log

@@ -779,6 +779,133 @@ Jenkins deploy SSH now verifies the deploy host against a pinned SHA256 host fin
 - The build parameter `DEPLOY_HOST_FINGERPRINT` can still be used as a one-off override.
 - If both the override and `APP_VM_SHA256` are empty, the pipeline now fails instead of falling back to TOFU host trust.
 
+## P2 API And Dashboard Updates (2026-04-09)
+
+### User Action Export Date Range And Timezone
+
+#### Purpose
+
+`GET /api/stats/users/{user_id}/export_actions` now supports date-range filtering with explicit timezone handling for JSON, CSV, and PDF exports.
+
+#### Query Parameters
+
+- `date_from` (optional, `YYYY-MM-DD`, inclusive)
+- `date_to` (optional, `YYYY-MM-DD`, inclusive)
+- `timezone` (optional, IANA timezone, default `UTC`)
+
+#### How To Use It
+
+1. Open user details page (`/users/{user_id}`) in the stats UI.
+2. Set `From`, `To`, and `Timezone` in the export toolbar (desktop).
+3. Click CSV / JSON / PDF export buttons.
+4. Use `Clear` to remove date filters and export full history again.
+
+Direct API examples:
+
+```text
+/api/stats/users/123/export_actions?format=csv&date_from=2026-04-01&date_to=2026-04-07&timezone=Europe/Moscow
+```
+
+```text
+/api/stats/users/123/export_actions?format=weekly_pdf&date_from=2026-03-01&date_to=2026-03-31&timezone=UTC
+```
+
+Validation behavior:
+
+- invalid timezone returns `400`
+- `date_from > date_to` returns `400`
+- malformed date format returns `422`
+
+### Dashboard Partial Degradation State
+
+#### Purpose
+
+The website stats dashboard now distinguishes between:
+
+- full outage (all widget loads fail)
+- partial degradation (for example, leaderboard fails but activity loads)
+
+#### How It Works
+
+- REST refresh now loads leaderboard and activity independently.
+- If only one widget fails, the dashboard keeps rendering healthy widgets and shows a yellow partial-degradation banner.
+- Widget-level status labels show whether stale/last-known data is being displayed.
+- Connection badge changes to `Partial degradation` instead of hard offline for partial failures.
+
+#### How To Use It
+
+1. Open website stats dashboard.
+2. If one API block fails, look for the yellow degradation banner and per-widget status text.
+3. Use `Retry` to reload both widgets, or hide the banner with `Hide`.
+
+### OpenAPI Alias Examples For Schedule Search Type
+
+#### Purpose
+
+`GET /api/schedule/search` now documents explicit `type` aliases so clients do not guess mappings.
+
+#### Alias Mapping
+
+- `lecturer` -> `person`
+- `teacher` -> `person`
+- `room` -> `auditorium`
+
+#### How To Use It
+
+1. Open API docs.
+2. Inspect `GET /api/schedule/search` query parameter `type`.
+3. Use documented aliases directly in frontend/client requests when needed.
+
+Example:
+
+```text
+/api/schedule/search?term=ivan&type=lecturer
+```
+
+### Schedule Data base_date Validation
+
+#### Purpose
+
+`GET /api/schedule/data/{type}/{id}` now validates `base_date` through FastAPI date parsing to prevent accidental `500` responses.
+
+#### How To Use It
+
+- Send `base_date` only in `YYYY-MM-DD` format.
+- Invalid values now return validation response `422` with field-level error details.
+
+Example:
+
+```text
+/api/schedule/data/group/12345?base_date=2026-04-09
+```
+
+### Legacy Action Users Alias Deprecation Plan
+
+#### Purpose
+
+Legacy route `/api/stats/stats/action_users` now has an explicit deprecation/migration path.
+
+#### Current Behavior
+
+- Canonical route: `/api/stats/action_users`
+- Legacy alias still works (when enabled) but now returns deprecation headers:
+  - `Deprecation: true`
+  - `Sunset: Tue, 01 Jul 2026 00:00:00 GMT` (planned removal window)
+  - `Warning` with migration message
+
+#### Removal Control
+
+- Environment flag `ENABLE_LEGACY_ACTION_USERS_ALIAS=false` disables the legacy alias immediately.
+- Disabled alias returns `410 Gone` with canonical-route guidance.
+
+#### Migration Instruction
+
+Move all clients to:
+
+```text
+/api/stats/action_users
+```
+
 ## Maintainer Summary
 
 - `/search` adds a single search surface for library and linked GitHub Markdown content.
@@ -786,6 +913,11 @@ Jenkins deploy SSH now verifies the deploy host against a pinned SHA256 host fin
 - website schedule search now returns groups, lecturers, and auditoriums from one search field
 - website schedule now supports a persistent `Full lecturer name` toggle for desktop table cards
 - authorized website users can manage profile-based iCal sync feeds from the schedule page, including current-page presets, masked links, platform guidance, and feed health metadata
+- user action export API now supports `date_from` / `date_to` / `timezone` filtering with UI controls on user details page
+- stats dashboard now exposes explicit partial-degradation UI state when only some widgets fail
+- schedule API docs now explicitly document `type` aliases (`lecturer`, `teacher`, `room`)
+- schedule data `base_date` now returns validation `422` on invalid format
+- legacy `/api/stats/stats/action_users` now emits deprecation headers and supports controlled shutdown via env flag
 - active search sessions live in Redis
 - saved presets live in `User.settings`
 - Jenkins deploy SSH uses pinned host fingerprint verification from `APP_VM_SHA256` by default

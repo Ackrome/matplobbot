@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -41,6 +41,12 @@ SEARCH_TYPE_DESCRIPTIONS = {
     "person": "Lecturer",
     "auditorium": "Auditorium",
 }
+SEARCH_TYPE_QUERY_DESCRIPTION = (
+    "Search scope for schedule entities. "
+    "Allowed values: all, group, person, auditorium. "
+    "Aliases: lecturer -> person, teacher -> person, room -> auditorium."
+)
+SEARCH_TYPE_QUERY_EXAMPLES = ["all", "group", "person", "auditorium", "lecturer", "teacher", "room"]
 
 
 def get_shared_http_session(request: Request) -> aiohttp.ClientSession:
@@ -145,7 +151,11 @@ def _merge_search_results(results_by_type: dict[str, list[dict]]) -> list[dict]:
 @router.get("/search")
 async def search_entity(
     term: str,
-    type: str = "all",
+    type: str = Query(
+        "all",
+        description=SEARCH_TYPE_QUERY_DESCRIPTION,
+        examples=SEARCH_TYPE_QUERY_EXAMPLES,
+    ),
     db: AsyncSession = Depends(get_db_session_dependency),
     http_session: aiohttp.ClientSession = Depends(get_shared_http_session),
 ):
@@ -198,7 +208,7 @@ async def search_entity(
 
 @router.get("/cached_list")
 async def get_cached_list(db: AsyncSession = Depends(get_db_session_dependency)):
-    """Возвращает список недавно закэшированных групп для правой панели."""
+    """Returns recently cached groups for the right-side panel."""
     stmt = text(
         """
         SELECT entity_type, entity_id,
@@ -230,16 +240,16 @@ async def get_fallback_counters():
 async def get_schedule_data(
     type: str,
     id: str,
-    base_date: str = Query(None),  # Ожидаем YYYY-MM-DD
+    base_date: date | None = Query(
+        None,
+        description="Optional center date in YYYY-MM-DD. Invalid format returns 422.",
+    ),
     db: AsyncSession = Depends(get_db_session_dependency),
     http_session: aiohttp.ClientSession = Depends(get_shared_http_session),
 ):
-    if base_date:
-        center_date = datetime.strptime(base_date, "%Y-%m-%d").date()
-    else:
-        center_date = date.today()
+    center_date = base_date or date.today()
 
-    # Парсим ±14 дней от запрошенной даты (4 недели)
+    # Build a +/- 14 day window from the selected center date.
     start_date = center_date - timedelta(days=14)
     finish_date = center_date + timedelta(days=14)
 
@@ -258,7 +268,7 @@ async def get_schedule_data(
         for lesson in schedule:
             full_name = lesson.get("discipline", "")
             lesson["discipline_short"] = short_names.get(full_name, full_name)
-            # Оставляем оригинальное имя тоже, чтобы фронт мог переключать.
+            # Keep full discipline name so frontend can toggle between short/full.
             lesson["discipline_full"] = full_name
 
             group_val = lesson.get("group")
@@ -277,8 +287,10 @@ async def get_schedule_data(
             "loaded_bounds": {
                 "start": start,
                 "end": finish,
-            },  # Отдаем фронту границы загруженного
+            },  # Return loaded date bounds for frontend pagination/navigation logic.
         }
+    except HTTPException:
+        raise
     except ConnectionError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:

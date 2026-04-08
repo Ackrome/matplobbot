@@ -6,11 +6,11 @@ Last updated: 2026-04-07
 
 
 ### P2 - API and Dashboard
-- [ ] Add range parameters for user action export (`date_from`, `date_to`, timezone) so weekly PDF and CSV are not fixed to "last 7 days only".
-- [ ] Add dashboard UI state for API partial degradation (for example when one stats widget fails but others still load).
-- [ ] Add explicit OpenAPI docs/examples for schedule search `type` aliases (`lecturer`, `teacher`, `room`) to reduce frontend/client ambiguity.
-- [ ] Add validation/error response for invalid `base_date` format in `GET /api/schedule/data/{type}/{id}` (current path can raise 500 instead of 400/422).
-- [ ] Define deprecation plan for legacy stats alias `/api/stats/stats/action_users` and remove it after frontend migration window.
+- [x] Add range parameters for user action export (`date_from`, `date_to`, timezone) so weekly PDF and CSV are not fixed to "last 7 days only".
+- [x] Add dashboard UI state for API partial degradation (for example when one stats widget fails but others still load).
+- [x] Add explicit OpenAPI docs/examples for schedule search `type` aliases (`lecturer`, `teacher`, `room`) to reduce frontend/client ambiguity.
+- [x] Add validation/error response for invalid `base_date` format in `GET /api/schedule/data/{type}/{id}` (current path can raise 500 instead of 400/422).
+- [x] Define deprecation plan for legacy stats alias `/api/stats/stats/action_users` and remove it after frontend migration window.
 
 ### P2 - Bot UX
 - [ ] Add optional "quick set" onboarding step after `/start` for schedule entity + notification time (skip allowed).

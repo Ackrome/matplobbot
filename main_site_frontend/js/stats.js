@@ -38,6 +38,10 @@ const state = {
     apiLatencies: [],
     lastLatencyMs: null,
     chart: null,
+    widgetHealth: {
+        leaderboard: "idle",
+        activity: "idle",
+    },
 };
 
 const elements = {
@@ -50,6 +54,7 @@ const elements = {
     retryLeaderboardBtn: document.getElementById("retryLeaderboardBtn"),
     retryActivityBtn: document.getElementById("retryActivityBtn"),
     retryAllBtn: document.getElementById("retryAllBtn"),
+    retryAllBtnMobile: document.getElementById("retryAllBtnMobile"),
     leaderboardMeta: document.getElementById("leaderboardMeta"),
     leaderboardPrev: document.getElementById("leaderboardPrev"),
     leaderboardNext: document.getElementById("leaderboardNext"),
@@ -68,6 +73,9 @@ const elements = {
     globalErrorBanner: document.getElementById("globalErrorBanner"),
     globalErrorText: document.getElementById("globalErrorText"),
     dismissGlobalError: document.getElementById("dismissGlobalError"),
+    partialDegradationBanner: document.getElementById("partialDegradationBanner"),
+    partialDegradationText: document.getElementById("partialDegradationText"),
+    dismissPartialDegradation: document.getElementById("dismissPartialDegradation"),
     toastContainer: document.getElementById("toastContainer"),
     diagnosticsPanel: document.getElementById("diagnosticsPanel"),
     toggleDiagnosticsBtn: document.getElementById("toggleDiagnosticsBtn"),
@@ -172,6 +180,64 @@ function showGlobalError(message) {
 function hideGlobalError() {
     if (!elements.globalErrorBanner) return;
     elements.globalErrorBanner.classList.add("hidden");
+}
+
+function hidePartialDegradation() {
+    if (!elements.partialDegradationBanner) return;
+    elements.partialDegradationBanner.classList.add("hidden");
+}
+
+function showPartialDegradation(message) {
+    if (!elements.partialDegradationBanner || !elements.partialDegradationText) return;
+    elements.partialDegradationText.textContent = message;
+    elements.partialDegradationBanner.classList.remove("hidden");
+}
+
+function getFailedWidgets() {
+    return Object.entries(state.widgetHealth)
+        .filter(([, status]) => status === "error")
+        .map(([widget]) => widget);
+}
+
+function updateDashboardHealthState() {
+    const failedWidgets = getFailedWidgets();
+    if (failedWidgets.length === 0) {
+        hidePartialDegradation();
+        if (state.wsConnected) {
+            setConnectionState("online", "Live updates");
+        } else {
+            setConnectionState("warning", "REST mode");
+        }
+        return;
+    }
+
+    const labels = failedWidgets.map((widget) => (widget === "leaderboard" ? "Leaderboard" : "Activity"));
+    const healthyCount = Object.keys(state.widgetHealth).length - failedWidgets.length;
+    const message = healthyCount > 0
+        ? `Partial degradation: failed widget(s): ${labels.join(", ")}. Showing available data for the rest.`
+        : `Dashboard degraded: all widgets failed (${labels.join(", ")}).`;
+    showPartialDegradation(message);
+    setConnectionState("warning", "Partial degradation");
+}
+
+function applyDegradedWidgetStatuses() {
+    if (state.widgetHealth.leaderboard === "error") {
+        const hasLeaderboardData = state.leaderboard.length > 0;
+        setBlockStatus(
+            elements.leaderboardStatus,
+            hasLeaderboardData ? "Degraded: showing last leaderboard snapshot" : "Leaderboard unavailable",
+            hasLeaderboardData ? "warning" : "error"
+        );
+    }
+
+    if (state.widgetHealth.activity === "error") {
+        const hasActivityData = getFilteredActivity().length > 0;
+        setBlockStatus(
+            elements.activityStatus,
+            hasActivityData ? "Degraded: showing last activity snapshot" : "Activity widget unavailable",
+            hasActivityData ? "warning" : "error"
+        );
+    }
 }
 
 function setConnectionState(status, label) {
@@ -628,41 +694,72 @@ function registerFailure(errorMessage) {
 }
 
 async function refreshFromRest({ silent = false } = {}) {
-    try {
-        if (!silent) {
-            setLoading(true);
-            setBlockStatus(elements.leaderboardStatus, "Loading...", "info");
-            setBlockStatus(elements.activityStatus, "Loading...", "info");
-        }
+    if (!silent) {
+        setLoading(true);
+        setBlockStatus(elements.leaderboardStatus, "Loading...", "info");
+        setBlockStatus(elements.activityStatus, "Loading...", "info");
+    }
 
-        const [leaderboardResponse, activityResponse] = await Promise.all([
-            fetchWithAuth("/stats/leaderboard"),
-            fetchWithAuth("/stats/activity"),
-        ]);
+    const [leaderboardResult, activityResult] = await Promise.allSettled([
+        fetchWithAuth("/stats/leaderboard"),
+        fetchWithAuth("/stats/activity"),
+    ]);
 
-        state.leaderboard = normalizeLeaderboard(leaderboardResponse);
-        state.activity = normalizeActivity(activityResponse);
+    let successCount = 0;
+    let failureCount = 0;
+    const failureMessages = [];
+
+    if (leaderboardResult.status === "fulfilled") {
+        state.leaderboard = normalizeLeaderboard(leaderboardResult.value);
         state.totalActions = state.leaderboard.reduce((sum, user) => sum + (user.actions_count || 0), 0);
-
-        hideGlobalError();
-        setRetryButtonsVisible(false);
-        renderAll();
-        markSynced("REST", new Date().toISOString());
-
-        if (!state.wsConnected) {
-            setConnectionState("warning", "REST mode");
-        }
-    } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown REST error";
+        state.widgetHealth.leaderboard = "ok";
+        successCount += 1;
+    } else {
+        const message = leaderboardResult.reason instanceof Error
+            ? leaderboardResult.reason.message
+            : "Leaderboard request failed";
         registerFailure(message);
-        showGlobalError(`Failed to load dashboard: ${message}`);
+        state.widgetHealth.leaderboard = "error";
+        failureMessages.push(`Leaderboard: ${message}`);
+        failureCount += 1;
+    }
+
+    if (activityResult.status === "fulfilled") {
+        state.activity = normalizeActivity(activityResult.value);
+        state.widgetHealth.activity = "ok";
+        successCount += 1;
+    } else {
+        const message = activityResult.reason instanceof Error
+            ? activityResult.reason.message
+            : "Activity request failed";
+        registerFailure(message);
+        state.widgetHealth.activity = "error";
+        failureMessages.push(`Activity: ${message}`);
+        failureCount += 1;
+    }
+
+    if (successCount > 0) {
+        hideGlobalError();
+        setRetryButtonsVisible(failureCount > 0);
+        renderAll();
+        applyDegradedWidgetStatuses();
+        markSynced("REST", new Date().toISOString());
+        updateDashboardHealthState();
+
+        if (failureCount > 0) {
+            showToast("warning", `Partial degradation detected. ${failureMessages.join(" | ")}`);
+        }
+    } else {
+        const combinedError = failureMessages.join(" | ") || "Unknown REST error";
+        showGlobalError(`Failed to load dashboard: ${combinedError}`);
         setRetryButtonsVisible(true);
         setBlockStatus(elements.leaderboardStatus, "Failed. Retry required.", "error");
         setBlockStatus(elements.activityStatus, "Failed. Retry required.", "error");
-        showToast("error", `Dashboard load failed: ${message}`);
-    } finally {
-        setLoading(false);
+        showToast("error", `Dashboard load failed: ${combinedError}`);
+        updateDashboardHealthState();
     }
+
+    setLoading(false);
 }
 
 function applyStatsPayload(payload) {
@@ -686,12 +783,15 @@ function applyStatsPayload(payload) {
         state.totalActions = state.leaderboard.reduce((sum, user) => sum + (user.actions_count || 0), 0);
     }
 
+    state.widgetHealth.leaderboard = "ok";
+    state.widgetHealth.activity = "ok";
     hideGlobalError();
+    hidePartialDegradation();
     setRetryButtonsVisible(false);
     renderAll();
 
     markSynced("WebSocket", payload.last_updated || new Date().toISOString());
-    setConnectionState("online", "Live updates");
+    updateDashboardHealthState();
 }
 
 function scheduleWsReconnect() {
@@ -720,7 +820,7 @@ function connectWebSocket() {
     socket.addEventListener("open", () => {
         state.wsConnected = true;
         state.wsBackoffMs = 1000;
-        setConnectionState("online", "Live updates");
+        updateDashboardHealthState();
         showToast("success", "Live stats connected");
     });
 
@@ -857,6 +957,11 @@ function wireEvents() {
         showToast("info", "Retry requested");
     });
 
+    elements.retryAllBtnMobile?.addEventListener("click", async () => {
+        await refreshFromRest({ silent: false });
+        showToast("info", "Retry requested");
+    });
+
     elements.retryActivityBtn?.addEventListener("click", async () => {
         await refreshFromRest({ silent: false });
         showToast("info", "Activity reload requested");
@@ -868,6 +973,7 @@ function wireEvents() {
     });
 
     elements.dismissGlobalError?.addEventListener("click", hideGlobalError);
+    elements.dismissPartialDegradation?.addEventListener("click", hidePartialDegradation);
 
     elements.toggleDiagnosticsBtn?.addEventListener("click", () => {
         elements.diagnosticsPanel?.classList.toggle("hidden");

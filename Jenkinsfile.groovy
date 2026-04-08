@@ -85,7 +85,7 @@ pipeline {
                                 ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' REPO_URL='https://github.com/Ackrome/matplobbot' bash -se" <<'REMOTE_EOF'
 set -euo pipefail
 
-DEPLOY_DIR="${DEPLOY_PATH/#\~/$HOME}"
+DEPLOY_DIR="${DEPLOY_PATH/#~/$HOME}"
 if [ -e "$DEPLOY_DIR" ] && [ ! -d "$DEPLOY_DIR" ]; then
   echo "ERROR: deploy path is not a directory: $DEPLOY_DIR"
   exit 1

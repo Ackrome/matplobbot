@@ -5,9 +5,11 @@ import json
 import logging
 import math
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
+from email.utils import format_datetime
 from io import StringIO
 from typing import Any, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -45,6 +47,15 @@ ACTION_USERS_SORT_BY_ALLOWED = ("user_id", "full_name", "username")
 SORT_ORDER_ALLOWED = ("asc", "desc")
 ADMIN_SEND_MESSAGE_RATE_LIMIT_PER_MINUTE = int(os.getenv("ADMIN_SEND_MESSAGE_RATE_LIMIT", "12"))
 ADMIN_SEND_MESSAGE_WINDOW_SECONDS = 60
+DEFAULT_EXPORT_TIMEZONE = "UTC"
+LEGACY_ACTION_USERS_ALIAS_ENABLED = (
+    os.getenv("ENABLE_LEGACY_ACTION_USERS_ALIAS", "true").strip().lower()
+    not in {"0", "false", "no", "off"}
+)
+LEGACY_ACTION_USERS_ALIAS_SUNSET_DATE = date(2026, 7, 1)
+LEGACY_ACTION_USERS_ALIAS_DOC_URL = (
+    "https://github.com/Ackrome/matplobbot/blob/main/docs/wiki.md#stats-action-users-endpoint"
+)
 
 
 def _resolve_correlation_id(request: Request) -> str:
@@ -121,6 +132,57 @@ def _parse_export_timestamp(value: str | None) -> datetime | None:
         return None
 
 
+def _resolve_export_timezone(timezone_name: str | None) -> ZoneInfo:
+    normalized = (timezone_name or DEFAULT_EXPORT_TIMEZONE).strip() or DEFAULT_EXPORT_TIMEZONE
+    try:
+        return ZoneInfo(normalized)
+    except ZoneInfoNotFoundError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unsupported timezone '{timezone_name}'. "
+                "Use an IANA timezone like UTC, Europe/Moscow, or America/New_York."
+            ),
+        ) from exc
+
+
+def _filter_actions_by_date_range(
+    actions: list[dict[str, Any]],
+    *,
+    date_from: date | None,
+    date_to: date | None,
+    timezone: ZoneInfo,
+) -> list[dict[str, Any]]:
+    if not date_from and not date_to:
+        return list(actions)
+
+    filtered_actions: list[dict[str, Any]] = []
+    for action in actions:
+        parsed = _parse_export_timestamp(str(action.get("timestamp") or ""))
+        if parsed is None:
+            continue
+        local_date = parsed.astimezone(timezone).date()
+        if date_from and local_date < date_from:
+            continue
+        if date_to and local_date > date_to:
+            continue
+        filtered_actions.append(action)
+    return filtered_actions
+
+
+def _build_legacy_action_users_deprecation_headers() -> dict[str, str]:
+    sunset_dt = datetime.combine(LEGACY_ACTION_USERS_ALIAS_SUNSET_DATE, time(), tzinfo=UTC)
+    return {
+        "Deprecation": "true",
+        "Sunset": format_datetime(sunset_dt),
+        "Link": f'<{LEGACY_ACTION_USERS_ALIAS_DOC_URL}>; rel="deprecation"',
+        "Warning": (
+            '299 - "Legacy endpoint /api/stats/stats/action_users is deprecated. '
+            'Use /api/stats/action_users instead."'
+        ),
+    }
+
+
 def _build_actions_csv(actions: list[dict[str, Any]]) -> str:
     buffer = StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
@@ -141,8 +203,9 @@ def _build_actions_csv(actions: list[dict[str, Any]]) -> str:
 def _build_weekly_pdf_html(
     *,
     user_id: int,
-    week_start_date: datetime,
-    week_end_date: datetime,
+    week_start_date: date,
+    week_end_date: date,
+    timezone_name: str,
     weekly_actions: list[dict[str, Any]],
 ) -> str:
     action_type_counts: dict[str, int] = {}
@@ -210,7 +273,7 @@ def _build_weekly_pdf_html(
 </head>
 <body>
   <h1>Weekly User Activity Report</h1>
-  <div class="meta">User ID: {user_id}<br/>Period: {period_label}<br/>Total actions: {len(weekly_actions)}</div>
+  <div class="meta">User ID: {user_id}<br/>Period: {period_label}<br/>Timezone: {html.escape(timezone_name)}<br/>Total actions: {len(weekly_actions)}</div>
 
   <h2>Action Type Summary</h2>
   <table>
@@ -255,7 +318,7 @@ def _build_weekly_pdf_bytes(html_content: str) -> bytes:
 @router.get(
     "/health",
     summary="Health Check",
-    description="Проверяет доступность сервиса и подключение к базе данных.",
+    description="Checks service availability and database connectivity.",
     response_model=dict[str, str],
     status_code=status.HTTP_200_OK,
 )
@@ -273,15 +336,15 @@ async def health_check(db: AsyncSession = Depends(get_db_session_dependency)) ->
 
 @router.get(
     "/users/{user_id}/profile",
-    summary="Профиль пользователя",
-    description="Возвращает детальную информацию о пользователе и историю его действий с пагинацией.",
+    summary="User profile",
+    description="Returns user details and action history with pagination.",
     response_model=UserProfileResponse,
     dependencies=[Depends(require_admin)],
 )
 async def get_user_profile(
     user_id: int,
-    page: int = Query(1, ge=1, description="Номер страницы"),
-    page_size: int = Query(50, ge=1, le=200, description="Размер страницы"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=200, description="Page size"),
     sort_by: Literal["id", "action_type", "action_details", "timestamp"] = Query(
         "timestamp",
         description="Allowed: id, action_type, action_details, timestamp",
@@ -307,7 +370,7 @@ async def get_user_profile(
         )
 
         if profile_data is None:
-            raise HTTPException(status_code=404, detail="Пользователь не найден.")
+            raise HTTPException(status_code=404, detail="User not found.")
 
         total_actions = profile_data["total_actions"]
         total_pages = math.ceil(total_actions / page_size) if page_size > 0 else 0
@@ -337,23 +400,11 @@ async def get_user_profile(
         raise HTTPException(status_code=500, detail="Internal Database Error")
 
 
-@router.get(
-    "/stats/action_users",
-    include_in_schema=False,
-    dependencies=[Depends(require_admin)],
-)
-@router.get(
-    "/action_users",
-    summary="Пользователи по действию",
-    description="Возвращает список пользователей, совершивших конкретное действие.",
-    response_model=ActionUsersResponse,
-    dependencies=[Depends(require_admin)],
-)
-async def get_action_users(
-    action_type: str = Query(..., description="Тип действия"),
-    action_details: str = Query(..., description="Содержание действия"),
-    page: int = Query(1, ge=1, description="Номер страницы"),
-    page_size: int = Query(15, ge=1, le=100, description="Размер страницы"),
+async def _get_action_users_impl(
+    action_type: str = Query(..., description="Action type"),
+    action_details: str = Query(..., description="Action details"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(15, ge=1, le=100, description="Page size"),
     sort_by: Literal["user_id", "full_name", "username"] = Query(
         "full_name",
         description="Allowed: user_id, full_name, username",
@@ -406,9 +457,95 @@ async def get_action_users(
 
 
 @router.get(
+    "/action_users",
+    summary="Users by action",
+    description="Returns users who performed the selected action with pagination and sorting.",
+    response_model=ActionUsersResponse,
+    dependencies=[Depends(require_admin)],
+)
+async def get_action_users(
+    action_type: str = Query(..., description="Action type"),
+    action_details: str = Query(..., description="Action details"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(15, ge=1, le=100, description="Page size"),
+    sort_by: Literal["user_id", "full_name", "username"] = Query(
+        "full_name",
+        description="Allowed: user_id, full_name, username",
+    ),
+    sort_order: Literal["asc", "desc"] = Query(
+        "asc",
+        description="Allowed: asc, desc",
+    ),
+    db: AsyncSession = Depends(get_db_session_dependency),
+) -> Any:
+    return await _get_action_users_impl(
+        action_type=action_type,
+        action_details=action_details,
+        page=page,
+        page_size=page_size,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        db=db,
+    )
+
+
+@router.get(
+    "/stats/action_users",
+    include_in_schema=False,
+    response_model=ActionUsersResponse,
+    dependencies=[Depends(require_admin)],
+)
+async def get_action_users_legacy_alias(
+    response: Response,
+    action_type: str = Query(..., description="Action type"),
+    action_details: str = Query(..., description="Action details"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(15, ge=1, le=100, description="Page size"),
+    sort_by: Literal["user_id", "full_name", "username"] = Query(
+        "full_name",
+        description="Allowed: user_id, full_name, username",
+    ),
+    sort_order: Literal["asc", "desc"] = Query(
+        "asc",
+        description="Allowed: asc, desc",
+    ),
+    db: AsyncSession = Depends(get_db_session_dependency),
+) -> Any:
+    if not LEGACY_ACTION_USERS_ALIAS_ENABLED:
+        raise HTTPException(
+            status_code=410,
+            detail=(
+                "Legacy endpoint /api/stats/stats/action_users has been removed. "
+                "Use /api/stats/action_users."
+            ),
+        )
+
+    for header_name, header_value in _build_legacy_action_users_deprecation_headers().items():
+        response.headers[header_name] = header_value
+
+    logger.warning(
+        "Legacy endpoint /api/stats/stats/action_users is deprecated and will be removed after %s.",
+        LEGACY_ACTION_USERS_ALIAS_SUNSET_DATE.isoformat(),
+    )
+
+    return await _get_action_users_impl(
+        action_type=action_type,
+        action_details=action_details,
+        page=page,
+        page_size=page_size,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        db=db,
+    )
+
+
+@router.get(
     "/users/{user_id}/export_actions",
-    summary="Экспорт действий",
-    description="Выгружает полную историю действий пользователя.",
+    summary="Export user actions",
+    description=(
+        "Exports user actions in JSON, CSV, or PDF. "
+        "Optional date range and timezone filters are applied before export."
+    ),
     response_model=None,
     dependencies=[Depends(require_admin)],
 )
@@ -422,6 +559,18 @@ async def export_user_actions(
         False,
         description="When format=json, return a downloadable file instead of JSON payload.",
     ),
+    date_from: date | None = Query(
+        None,
+        description="Inclusive start date in YYYY-MM-DD for export filtering.",
+    ),
+    date_to: date | None = Query(
+        None,
+        description="Inclusive end date in YYYY-MM-DD for export filtering.",
+    ),
+    timezone: str = Query(
+        DEFAULT_EXPORT_TIMEZONE,
+        description="IANA timezone used when applying date range filters.",
+    ),
     db: AsyncSession = Depends(get_db_session_dependency),
 ) -> Any | Response:
     normalized_format = format.strip().lower()
@@ -431,14 +580,36 @@ async def export_user_actions(
             detail=f"Unsupported export format '{format}'. Use one of: {sorted(SUPPORTED_USER_EXPORT_FORMATS)}",
         )
 
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid date range: date_from must be before or equal to date_to.",
+        )
+
+    export_timezone = _resolve_export_timezone(timezone)
+
     try:
         actions = await get_all_user_actions(db, user_id)
     except Exception as e:
         logger.error(f"Database error exporting actions for user {user_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Database Error")
 
+    effective_date_from = date_from
+    effective_date_to = date_to
+    if normalized_format == "weekly_pdf" and not effective_date_from and not effective_date_to:
+        timezone_today = datetime.now(UTC).astimezone(export_timezone).date()
+        effective_date_to = timezone_today
+        effective_date_from = timezone_today - timedelta(days=6)
+
+    filtered_actions = _filter_actions_by_date_range(
+        actions,
+        date_from=effective_date_from,
+        date_to=effective_date_to,
+        timezone=export_timezone,
+    )
+
     if normalized_format == "json":
-        payload = {"actions": actions}
+        payload = {"actions": filtered_actions}
         if not download:
             return payload
         filename = f"user_{user_id}_actions.json"
@@ -449,7 +620,7 @@ async def export_user_actions(
         )
 
     if normalized_format == "csv":
-        csv_content = _build_actions_csv(actions)
+        csv_content = _build_actions_csv(filtered_actions)
         filename = f"user_{user_id}_actions.csv"
         return Response(
             content=csv_content,
@@ -457,14 +628,9 @@ async def export_user_actions(
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
-    week_end = datetime.now(UTC)
-    week_start = week_end - timedelta(days=6)
-    weekly_actions = [
-        action
-        for action in actions
-        if (parsed := _parse_export_timestamp(str(action.get("timestamp") or "")))
-        and week_start.date() <= parsed.date() <= week_end.date()
-    ]
+    period_start = effective_date_from or datetime.now(UTC).astimezone(export_timezone).date()
+    period_end = effective_date_to or period_start
+    weekly_actions = list(filtered_actions)
     weekly_actions.sort(
         key=lambda action: _parse_export_timestamp(str(action.get("timestamp") or ""))
         or datetime.min.replace(tzinfo=UTC),
@@ -472,12 +638,13 @@ async def export_user_actions(
     )
     weekly_html = _build_weekly_pdf_html(
         user_id=user_id,
-        week_start_date=week_start,
-        week_end_date=week_end,
+        week_start_date=period_start,
+        week_end_date=period_end,
+        timezone_name=str(export_timezone),
         weekly_actions=weekly_actions,
     )
     pdf_bytes = _build_weekly_pdf_bytes(weekly_html)
-    filename = f"user_{user_id}_weekly_report_{week_end.strftime('%Y%m%d')}.pdf"
+    filename = f"user_{user_id}_actions_{period_start.strftime('%Y%m%d')}_{period_end.strftime('%Y%m%d')}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
@@ -487,8 +654,8 @@ async def export_user_actions(
 
 @router.post(
     "/users/{user_id}/send_message",
-    summary="Отправить сообщение пользователю",
-    description="Отправляет сообщение в Telegram и сохраняет его в БД как исходящее от админа.",
+    summary="Send message to user",
+    description="Sends a Telegram message and stores it as an outgoing admin action.",
     status_code=status.HTTP_200_OK,
 )
 async def send_message_to_user(
@@ -510,7 +677,7 @@ async def send_message_to_user(
             result="server_misconfigured",
             error="BOT_TOKEN is not configured",
         )
-        raise HTTPException(status_code=500, detail="BOT_TOKEN не настроен на сервере.")
+        raise HTTPException(status_code=500, detail="BOT_TOKEN is not configured on the server.")
 
     text = message_data.text.strip()
     if not text:
@@ -522,7 +689,7 @@ async def send_message_to_user(
             result="validation_failed",
             error="message text is empty",
         )
-        raise HTTPException(status_code=400, detail="Сообщение не может быть пустым")
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
 
     try:
         await _enforce_send_message_rate_limit(admin_id)
@@ -566,7 +733,7 @@ async def send_message_to_user(
             error=str(e),
         )
         logger.error(f"Network error sending message to {user_id}: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка сети при отправке в Telegram")
+        raise HTTPException(status_code=500, detail="Network error while sending message to Telegram")
 
     try:
         await log_user_action(

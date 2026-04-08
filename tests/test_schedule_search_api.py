@@ -211,3 +211,30 @@ class TestScheduleSearchAPI(unittest.TestCase):
                 "no_cache": 1,
             },
         )
+
+    def test_schedule_data_rejects_invalid_base_date(self):
+        response = self.client.get(
+            "/api/schedule/data/group/group-1",
+            params={"base_date": "2026/04/06"},
+        )
+
+        self.assertEqual(response.status_code, 422)
+        detail = response.json().get("detail", [])
+        self.assertTrue(any(item.get("loc", [])[-1] == "base_date" for item in detail))
+
+    def test_schedule_search_openapi_documents_aliases(self):
+        schema = self.app.openapi()
+        params = schema["paths"]["/api/schedule/search"]["get"]["parameters"]
+        type_param = next(
+            (param for param in params if param.get("name") == "type"),
+            None,
+        )
+        self.assertIsNotNone(type_param)
+        description = str(type_param.get("description", "")).lower()
+        self.assertIn("lecturer", description)
+        self.assertIn("teacher", description)
+        self.assertIn("room", description)
+        examples = type_param.get("schema", {}).get("examples", [])
+        self.assertIn("lecturer", examples)
+        self.assertIn("teacher", examples)
+        self.assertIn("room", examples)

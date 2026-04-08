@@ -9,6 +9,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const pageTitle = document.querySelector('title');
     const paginationControlsElement = document.getElementById('pagination-controls');
     const searchInput = document.getElementById('search-input');
+    const exportDateFromInput = document.getElementById('export-date-from');
+    const exportDateToInput = document.getElementById('export-date-to');
+    const exportTimezoneSelect = document.getElementById('export-timezone');
+    const clearExportRangeButton = document.getElementById('clear-export-range-btn');
 
     const messageForm = document.getElementById('send-message-form');
     const messageInput = document.getElementById('message-input');
@@ -394,12 +398,37 @@ document.addEventListener('DOMContentLoaded', function() {
 
     searchInput.addEventListener('input', debounce(applySearchFilter, 300));
 
-    // Экспорт CSV
+    // Экспорт действий с опциональным диапазоном дат.
+    function getExportRangeParams() {
+        const dateFrom = exportDateFromInput?.value?.trim() || "";
+        const dateTo = exportDateToInput?.value?.trim() || "";
+        const timezone = exportTimezoneSelect?.value?.trim() || "";
+
+        if (dateFrom && dateTo && new Date(dateFrom) > new Date(dateTo)) {
+            alert("Export date range is invalid: \"From\" must be before or equal to \"To\".");
+            return null;
+        }
+
+        return { dateFrom, dateTo, timezone };
+    }
+
     function triggerExport(format) {
+        const range = getExportRangeParams();
+        if (!range) return;
+
         const url = new URL(`/api/stats/users/${userId}/export_actions`, window.location.origin);
-        url.searchParams.set('format', format);
-        if (format === 'json') {
-            url.searchParams.set('download', '1');
+        url.searchParams.set("format", format);
+        if (format === "json") {
+            url.searchParams.set("download", "1");
+        }
+        if (range.dateFrom) {
+            url.searchParams.set("date_from", range.dateFrom);
+        }
+        if (range.dateTo) {
+            url.searchParams.set("date_to", range.dateTo);
+        }
+        if (range.timezone) {
+            url.searchParams.set("timezone", range.timezone);
         }
         window.location.href = url.toString();
     }
@@ -416,6 +445,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (downloadWeeklyPdfButton) {
         downloadWeeklyPdfButton.addEventListener('click', () => triggerExport('weekly_pdf'));
+    }
+
+    if (clearExportRangeButton) {
+        clearExportRangeButton.addEventListener("click", () => {
+            if (exportDateFromInput) exportDateFromInput.value = "";
+            if (exportDateToInput) exportDateToInput.value = "";
+        });
+    }
+
+    if (exportTimezoneSelect) {
+        const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+        const knownTimezones = Array.from(exportTimezoneSelect.options).map((option) => option.value);
+        exportTimezoneSelect.value = knownTimezones.includes(browserTimezone) ? browserTimezone : "UTC";
     }
 
     // --- INITIALIZATION ---
