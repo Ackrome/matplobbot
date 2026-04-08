@@ -70,7 +70,7 @@ function setConnectionState(state, text) {
 function updateLastSync(timestamp) {
     if (!timestamp || !connectionLastSyncElement) return;
     lastSyncDate = new Date(timestamp);
-    connectionLastSyncElement.textContent = `Р В РЎвЂєР В Р’В±Р В Р вЂ¦Р В РЎвЂўР В Р вЂ Р В Р’В»Р В Р’ВµР В Р вЂ¦Р В РЎвЂў ${lastSyncDate.toLocaleTimeString()}`;
+    connectionLastSyncElement.textContent = `Обновлено ${lastSyncDate.toLocaleTimeString()}`;
 }
 
 function setWidgetStatus(element, state, message) {
@@ -177,13 +177,13 @@ class WebSocketManager {
 }
 
 function handleStatsSocketOpen() {
-    totalActionsValueElement.textContent = "Р С›Р В±Р Р…Р С•Р Р†Р В»Р ВµР Р…Р С‘Р Вµ...";
-    setConnectionState('online', 'Р С›Р Р…Р В»Р В°Р в„–Р Р…');
-    setLeaderboardState('loading', 'Р вЂ”Р В°Р С–РЎР‚РЎС“Р В·Р С”Р В°...');
-    setWidgetStatus(popularActionsStatusElement, 'loading', 'Р С›Р В¶Р С‘Р Т‘Р В°Р Р…Р С‘Р Вµ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦...');
-    setWidgetStatus(activityOverTimeStatusElement, 'loading', 'Р С›Р В¶Р С‘Р Т‘Р В°Р Р…Р С‘Р Вµ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦...');
-    setWidgetStatus(newUsersStatusElement, 'loading', 'Р С›Р В¶Р С‘Р Т‘Р В°Р Р…Р С‘Р Вµ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦...');
-    setWidgetStatus(actionTypesStatusElement, 'loading', 'Р С›Р В¶Р С‘Р Т‘Р В°Р Р…Р С‘Р Вµ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦...');
+    totalActionsValueElement.textContent = "Обновление...";
+    setConnectionState('online', 'Онлайн');
+    setLeaderboardState('loading', 'Загрузка...');
+    setWidgetStatus(popularActionsStatusElement, 'loading', 'Ожидание данных...');
+    setWidgetStatus(activityOverTimeStatusElement, 'loading', 'Ожидание данных...');
+    setWidgetStatus(newUsersStatusElement, 'loading', 'Ожидание данных...');
+    setWidgetStatus(actionTypesStatusElement, 'loading', 'Ожидание данных...');
     renderLeaderboardSkeleton();
 }
 function handleStatsSocketMessage(event) {
@@ -191,12 +191,12 @@ function handleStatsSocketMessage(event) {
         const data = JSON.parse(event.data);
 
         if (data.error) {
-            setLeaderboardState('error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦');
-            setWidgetStatus(popularActionsStatusElement, 'error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦');
-            setWidgetStatus(activityOverTimeStatusElement, 'error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦');
-            setWidgetStatus(newUsersStatusElement, 'error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦');
-            setWidgetStatus(actionTypesStatusElement, 'error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦');
-            showToast('error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° Р В·Р В°Р С–РЎР‚РЎС“Р В·Р С”Р С‘ РЎРѓРЎвЂљР В°РЎвЂљР С‘РЎРѓРЎвЂљР С‘Р С”Р С‘');
+            setLeaderboardState('error', 'Ошибка данных');
+            setWidgetStatus(popularActionsStatusElement, 'error', 'Ошибка данных');
+            setWidgetStatus(activityOverTimeStatusElement, 'error', 'Ошибка данных');
+            setWidgetStatus(newUsersStatusElement, 'error', 'Ошибка данных');
+            setWidgetStatus(actionTypesStatusElement, 'error', 'Ошибка данных');
+            showToast('error', 'Ошибка загрузки статистики');
             return;
         }
 
@@ -213,10 +213,10 @@ function handleStatsSocketMessage(event) {
         if (data.leaderboard && Array.isArray(data.leaderboard)) {
             leaderboardBodyElement.innerHTML = '';
             if (data.leaderboard.length === 0) {
-                setLeaderboardState('empty', 'Р СњР ВµРЎвЂљ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦');
-                leaderboardBodyElement.innerHTML = `<tr><td colspan="5" class="px-6 py-4 text-center">Р СњР ВµРЎвЂљ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦.</td></tr>`;
+                setLeaderboardState('empty', 'Нет данных');
+                leaderboardBodyElement.innerHTML = `<tr><td colspan="5" class="px-6 py-4 text-center">Нет данных.</td></tr>`;
             } else {
-                setLeaderboardState('ok', 'Р вЂќР В°Р Р…Р Р…РЎвЂ№Р Вµ Р С•Р В±Р Р…Р С•Р Р†Р В»РЎРЏРЎР‹РЎвЂљРЎРѓРЎРЏ');
+                setLeaderboardState('ok', 'Данные обновляются');
                 data.leaderboard.forEach((user, index) => {
                     const tr = document.createElement('tr');
                     tr.className = "theme-card border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors";
@@ -242,7 +242,7 @@ function handleStatsSocketMessage(event) {
 
                     const tdTag = document.createElement('td');
                     tdTag.className = "px-6 py-4";
-                    if (user.username && user.username !== 'Р СњР ВµРЎвЂљ username') {
+                    if (user.username && user.username !== 'Нет username') {
                         tdTag.innerHTML = `<span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-gray-700 dark:text-gray-300">@${user.username}</span>`;
                     } else {
                         tdTag.innerHTML = `<span class="text-gray-400 text-xs">-</span>`;
@@ -285,21 +285,21 @@ function handleStatsSocketMessage(event) {
 
     } catch (e) {
         console.error("Error parsing WS stats:", e);
-        setLeaderboardState('error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦');
-        setConnectionState('offline', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦');
-        showToast('error', 'Р СњР Вµ РЎС“Р Т‘Р В°Р В»Р С•РЎРѓРЎРЉ Р С•Р В±РЎР‚Р В°Р В±Р С•РЎвЂљР В°РЎвЂљРЎРЉ Р Т‘Р В°Р Р…Р Р…РЎвЂ№Р Вµ РЎРѓРЎвЂљР В°РЎвЂљР С‘РЎРѓРЎвЂљР С‘Р С”Р С‘');
+        setLeaderboardState('error', 'Ошибка данных');
+        setConnectionState('offline', 'Ошибка данных');
+        showToast('error', 'Не удалось обработать данные статистики');
     }
 }
 function handleStatsSocketClose() {
-    setLeaderboardState('error', 'Р СњР ВµРЎвЂљ РЎРѓР С•Р ВµР Т‘Р С‘Р Р…Р ВµР Р…Р С‘РЎРЏ');
-    setConnectionState('offline', 'Р СњР ВµРЎвЂљ РЎРѓР С•Р ВµР Т‘Р С‘Р Р…Р ВµР Р…Р С‘РЎРЏ');
-    showToast('warning', 'WebSocket Р С•РЎвЂљР С”Р В»РЎР‹РЎвЂЎР ВµР Р…, Р С‘Р Т‘Р ВµРЎвЂљ Р С—Р ВµРЎР‚Р ВµР С—Р С•Р Т‘Р С”Р В»РЎР‹РЎвЂЎР ВµР Р…Р С‘Р Вµ');
+    setLeaderboardState('error', 'Нет соединения');
+    setConnectionState('offline', 'Нет соединения');
+    showToast('warning', 'WebSocket отключен, идет переподключение');
 }
 
 function handleStatsSocketError() {
-    setLeaderboardState('error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° РЎРѓР С•Р ВµР Т‘Р С‘Р Р…Р ВµР Р…Р С‘РЎРЏ');
-    setConnectionState('offline', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° РЎРѓР С•Р ВµР Т‘Р С‘Р Р…Р ВµР Р…Р С‘РЎРЏ');
-    showToast('error', 'Р С›РЎв‚¬Р С‘Р В±Р С”Р В° РЎРѓР С•Р ВµР Т‘Р С‘Р Р…Р ВµР Р…Р С‘РЎРЏ РЎРѓР С• РЎРѓРЎвЂљР В°РЎвЂљР С‘РЎРѓРЎвЂљР С‘Р С”Р С•Р в„–');
+    setLeaderboardState('error', 'Ошибка соединения');
+    setConnectionState('offline', 'Ошибка соединения');
+    showToast('error', 'Ошибка соединения со статистикой');
 }
 function handleLogSocketMessage(event) {
     const newLogEntry = document.createElement('div');
@@ -346,9 +346,9 @@ function updateCombinedPopularActionsChart() {
     const topData = combinedData.slice(0, 10);
 
     if (topData.length === 0) {
-        setWidgetStatus(popularActionsStatusElement, 'empty', 'Р СњР ВµРЎвЂљ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦ Р С—Р С• Р Р†РЎвЂ№Р В±РЎР‚Р В°Р Р…Р Р…Р С•Р СРЎС“ РЎвЂћР С‘Р В»РЎРЉРЎвЂљРЎР‚РЎС“');
+        setWidgetStatus(popularActionsStatusElement, 'empty', 'Нет данных по выбранному фильтру');
     } else {
-        setWidgetStatus(popularActionsStatusElement, 'ok', `Р СџР С•Р С”Р В°Р В·Р В°Р Р…Р С•: ${topData.length}`);
+        setWidgetStatus(popularActionsStatusElement, 'ok', `Показано: ${topData.length}`);
     }
 
     popularActionsChartInstance = updateChart({
@@ -371,9 +371,9 @@ const updateActivityOverTimeChart = () => {
     const data = chartDataStore.activityOverTime ? chartDataStore.activityOverTime[filter] : [];
 
     if (!data || data.length === 0) {
-        setWidgetStatus(activityOverTimeStatusElement, 'empty', 'Р СњР ВµРЎвЂљ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦ Р В·Р В° Р Р†РЎвЂ№Р В±РЎР‚Р В°Р Р…Р Р…РЎвЂ№Р в„– Р С—Р ВµРЎР‚Р С‘Р С•Р Т‘');
+        setWidgetStatus(activityOverTimeStatusElement, 'empty', 'Нет данных за выбранный период');
     } else {
-        setWidgetStatus(activityOverTimeStatusElement, 'ok', `Р СџР ВµРЎР‚Р С‘Р С•Р Т‘: ${filter}`);
+        setWidgetStatus(activityOverTimeStatusElement, 'ok', `Период: ${filter}`);
     }
 
     activityOverTimeChartInstance = updateChart({
@@ -389,9 +389,9 @@ const updateActivityOverTimeChart = () => {
 
 const updateNewUsersChart = (data) => {
     if (!data || data.length === 0) {
-        setWidgetStatus(newUsersStatusElement, 'empty', 'Р СњР ВµРЎвЂљ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦ Р С• Р Р…Р С•Р Р†РЎвЂ№РЎвЂ¦ Р С—Р С•Р В»РЎРЉР В·Р С•Р Р†Р В°РЎвЂљР ВµР В»РЎРЏРЎвЂ¦');
+        setWidgetStatus(newUsersStatusElement, 'empty', 'Нет данных о новых пользователях');
     } else {
-        setWidgetStatus(newUsersStatusElement, 'ok', `Р вЂ”Р В°Р С—Р С‘РЎРѓР ВµР в„–: ${data.length}`);
+        setWidgetStatus(newUsersStatusElement, 'ok', `Записей: ${data.length}`);
     }
 
     newUsersChartInstance = updateChart({
@@ -407,9 +407,9 @@ const updateNewUsersChart = (data) => {
 
 const updateActionTypesChart = (data) => {
     if (!data || data.length === 0) {
-        setWidgetStatus(actionTypesStatusElement, 'empty', 'Р СњР ВµРЎвЂљ Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦ Р С—Р С• РЎвЂљР С‘Р С—Р В°Р С Р Т‘Р ВµР в„–РЎРѓРЎвЂљР Р†Р С‘Р в„–');
+        setWidgetStatus(actionTypesStatusElement, 'empty', 'Нет данных по типам действий');
     } else {
-        setWidgetStatus(actionTypesStatusElement, 'ok', `Р С™Р В°РЎвЂљР ВµР С–Р С•РЎР‚Р С‘Р в„–: ${data.length}`);
+        setWidgetStatus(actionTypesStatusElement, 'ok', `Категорий: ${data.length}`);
     }
 
     const colors = [
@@ -510,7 +510,7 @@ function handleChartClick(event, chart, data) {
 function fetchUsersForModal(label, type, page = 1) {
     const modalBody = document.getElementById('modal-body');
     const controls = document.getElementById('modal-pagination-controls');
-    modalBody.innerHTML = '<div class="p-4 text-center">Р—Р°РіСЂСѓР·РєР°...</div>';
+    modalBody.innerHTML = '<div class="p-4 text-center">Загрузка...</div>';
 
     fetch(`/api/stats/action_users?action_type=${type}&action_details=${encodeURIComponent(label)}&page=${page}`)
         .then(res => {
@@ -521,7 +521,7 @@ function fetchUsersForModal(label, type, page = 1) {
         })
         .then(data => {
             if (!data.users || data.users.length === 0) {
-                modalBody.innerHTML = '<div class="p-4 text-center text-gray-500">РџРѕР»СЊР·РѕРІР°С‚РµР»Рё РЅРµ РЅР°Р№РґРµРЅС‹.</div>';
+                modalBody.innerHTML = '<div class="p-4 text-center text-gray-500">Пользователи не найдены.</div>';
                 return;
             }
 
@@ -531,7 +531,7 @@ function fetchUsersForModal(label, type, page = 1) {
                 <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-300">
                     <tr>
                         <th class="px-6 py-3">ID</th>
-                        <th class="px-6 py-3">РРјСЏ</th>
+                        <th class="px-6 py-3">Имя</th>
                         <th class="px-6 py-3">Username</th>
                     </tr>
                 </thead>
@@ -552,7 +552,7 @@ function fetchUsersForModal(label, type, page = 1) {
             if (data.pagination.total_pages > 1) {
                 if (page > 1) {
                     const prevBtn = document.createElement('button');
-                    prevBtn.textContent = 'В« РќР°Р·Р°Рґ';
+                    prevBtn.textContent = '« Назад';
                     prevBtn.className = "px-3 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white";
                     prevBtn.onclick = () => fetchUsersForModal(label, type, page - 1);
                     controls.appendChild(prevBtn);
@@ -564,7 +564,7 @@ function fetchUsersForModal(label, type, page = 1) {
 
                 if (page < data.pagination.total_pages) {
                     const nextBtn = document.createElement('button');
-                    nextBtn.textContent = 'Р’РїРµСЂРµРґ В»';
+                    nextBtn.textContent = 'Вперед »';
                     nextBtn.className = "px-3 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white";
                     nextBtn.onclick = () => fetchUsersForModal(label, type, page + 1);
                     controls.appendChild(nextBtn);
@@ -573,12 +573,12 @@ function fetchUsersForModal(label, type, page = 1) {
         })
         .catch(err => {
             console.error(err);
-            showToast('error', 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃРїРёСЃРѕРє РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№');
+            showToast('error', 'Не удалось загрузить список пользователей');
             modalBody.innerHTML = `
-                <div class="p-4 text-center text-red-500">РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё.</div>
+                <div class="p-4 text-center text-red-500">Ошибка загрузки.</div>
                 <div class="pb-4 text-center">
                     <button id="modal-retry-btn" class="px-3 py-1 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 transition">
-                        РџРѕРІС‚РѕСЂРёС‚СЊ
+                        Повторить
                     </button>
                 </div>
             `;
@@ -590,12 +590,12 @@ function fetchUsersForModal(label, type, page = 1) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    setConnectionState('connecting', 'РџРѕРґРєР»СЋС‡РµРЅРёРµ...');
+    setConnectionState('connecting', 'Подключение...');
     renderLeaderboardSkeleton();
-    setWidgetStatus(popularActionsStatusElement, 'loading', 'РћР¶РёРґР°РЅРёРµ РґР°РЅРЅС‹С…...');
-    setWidgetStatus(activityOverTimeStatusElement, 'loading', 'РћР¶РёРґР°РЅРёРµ РґР°РЅРЅС‹С…...');
-    setWidgetStatus(newUsersStatusElement, 'loading', 'РћР¶РёРґР°РЅРёРµ РґР°РЅРЅС‹С…...');
-    setWidgetStatus(actionTypesStatusElement, 'loading', 'РћР¶РёРґР°РЅРёРµ РґР°РЅРЅС‹С…...');
+    setWidgetStatus(popularActionsStatusElement, 'loading', 'Ожидание данных...');
+    setWidgetStatus(activityOverTimeStatusElement, 'loading', 'Ожидание данных...');
+    setWidgetStatus(newUsersStatusElement, 'loading', 'Ожидание данных...');
+    setWidgetStatus(actionTypesStatusElement, 'loading', 'Ожидание данных...');
 
     statsSocketManager = new WebSocketManager(statsWsUrl, {
         onOpen: handleStatsSocketOpen,
@@ -606,8 +606,8 @@ document.addEventListener('DOMContentLoaded', function() {
     statsSocketManager.connect();
 
     const reconnectStats = () => {
-        setConnectionState('connecting', 'РџРµСЂРµРїРѕРґРєР»СЋС‡РµРЅРёРµ...');
-        setLeaderboardState('loading', 'РџРѕРІС‚РѕСЂРЅРѕРµ РїРѕРґРєР»СЋС‡РµРЅРёРµ...');
+        setConnectionState('connecting', 'Переподключение...');
+        setLeaderboardState('loading', 'Повторное подключение...');
         renderLeaderboardSkeleton();
         statsSocketManager.connect();
     };

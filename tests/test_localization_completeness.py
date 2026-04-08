@@ -1,7 +1,23 @@
 import json
-import tempfile
+import shutil
+import sys
+import types
 import unittest
 from pathlib import Path
+
+# `shared_lib.i18n` imports database helpers from `shared_lib.database`,
+# which depends on SQLAlchemy. For this unit test we only need Translator
+# fallback logic, so we provide a lightweight stub module.
+fake_database_module = types.ModuleType("shared_lib.database")
+
+
+async def _fake_get_settings(*_args, **_kwargs):
+    return {}
+
+
+fake_database_module.get_chat_settings = _fake_get_settings
+fake_database_module.get_user_settings = _fake_get_settings
+sys.modules.setdefault("shared_lib.database", fake_database_module)
 
 from shared_lib.i18n import Translator
 
@@ -17,8 +33,10 @@ class TestLocalizationCompleteness(unittest.TestCase):
         self.assertEqual(set(en_data.keys()), set(ru_data.keys()))
 
     def test_translator_fallback_behavior(self):
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp_path = Path(tmp_dir)
+        tmp_path = Path("tests/.tmp_localization_test")
+        shutil.rmtree(tmp_path, ignore_errors=True)
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        try:
             (tmp_path / "en.json").write_text(
                 json.dumps({"hello": "Hello", "fallback_only": "Default value"}),
                 encoding="utf-8",
@@ -34,3 +52,5 @@ class TestLocalizationCompleteness(unittest.TestCase):
             self.assertEqual(translator.gettext("ru", "fallback_only"), "Default value")
             self.assertEqual(translator.gettext("es", "fallback_only"), "Default value")
             self.assertEqual(translator.gettext("ru", "missing_key"), "_missing_key_")
+        finally:
+            shutil.rmtree(tmp_path, ignore_errors=True)

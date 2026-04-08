@@ -116,8 +116,8 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 @app.get(
     "/",
     response_class=HTMLResponse,
-    summary="Р“Р»Р°РІРЅР°СЏ СЃС‚СЂР°РЅРёС†Р° СЃС‚Р°С‚РёСЃС‚РёРєРё",
-    description="РћС‚РѕР±СЂР°Р¶Р°РµС‚ HTML СЃС‚СЂР°РЅРёС†Сѓ СЃРѕ СЃС‚Р°С‚РёСЃС‚РёРєРѕР№ Р±РѕС‚Р°.",
+    summary="Главная страница статистики",
+    description="Отображает HTML страницу со статистикой бота.",
     dependencies=[Depends(get_current_user)],
 )
 async def read_root_html(request: Request):
@@ -127,8 +127,8 @@ async def read_root_html(request: Request):
 @app.get(
     "/users/{user_id}",
     response_class=HTMLResponse,
-    summary="РЎС‚СЂР°РЅРёС†Р° РїСЂРѕС„РёР»СЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ",
-    description="РћС‚РѕР±СЂР°Р¶Р°РµС‚ СЃС‚СЂР°РЅРёС†Сѓ СЃ РґРµС‚Р°Р»СЊРЅРѕР№ РёРЅС„РѕСЂРјР°С†РёРµР№ Рѕ РґРµР№СЃС‚РІРёСЏС… РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ.",
+    summary="Страница профиля пользователя",
+    description="Отображает страницу с детальной информацией о действиях пользователя.",
     dependencies=[Depends(get_current_user)],
 )
 async def read_user_details_html(request: Request, user_id: int):

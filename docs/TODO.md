@@ -4,19 +4,6 @@ Last updated: 2026-04-07
 
 ## Active Backlog (In-Repo)
 
-### P1 - Deployment and Release
-- [ ] Replace root SSH deploy in Jenkins with least-privileged deploy user
-  - blocked/external: needs Jenkins credential rotation + host user provisioning.
-
-### P1 - Reliability and Data Safety
-- [x] Persist `/myschedule` filters in DB-backed user settings (not Redis-only 1h TTL) to avoid silent filter resets.
-- [x] Add integration test coverage for admin stats endpoints actually used by frontend (`/api/stats/action_users`, profile pagination/sort matrix).
-
-### P1 - Security and Observability
-- [x] Add rate limiting and explicit audit metadata for `POST /api/stats/users/{user_id}/send_message` (admin id, target id, timestamp, result).
-- [x] Add explicit allowlists for `sort_by` and `sort_order` in stats/profile endpoints to prevent accidental unsafe query paths in future refactors.
-- [x] Add per-request correlation id in FastAPI logs and propagate it into scheduler-triggered/admin operations for easier incident tracing.
-- [x] Add metrics or counters for schedule API fallback usage (`RUZ API success`, `cache fallback`, `no cache`) to track upstream health.
 
 ### P2 - API and Dashboard
 - [ ] Add range parameters for user action export (`date_from`, `date_to`, timezone) so weekly PDF and CSV are not fixed to "last 7 days only".
@@ -34,10 +21,10 @@ Last updated: 2026-04-07
 - [ ] Fix mojibake RU OpenAPI summary/description text in FastAPI routers to restore readable API docs.
 - [ ] Add wiki section describing schedule search offline fallback semantics and `is_offline` flag behavior for frontend maintainers.
 
+### P3 front
+ - [ ] replace allerts with cool popups
 
-
-
-## P3
+### P3 back
 
 - [ ] Qdrant for search
 - [ ] Add CI matrix run for Python 3.11 and 3.12 to catch version-specific typing/FastAPI regressions earlier.
@@ -53,6 +40,19 @@ Last updated: 2026-04-07
 - [x] Speed up website schedule unified search by running group/person/auditorium lookups in parallel.
 - [x] Fix stats action users endpoint mismatch by exposing `/api/stats/action_users` and keeping legacy `/api/stats/stats/action_users` as compatibility alias.
 
+### P1 - Deployment and Release
+- [x] Replace root SSH deploy in Jenkins with least-privileged deploy user
+  - blocked/external: needs Jenkins credential rotation + host user provisioning.
+
+### P1 - Reliability and Data Safety
+- [x] Persist `/myschedule` filters in DB-backed user settings (not Redis-only 1h TTL) to avoid silent filter resets.
+- [x] Add integration test coverage for admin stats endpoints actually used by frontend (`/api/stats/action_users`, profile pagination/sort matrix).
+
+### P1 - Security and Observability
+- [x] Add rate limiting and explicit audit metadata for `POST /api/stats/users/{user_id}/send_message` (admin id, target id, timestamp, result).
+- [x] Add explicit allowlists for `sort_by` and `sort_order` in stats/profile endpoints to prevent accidental unsafe query paths in future refactors.
+- [x] Add per-request correlation id in FastAPI logs and propagate it into scheduler-triggered/admin operations for easier incident tracing.
+- [x] Add metrics or counters for schedule API fallback usage (`RUZ API success`, `cache fallback`, `no cache`) to track upstream health.
 
 ## Chosen not to be implemented at all (cuz implemented partially or just don't want)
 

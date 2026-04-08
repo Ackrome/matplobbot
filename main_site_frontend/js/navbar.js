@@ -158,7 +158,7 @@ const I18N = {
         "schedule.meta.title": "Расписание | ITISHCHENKO",
         "schedule.heading": "Расписание",
         "schedule.offline.available": "Доступно оффлайн",
-        "schedule.search.placeholder": "Найти группу или ФИО...",
+        "schedule.search.placeholder": "\u041d\u0430\u0439\u0442\u0438 \u0433\u0440\u0443\u043f\u043f\u0443, \u043f\u0440\u0435\u043f\u043e\u0434\u0430\u0432\u0430\u0442\u0435\u043b\u044f \u0438\u043b\u0438 \u0430\u0443\u0434\u0438\u0442\u043e\u0440\u0438\u044e...",
         "schedule.today": "Сегодня",
         "schedule.filters.mobile": "Фильтры и модули",
         "schedule.filters.desktop": "Фильтры и модули",
@@ -201,10 +201,10 @@ const I18N = {
 };
 
 Object.assign(I18N.ru, {
-    "schedule.search.placeholder": "РќР°Р№С‚Рё РіСЂСѓРїРїСѓ, РїСЂРµРїРѕРґР°РІР°С‚РµР»СЏ РёР»Рё Р°СѓРґРёС‚РѕСЂРёСЋ...",
-    "schedule.search.type.group": "Р“СЂСѓРїРїР°",
-    "schedule.search.type.person": "РџСЂРµРїРѕРґР°РІР°С‚РµР»СЊ",
-    "schedule.search.type.auditorium": "РђСѓРґРёС‚РѕСЂРёСЏ",
+    "schedule.search.placeholder": "\u041d\u0430\u0439\u0442\u0438 \u0433\u0440\u0443\u043f\u043f\u0443, \u043f\u0440\u0435\u043f\u043e\u0434\u0430\u0432\u0430\u0442\u0435\u043b\u044f \u0438\u043b\u0438 \u0430\u0443\u0434\u0438\u0442\u043e\u0440\u0438\u044e...",
+    "schedule.search.type.group": "\u0413\u0440\u0443\u043f\u043f\u0430",
+    "schedule.search.type.person": "\u041f\u0440\u0435\u043f\u043e\u0434\u0430\u0432\u0430\u0442\u0435\u043b\u044c",
+    "schedule.search.type.auditorium": "\u0410\u0443\u0434\u0438\u0442\u043e\u0440\u0438\u044f",
     "schedule.filters.fullLecturer": "Полное имя преподавателя",
     "schedule.calendar.eyebrow": "Синхронизация",
     "schedule.calendar.title": "Подписка на календарь",
