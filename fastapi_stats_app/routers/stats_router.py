@@ -48,10 +48,9 @@ SORT_ORDER_ALLOWED = ("asc", "desc")
 ADMIN_SEND_MESSAGE_RATE_LIMIT_PER_MINUTE = int(os.getenv("ADMIN_SEND_MESSAGE_RATE_LIMIT", "12"))
 ADMIN_SEND_MESSAGE_WINDOW_SECONDS = 60
 DEFAULT_EXPORT_TIMEZONE = "UTC"
-LEGACY_ACTION_USERS_ALIAS_ENABLED = (
-    os.getenv("ENABLE_LEGACY_ACTION_USERS_ALIAS", "true").strip().lower()
-    not in {"0", "false", "no", "off"}
-)
+LEGACY_ACTION_USERS_ALIAS_ENABLED = os.getenv(
+    "ENABLE_LEGACY_ACTION_USERS_ALIAS", "true"
+).strip().lower() not in {"0", "false", "no", "off"}
 LEGACY_ACTION_USERS_ALIAS_SUNSET_DATE = date(2026, 7, 1)
 LEGACY_ACTION_USERS_ALIAS_DOC_URL = (
     "https://github.com/Ackrome/matplobbot/blob/main/docs/wiki.md#stats-action-users-endpoint"
@@ -733,7 +732,9 @@ async def send_message_to_user(
             error=str(e),
         )
         logger.error(f"Network error sending message to {user_id}: {e}")
-        raise HTTPException(status_code=500, detail="Network error while sending message to Telegram")
+        raise HTTPException(
+            status_code=500, detail="Network error while sending message to Telegram"
+        )
 
     try:
         await log_user_action(
