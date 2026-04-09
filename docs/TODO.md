@@ -4,6 +4,21 @@ Last updated: 2026-04-09
 
 ## Active Backlog (In-Repo)
 
+### P1 - v1.0.0 Release Gate
+- [ ] Define `v1.0.0` scope freeze + explicit cut-list ("not in 1.0"), then lock feature creep after RC1.
+- [ ] Create a release readiness checklist (Go/No-Go) with required checks: CI green, migrations verified, smoke checks green, rollback tested, docs updated.
+- [ ] Prepare a release candidate process (`v1.0.0-rc1`, `rc2`, ...) with acceptance sign-off criteria and owner per check.
+- [ ] Add one-command rollback flow for production (restore previous known-good image tags for bot/api/scheduler/worker).
+- [ ] Persist and publish "last successful deploy metadata" (image tags + commit SHA + timestamp) to simplify incident rollback.
+- [ ] Add production backup policy for Postgres (scheduled `pg_dump`, retention, restore drill) and document RPO/RTO targets.
+- [ ] Add migration safety checks in deploy: fail before rollout if alembic revision state is inconsistent; verify post-migration schema health.
+- [ ] Add secret scanning in CI (for example `gitleaks`) and block merges on high-confidence leaks.
+- [ ] Add dependency vulnerability gate in CI (`pip-audit` with policy/allowlist) for release branches.
+- [ ] Add E2E tests for critical user journeys: auth, schedule search/load, `/myschedule` notifications path, stats export, Studio core actions.
+- [ ] Define and enforce a minimum automated coverage target for critical modules (routers/scheduler/studio/stats).
+- [ ] Add uptime/error alerts for key production endpoints (`/api/stats/health`, scheduler `/health`, website) with actionable routing to admins.
+- [ ] Publish `v1.0.0` operator runbook: deploy, rollback, backup/restore, common incident playbooks, and on-call triage steps.
+- [ ] Prepare `v1.0.0` release notes/changelog template with upgrade notes, known limitations, and post-release monitoring checklist.
 
 ### P1 - Reliability, Security, and Delivery
 - [ ] Escape HTML-sensitive `project.name` before Studio Telegram send (`parse_mode=HTML`) to prevent malformed captions/injection-like rendering; add regression test with `<`, `>`, `&`, and quotes.

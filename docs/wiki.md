@@ -851,6 +851,28 @@ Jenkins deploy SSH now verifies the deploy host against a pinned SHA256 host fin
 - The build parameter `DEPLOY_HOST_FINGERPRINT` can still be used as a one-off override.
 - If both the override and `APP_VM_SHA256` are empty, the pipeline now fails instead of falling back to TOFU host trust.
 
+## GitHub Wiki Sync
+
+Repository now includes workflow:
+
+- `.github/workflows/sync-wiki.yml`
+
+It syncs `docs/wiki.md` into GitHub Wiki `Home.md` on every push to `main` when `docs/wiki.md` changes.
+
+### Setup
+
+1. Enable Wiki in GitHub repository settings.
+2. Add secret `WIKI_PUSH_TOKEN` in repository secrets:
+   - for private repos: token with `repo` scope
+   - for public repos: token with enough rights to push wiki repo
+3. Optionally run workflow manually via `workflow_dispatch`.
+
+### Behavior
+
+- Trigger: push to `main` with path `docs/wiki.md`
+- Action: clones `${owner}/${repo}.wiki.git`, overwrites `Home.md`, commits/pushes only if content changed
+- If `WIKI_PUSH_TOKEN` is missing, workflow fails with explicit setup message
+
 ### Docker Pull Lease Error Recovery
 
 The production `deploy.sh` now includes automatic recovery for intermittent Docker/containerd pull failures such as:

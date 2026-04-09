@@ -1,0 +1,49 @@
+name: Sync docs/wiki.md to GitHub Wiki
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - docs/wiki.md
+  workflow_dispatch:
+
+jobs:
+  sync-wiki:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Sync Home.md in GitHub Wiki
+        env:
+          WIKI_TOKEN: ${{ secrets.WIKI_PUSH_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${WIKI_TOKEN:-}" ]; then
+            echo "WIKI_PUSH_TOKEN is not configured. Add it in repository secrets."
+            exit 1
+          fi
+
+          WIKI_URL="https://x-access-token:${WIKI_TOKEN}@github.com/${REPO}.wiki.git"
+          git clone "${WIKI_URL}" wiki
+
+          cp docs/wiki.md wiki/Home.md
+
+          cd wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Home.md
+
+          if git diff --cached --quiet; then
+            echo "No wiki changes to commit."
+            exit 0
+          fi
+
+          git commit -m "docs: sync Home from docs/wiki.md"
+          git push
