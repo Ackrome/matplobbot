@@ -546,9 +546,7 @@ async def send_admin_summary(
                     )
                 except Exception as e:
                     logger.error(f"Failed to get stats for admin summary: {e}", exc_info=True)
-                    summary_parts.append(
-                        "❌ Не удалось загрузить статистику."
-                    )
+                    summary_parts.append("❌ Не удалось загрузить статистику.")
 
                 # Send the main summary message (no buttons usually needed here)
                 send_attempts += 1

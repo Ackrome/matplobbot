@@ -25,9 +25,7 @@ if PROXY_URL:
     os.environ["ALL_PROXY"] = socks5h_proxy
 # ------------------------------------
 # Определяем пути для логгирования FastAPI приложения
-LOG_FILE_FASTAPI = os.path.join(
-    LOG_DIR, FASTAPI_LOG_FILE_NAME
-)  # Use constants from config
+LOG_FILE_FASTAPI = os.path.join(LOG_DIR, FASTAPI_LOG_FILE_NAME)  # Use constants from config
 
 # Настройка логгирования для FastAPI приложения
 # Reuse the same logging format as in bot/logger.py
@@ -40,9 +38,7 @@ logging.basicConfig(
     handlers=[logging.FileHandler(LOG_FILE_FASTAPI, encoding="utf-8"), logging.StreamHandler()],
 )
 configure_correlation_logging()
-logger = logging.getLogger(
-    __name__
-)  # Получаем логгер после базовой конфигурации
+logger = logging.getLogger(__name__)  # Получаем логгер после базовой конфигурации
 
 # --- Теперь можно безопасно импортировать остальные части приложения ---
 from fastapi import Depends, FastAPI, Request
