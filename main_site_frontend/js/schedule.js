@@ -1048,9 +1048,29 @@ function renderCard(l, isDesktop) {
 function getBadgeColor(kind) {
     if (!kind) return { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600' };
     const k = kind.toLowerCase();
-    if (k.includes('Р»РµРєС†') || k.includes('lecture')) return { bg: 'bg-emerald-50/60', border: 'border-emerald-200', text: 'text-emerald-700' };
-    if (k.includes('РїСЂР°РєС‚') || k.includes('СЃРµРјРёРЅ') || k.includes('practice') || k.includes('seminar')) return { bg: 'bg-amber-50/60', border: 'border-amber-200', text: 'text-amber-700' };
-    if (k.includes('СЌРєР·Р°РјРµРЅ') || k.includes('Р·Р°С‡РµС‚') || k.includes('Р°С‚С‚РµСЃС‚') || k.includes('exam') || k.includes('credit') || k.includes('test')) return { bg: 'bg-rose-50/60', border: 'border-rose-200', text: 'text-rose-700' };
+
+    const isLecture = k.includes('лекц') || k.includes('lecture') || k.includes('Р»РµРєС†');
+    const isPractice =
+        k.includes('практ') ||
+        k.includes('семин') ||
+        k.includes('practice') ||
+        k.includes('seminar') ||
+        k.includes('РїСЂР°РєС‚') ||
+        k.includes('СЃРµРјРёРЅ');
+    const isExamLike =
+        k.includes('экзам') ||
+        k.includes('зачет') ||
+        k.includes('аттест') ||
+        k.includes('exam') ||
+        k.includes('credit') ||
+        k.includes('test') ||
+        k.includes('СЌРєР·Р°РјРµРЅ') ||
+        k.includes('Р·Р°С‡РµС‚') ||
+        k.includes('Р°С‚С‚РµСЃС‚');
+
+    if (isLecture) return { bg: 'bg-emerald-50/60', border: 'border-emerald-200', text: 'text-emerald-700' };
+    if (isPractice) return { bg: 'bg-amber-50/60', border: 'border-amber-200', text: 'text-amber-700' };
+    if (isExamLike) return { bg: 'bg-rose-50/60', border: 'border-rose-200', text: 'text-rose-700' };
     return { bg: 'bg-blue-50/60', border: 'border-blue-200', text: 'text-blue-700' };
 }
 
