@@ -1,587 +1,607 @@
-# Bot Feature Wiki
+# Matplobbot Full Feature Wiki
 
-This document covers the user-facing bot, scheduler, and website features currently described here:
-
-- unified global search via `/search`
-- saved search presets via `/search_presets`
-- schedule table lecturer-name toggle on the website
-- website iCal subscription links for authorized users
-- scheduler proxy support via `PROXY_URL`
-
-## Fast Travel TOC
-
-- [Quick Index](#quick-index)
-- [Website Schedule Search](#website-schedule-search)
-- [Unified Global Search](#unified-global-search)
-- [Search Presets](#search-presets)
-- [Website Schedule Features](#website-schedule-features-1)
-- [Website Schedule Features - Full Lecturer Name Toggle](#full-lecturer-name-toggle)
-- [Website Schedule Features - Configurable Frontend API Base](#configurable-frontend-api-base)
-- [Website Schedule Features - Styled Popup Notifications](#styled-popup-notifications)
-- [Website Schedule Features - Schedule/Auth Text Fixes (P3 Front)](#scheduleauth-text-fixes-p3-front)
-- [Website Schedule Features - Website iCal Subscription Links](#website-ical-subscription-links)
-- [Website Schedule Features - Schedule Last Parsed Time](#schedule-last-parsed-time)
-- [Website Schedule Features - Bot Calendar Link: Telegram-Filtered Feed](#bot-calendar-link-telegram-filtered-feed)
-- [Website Schedule Features - User Stats Export Formats](#user-stats-export-formats)
-- [Website Schedule Features - Stats Action Users Endpoint](#stats-action-users-endpoint)
-- [Website Schedule Features - Stats Sort Allowlists](#stats-sort-allowlists)
-- [Website Schedule Features - Admin Message Rate Limit And Audit Metadata](#admin-message-rate-limit-and-audit-metadata)
-- [Website Schedule Features - Correlation ID In API/Scheduler Logs](#correlation-id-in-apischeduler-logs)
-- [Website Schedule Features - Schedule Fallback Counters](#schedule-fallback-counters)
-- [Website Schedule Features - Localization Completeness And Fallback](#localization-completeness-and-fallback)
-- [Scheduler Proxy Support](#scheduler-proxy-support)
-- [Jenkins Deploy Host Fingerprint](#jenkins-deploy-host-fingerprint)
-- [GitHub Wiki Sync](#github-wiki-sync)
-- [Docker Pull Lease Error Recovery](#docker-pull-lease-error-recovery)
-- [P2 API And Dashboard Updates (2026-04-09)](#p2-api-and-dashboard-updates-2026-04-09)
-- [Maintainer Summary](#maintainer-summary)
+This page is a full feature map of the project: bot, website, API, scheduler, worker, and delivery pipeline.
 
 ## Quick Index
 
-### Search Features
+### Bot Features
 
 | Feature | Entry point | Purpose |
 | --- | --- | --- |
-| [Unified global search](#unified-global-search) | `/search` | Search library content and linked GitHub notes from one screen |
-| [Search presets](#search-presets) | `/search_presets` | Save and rerun commonly used searches |
+| [Onboarding and language](#onboarding-and-language) | `/start` | First-run flow, language selection, and guided intro |
+| [Help and command menu](#help-and-command-menu) | `/help` | Discover commands and open feature entry points |
+| [Library browser and search](#library-browser-and-search) | `/matp_all`, `/matp_search`, `/favorites` | Browse `matplobblib`, search, and manage favorites |
+| [GitHub notes browser and search](#github-notes-browser-and-search) | `/lec_all`, `/lec_search` | Browse and search linked GitHub Markdown notes |
+| [Unified global search](#unified-global-search) | `/search` | Search library and linked GitHub from one screen |
+| [Search presets](#search-presets) | `/search_presets` | Save and rerun search configurations |
+| [Schedule discovery](#schedule-discovery) | `/schedule` | Search group/lecturer/room and view day or week schedule |
+| [Personal aggregated schedule](#personal-aggregated-schedule) | `/myschedule` | Combined view across active subscriptions with filters |
+| [Settings center](#settings-center) | `/settings` | Personal/group settings, subscriptions, short names, privacy |
+| [Rendering tools](#rendering-tools) | `/latex`, `/mermaid` | Render formulas and diagrams |
+| [Short-name suggestions](#short-name-suggestions) | `/offershorter` | User suggestion flow with admin moderation |
+| [Admin commands](#admin-commands) | `/update`, `/clear_cache`, `/send_admin_summary`, `/set_module` | Maintenance and moderation operations |
 
-### Scheduler Feature
+### Website Features
 
 | Feature | Entry point | Purpose |
 | --- | --- | --- |
-| [Scheduler proxy support](#scheduler-proxy-support) | `PROXY_URL` env var | Route scheduler Telegram delivery through a proxy |
+| [Auth and account sessions](#auth-and-account-sessions) | `/login` + navbar auth actions | Sign in via Telegram or password, persist user profile |
+| [Shared navbar and i18n](#shared-navbar-and-i18n) | `main_site_frontend/js/navbar.js` | Cross-page navigation, EN/RU translations, command palette |
+| [Schedule page](#schedule-page) | `/schedule` | Unified schedule search, filters, calendar nav, offline awareness |
+| [Calendar sync panel](#calendar-sync-panel) | Schedule page calendar section | Manage private iCal feeds and website sync profiles |
+| [Stats dashboard](#stats-dashboard) | `/stats` (admin) | Live and REST analytics, degradations, drill-downs |
+| [Studio page](#studio-page) | `/studio` | Document compile, project files, exports, send to Telegram |
+| [Runtime API base and popup UX](#runtime-api-base-and-popup-ux) | `runtime_config.js`, `ui_utils.js` | Environment-specific API host and unified notifications |
 
-### Website Schedule Features
+### API Features
 
 | Feature | Entry point | Purpose |
 | --- | --- | --- |
-| [Unified schedule search](#website-schedule-search) | Website schedule page search bar | Find groups, lecturers, and auditoriums from one search field |
-| [Full lecturer name toggle](#full-lecturer-name-toggle) | Website schedule page filters | Show the full lecturer name in desktop table cards |
-| [iCal subscription links](#website-ical-subscription-links) | Website schedule page for authorized users | Copy or rotate a personal calendar subscription link |
-| [Configurable frontend API base](#configurable-frontend-api-base) | `window.__MPB_API_BASE__` or `<meta name="mpb-api-base">` | Use relative `/api` by default or override frontend API host per environment |
-| [Styled popup notifications](#styled-popup-notifications) | `window.mpbPopup(message, options)` | Replace browser alerts with unified dismissible popup notifications |
+| [Auth API](#auth-api) | `/api/auth/*` | Registration, login, Telegram auth, profile, preferences |
+| [Schedule API](#schedule-api) | `/api/schedule/*` | Search entities, fetch schedule windows, fallback counters |
+| [Stats API](#stats-api) | `/api/stats/*` | Health, profiles, exports, admin messaging, dashboards |
+| [Studio API](#studio-api) | `/api/studio/*` | Project CRUD, compile, assets, zip export, Telegram delivery |
+| [Calendar API](#calendar-api) | `/api/cal/*` | Authorized calendar config + public iCal feeds |
+| [WebSocket API](#websocket-api) | `/ws/*` | Live stats, live log stream, user-specific update stream |
 
-## Website Schedule Search
+### Background, Data, and Ops
 
-### Purpose
+| Feature | Entry point | Purpose |
+| --- | --- | --- |
+| [Scheduler jobs](#scheduler-jobs) | `scheduler_app/main.py` | Notifications, cache refresh, diffs, cleanup, summaries |
+| [Celery worker tasks](#celery-worker-tasks) | `shared_lib/tasks.py` | Rendering and compile pipelines |
+| [Cache and fallback model](#cache-and-fallback-model) | Redis + `cached_schedules` | Keep schedule UX available during upstream outages |
+| [CI, deploy, and wiki sync](#ci-deploy-and-wiki-sync) | GitHub Actions + Jenkins + `deploy.sh` | Validation, publish/build, production deploy, docs sync |
 
-The website schedule search bar supports mixed search across:
+## Bot Features
 
-- groups
-- lecturers
-- auditoriums
+### Onboarding And Language
 
-Users no longer need a separate search mode for each schedule entity type.
+What it does:
 
-### User Flow
+- Shows first-start flow with language selector.
+- Supports a guided onboarding tour across major bot capabilities.
+- Supports language cycling and restart onboarding from settings.
 
-1. Open the website schedule page.
-2. Type at least two characters into the search bar.
-3. The dropdown returns matching groups, lecturers, and auditoriums together.
-4. Each result shows its entity type badge.
-5. Clicking any result loads the matching schedule in the same page.
+How to use:
 
-## Unified Global Search
+1. Send `/start` in private chat.
+2. Pick language.
+3. Continue onboarding or skip.
+4. Open `/settings` to change language later or restart onboarding.
 
-### Purpose
+### Help And Command Menu
 
-`/search` gives the user one search entry point that can search across:
+What it does:
 
-- the internal `matplobblib` library
-- Markdown notes from the user's linked GitHub repositories
+- `/help` presents command-centered navigation.
+- Supports private and group-aware help behavior.
+- Includes route buttons to major flows (`/schedule`, `/search`, `/search_presets`, etc.).
 
-The goal is to let the user search both sources at once and open results in the correct viewer without switching commands manually.
+How to use:
 
-### Entry Points
+1. Send `/help`.
+2. Tap a feature button or run command directly from menu.
 
-Users can open unified search from:
+### Library Browser And Search
 
-- the `/search` command
-- the bot command menu
-- the `/help` menu button for unified search
+Commands:
 
-### User Flow
+- `/matp_all`: interactive browse of indexed `matplobblib` materials.
+- `/matp_search`: semantic text search in library content.
+- `/favorites`: opens saved favorite materials.
 
-1. The user sends `/search`.
-2. The bot opens the global search panel and creates a fresh per-user search context in Redis.
-3. The panel shows enabled sources and available GitHub repository filters.
-4. The user sends a plain-text query.
-5. The bot runs the search and edits the status message into a paginated results list.
-6. The user can open a result, change enabled sources, limit GitHub search to selected repositories, or save the current search as a preset.
+What it does:
 
-### Search Sources
+- Paginates long result sets.
+- Lets users open material by inline result.
+- Supports add/remove favorite actions directly from cards.
 
-#### Library source
+How to use:
 
-The library side uses the semantic search engine with:
+1. Send `/matp_all` to browse by sections.
+2. Send `/matp_search`, then enter query text.
+3. Use inline result buttons to open, star, or unstar items.
+4. Use `/favorites` to revisit saved items.
 
-```text
-source_type="lib"
-```
+### GitHub Notes Browser And Search
 
-Each result contains:
+Commands:
 
-- `kind = "library"`
-- `path`
-- `score`
+- `/lec_all`: browse linked repositories.
+- `/lec_search`: search Markdown chunks in selected linked repository.
 
-Opening a library result routes to the normal library display flow.
+What it does:
 
-#### GitHub source
+- Per-user repository management in settings.
+- Markdown viewer for selected file chunks.
+- Semantic search over configured repo sources.
 
-The GitHub side searches only repositories already linked in the current user's bot settings.
+How to use:
 
-For each linked repository, the semantic search engine is called with:
+1. Open `/settings` and add a GitHub repo (`owner/repo`) if none linked.
+2. Send `/lec_all` to browse notes.
+3. Send `/lec_search`, pick a repository, and enter query.
 
-```text
-source_type=f"repo:{repo_path}"
-```
+### Unified Global Search
 
-Each result contains:
+Command:
 
-- `kind = "github"`
-- `repo_path`
-- `path`
-- `score`
+- `/search`
 
-Opening a GitHub result routes to the GitHub Markdown viewer flow.
+What it does:
 
-### Filters
+- Merges search across two source types:
+- library (`source_type="lib"`)
+- linked GitHub repos (`source_type="repo:owner/name"`)
+- Supports source toggles and repo subset toggles.
+- Uses Redis-backed session state for pagination and result-open callbacks.
 
-The unified search UI supports two filter levels.
+How to use:
 
-#### Source filters
+1. Send `/search`.
+2. Toggle sources (Library/GitHub) and optional repos.
+3. Send query text.
+4. Page through results and open target item.
+5. Optionally tap `Save preset`.
 
-The user can enable or disable:
+### Search Presets
 
-- Library
-- GitHub
+Command:
 
-Rules:
+- `/search_presets`
 
-- At least one source must remain enabled.
-- If the user tries to disable the last enabled source, the bot shows an alert and does not apply the change.
+Supported kinds:
 
-#### Repository filters
+- `library`
+- `github`
+- `schedule`
+- `global`
 
-If GitHub is enabled and the user has linked repositories, the panel shows one toggle per linked repository.
+What it does:
 
-Rules:
+- Saves query + filters (not static result snapshots).
+- Stores presets in `User.settings["search_presets"]`.
+- Lets users run/delete presets from one menu.
 
-- repository filters affect GitHub results only
-- the user can search any subset of linked repositories
-- if GitHub is enabled and no explicit subset exists yet, all linked repositories are selected by default
-- if GitHub is disabled, the active repository list is cleared from the normalized filter state
+How to use:
 
-### Default State
+1. Run one of supported search flows and get results.
+2. Tap `Save preset`, send preset name.
+3. Open `/search_presets` later and tap run/delete.
 
-When `/search` is opened:
+### Schedule Discovery
 
-- Library is enabled by default.
-- GitHub is enabled by default if the user has at least one linked repository.
-- All linked repositories are selected by default.
-- The initial panel is shown before any query is run.
+Command:
 
-### Search Execution
+- `/schedule`
 
-Before each search, the bot normalizes filters so outdated or invalid repository selections are removed automatically.
+What it does:
 
-If both sources are enabled, the bot searches them in parallel:
-
-- library search: up to 20 results
-- GitHub search: fetched per selected repository, then merged
-
-The merged result list is:
-
-1. sorted by semantic score descending
-2. sorted library-first on equal score
-3. capped at 20 items
-
-GitHub results are deduplicated by Markdown file path within each repository before merging.
-
-### Pagination And Presentation
-
-Global results use the standard bot pagination pattern:
-
-- `SEARCH_RESULTS_PER_PAGE = 10`
-- page navigation is inline
-- pagination does not rerun the search; it only changes the current page view
-
-Result presentation rules:
-
-- library results are shown as library items
-- GitHub results include the repository name and file path
-- library results open in the library viewer
-- GitHub results open in the GitHub Markdown viewer
-
-### Re-running On Filter Changes
-
-If the user already has a query in the current `/search` session and then changes:
-
-- enabled sources
-- selected repositories
-
-the bot immediately reruns the last query with the updated filters and refreshes the results list.
-
-If no query has been entered yet, the bot only refreshes the panel text and buttons.
-
-### Cache And Session Scope
-
-The active unified search session is stored in Redis under:
-
-```text
-global_search
-```
-
-The stored payload contains:
-
-- `query`
-- `filters`
-- `results`
-
-This cache is used for:
-
-- pagination
-- source toggles
-- repository toggles
-- `Save preset`
-- reopening result items by index
-
-### Limitations
-
-- GitHub unified search only works for repositories linked in the user's bot settings.
-- Unified search does not search arbitrary GitHub repositories.
-- Unified search currently covers library content and linked GitHub Markdown content only. It does not include schedule entities.
-- If the cached search context is missing, actions such as pagination or preset saving fail gracefully with an outdated or missing context message.
-
-## Search Presets
-
-### Purpose
-
-Saved presets let users store a reusable search configuration and reopen it later without retyping the query or rebuilding filters manually.
-
-This feature works for:
-
-- library search
-- GitHub Markdown search
-- schedule entity search
-- unified global search
-
-### Entry Points
-
-Users can open presets from:
-
-- the `/search_presets` command
-- the bot command menu
-- the `/help` menu button for search presets
-
-Users can create presets from supported results screens with the `Save preset` button.
-
-The button is available on:
-
-- `/matp_search` results
-- `/lec_search` results
-- `/schedule` search results
-- `/search` unified search results
-
-The button appears only after a valid search result context has been created and cached.
-
-### Supported Preset Types
-
-Each preset stores a `search_kind` so the bot knows how to reopen it.
-
-| Preset type | `search_kind` | Saved data | Reopen behavior |
-| --- | --- | --- | --- |
-| Library | `library` | query, empty filters | reruns library semantic search |
-| GitHub | `github` | query, selected `repo_paths` | reruns Markdown search in the same linked repo |
-| Schedule | `schedule` | query, `search_type` | reruns schedule entity search in the same mode |
-| Global | `global` | query, source state, selected repositories | reruns unified search with the same source and repo filters |
-
-Current schedule modes are the existing bot modes such as:
-
+- Search by entity type:
 - group
-- person
+- person (lecturer)
 - auditorium
+- Shows day view and week view.
+- Provides inline calendar navigation.
+- Supports iCal export from selected schedule entity.
+- Supports subscribe flow with schedule delivery time.
 
-Important note:
+How to use:
 
-- a schedule preset stores the search mode, not a chosen result item
+1. Send `/schedule`.
+2. Pick search type.
+3. Enter query and select result.
+4. Use day/week/calendar controls.
+5. Use subscribe button to set a daily notification time.
 
-### Saving A Preset
+### Personal Aggregated Schedule
 
-1. The user performs a supported search and reaches a results screen.
-2. The user taps `Save preset`.
-3. The bot reads the latest search context from Redis.
-4. The bot asks the user to send a preset name.
-5. The user sends a name.
-6. The preset is stored in user settings and the bot immediately shows the presets list.
+Command:
 
-Important behavior:
+- `/myschedule`
 
-- the preset is based on the latest cached search for that scope
-- search results themselves are not stored in the preset
-- if the cache is missing or outdated, the bot refuses the save action
+What it does:
 
-Validation rules:
+- Aggregates active subscriptions into one personal timeline.
+- Includes filter controls:
+- include/exclude subscriptions
+- include/exclude lesson types
+- Supports iCal export and personal calendar link actions.
+- Includes link revocation action for secret calendar URL.
 
-- the preset name is trimmed
-- empty names are rejected
-- the name is limited to 60 characters
-- a preset cannot be saved without a valid cached search context
+How to use:
 
-### Reopening A Preset
+1. Ensure at least one active schedule subscription.
+2. Send `/myschedule`.
+3. Use filters and day/week navigation.
+4. Export iCal or manage personal calendar link from inline actions.
 
-1. The user sends `/search_presets`.
-2. The bot shows all saved presets in a single inline list.
-3. Each row shows a run button with a short scope label and a delete button.
-4. The user taps the run button.
-5. The bot loads the preset and dispatches it to the matching search flow.
+### Settings Center
 
-Scope labels:
+Command:
 
-- `LIB` for library presets
-- `GH` for GitHub presets
-- `SCH` for schedule presets
-- `ALL` for unified global presets
+- `/settings` (private and group admin context)
 
-### Reopen Behavior By Type
+What it does (private):
 
-#### Library preset
+- Personal display toggles (short names, markdown mode, latex tuning, module details).
+- Manage personal schedule subscriptions (list, page, toggle, set time, delete).
+- Manage personal short names (create/toggle/delete).
+- Manage linked GitHub repositories.
+- Restart onboarding.
+- Delete my data action.
 
-The bot reruns library semantic search and rebuilds the normal `lib_search` cache used by the library results UI.
+What it does (group admin):
 
-#### GitHub preset
+- Group subscription controls.
+- Group language control.
+- Admin summary scheduling controls.
 
-The bot checks whether the saved repository is still linked for the user.
+How to use:
 
-If the repository still exists:
+1. Send `/settings`.
+2. Select area (personal, subscriptions, repos, short names, admin/group).
+3. Apply changes via inline buttons.
 
-- Markdown search is rerun for that repository
-- the normal `md_search` cache is rebuilt
+### Rendering Tools
 
-If the repository was removed:
+Commands:
 
-- the bot warns the user that the repository is no longer linked
-- the preset remains stored until the user deletes it
+- `/latex`
+- `/mermaid`
 
-#### Schedule preset
+What it does:
 
-The bot reruns schedule search with the saved:
+- Sends content to worker-backed render tasks.
+- Returns rendered output to chat.
 
-- query
-- search type
+How to use:
 
-This rebuilds the `schedule_search` cache used by the schedule results flow.
+1. Send `/latex` or `/mermaid`.
+2. Send expression/diagram text.
+3. Wait for compiled image output.
 
-#### Global preset
+### Short-Name Suggestions
 
-The bot reruns unified search with the saved:
+Command:
 
-- query
-- source toggles
-- repository subset
+- `/offershorter`
 
-The `global_search` cache is recreated so pagination and result opening work the same way as a fresh `/search` run.
+What it does:
 
-### Deleting Presets
+- Users suggest a shorter discipline alias.
+- Admins receive moderation buttons (approve/decline).
+- Decision state is persisted to prevent duplicate moderation actions.
 
-Users delete presets directly from the `/search_presets` list by tapping the delete button on a row.
+How to use:
 
-Behavior:
+1. Send `/offershorter`.
+2. Enter full discipline and suggested short name.
+3. Wait for admin decision.
 
-- deletion removes the preset from persistent user settings
-- the preset list message is refreshed in place
-- if the preset no longer exists, the bot shows a safe not-found or outdated response
+### Admin Commands
 
-### Storage And Limits
+Commands:
 
-Presets are stored in persistent per-user settings, not in Redis.
+- `/update`
+- `/clear_cache`
+- `/send_admin_summary`
+- `/set_module`
 
-Storage location:
+What they do:
 
-```text
-User.settings["search_presets"]
-```
+- Trigger maintenance/cache/index operations.
+- Trigger summary delivery.
+- Map discipline to module name with `/set_module Discipline | Module`.
 
-Each preset record contains:
+How to use:
 
-- `id`
-- `name`
-- `search_kind`
-- `query`
-- `filters`
-- `created_at`
-- `updated_at`
+1. Run command from admin account/chat role.
+2. Follow command-specific format prompts.
 
-Preset rules:
+## Website Features
 
-- presets are sorted by `updated_at`, falling back to `created_at`
-- newest or most recently updated presets appear first
-- the maximum stored preset count per user is `15`
+### Auth And Account Sessions
 
-If a future update path reuses an existing preset id, the preset is replaced and moved according to its new update timestamp.
+Pages and scripts:
 
-### Cache Dependency
+- `main_site_frontend/login.html`
+- `main_site_frontend/js/auth.js`
 
-Creating a preset depends on the latest search cache still being available.
+What it does:
 
-The save flow reads one of these per-user Redis keys:
+- Supports password login/register.
+- Supports Telegram auth handoff.
+- Stores bearer token client-side for API calls.
+- Loads `/api/auth/me` for profile and role-aware UI.
 
-- `lib_search`
-- `md_search`
-- `schedule_search`
-- `global_search`
+How to use:
 
-If the expected cache is missing or does not contain a valid query, the bot refuses to create the preset and tells the user there is no recent search to save.
+1. Open `/login`.
+2. Sign in with Telegram or username/password.
+3. After login, navigate to schedule/studio/stats by role.
 
-### Operational Notes
+### Shared Navbar And I18n
 
-- Presets are personal and are not shared between users.
-- Presets are language-neutral in storage.
-- Presets do not snapshot search results; they only snapshot the query and filters.
-- Reopening a preset always runs a fresh search.
-- A GitHub preset becomes non-runnable if its repository is no longer linked, but it remains visible until deleted.
+Files:
 
-## Website Schedule Features
+- `main_site_frontend/js/navbar.js`
 
-### Full Lecturer Name Toggle
+What it does:
 
-#### Purpose
+- Shared top nav across pages.
+- EN/RU translation dictionary and runtime text updates.
+- Command palette and keyboard shortcuts.
+- Admin-only nav item for stats page.
 
-The website schedule page now includes a separate filter for lecturer display in the desktop table view.
+How to use:
 
-With this toggle enabled:
+1. Use language switch in navbar.
+2. Open palette/shortcuts from navbar controls.
+3. Use account menu for logout and profile actions.
 
-- desktop lesson cards show the full lecturer name
-- copy-to-clipboard still copies the full lecturer name
-- mobile cards stay unchanged and continue to show the full lecturer name as before
+### Schedule Page
 
-#### How To Use It
+Files:
 
-1. Open the website schedule page.
-2. Load any group, lecturer, or auditorium schedule.
-3. Open the filters panel.
-4. Toggle `Full lecturer name`.
+- `main_site_frontend/schedule.html`
+- `main_site_frontend/js/schedule.js`
+- `main_site_frontend/js/schedule_ux.js`
 
-The preference is stored in the same website schedule preferences payload as the existing module and short-name options, so it persists for signed-in users and in local browser storage.
+What it does:
 
-### Configurable Frontend API Base
+- Unified search for group/lecturer/auditorium.
+- Desktop timetable grid + mobile card view.
+- Filters and toggles:
+- module filters
+- short names
+- full lecturer name
+- Includes copy-to-clipboard actions for room/lecturer.
+- Shows source update timestamp and offline/fallback states.
+- Persists preference state locally and in account preferences when available.
 
-#### Purpose
+How to use:
 
-Website frontend modules now resolve API endpoints from one shared base instead of hardcoded host strings.
+1. Open `/schedule`.
+2. Search for group, lecturer, or room.
+3. Pick result and switch day/week context.
+4. Use filters panel to adjust card/table rendering.
 
-This allows:
+### Calendar Sync Panel
 
-- same-origin production deployments through relative `/api`
-- staging/testing environments to override API host without editing multiple JS files
-- consistent API routing across `navbar`, `auth`, `schedule`, `stats`, and `studio` scripts
+Files:
 
-#### How To Use It
+- `main_site_frontend/js/calendar_sync.js`
 
-1. Shared static frontend setup:
-   - `main_site_frontend/js/runtime_config.js` now sets:
-   - `window.__MPB_API_BASE__ = "https://api.ivantishchenko.ru/api";`
-2. Default behavior without any override:
-   - frontend uses `/api`
-3. To override globally, set `window.__MPB_API_BASE__` before page scripts:
+What it does:
+
+- Shows eligibility based on Telegram linkage and active bot subscriptions.
+- Manages profile-based iCal feeds:
+- built-in `All classes`
+- built-in `Exams only`
+- custom presets from current schedule page
+- Supports:
+- copy/reveal/hide URL
+- Apple/Google/Outlook guidance
+- preview and download
+- enable/disable sync
+- rotate secret
+- delete custom preset
+- Shows profile health (event count, next event, cache status, source updated, last access).
+
+How to use:
+
+1. Sign in and open `/schedule`.
+2. Expand `Calendar subscription`.
+3. Select profile and copy or subscribe.
+4. Use `Save current view` to create custom profile.
+5. Use `Reset link` if URL must be revoked.
+
+### Stats Dashboard
+
+Files:
+
+- `main_site_frontend/stats.html`
+- `main_site_frontend/js/stats.js`
+- `main_site_frontend/js/stats_ux.js`
+
+What it does:
+
+- Uses REST + WebSocket live updates.
+- Displays leaderboard, activity, action distributions, and user drill-down.
+- Supports pagination and sorting on user profile/action-users tables.
+- Supports exports (JSON/CSV/PDF weekly) with date range and timezone.
+- Includes partial-degradation state when one widget fails.
+
+How to use:
+
+1. Sign in as admin.
+2. Open `/stats`.
+3. Open a user profile from tables/charts.
+4. Export user actions in needed format and filter window.
+
+### Studio Page
+
+Files:
+
+- `main_site_frontend/studio.html`
+- `main_site_frontend/js/studio.js`
+
+What it does:
+
+- Quick compile mode for text payloads.
+- Project mode for multi-file workspaces.
+- Supports create/edit/rename/delete files, upload assets, compile, export ZIP.
+- Supports sending compiled project PDF directly to linked Telegram account.
+
+How to use:
+
+1. Open `/studio`.
+2. Pick quick mode or create project.
+3. Edit content, compile, inspect result.
+4. Optionally export ZIP or send compiled PDF to Telegram.
+
+### Runtime API Base And Popup UX
+
+Files:
+
+- `main_site_frontend/js/runtime_config.js`
+- `main_site_frontend/js/ui_utils.js`
+
+What it does:
+
+- Resolves API base in this order:
+- `window.__MPB_API_BASE__`
+- `<meta name="mpb-api-base">`
+- fallback `/api`
+- Shared popup helper `window.mpbPopup(message, options)` replaces raw browser alerts.
+
+How to use:
+
+1. Set runtime override before scripts when needed:
 
 ```html
 <script>
-  window.__MPB_API_BASE__ = "https://example.com/api";
+  window.__MPB_API_BASE__ = "https://api.ivantishchenko.ru/api";
 </script>
 ```
 
-4. Or set a page-level meta override:
-
-```html
-<meta name="mpb-api-base" content="https://example.com/api" />
-```
-
-5. Resolution order:
-   - `window.__MPB_API_BASE__`
-   - `<meta name="mpb-api-base">`
-   - fallback `/api`
-
-### Styled Popup Notifications
-
-#### Purpose
-
-Frontend alert dialogs were replaced with a shared popup notification helper for better UX.
-
-#### How To Use It
-
-1. Call:
+2. Use popup helper from JS modules:
 
 ```js
-window.mpbPopup("Saved successfully", { type: "success" });
+window.mpbPopup("Saved", { type: "success" });
 ```
 
-2. Supported `type` values:
-   - `info`
-   - `success`
-   - `warning`
-   - `error`
-3. Optional options:
-   - `title`: custom popup header
-   - `duration`: auto-close timeout in milliseconds (default about 4.2 seconds)
-4. The helper auto-injects styles/container and renders stacked, dismissible popups in the top-right corner.
+## API Features
 
-### Schedule/Auth Text Fixes (P3 Front)
+### Auth API
 
-#### What Changed
+Router:
 
-- Replaced remaining hardcoded schedule toggle label fallback to localized `Полное имя преподавателя`.
-- Removed visible mojibake symbols in frontend UI controls that were showing broken characters.
-- Updated auth page/script messages to keep runtime text localized and consistent with UI language.
+- `/api/auth/*`
 
-### Website iCal Subscription Links
+Endpoints:
 
-#### Purpose
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/telegram`
+- `GET /api/auth/me`
+- `POST /api/auth/logout`
+- `PUT /api/auth/preferences`
 
-Authorized website users can now open the schedule page and manage their personal calendar subscription link directly from the site.
+How to use:
 
-The website now manages a richer iCal sync model on its own side:
+1. Authenticate with login or Telegram endpoint.
+2. Pass bearer token to protected endpoints.
+3. Store/update user preferences through `/preferences`.
 
-- multiple private feed profiles per user
-- built-in feeds for `All classes` and `Exams only`
-- custom feeds saved from the current website schedule page
-- masked private URLs by default with reveal/copy controls
-- Apple, Google, and Outlook specific subscribe instructions
-- test and download actions for the raw `.ics` feed
-- feed health metadata such as event count, next event, cache status, source update time, and last external access
+### Schedule API
 
-#### How To Use It
+Router:
 
-1. Sign in on the website.
-2. Open the schedule page.
-3. Find the collapsible `Calendar subscription` section above the main schedule block.
-4. Expand the section to review eligibility, active subscription counts, feed health, and the currently selected sync profile.
-5. Choose a profile:
-   - `All classes`
-   - `Exams only`
-   - or a saved preset created from the current website schedule page
-6. Use `Copy link` for Google Calendar or other HTTPS ICS clients.
-7. Use `Reveal link` only when you need to inspect the full private URL directly.
-8. Use `Open on iOS / Mac` for Apple Calendar compatible devices.
-9. Use `Test feed` to open the raw `.ics` URL in a new tab.
-10. Use `Download .ics` to fetch the feed once.
-11. Use `Save current view` to create a separate website-owned feed for the currently opened schedule page and its selected modules.
-12. Use `Disable sync` to stop all website calendar feeds temporarily without rotating the secret.
-13. Use `Reset link` to revoke the old private URL and issue a new one immediately.
+- `/api/schedule/*`
 
-#### Availability Rules
+Endpoints:
 
-- the card is shown only for authorized website users
-- the subscription becomes active only for accounts linked to Telegram schedule subscriptions
-- if the account is authorized but not linked to Telegram schedule data, the website shows an unavailable state instead of a link
-- website iCal settings are stored in website account preferences and do not reuse Telegram quick filters from Redis
-- the expanded panel explains the source, scope, time window, access model, and current feed health of each sync profile
-- disabling sync makes the public feed URLs stop serving updates until sync is enabled again
+- `GET /api/schedule/search`
+- `GET /api/schedule/cached_list`
+- `GET /api/schedule/fallback_counters` (admin)
+- `GET /api/schedule/data/{type}/{id}`
 
-#### Backend Endpoints
+Feature details:
 
-The website uses these authenticated API endpoints:
+- Search aliases:
+- `lecturer` -> `person`
+- `teacher` -> `person`
+- `room` -> `auditorium`
+- Search automatically falls back to local cache if upstream RUZ fails.
+- Schedule data returns:
+- `schedule`
+- `available_modules`
+- `is_offline`
+- `source_updated_at`
+- `loaded_bounds`
+
+How to use:
+
+1. Call `/search?term=...&type=all|group|person|auditorium`.
+2. Use returned entity `type/id` with `/data/{type}/{id}`.
+3. Optionally pass `base_date=YYYY-MM-DD` to center the loaded window.
+
+### Stats API
+
+Router:
+
+- `/api/stats/*`
+
+Endpoints:
+
+- `GET /api/stats/health`
+- `GET /api/stats/users/{user_id}/profile` (admin)
+- `GET /api/stats/action_users` (admin, canonical)
+- `GET /api/stats/stats/action_users` (admin, legacy alias, deprecating)
+- `GET /api/stats/users/{user_id}/export_actions` (admin)
+- `POST /api/stats/users/{user_id}/send_message` (admin)
+- `GET /api/stats/leaderboard` (admin)
+- `GET /api/stats/activity` (admin)
+
+Feature details:
+
+- Sort allowlists are strict and validated.
+- Export supports `json|csv|weekly_pdf`, `date_from`, `date_to`, `timezone`.
+- Admin send-message has Redis-backed per-admin rate limit and structured audit logs.
+- Legacy alias can be hard-disabled with `ENABLE_LEGACY_ACTION_USERS_ALIAS=false`.
+
+How to use:
+
+1. Authenticate as admin.
+2. Use profile/action drill-down routes for analytics.
+3. Use export route for audits/reporting.
+4. Use send-message route for direct outreach to Telegram users.
+
+### Studio API
+
+Router:
+
+- `/api/studio/*`
+
+Endpoints:
+
+- `POST /api/studio/compile`
+- `GET /api/studio/projects`
+- `POST /api/studio/projects`
+- `GET /api/studio/projects/{project_id}`
+- `PUT /api/studio/projects/{project_id}/files/{file_id}`
+- `POST /api/studio/projects/{project_id}/upload`
+- `POST /api/studio/projects/{project_id}/compile`
+- `DELETE /api/studio/projects/{project_id}/files/{file_id}`
+- `PUT /api/studio/projects/{project_id}/files/{file_id}/rename`
+- `GET /api/studio/projects/{project_id}/export/zip`
+- `GET /api/studio/projects/{project_id}/assets/{file_path}`
+- `POST /api/studio/projects/{project_id}/send_telegram`
+
+Feature details:
+
+- Project ownership is enforced on all project routes.
+- `upload` supports binary assets up to 5 MB.
+- Compile pipeline supports build cache reuse for project compile.
+
+How to use:
+
+1. Create project.
+2. Save/edit files and upload assets.
+3. Compile and preview.
+4. Export ZIP or send compiled PDF to Telegram.
+
+### Calendar API
+
+Routes:
+
+- Authorized profile/config routes under `/api/cal/subscription*`
+- Public feed routes under `/api/cal/{secret}*`
+
+Authorized endpoints:
 
 - `GET /api/cal/subscription`
 - `POST /api/cal/subscription/reset`
@@ -590,476 +610,140 @@ The website uses these authenticated API endpoints:
 - `POST /api/cal/subscription/profiles`
 - `DELETE /api/cal/subscription/profiles/{profile_id}`
 
-Public feed URLs remain available through the existing secret link and now also support profile-specific routes:
+Public feed endpoints:
 
-- `GET /api/cal/{secret}.ics`
-- `GET /api/cal/{secret}/profiles/{profile_id}.ics`
+- `GET|HEAD /api/cal/{secret}.ics`
+- `GET|HEAD /api/cal/{secret}/basic.ics`
+- `GET|HEAD /api/cal/{secret}/profiles/{profile_id}.ics`
+- `GET|HEAD /api/cal/{secret}/profiles/{profile_id}/basic.ics`
+- `GET|HEAD /api/cal/{secret}/telegram.ics`
+- `GET|HEAD /api/cal/{secret}/telegram/basic.ics`
 
-Both public feed routes support `?download=1` and now return `ETag` / `Last-Modified` headers for calendar clients.
+Feature details:
 
-### Schedule Last Parsed Time
+- Profile-based feeds with health metadata.
+- `ETag` and `Last-Modified` for cache-aware calendar clients.
+- `download=1` forces attachment content disposition.
 
-#### Purpose
+How to use:
 
-Both bot and website schedule views now show when the source schedule was last parsed and cached from the university API.
+1. Use authorized routes from signed-in website session.
+2. Share only secret URLs with trusted calendar clients.
+3. Reset secret to revoke leaked links.
 
-#### Where It Appears
+### WebSocket API
 
-- Bot `/schedule` responses:
-  - day view from search result
-  - day view from calendar
-  - week view
-  - `/myschedule` per-subscription daily updates
-- Website schedule page:
-  - context bar line now includes the loaded range and source parsed timestamp
+Endpoints:
 
-#### Data Source
+- `WS /ws/stats/total_actions`
+- `WS /ws/bot_log`
+- `WS /ws/users/{user_id}`
 
-- Backend reads `cached_schedules.updated_at` for the selected entity.
-- API endpoint `GET /api/schedule/data/{type}/{id}` now includes:
+Feature details:
 
-```json
-{
-  "source_updated_at": "2026-04-06T10:30:00+00:00"
-}
-```
+- Stats stream sends full live analytics payload when changed.
+- Bot log stream replays last lines then tails live file updates.
+- User-specific stream is restricted to admins or matching Telegram user.
 
-#### Notes
+How to use:
 
-- If no cached timestamp exists yet, the UI falls back to a localized "unknown parsed time" message.
-- Bot display is formatted in Moscow time.
+1. Connect with authenticated websocket session/token.
+2. Subscribe to needed stream and handle reconnects on disconnect.
 
-### Bot Calendar Link: Telegram-Filtered Feed
+## Background, Data, and Operations
 
-#### Purpose
+### Scheduler Jobs
 
-When users open the calendar link from the bot, the generated feed should respect Telegram subscription/module filtering choices.
+Source:
 
-#### Behavior
+- `scheduler_app/main.py`
+- `scheduler_app/jobs.py`
 
-- The bot now sends a link to:
+Configured jobs:
 
-```text
-/api/cal/{secret}/telegram.ics
-```
+- `send_daily_schedules` (cron, every minute): sends next-day schedules at subscriber-selected times.
+- `check_for_schedule_updates` (interval, every 2h): detects diffs and sends change notifications.
+- `update_schedule_cache` (cron at 04:00 and 16:00): warm cache refresh.
+- `prune_inactive_subscriptions` (cron at 03:00): cleanup inactive subscriptions.
+- `send_admin_summary` (cron, every minute): checks summary schedule and sends due summaries.
+- `cleanup_old_log_files` (cron at 04:00): removes old log files.
 
-- This feed is generated from active Telegram schedule subscriptions and applies Telegram-side filters, including selected modules where configured.
+Other scheduler features:
 
-#### Public Endpoints
+- Health endpoint on `:9584/health`.
+- Optional proxy use for Telegram calls via `PROXY_URL`.
+- Correlation IDs in scheduler logs.
 
-- `GET /api/cal/{secret}/telegram.ics`
-- `GET /api/cal/{secret}/telegram/basic.ics`
+### Celery Worker Tasks
 
-Both support `HEAD` and optional `?download=1`.
+Source:
 
-### User Stats Export Formats
+- `shared_lib/tasks.py`
 
-#### Purpose
+Tasks include:
 
-Admin user detail export now supports multiple formats from one endpoint.
+- LaTeX compile/render.
+- Mermaid render.
+- Markdown to PDF render.
+- Markdown to HTML render.
+- Full project compile with build cache.
 
-#### Endpoint
+How to use:
 
-`GET /api/stats/users/{user_id}/export_actions`
+1. Bot/API enqueues task.
+2. Worker executes and returns serialized result.
+3. Caller sends output to user/UI.
 
-#### Query Parameters
+### Cache And Fallback Model
 
-- `format=json|csv|weekly_pdf` (default `json`)
-- `download=1` (used for downloadable JSON file mode)
+What it does:
 
-#### Examples
-
-- JSON payload (API response):
-
-```text
-/api/stats/users/123/export_actions
-```
-
-- Download JSON file:
-
-```text
-/api/stats/users/123/export_actions?format=json&download=1
-```
-
-- Download CSV file:
-
-```text
-/api/stats/users/123/export_actions?format=csv
-```
-
-- Download weekly PDF report:
-
-```text
-/api/stats/users/123/export_actions?format=weekly_pdf
-```
-
-#### UI
-
-The user detail dashboard page now has separate export actions for CSV, JSON, and weekly PDF.
-
-### Stats Action Users Endpoint
-
-#### Purpose
-
-The admin dashboard "users by action" drill-down now uses a canonical API route that matches frontend requests.
-
-#### Endpoint
-
-Canonical route:
-
-```text
-GET /api/stats/action_users
-```
-
-Backward-compatible legacy alias (still supported):
-
-```text
-GET /api/stats/stats/action_users
-```
-
-#### Query Parameters
-
-- `action_type` (required)
-- `action_details` (required)
-- `page` (optional, default `1`)
-- `page_size` (optional, default `15`)
-- `sort_by` (optional, default `full_name`)
-- `sort_order` (optional, default `asc`)
-
-### Stats Sort Allowlists
-
-#### Purpose
-
-Stats profile and action-users APIs now use explicit allowlists for sorting params.
-
-#### Allowed Values
-
-`GET /api/stats/users/{user_id}/profile`
-
-- `sort_by`: `id`, `action_type`, `action_details`, `timestamp`
-- `sort_order`: `asc`, `desc`
-
-`GET /api/stats/action_users`
-
-- `sort_by`: `user_id`, `full_name`, `username`
-- `sort_order`: `asc`, `desc`
-
-Invalid values are now rejected with `422` instead of silently falling back.
-
-### Admin Message Rate Limit And Audit Metadata
-
-#### Purpose
-
-`POST /api/stats/users/{user_id}/send_message` now has abuse protection and structured audit logs.
-
-#### Behavior
-
-- per-admin rate limit is enforced (default: `12` requests per `60` seconds)
-- limit can be changed with env var:
-
-```text
-ADMIN_SEND_MESSAGE_RATE_LIMIT
-```
-
-- each request writes an audit log entry with:
-  - `admin_id`
-  - `target_id`
-  - `timestamp`
-  - `result` (`success`, `rate_limited`, `telegram_error`, `network_error`, etc.)
-  - `correlation_id`
-
-#### Response
-
-Successful responses now include:
-
-```json
-{
-  "status": "success",
-  "correlation_id": "..."
-}
-```
-
-### Correlation ID In API/Scheduler Logs
-
-#### Purpose
-
-FastAPI and scheduler logs now include correlation ids for incident tracing.
-
-#### FastAPI Usage
-
-- middleware sets request id from `X-Request-ID` if provided
-- otherwise generates one automatically
-- response returns `X-Request-ID` header
-- log format includes `[cid=...]`
-
-#### Scheduler/Admin Propagation
-
-- scheduler jobs now generate operation correlation ids and include them in job logs
-- admin send-message audit logs include the same correlation id
-
-### Schedule Fallback Counters
-
-#### Purpose
-
-Track upstream schedule source health over time.
-
-#### Counters
-
-The shared schedule fetch path now increments Redis-backed counters:
-
+- Schedule fetch pipeline prefers live university API.
+- Falls back to cached schedule when upstream fails.
+- Tracks source outcomes in counters:
 - `ruz_api_success`
 - `cache_fallback`
 - `no_cache`
 
-#### Endpoint
+How to use:
 
-Admin-only endpoint to read counters:
+1. Check `GET /api/schedule/fallback_counters` as admin.
+2. Correlate spikes in fallback/no-cache with upstream incidents.
 
-```text
-GET /api/schedule/fallback_counters
-```
+### CI, Deploy, And Wiki Sync
 
-### Localization Completeness And Fallback
+CI workflows:
 
-#### What Was Added
-
-- New RU/EN keys for updated bot schedule flows and error/status messages.
-- Key-parity safety test for locale files.
-- Translator fallback behavior test (missing key in selected locale falls back to default locale, then to `_key_` marker).
-
-#### Tests
-
-- `tests/test_localization_completeness.py`
-
-## Scheduler Proxy Support
-
-### Purpose
-
-The scheduler service can use `PROXY_URL` for Telegram message delivery.
-
-RUZ schedule API requests continue to use a direct session.
-
-### How To Enable It
-
-1. Set `PROXY_URL` in `.env`, for example:
-
-```text
-socks5://proxy:20170
-```
-
-2. Restart `mpb-scheduler`.
-3. Check the scheduler logs for:
-
-```text
-Using proxy for scheduler Telegram session
-```
-
-That log line confirms the proxy-aware Telegram session was applied.
-
-### Failure Behavior
-
-If a scheduler delivery window is reached and every attempted send fails:
-
-- the job now raises an error
-- the failure is visible in logs
-- the run no longer appears successful only because APScheduler itself stayed alive
-
-## Jenkins Deploy Host Fingerprint
-
-Jenkins deploy SSH now verifies the deploy host against a pinned SHA256 host fingerprint before opening an SSH session.
-
-### Setup
-
-1. In Jenkins, create a Secret Text credential with id `APP_VM_SHA256`.
-2. Put the deploy host ED25519 fingerprint there in the form `SHA256:...`.
-3. The pipeline reads that credential by default for deploy, smoke-check, and deploy-host fallback notification SSH access.
-
-### Optional Override
-
-- The build parameter `DEPLOY_HOST_FINGERPRINT` can still be used as a one-off override.
-- If both the override and `APP_VM_SHA256` are empty, the pipeline now fails instead of falling back to TOFU host trust.
-
-## GitHub Wiki Sync
-
-Repository now includes workflow:
-
+- `.github/workflows/ci-cd.yml`
+- `.github/workflows/autolint-autofix.yml`
+- `.github/workflows/stats-visual-regression.yml`
 - `.github/workflows/sync-wiki.yml`
 
-It syncs `docs/wiki.md` into GitHub Wiki `Home.md` on every push to `main` when `docs/wiki.md` changes.
+Pipeline features:
 
-### Setup
+- Lint/test/type/security gates.
+- Shared package version consistency checks.
+- Auto version patching.
+- Shared package publish to PyPI.
+- Docker image build/push to GHCR.
+- Stats visual baseline capture artifact.
+- Wiki sync from `docs/wiki.md` to GitHub Wiki `Home.md`.
 
-1. Enable Wiki in GitHub repository settings.
-2. Add secret `WIKI_PUSH_TOKEN` in repository secrets:
-   - for private repos: token with `repo` scope
-   - for public repos: token with enough rights to push wiki repo
-3. Optionally run workflow manually via `workflow_dispatch`.
+Jenkins + deploy features:
 
-### Behavior
+- `Jenkinsfile.groovy` performs production deploy and smoke checks.
+- Deploy host fingerprint pinning via `APP_VM_SHA256` (with optional one-off override).
+- `deploy.sh` performs resilient service-by-service pull with lease-error recovery and retries.
 
-- Trigger: push to `main` with path `docs/wiki.md`
-- Action: clones `${owner}/${repo}.wiki.git`, overwrites `Home.md`, commits/pushes only if content changed
-- If `WIKI_PUSH_TOKEN` is missing, workflow fails with explicit setup message
+How to use:
 
-### Docker Pull Lease Error Recovery
+1. Push to `main` to run CI and image publishing.
+2. Jenkins deploy job pulls tagged images and runs smoke checks.
+3. Keep `WIKI_PUSH_TOKEN` configured for automatic wiki mirror updates.
 
-The production `deploy.sh` now includes automatic recovery for intermittent Docker/containerd pull failures such as:
+## Practical Notes
 
-- `lease "...": not found`
-- `lease does not exist`
-- `failed commit on ref ... lease ... not found`
-
-#### Behavior
-
-1. Images are pulled service-by-service (serial pull, not parallel).
-2. For each service, deploy retries up to 3 times.
-3. On recognized lease errors, deploy runs safe cleanup:
-   - `docker builder prune -af`
-   - `docker image prune -af --filter dangling=true`
-4. Deploy then retries the failed image pull automatically.
-
-If all retries still fail, deploy exits with error as before.
-
-## P2 API And Dashboard Updates (2026-04-09)
-
-### User Action Export Date Range And Timezone
-
-#### Purpose
-
-`GET /api/stats/users/{user_id}/export_actions` now supports date-range filtering with explicit timezone handling for JSON, CSV, and PDF exports.
-
-#### Query Parameters
-
-- `date_from` (optional, `YYYY-MM-DD`, inclusive)
-- `date_to` (optional, `YYYY-MM-DD`, inclusive)
-- `timezone` (optional, IANA timezone, default `UTC`)
-
-#### How To Use It
-
-1. Open user details page (`/users/{user_id}`) in the stats UI.
-2. Set `From`, `To`, and `Timezone` in the export toolbar (desktop).
-3. Click CSV / JSON / PDF export buttons.
-4. Use `Clear` to remove date filters and export full history again.
-
-Direct API examples:
-
-```text
-/api/stats/users/123/export_actions?format=csv&date_from=2026-04-01&date_to=2026-04-07&timezone=Europe/Moscow
-```
-
-```text
-/api/stats/users/123/export_actions?format=weekly_pdf&date_from=2026-03-01&date_to=2026-03-31&timezone=UTC
-```
-
-Validation behavior:
-
-- invalid timezone returns `400`
-- `date_from > date_to` returns `400`
-- malformed date format returns `422`
-
-### Dashboard Partial Degradation State
-
-#### Purpose
-
-The website stats dashboard now distinguishes between:
-
-- full outage (all widget loads fail)
-- partial degradation (for example, leaderboard fails but activity loads)
-
-#### How It Works
-
-- REST refresh now loads leaderboard and activity independently.
-- If only one widget fails, the dashboard keeps rendering healthy widgets and shows a yellow partial-degradation banner.
-- Widget-level status labels show whether stale/last-known data is being displayed.
-- Connection badge changes to `Partial degradation` instead of hard offline for partial failures.
-
-#### How To Use It
-
-1. Open website stats dashboard.
-2. If one API block fails, look for the yellow degradation banner and per-widget status text.
-3. Use `Retry` to reload both widgets, or hide the banner with `Hide`.
-
-### OpenAPI Alias Examples For Schedule Search Type
-
-#### Purpose
-
-`GET /api/schedule/search` now documents explicit `type` aliases so clients do not guess mappings.
-
-#### Alias Mapping
-
-- `lecturer` -> `person`
-- `teacher` -> `person`
-- `room` -> `auditorium`
-
-#### How To Use It
-
-1. Open API docs.
-2. Inspect `GET /api/schedule/search` query parameter `type`.
-3. Use documented aliases directly in frontend/client requests when needed.
-
-Example:
-
-```text
-/api/schedule/search?term=ivan&type=lecturer
-```
-
-### Schedule Data base_date Validation
-
-#### Purpose
-
-`GET /api/schedule/data/{type}/{id}` now validates `base_date` through FastAPI date parsing to prevent accidental `500` responses.
-
-#### How To Use It
-
-- Send `base_date` only in `YYYY-MM-DD` format.
-- Invalid values now return validation response `422` with field-level error details.
-
-Example:
-
-```text
-/api/schedule/data/group/12345?base_date=2026-04-09
-```
-
-### Legacy Action Users Alias Deprecation Plan
-
-#### Purpose
-
-Legacy route `/api/stats/stats/action_users` now has an explicit deprecation/migration path.
-
-#### Current Behavior
-
-- Canonical route: `/api/stats/action_users`
-- Legacy alias still works (when enabled) but now returns deprecation headers:
-  - `Deprecation: true`
-  - `Sunset: Tue, 01 Jul 2026 00:00:00 GMT` (planned removal window)
-  - `Warning` with migration message
-
-#### Removal Control
-
-- Environment flag `ENABLE_LEGACY_ACTION_USERS_ALIAS=false` disables the legacy alias immediately.
-- Disabled alias returns `410 Gone` with canonical-route guidance.
-
-#### Migration Instruction
-
-Move all clients to:
-
-```text
-/api/stats/action_users
-```
-
-## Maintainer Summary
-
-- `/search` adds a single search surface for library and linked GitHub Markdown content.
-- `/search_presets` adds persistent saved searches for library, GitHub, schedule, and global search.
-- website schedule search now returns groups, lecturers, and auditoriums from one search field
-- website schedule now supports a persistent `Full lecturer name` toggle for desktop table cards
-- authorized website users can manage profile-based iCal sync feeds from the schedule page, including current-page presets, masked links, platform guidance, and feed health metadata
-- user action export API now supports `date_from` / `date_to` / `timezone` filtering with UI controls on user details page
-- stats dashboard now exposes explicit partial-degradation UI state when only some widgets fail
-- schedule API docs now explicitly document `type` aliases (`lecturer`, `teacher`, `room`)
-- schedule data `base_date` now returns validation `422` on invalid format
-- legacy `/api/stats/stats/action_users` now emits deprecation headers and supports controlled shutdown via env flag
-- active search sessions live in Redis
-- saved presets live in `User.settings`
-- Jenkins deploy SSH uses pinned host fingerprint verification from `APP_VM_SHA256` by default
-- scheduler Telegram delivery can use `PROXY_URL`
+- Public calendar links are secrets. Rotate immediately if exposed.
+- Legacy stats alias `/api/stats/stats/action_users` is deprecating; migrate clients to `/api/stats/action_users`.
+- Website API base can be switched per environment with `window.__MPB_API_BASE__`.
+- Bot and website schedule features are intentionally coupled through shared subscription data and cached schedule sources.

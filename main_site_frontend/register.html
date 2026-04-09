@@ -2,8 +2,8 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Р РµРіРёСЃС‚СЂР°С†РёСЏ | ITISHCHENKO</title>
-    <!-- РРєРѕРЅРєРё СЃР°Р№С‚Р° -->
+    <title>Регистрация | ITISHCHENKO</title>
+    <!-- Иконки сайта -->
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
@@ -23,7 +23,7 @@
 </head>
 <body class="bg-slate-50 text-slate-900 flex flex-col min-h-screen">
 
-    <!-- РЈРќРР’Р•Р РЎРђР›Р¬РќРђРЇ РЁРђРџРљРђ -->
+    <!-- Универсальная шапка -->
     <nav class="glass fixed top-0 w-full z-50 transition-all duration-300 nav-visible" id="navbar">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-20">
@@ -32,11 +32,11 @@
                     <span class="text-lg font-bold text-slate-800">Ivan Tishchenko</span>
                 </a>
                 <div class="hidden md:flex space-x-8 items-center" id="desktop-nav-links">
-                    <a href="/#projects" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">РџСЂРѕРµРєС‚С‹</a>
-                    <a href="/schedule" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Р Р°СЃРїРёСЃР°РЅРёРµ</a>
+                    <a href="/#projects" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Проекты</a>
+                    <a href="/schedule" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Расписание</a>
                     <div id="desktop-auth-container" class="flex items-center gap-4">
                         <a href="/login" class="group relative px-6 py-2.5 bg-slate-900 text-white rounded-full font-medium overflow-hidden shadow-lg shadow-slate-900/20 hover:shadow-slate-900/40 transition-all">
-                            <span class="relative z-10 flex items-center gap-2">РђРІС‚РѕСЂРёР·Р°С†РёСЏ</span>
+                            <span class="relative z-10 flex items-center gap-2">Авторизация</span>
                             <div class="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                         </a>
                     </div>
@@ -50,42 +50,42 @@
         </div>
         <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-slate-100 absolute w-full shadow-xl">
             <div class="px-4 pt-2 pb-6 space-y-1" id="mobile-nav-links">
-                <a href="/#projects" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">РџСЂРѕРµРєС‚С‹</a>
-                <a href="/schedule" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Р Р°СЃРїРёСЃР°РЅРёРµ</a>
+                <a href="/#projects" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Проекты</a>
+                <a href="/schedule" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Расписание</a>
                 <div id="mobile-auth-container">
-                    <a href="/login" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">РђРІС‚РѕСЂРёР·Р°С†РёСЏ</a>
+                    <a href="/login" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">Авторизация</a>
                 </div>
             </div>
         </div>
     </nav>
 
-    <!-- РћРўРЎРўРЈРџ РЎР’Р•Р РҐРЈ (pt-32) -->
+    <!-- Отступ сверху (pt-32) -->
     <main class="flex-grow flex items-center justify-center w-full pt-32 pb-10 px-4">
         <div class="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md border border-slate-100">
             <div class="text-center mb-8">
                 <div class="w-16 h-16 bg-blue-600 rounded-2xl mx-auto flex items-center justify-center text-white text-2xl font-bold mb-4 shadow-lg shadow-blue-200">IT</div>
-                <h1 class="text-2xl font-bold text-slate-900">РЎРѕР·РґР°С‚СЊ Р°РєРєР°СѓРЅС‚</h1>
-                <p class="text-slate-500">Р—Р°СЂРµРіРёСЃС‚СЂРёСЂСѓР№С‚РµСЃСЊ РґР»СЏ РґРѕСЃС‚СѓРїР° Рє РґР°С€Р±РѕСЂРґСѓ</p>
+                <h1 class="text-2xl font-bold text-slate-900">Создать аккаунт</h1>
+                <p class="text-slate-500">Зарегистрируйтесь для доступа к дашборду</p>
             </div>
 
             <form id="registerForm" class="space-y-4">
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">РќРѕРІС‹Р№ Р»РѕРіРёРЅ</label>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Новый логин</label>
                     <input type="text" id="reg_username" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Укажите логин" required minlength="3">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">РќРѕРІС‹Р№ РїР°СЂРѕР»СЊ</label>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Новый пароль</label>
                     <input type="password" id="reg_password" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Не менее 6 символов" required minlength="6">
                 </div>
                 <button type="submit" class="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200">
-                    Р—Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°С‚СЊСЃСЏ
+                    Зарегистрироваться
                 </button>
             </form>
             <div id="reg_error" class="mt-4 text-red-500 text-center text-sm hidden"></div>
-            <div id="reg_success" class="mt-4 text-green-600 text-center text-sm font-semibold hidden">РЈСЃРїРµС€РЅРѕ! РџРµСЂРµРЅР°РїСЂР°РІР»РµРЅРёРµ...</div>
+            <div id="reg_success" class="mt-4 text-green-600 text-center text-sm font-semibold hidden">Успешно! Перенаправление...</div>
 
             <div class="mt-6 text-center text-sm text-slate-500">
-                РЈР¶Рµ РµСЃС‚СЊ Р°РєРєР°СѓРЅС‚? <a href="/login" class="text-blue-600 font-semibold hover:underline">Р’РѕР№С‚Рё</a>
+                Уже есть аккаунт? <a href="/login" class="text-blue-600 font-semibold hover:underline">Войти</a>
             </div>
         </div>
     </main>

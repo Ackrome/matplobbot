@@ -35,6 +35,7 @@ Last updated: 2026-04-09
 - [ ] Add `/myschedule` filter presets (for example "only exams", "hide auditorium subscriptions", custom named sets).
 
 ### P2 - Quality and Documentation
+- [ ] add mobile version of auth pages. 
 - [ ] Add test for deterministic ordering in unified schedule search results when mixed entity types return equal match quality.
 - [ ] Fix mojibake RU OpenAPI summary/description text in FastAPI routers to restore readable API docs.
 - [ ] Expand mojibake cleanup beyond OpenAPI docs: fix corrupted user-facing text in `main_site_frontend` pages/scripts, `studio_router`, and scheduler admin messages.

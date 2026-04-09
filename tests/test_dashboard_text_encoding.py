@@ -17,6 +17,8 @@ class TestDashboardTextEncoding(unittest.TestCase):
             Path("fastapi_stats_app/static/js/user_details.js"),
             Path("fastapi_stats_app/templates/index.html"),
             Path("fastapi_stats_app/templates/user_details.html"),
+            Path("main_site_frontend/login.html"),
+            Path("main_site_frontend/register.html"),
         ]
 
         problems: list[str] = []
