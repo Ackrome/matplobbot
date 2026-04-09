@@ -8,30 +8,58 @@ This document covers the user-facing bot, scheduler, and website features curren
 - website iCal subscription links for authorized users
 - scheduler proxy support via `PROXY_URL`
 
+## Fast Travel TOC
+
+- [Quick Index](#quick-index)
+- [Website Schedule Search](#website-schedule-search)
+- [Unified Global Search](#unified-global-search)
+- [Search Presets](#search-presets)
+- [Website Schedule Features](#website-schedule-features-1)
+- [Website Schedule Features - Full Lecturer Name Toggle](#full-lecturer-name-toggle)
+- [Website Schedule Features - Configurable Frontend API Base](#configurable-frontend-api-base)
+- [Website Schedule Features - Styled Popup Notifications](#styled-popup-notifications)
+- [Website Schedule Features - Schedule/Auth Text Fixes (P3 Front)](#scheduleauth-text-fixes-p3-front)
+- [Website Schedule Features - Website iCal Subscription Links](#website-ical-subscription-links)
+- [Website Schedule Features - Schedule Last Parsed Time](#schedule-last-parsed-time)
+- [Website Schedule Features - Bot Calendar Link: Telegram-Filtered Feed](#bot-calendar-link-telegram-filtered-feed)
+- [Website Schedule Features - User Stats Export Formats](#user-stats-export-formats)
+- [Website Schedule Features - Stats Action Users Endpoint](#stats-action-users-endpoint)
+- [Website Schedule Features - Stats Sort Allowlists](#stats-sort-allowlists)
+- [Website Schedule Features - Admin Message Rate Limit And Audit Metadata](#admin-message-rate-limit-and-audit-metadata)
+- [Website Schedule Features - Correlation ID In API/Scheduler Logs](#correlation-id-in-apischeduler-logs)
+- [Website Schedule Features - Schedule Fallback Counters](#schedule-fallback-counters)
+- [Website Schedule Features - Localization Completeness And Fallback](#localization-completeness-and-fallback)
+- [Scheduler Proxy Support](#scheduler-proxy-support)
+- [Jenkins Deploy Host Fingerprint](#jenkins-deploy-host-fingerprint)
+- [GitHub Wiki Sync](#github-wiki-sync)
+- [Docker Pull Lease Error Recovery](#docker-pull-lease-error-recovery)
+- [P2 API And Dashboard Updates (2026-04-09)](#p2-api-and-dashboard-updates-2026-04-09)
+- [Maintainer Summary](#maintainer-summary)
+
 ## Quick Index
 
 ### Search Features
 
 | Feature | Entry point | Purpose |
 | --- | --- | --- |
-| Unified global search | `/search` | Search library content and linked GitHub notes from one screen |
-| Search presets | `/search_presets` | Save and rerun commonly used searches |
+| [Unified global search](#unified-global-search) | `/search` | Search library content and linked GitHub notes from one screen |
+| [Search presets](#search-presets) | `/search_presets` | Save and rerun commonly used searches |
 
 ### Scheduler Feature
 
 | Feature | Entry point | Purpose |
 | --- | --- | --- |
-| Scheduler proxy support | `PROXY_URL` env var | Route scheduler Telegram delivery through a proxy |
+| [Scheduler proxy support](#scheduler-proxy-support) | `PROXY_URL` env var | Route scheduler Telegram delivery through a proxy |
 
 ### Website Schedule Features
 
 | Feature | Entry point | Purpose |
 | --- | --- | --- |
-| Unified schedule search | Website schedule page search bar | Find groups, lecturers, and auditoriums from one search field |
-| Full lecturer name toggle | Website schedule page filters | Show the full lecturer name in desktop table cards |
-| iCal subscription links | Website schedule page for authorized users | Copy or rotate a personal calendar subscription link |
-| Configurable frontend API base | `window.__MPB_API_BASE__` or `<meta name="mpb-api-base">` | Use relative `/api` by default or override frontend API host per environment |
-| Styled popup notifications | `window.mpbPopup(message, options)` | Replace browser alerts with unified dismissible popup notifications |
+| [Unified schedule search](#website-schedule-search) | Website schedule page search bar | Find groups, lecturers, and auditoriums from one search field |
+| [Full lecturer name toggle](#full-lecturer-name-toggle) | Website schedule page filters | Show the full lecturer name in desktop table cards |
+| [iCal subscription links](#website-ical-subscription-links) | Website schedule page for authorized users | Copy or rotate a personal calendar subscription link |
+| [Configurable frontend API base](#configurable-frontend-api-base) | `window.__MPB_API_BASE__` or `<meta name="mpb-api-base">` | Use relative `/api` by default or override frontend API host per environment |
+| [Styled popup notifications](#styled-popup-notifications) | `window.mpbPopup(message, options)` | Replace browser alerts with unified dismissible popup notifications |
 
 ## Website Schedule Search
 
