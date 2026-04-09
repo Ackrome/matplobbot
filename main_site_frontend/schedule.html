@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="schedule.meta.title">Расписание | ITISHCHENKO</title>
-    <!-- Иконки сайта -->
+    <title data-i18n="schedule.meta.title">Р Р°СЃРїРёСЃР°РЅРёРµ | ITISHCHENKO</title>
+    <!-- РРєРѕРЅРєРё СЃР°Р№С‚Р° -->
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
@@ -25,7 +25,7 @@
         .skeleton { background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%); background-size: 200% 100%; animation: loading 1.5s infinite; }
         @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
-        /* Стили универсальной шапки */
+        /* РЎС‚РёР»Рё СѓРЅРёРІРµСЂСЃР°Р»СЊРЅРѕР№ С€Р°РїРєРё */
         .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255, 255, 255, 0.3); }
         .nav-hidden { transform: translateY(-100%); opacity: 0; }
         .nav-visible { transform: translateY(0); opacity: 1; }
@@ -33,7 +33,7 @@
 </head>
 <body class="bg-slate-50 text-slate-900">
 
-    <!-- УНИВЕРСАЛЬНАЯ ШАПКА -->
+    <!-- РЈРќРР’Р•Р РЎРђР›Р¬РќРђРЇ РЁРђРџРљРђ -->
     <nav class="glass fixed top-0 w-full z-50 transition-all duration-300 nav-visible" id="navbar">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-20">
@@ -42,11 +42,11 @@
                     <span class="text-lg font-bold text-slate-800">Ivan Tishchenko</span>
                 </a>
                 <div class="hidden md:flex space-x-8 items-center" id="desktop-nav-links">
-                    <a href="/#projects" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Проекты</a>
-                    <a href="/schedule" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Расписание</a>
+                    <a href="/#projects" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">РџСЂРѕРµРєС‚С‹</a>
+                    <a href="/schedule" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Р Р°СЃРїРёСЃР°РЅРёРµ</a>
                     <div id="desktop-auth-container" class="flex items-center gap-4">
                         <a href="/login" class="group relative px-6 py-2.5 bg-slate-900 text-white rounded-full font-medium overflow-hidden shadow-lg shadow-slate-900/20 hover:shadow-slate-900/40 transition-all">
-                            <span class="relative z-10 flex items-center gap-2">Авторизация</span>
+                            <span class="relative z-10 flex items-center gap-2">РђРІС‚РѕСЂРёР·Р°С†РёСЏ</span>
                             <div class="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                         </a>
                     </div>
@@ -60,21 +60,21 @@
         </div>
         <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-slate-100 absolute w-full shadow-xl">
             <div class="px-4 pt-2 pb-6 space-y-1" id="mobile-nav-links">
-                <a href="/#projects" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Проекты</a>
-                <a href="/schedule" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Расписание</a>
+                <a href="/#projects" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">РџСЂРѕРµРєС‚С‹</a>
+                <a href="/schedule" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Р Р°СЃРїРёСЃР°РЅРёРµ</a>
                 <div id="mobile-auth-container">
-                    <a href="/login" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">Авторизация</a>
+                    <a href="/login" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">РђРІС‚РѕСЂРёР·Р°С†РёСЏ</a>
                 </div>
             </div>
         </div>
     </nav>
 
-    <!-- КОНТЕНТ (Остается без изменений) -->
+    <!-- РљРћРќРўР•РќРў (РћСЃС‚Р°РµС‚СЃСЏ Р±РµР· РёР·РјРµРЅРµРЅРёР№) -->
     <main class="pt-24 max-w-[1600px] mx-auto px-2 sm:px-6 lg:px-8 pb-20">
         <div class="w-full">
             <div class="flex flex-col md:flex-row justify-between items-center mb-4 md:mb-8 gap-3 relative z-40 w-full px-1">
                 <div class="flex items-center justify-between w-full md:w-auto gap-3">
-                    <h1 data-i18n="schedule.heading" class="text-2xl md:text-4xl font-black text-slate-900 tracking-tight">Расписание</h1>
+                    <h1 data-i18n="schedule.heading" class="text-2xl md:text-4xl font-black text-slate-900 tracking-tight">Р Р°СЃРїРёСЃР°РЅРёРµ</h1>
                     <div class="relative" id="offlinePanelContainer">
                         <button onclick="toggleOfflinePanel(event)"
                             class="group flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-blue-400 transition-all">
@@ -82,7 +82,7 @@
                                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                                 <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                             </div>
-                            <span data-i18n="schedule.offline.available" class="text-xs md:text-sm font-bold text-slate-600">Доступно оффлайн</span>
+                            <span data-i18n="schedule.offline.available" class="text-xs md:text-sm font-bold text-slate-600">Р”РѕСЃС‚СѓРїРЅРѕ РѕС„С„Р»Р°Р№РЅ</span>
                             <svg id="offlineArrow" class="w-4 h-4 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                             </svg>
@@ -90,7 +90,7 @@
                         <div id="offlineDropdown"
                             class="absolute right-0 md:left-0 mt-2 w-64 md:w-72 bg-white border border-slate-100 rounded-2xl shadow-2xl overflow-hidden hidden opacity-0 translate-y-2 transition-all duration-200 z-50">
                             <div class="p-3 border-b border-slate-50 bg-slate-50/50">
-                                <h3 data-i18n="schedule.offline.available" class="font-black text-[10px] text-slate-400 uppercase tracking-wider text-center">Доступно оффлайн</h3>
+                                <h3 data-i18n="schedule.offline.available" class="font-black text-[10px] text-slate-400 uppercase tracking-wider text-center">Р”РѕСЃС‚СѓРїРЅРѕ РѕС„С„Р»Р°Р№РЅ</h3>
                             </div>
                             <div id="cachedEntitiesList" class="p-1.5 flex flex-col gap-1 max-h-80 overflow-y-auto custom-scrollbar"></div>
                         </div>
@@ -100,7 +100,7 @@
                 <div class="relative w-full md:w-96" id="searchContainer">
                     <input type="text" id="groupSearch" data-search-input data-i18n-placeholder="schedule.search.placeholder" autocomplete="off"
                         class="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-slate-700 text-sm md:text-base"
-                        placeholder="Найти группу или ФИО...">
+                        placeholder="РќР°Р№С‚Рё РіСЂСѓРїРїСѓ РёР»Рё Р¤РРћ...">
                     <div class="absolute left-3.5 top-3 text-slate-400">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                     </div>
@@ -122,12 +122,12 @@
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                             </button>
                         </div>
-                        <button onclick="setTodayWeek()" data-i18n="schedule.today" class="px-3 py-2 text-xs md:text-sm font-bold bg-white text-blue-600 rounded-lg border border-blue-100 shadow-sm">Сегодня</button>
+                        <button onclick="setTodayWeek()" data-i18n="schedule.today" class="px-3 py-2 text-xs md:text-sm font-bold bg-white text-blue-600 rounded-lg border border-blue-100 shadow-sm">РЎРµРіРѕРґРЅСЏ</button>
                     </div>
 
                     <div id="moduleFilterSection" class="p-3 md:p-5">
                         <button type="button" id="filterToggleBtn" class="flex items-center justify-between w-full text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">
-                            <span data-i18n="schedule.filters.desktop">Фильтры и модули</span>
+                            <span data-i18n="schedule.filters.desktop">Р¤РёР»СЊС‚СЂС‹ Рё РјРѕРґСѓР»Рё</span>
                             <svg id="filterArrow" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </button>
 
@@ -140,7 +140,7 @@
                                             <div class="block bg-slate-200 w-9 h-5 rounded-full transition-colors"></div>
                                             <div class="dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition-transform shadow-sm"></div>
                                         </div>
-                                        <span data-i18n="schedule.filters.shortNames" class="ml-2 text-xs font-medium text-slate-500">Короткие названия</span>
+                                        <span data-i18n="schedule.filters.shortNames" class="ml-2 text-xs font-medium text-slate-500">РљРѕСЂРѕС‚РєРёРµ РЅР°Р·РІР°РЅРёСЏ</span>
                                     </label>
                                     <label class="flex items-center cursor-pointer group">
                                         <div class="relative">
@@ -148,11 +148,11 @@
                                             <div class="block bg-slate-200 w-9 h-5 rounded-full transition-colors"></div>
                                             <div class="dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition-transform shadow-sm"></div>
                                         </div>
-                                        <span data-i18n="schedule.filters.fullLecturer" class="ml-2 text-xs font-medium text-slate-500">Full lecturer name</span>
+                                        <span data-i18n="schedule.filters.fullLecturer" class="ml-2 text-xs font-medium text-slate-500">Полное имя преподавателя</span>
                                     </label>
                                     <div class="flex gap-3">
-                                        <button onclick="selectAllModules()" data-i18n="schedule.filters.all" class="text-[10px] md:text-xs font-bold text-blue-600 uppercase">Всё</button>
-                                        <button onclick="clearAllModules()" data-i18n="schedule.filters.clear" class="text-[10px] md:text-xs font-bold text-slate-400 uppercase">Сброс</button>
+                                        <button onclick="selectAllModules()" data-i18n="schedule.filters.all" class="text-[10px] md:text-xs font-bold text-blue-600 uppercase">Р’СЃС‘</button>
+                                        <button onclick="clearAllModules()" data-i18n="schedule.filters.clear" class="text-[10px] md:text-xs font-bold text-slate-400 uppercase">РЎР±СЂРѕСЃ</button>
                                     </div>
                                 </div>
                             </div>
@@ -164,7 +164,7 @@
                 <div id="scheduleGridContent" class="relative bg-white">
                     <div id="offlineWarning" class="hidden m-3 p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-2 text-amber-800 fade-in">
                         <svg class="w-4 h-4 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                        <span data-i18n="schedule.offline.warning" class="text-[10px] md:text-sm font-medium">ВУЗ недоступен. Загружена копия.</span>
+                        <span data-i18n="schedule.offline.warning" class="text-[10px] md:text-sm font-medium">Р’РЈР— РЅРµРґРѕСЃС‚СѓРїРµРЅ. Р—Р°РіСЂСѓР¶РµРЅР° РєРѕРїРёСЏ.</span>
                     </div>
                     <div id="desktopSchedule" class="hidden lg:block w-full"></div>
                     <div id="mobileSchedule" class="block lg:hidden flex flex-col gap-0 schedule-cards-feed"></div>
@@ -172,16 +172,21 @@
                         <div class="w-16 h-16 bg-slate-50 text-slate-200 rounded-full flex items-center justify-center mx-auto mb-4">
                             <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                         </div>
-                        <h3 data-i18n="schedule.state.default" class="text-base font-bold text-slate-400 tracking-tight">Выберите расписание</h3>
+                        <h3 data-i18n="schedule.state.default" class="text-base font-bold text-slate-400 tracking-tight">Р’С‹Р±РµСЂРёС‚Рµ СЂР°СЃРїРёСЃР°РЅРёРµ</h3>
                     </div>
                 </div>
             </div>
         </div>
     </main>
 
-    <script src="/js/navbar.js?v=17"></script>
-    <script src="/js/schedule.js?v=16"></script>
-    <script src="/js/calendar_sync.js?v=1"></script>
+    <script src="/js/runtime_config.js?v=1"></script>
+    <script src="/js/ui_utils.js?v=1"></script>
+    <script src="/js/navbar.js?v=18"></script>
+    <script src="/js/schedule.js?v=17"></script>
+    <script src="/js/calendar_sync.js?v=2"></script>
     <script src="/js/schedule_ux.js?v=5"></script>
 </body>
 </html>
+
+
+

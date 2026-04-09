@@ -1,43 +1,45 @@
-// main_site_frontend/js/studio.js
+﻿// main_site_frontend/js/studio.js
 
-const API_BASE = "https://api.ivantishchenko.ru/api";
+const API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : "/api";
 const token = localStorage.getItem('jwt_token');
-// Настройка парсера Markdown для поддержки локальных картинок
+// РќР°СЃС‚СЂРѕР№РєР° РїР°СЂСЃРµСЂР° Markdown РґР»СЏ РїРѕРґРґРµСЂР¶РєРё Р»РѕРєР°Р»СЊРЅС‹С… РєР°СЂС‚РёРЅРѕРє
 const renderer = new marked.Renderer();
 renderer.image = function(href, title, text) {
-    // Если мы в режиме проекта и ссылка относительная (не http/data)
+    // Р•СЃР»Рё РјС‹ РІ СЂРµР¶РёРјРµ РїСЂРѕРµРєС‚Р° Рё СЃСЃС‹Р»РєР° РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅР°СЏ (РЅРµ http/data)
     if (currentMode === 'project' && currentProjectId && !href.startsWith('http') && !href.startsWith('data:')) {
-        // Убираем слеш в начале, если есть
+        // РЈР±РёСЂР°РµРј СЃР»РµС€ РІ РЅР°С‡Р°Р»Рµ, РµСЃР»Рё РµСЃС‚СЊ
         let cleanHref = href.replace(/^\/+/, '');
-        // Формируем прямую ссылку на наш новый эндпоинт + токен
+        // Р¤РѕСЂРјРёСЂСѓРµРј РїСЂСЏРјСѓСЋ СЃСЃС‹Р»РєСѓ РЅР° РЅР°С€ РЅРѕРІС‹Р№ СЌРЅРґРїРѕРёРЅС‚ + С‚РѕРєРµРЅ
         href = `${API_BASE}/studio/projects/${currentProjectId}/assets/${cleanHref}?token=${token}`;
     }
     return `<img src="${href}" alt="${text || ''}" title="${title || ''}" class="max-w-full rounded-lg shadow-sm my-2 mx-auto" />`;
 };
 marked.use({ renderer });
-// Состояние приложения
+// РЎРѕСЃС‚РѕСЏРЅРёРµ РїСЂРёР»РѕР¶РµРЅРёСЏ
 let editor = null;
 let currentMode = 'quick'; // 'quick' | 'project'
 let currentProjectId = null;
 let currentFileId = null;
 let projectFiles =[];
 let splitInstance = null;
-let currentBlobUrl = null; // Ссылка на скомпилированный PDF для скачивания
+let currentBlobUrl = null; // РЎСЃС‹Р»РєР° РЅР° СЃРєРѕРјРїРёР»РёСЂРѕРІР°РЅРЅС‹Р№ PDF РґР»СЏ СЃРєР°С‡РёРІР°РЅРёСЏ
 let projectsList =[];
 let currentProjectType = 'latex';
 
 const TEMPLATES = {
-    latex: `\\documentclass[12pt, a4paper]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage[T2A]{fontenc}\n\\usepackage[russian]{babel}\n\\usepackage{amsmath, amssymb, graphicx}\n\n\\begin{document}\n\\section{Введение}\nПривет, LaTeX! Формула: \\[ E = mc^2 \\]\n\\end{document}`,
-    markdown: `# Live Markdown\nФормулы работают на лету: $$E = mc^2$$\n\nИзмените этот текст!`,
-    mermaid: `graph TD;\n    A[Начало] --> B{Работает?};\n    B -- Да --> C[Отлично!];\n    B -- Нет --> D[Ищем баг];`
+    latex: `\\documentclass[12pt, a4paper]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage[T2A]{fontenc}\n\\usepackage[russian]{babel}\n\\usepackage{amsmath, amssymb, graphicx}\n\n\\begin{document}\n\\section{Р’РІРµРґРµРЅРёРµ}\nРџСЂРёРІРµС‚, LaTeX! Р¤РѕСЂРјСѓР»Р°: \\[ E = mc^2 \\]\n\\end{document}`,
+    markdown: `# Live Markdown\nР¤РѕСЂРјСѓР»С‹ СЂР°Р±РѕС‚Р°СЋС‚ РЅР° Р»РµС‚Сѓ: $$E = mc^2$$\n\nРР·РјРµРЅРёС‚Рµ СЌС‚РѕС‚ С‚РµРєСЃС‚!`,
+    mermaid: `graph TD;\n    A[РќР°С‡Р°Р»Рѕ] --> B{Р Р°Р±РѕС‚Р°РµС‚?};\n    B -- Р”Р° --> C[РћС‚Р»РёС‡РЅРѕ!];\n    B -- РќРµС‚ --> D[РС‰РµРј Р±Р°Рі];`
 };
 
 if (!token) {
-    alert("Пожалуйста, авторизуйтесь для доступа к Студии.");
-    window.location.href = '/login';
+    window.mpbPopup?.("РџРѕР¶Р°Р»СѓР№СЃС‚Р°, Р°РІС‚РѕСЂРёР·СѓР№С‚РµСЃСЊ РґР»СЏ РґРѕСЃС‚СѓРїР° Рє РЎС‚СѓРґРёРё.");
+    setTimeout(() => {
+        window.location.href = '/login';
+    }, 250);
 }
 
-// === 1. ИНИЦИАЛИЗАЦИЯ ИНТЕРФЕЙСА (SPLIT.JS & MOBILE) ===
+// === 1. РРќРР¦РРђР›РР—РђР¦РРЇ РРќРўР•Р Р¤Р•Р™РЎРђ (SPLIT.JS & MOBILE) ===
 function setupSplit() {
     const isMobile = window.innerWidth < 768;
 
@@ -51,15 +53,15 @@ function setupSplit() {
     const viewer = document.getElementById('viewer-pane');
 
     if (isMobile) {
-        // Мобильный режим: скрываем Split.js, управляем табами
+        // РњРѕР±РёР»СЊРЅС‹Р№ СЂРµР¶РёРј: СЃРєСЂС‹РІР°РµРј Split.js, СѓРїСЂР°РІР»СЏРµРј С‚Р°Р±Р°РјРё
         sidebar.classList.add('w-full', 'absolute', 'inset-0', 'z-10');
         editor.classList.add('w-full', 'absolute', 'inset-0', 'z-10');
         viewer.classList.add('w-full', 'absolute', 'inset-0', 'z-10');
 
         document.getElementById('mobile-tabs').classList.remove('hidden');
-        switchMobileTab('editor-pane'); // Открываем код по умолчанию
+        switchMobileTab('editor-pane'); // РћС‚РєСЂС‹РІР°РµРј РєРѕРґ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ
     } else {
-        // Десктопный режим
+        // Р”РµСЃРєС‚РѕРїРЅС‹Р№ СЂРµР¶РёРј
         sidebar.classList.remove('w-full', 'absolute', 'inset-0', 'z-10', 'hidden');
         editor.classList.remove('w-full', 'absolute', 'inset-0', 'z-10', 'hidden');
         viewer.classList.remove('w-full', 'absolute', 'inset-0', 'z-10', 'hidden');
@@ -80,12 +82,12 @@ function setupSplit() {
 }
 setupSplit();
 window.addEventListener('resize', () => {
-    // Простейший debounce для resize
+    // РџСЂРѕСЃС‚РµР№С€РёР№ debounce РґР»СЏ resize
     clearTimeout(window.resizeTimer);
     window.resizeTimer = setTimeout(setupSplit, 250);
 });
 
-// Логика переключения мобильных табов
+// Р›РѕРіРёРєР° РїРµСЂРµРєР»СЋС‡РµРЅРёСЏ РјРѕР±РёР»СЊРЅС‹С… С‚Р°Р±РѕРІ
 window.switchMobileTab = function(targetPaneId) {
     const panes = ['sidebar-pane', 'editor-pane', 'viewer-pane'];
 
@@ -106,11 +108,11 @@ window.switchMobileTab = function(targetPaneId) {
     });
 };
 
-// === 2. ИНИЦИАЛИЗАЦИЯ MONACO EDITOR И INTELLISENSE ===
+// === 2. РРќРР¦РРђР›РР—РђР¦РРЇ MONACO EDITOR Р INTELLISENSE ===
 require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.38.0/min/vs' }});
 require(['vs/editor/editor.main'], function() {
 
-    // Регистрируем умные сниппеты (Snippets) для LaTeX
+    // Р РµРіРёСЃС‚СЂРёСЂСѓРµРј СѓРјРЅС‹Рµ СЃРЅРёРїРїРµС‚С‹ (Snippets) РґР»СЏ LaTeX
     monaco.languages.registerCompletionItemProvider('latex', {
         provideCompletionItems: function(model, position) {
             const suggestions =[
@@ -119,7 +121,7 @@ require(['vs/editor/editor.main'], function() {
                     kind: monaco.languages.CompletionItemKind.Snippet,
                     insertText: '\\begin{${1:environment}}\n\t$0\n\\end{${1:environment}}',
                     insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                    documentation: 'Вставить окружение LaTeX'
+                    documentation: 'Р’СЃС‚Р°РІРёС‚СЊ РѕРєСЂСѓР¶РµРЅРёРµ LaTeX'
                 },
                 {
                     label: '\\section',
@@ -148,12 +150,12 @@ require(['vs/editor/editor.main'], function() {
         fontSize: 14
     });
 
-    // Автосохранение, Live Preview и подсчет слов (Debounce)
+    // РђРІС‚РѕСЃРѕС…СЂР°РЅРµРЅРёРµ, Live Preview Рё РїРѕРґСЃС‡РµС‚ СЃР»РѕРІ (Debounce)
     let timeout;
     editor.onDidChangeModelContent(() => {
         updateWordCount();
         setStatus("Unsaved", false);
-        monaco.editor.setModelMarkers(editor.getModel(), 'latex',[]); // Очищаем маркеры ошибок при редактировании
+        monaco.editor.setModelMarkers(editor.getModel(), 'latex',[]); // РћС‡РёС‰Р°РµРј РјР°СЂРєРµСЂС‹ РѕС€РёР±РѕРє РїСЂРё СЂРµРґР°РєС‚РёСЂРѕРІР°РЅРёРё
 
         clearTimeout(timeout);
         timeout = setTimeout(() => {
@@ -162,10 +164,10 @@ require(['vs/editor/editor.main'], function() {
         }, 1000);
     });
 
-    // Биндим Ctrl+S
+    // Р‘РёРЅРґРёРј Ctrl+S
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, compileCurrent);
 
-    // Инит Mermaid
+    // РРЅРёС‚ Mermaid
     try {
         mermaid.initialize({ startOnLoad: false, theme: 'default' });
     } catch(e) {
@@ -173,7 +175,7 @@ require(['vs/editor/editor.main'], function() {
     }
 });
 
-// Обновление UI Статус-бара
+// РћР±РЅРѕРІР»РµРЅРёРµ UI РЎС‚Р°С‚СѓСЃ-Р±Р°СЂР°
 function setStatus(text, isSaving = false) {
     document.getElementById('status-text').innerText = text;
     document.getElementById('status-icon-saved').classList.toggle('hidden', isSaving || text !== 'Saved');
@@ -188,7 +190,7 @@ function updateWordCount() {
     document.getElementById('doc-stats').innerText = `${words} words, ${chars} chars`;
 }
 
-// === 3. ПЕРЕКЛЮЧЕНИЕ РЕЖИМОВ (QUICK / PROJECT) ===
+// === 3. РџР•Р Р•РљР›Р®Р§Р•РќРР• Р Р•Р–РРњРћР’ (QUICK / PROJECT) ===
 document.getElementById('mode-quick').onclick = () => switchMode('quick');
 document.getElementById('mode-project').onclick = () => switchMode('project');
 document.getElementById('doc-type').addEventListener('change', (e) => setLanguage(e.target.value));
@@ -218,7 +220,7 @@ function switchMode(mode) {
         typeSelect.classList.add('hidden');
 
         btnZip.classList.remove('hidden');
-        if (btnTg) btnTg.classList.remove('hidden'); // <-- ПОКАЗЫВАЕМ В PROJECT РЕЖИМЕ
+        if (btnTg) btnTg.classList.remove('hidden'); // <-- РџРћРљРђР—Р«Р’РђР•Рњ Р’ PROJECT Р Р•Р–РРњР•
 
         loadProjects();
     }
@@ -234,7 +236,7 @@ function setLanguage(type) {
         editor.setValue(TEMPLATES[type]);
     }
 
-    // Скрываем PDF, если перешли на Live формат
+    // РЎРєСЂС‹РІР°РµРј PDF, РµСЃР»Рё РїРµСЂРµС€Р»Рё РЅР° Live С„РѕСЂРјР°С‚
     if (type !== 'latex') {
         document.getElementById('pdf-viewer').classList.add('hidden');
         document.getElementById('btn-download-pdf').classList.add('hidden');
@@ -245,7 +247,7 @@ function setLanguage(type) {
 // === 4. LIVE PREVIEW (Markdown & Mermaid) ===
 async function updateLivePreview() {
     const type = currentMode === 'quick' ? document.getElementById('doc-type').value : currentProjectType;
-    if (type === 'latex') return; // LaTeX требует серверной сборки
+    if (type === 'latex') return; // LaTeX С‚СЂРµР±СѓРµС‚ СЃРµСЂРІРµСЂРЅРѕР№ СЃР±РѕСЂРєРё
 
     const code = editor.getValue();
     const liveDiv = document.getElementById('live-preview');
@@ -258,13 +260,13 @@ async function updateLivePreview() {
     liveDiv.classList.remove('hidden');
 
     if (type === 'markdown') {
-        // Подменяем $$ формулы для KaTeX перед парсингом Markdown
+        // РџРѕРґРјРµРЅСЏРµРј $$ С„РѕСЂРјСѓР»С‹ РґР»СЏ KaTeX РїРµСЂРµРґ РїР°СЂСЃРёРЅРіРѕРј Markdown
         let safeCode = code.replace(/\$\$(.*?)\$\$/gs, (m, p1) => `\n<div class="math-block">${p1}</div>\n`);
         safeCode = safeCode.replace(/\$(.*?)\$/g, (m, p1) => `<span class="math-inline">${p1}</span>`);
 
         contentDiv.innerHTML = marked.parse(safeCode);
 
-        // Рендерим математику
+        // Р РµРЅРґРµСЂРёРј РјР°С‚РµРјР°С‚РёРєСѓ
         if (typeof renderMathInElement === 'function') {
             renderMathInElement(contentDiv, {
                 delimiters:[
@@ -283,7 +285,7 @@ async function updateLivePreview() {
     }
 }
 
-// === 5. СЕРВЕРНАЯ КОМПИЛЯЦИЯ И ОШИБКИ ===
+// === 5. РЎР•Р Р’Р•Р РќРђРЇ РљРћРњРџРР›РЇР¦РРЇ Р РћРЁРР‘РљР ===
 async function compileCurrent() {
     if (currentMode === 'project') await saveCurrentFile();
 
@@ -291,7 +293,7 @@ async function compileCurrent() {
     const errorPanel = document.getElementById('error-panel');
     const errorText = document.getElementById('error-text');
 
-    if(editor) monaco.editor.setModelMarkers(editor.getModel(), 'latex',[]); // Чистим старые ошибки
+    if(editor) monaco.editor.setModelMarkers(editor.getModel(), 'latex',[]); // Р§РёСЃС‚РёРј СЃС‚Р°СЂС‹Рµ РѕС€РёР±РєРё
 
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');
@@ -308,7 +310,7 @@ async function compileCurrent() {
                 body: JSON.stringify({ type, content: editor.getValue() })
             });
         } else {
-            if(!currentProjectId) throw new Error("Проект не выбран");
+            if(!currentProjectId) throw new Error("РџСЂРѕРµРєС‚ РЅРµ РІС‹Р±СЂР°РЅ");
             response = await fetch(`${API_BASE}/studio/projects/${currentProjectId}/compile`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -320,29 +322,29 @@ async function compileCurrent() {
         if (response.ok && data.status === 'success') {
             setStatus("Saved", false);
 
-            // Если вернулся PDF
+            // Р•СЃР»Рё РІРµСЂРЅСѓР»СЃСЏ PDF
             if (data.pdf) {
                 document.getElementById('live-preview').classList.add('hidden');
                 document.getElementById('empty-state').classList.add('hidden');
                 const pdfViewer = document.getElementById('pdf-viewer');
                 pdfViewer.classList.remove('hidden');
 
-                // Конвертируем Base64 в Blob
+                // РљРѕРЅРІРµСЂС‚РёСЂСѓРµРј Base64 РІ Blob
                 const byteCharacters = atob(data.pdf);
                 const byteNumbers = new Array(byteCharacters.length);
                 for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
                 const blob = new Blob([new Uint8Array(byteNumbers)], {type: 'application/pdf'});
 
-                if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl); // Очистка старой ссылки памяти
+                if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl); // РћС‡РёСЃС‚РєР° СЃС‚Р°СЂРѕР№ СЃСЃС‹Р»РєРё РїР°РјСЏС‚Рё
                 currentBlobUrl = URL.createObjectURL(blob);
 
-                pdfViewer.src = currentBlobUrl + "#toolbar=0&view=FitH"; // Скрываем тулбар, подгоняем по ширине
+                pdfViewer.src = currentBlobUrl + "#toolbar=0&view=FitH"; // РЎРєСЂС‹РІР°РµРј С‚СѓР»Р±Р°СЂ, РїРѕРґРіРѕРЅСЏРµРј РїРѕ С€РёСЂРёРЅРµ
                 document.getElementById('btn-download-pdf').classList.remove('hidden');
             }
         } else {
             setStatus("Error", false);
 
-            // Парсинг ошибок в Monaco Editor
+            // РџР°СЂСЃРёРЅРі РѕС€РёР±РѕРє РІ Monaco Editor
             if (data.errors && data.errors.length > 0) {
                 const markers = data.errors.map(err => ({
                     severity: monaco.MarkerSeverity.Error,
@@ -377,10 +379,10 @@ async function loadProjects() {
     const res = await fetch(`${API_BASE}/studio/projects`, { headers: { 'Authorization': `Bearer ${token}` } });
     if (!res.ok) return;
 
-    projectsList = await res.json(); // Сохраняем в глобальную переменную
+    projectsList = await res.json(); // РЎРѕС…СЂР°РЅСЏРµРј РІ РіР»РѕР±Р°Р»СЊРЅСѓСЋ РїРµСЂРµРјРµРЅРЅСѓСЋ
     const selector = document.getElementById('project-selector');
 
-    selector.innerHTML = '<option value="" disabled selected>-- Выберите проект --</option>';
+    selector.innerHTML = '<option value="" disabled selected>-- Р’С‹Р±РµСЂРёС‚Рµ РїСЂРѕРµРєС‚ --</option>';
     projectsList.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p.id;
@@ -389,14 +391,14 @@ async function loadProjects() {
     });
 
     if(projectsList.length > 0) {
-        // Если мы только что создали проект, открываем его, иначе первый в списке
+        // Р•СЃР»Рё РјС‹ С‚РѕР»СЊРєРѕ С‡С‚Рѕ СЃРѕР·РґР°Р»Рё РїСЂРѕРµРєС‚, РѕС‚РєСЂС‹РІР°РµРј РµРіРѕ, РёРЅР°С‡Рµ РїРµСЂРІС‹Р№ РІ СЃРїРёСЃРєРµ
         const targetId = currentProjectId || projectsList[0].id;
         selector.value = targetId;
         openProject(targetId);
     }
 }
 
-// --- УПРАВЛЕНИЕ МОДАЛКОЙ ---
+// --- РЈРџР РђР’Р›Р•РќРР• РњРћР”РђР›РљРћР™ ---
 function createNewProject() {
     document.getElementById('new-project-name').value = '';
     document.getElementById('new-project-type').value = 'latex';
@@ -408,7 +410,7 @@ function closeCreateProjectModal() {
     document.getElementById('create-project-modal').classList.add('hidden');
 }
 
-// Вспомогательная функция для обновления селекта шаблонов
+// Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅР°СЏ С„СѓРЅРєС†РёСЏ РґР»СЏ РѕР±РЅРѕРІР»РµРЅРёСЏ СЃРµР»РµРєС‚Р° С€Р°Р±Р»РѕРЅРѕРІ
 window.updateTemplateOptions = function() {
     const type = document.getElementById('new-project-type').value;
     const templateContainer = document.getElementById('template-container');
@@ -419,25 +421,25 @@ window.updateTemplateOptions = function() {
     if (type === 'latex') {
         templateContainer.classList.remove('hidden');
         templateSelect.innerHTML = `
-            <option value="latex_blank">Пустой документ (Article)</option>
-            <option value="latex_beamer">Презентация (Beamer)</option>
-            <option value="latex_report">Отчет (ГОСТ / extreport)</option>
+            <option value="latex_blank">РџСѓСЃС‚РѕР№ РґРѕРєСѓРјРµРЅС‚ (Article)</option>
+            <option value="latex_beamer">РџСЂРµР·РµРЅС‚Р°С†РёСЏ (Beamer)</option>
+            <option value="latex_report">РћС‚С‡РµС‚ (Р“РћРЎРў / extreport)</option>
         `;
     } else if (type === 'markdown') {
         templateContainer.classList.remove('hidden');
-        templateSelect.innerHTML = `<option value="markdown">Стандартный Markdown</option>`;
+        templateSelect.innerHTML = `<option value="markdown">РЎС‚Р°РЅРґР°СЂС‚РЅС‹Р№ Markdown</option>`;
     } else if (type === 'mermaid') {
         templateContainer.classList.remove('hidden');
-        templateSelect.innerHTML = `<option value="mermaid">Базовая диаграмма</option>`;
+        templateSelect.innerHTML = `<option value="mermaid">Р‘Р°Р·РѕРІР°СЏ РґРёР°РіСЂР°РјРјР°</option>`;
     }
 };
 
 async function submitNewProject() {
     const name = document.getElementById('new-project-name').value.trim();
     const type = document.getElementById('new-project-type').value;
-    const templateId = document.getElementById('new-project-template').value; // Берем ID шаблона
+    const templateId = document.getElementById('new-project-template').value; // Р‘РµСЂРµРј ID С€Р°Р±Р»РѕРЅР°
 
-    if (!name) { alert("Введите название проекта"); return; }
+    if (!name) { window.mpbPopup?.("Р’РІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ РїСЂРѕРµРєС‚Р°"); return; }
 
     closeCreateProjectModal();
     setStatus("Creating...", true);
@@ -445,7 +447,7 @@ async function submitNewProject() {
     const res = await fetch(`${API_BASE}/studio/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ name: name, project_type: type, template_id: templateId }) // Отправляем шаблон!
+        body: JSON.stringify({ name: name, project_type: type, template_id: templateId }) // РћС‚РїСЂР°РІР»СЏРµРј С€Р°Р±Р»РѕРЅ!
     });
 
     if (res.ok) {
@@ -454,23 +456,23 @@ async function submitNewProject() {
         await loadProjects();
         setStatus("Ready", false);
     } else {
-        alert("Ошибка при создании проекта");
+        window.mpbPopup?.("РћС€РёР±РєР° РїСЂРё СЃРѕР·РґР°РЅРёРё РїСЂРѕРµРєС‚Р°");
         setStatus("Error", false);
     }
 }
 
-// --- ОТКРЫТИЕ ПРОЕКТА ---
+// --- РћРўРљР Р«РўРР• РџР РћР•РљРўРђ ---
 async function openProject(id) {
     currentProjectId = id;
 
-    // Определяем тип открытого проекта
+    // РћРїСЂРµРґРµР»СЏРµРј С‚РёРї РѕС‚РєСЂС‹С‚РѕРіРѕ РїСЂРѕРµРєС‚Р°
     const proj = projectsList.find(p => p.id == id);
     currentProjectType = proj ? proj.type : 'latex';
 
     document.getElementById('empty-state').classList.remove('hidden');
     document.getElementById('pdf-viewer').classList.add('hidden');
     document.getElementById('btn-download-pdf').classList.add('hidden');
-    document.getElementById('live-preview').classList.add('hidden'); // Прячем live preview по умолчанию
+    document.getElementById('live-preview').classList.add('hidden'); // РџСЂСЏС‡РµРј live preview РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ
 
     const res = await fetch(`${API_BASE}/studio/projects/${id}`, { headers: { 'Authorization': `Bearer ${token}` } });
     projectFiles = await res.json();
@@ -481,7 +483,7 @@ async function openProject(id) {
     if (mainFile) openFile(mainFile.id);
 }
 
-// Рендеринг дерева файлов (с иконками и кнопками Rename/Delete)
+// Р РµРЅРґРµСЂРёРЅРі РґРµСЂРµРІР° С„Р°Р№Р»РѕРІ (СЃ РёРєРѕРЅРєР°РјРё Рё РєРЅРѕРїРєР°РјРё Rename/Delete)
 function renderFileList() {
     const list = document.getElementById('file-list');
     list.innerHTML = '';
@@ -491,7 +493,7 @@ function renderFileList() {
         div.className = `file-item group px-3 py-1.5 text-sm text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors flex items-center justify-between border-l-[3px] border-transparent`;
         if (f.id === currentFileId) div.classList.add('active');
 
-        let icon = f.is_binary ? '🖼️' : (f.path.endsWith('.tex') ? '✍️' : '📄');
+        let icon = f.is_binary ? '[BIN]' : (f.path.endsWith('.tex') ? '[TEX]' : '[FILE]');
 
         const nameDiv = document.createElement('div');
         nameDiv.className = "flex items-center gap-2 truncate";
@@ -503,15 +505,15 @@ function renderFileList() {
 
         if (!f.is_main) {
             const btnRename = document.createElement('button');
-            btnRename.innerHTML = '✏️';
+            btnRename.innerHTML = 'RENAME';
             btnRename.className = "hover:scale-125 transition-transform text-xs";
-            btnRename.title = "Переименовать";
+            btnRename.title = "РџРµСЂРµРёРјРµРЅРѕРІР°С‚СЊ";
             btnRename.onclick = (e) => { e.stopPropagation(); renameFile(f.id, f.path); };
 
             const btnDelete = document.createElement('button');
-            btnDelete.innerHTML = '❌';
+            btnDelete.innerHTML = 'DELETE';
             btnDelete.className = "hover:scale-125 transition-transform text-xs";
-            btnDelete.title = "Удалить";
+            btnDelete.title = "РЈРґР°Р»РёС‚СЊ";
             btnDelete.onclick = (e) => { e.stopPropagation(); deleteFile(f.id, f.path); };
 
             actionsDiv.appendChild(btnRename);
@@ -531,10 +533,10 @@ async function openFile(id) {
     if (!file) return;
 
     currentFileId = id;
-    renderFileList(); // Обновляем выделение в Sidebar
+    renderFileList(); // РћР±РЅРѕРІР»СЏРµРј РІС‹РґРµР»РµРЅРёРµ РІ Sidebar
 
     if (file.is_binary) {
-        editor.setValue(`% Это бинарный файл (${file.path}).\n% Используйте относительный путь в коде.`);
+        editor.setValue(`% Р­С‚Рѕ Р±РёРЅР°СЂРЅС‹Р№ С„Р°Р№Р» (${file.path}).\n% РСЃРїРѕР»СЊР·СѓР№С‚Рµ РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅС‹Р№ РїСѓС‚СЊ РІ РєРѕРґРµ.`);
         monaco.editor.setModelLanguage(editor.getModel(), 'plaintext');
         editor.updateOptions({ readOnly: true });
     } else {
@@ -546,11 +548,11 @@ async function openFile(id) {
 
         editor.setValue(file.content || "");
 
-        // Включаем Live Preview для не-LaTeX файлов в режиме проекта
+        // Р’РєР»СЋС‡Р°РµРј Live Preview РґР»СЏ РЅРµ-LaTeX С„Р°Р№Р»РѕРІ РІ СЂРµР¶РёРјРµ РїСЂРѕРµРєС‚Р°
         if (currentProjectType !== 'latex') {
             document.getElementById('pdf-viewer').classList.add('hidden');
             document.getElementById('empty-state').classList.add('hidden');
-            updateLivePreview(); // Запускаем рендер сразу после открытия
+            updateLivePreview(); // Р—Р°РїСѓСЃРєР°РµРј СЂРµРЅРґРµСЂ СЃСЂР°Р·Сѓ РїРѕСЃР»Рµ РѕС‚РєСЂС‹С‚РёСЏ
         }
     }
 }
@@ -577,7 +579,7 @@ async function saveCurrentFile() {
 }
 
 async function renameFile(fileId, oldPath) {
-    const newName = prompt(`Новое имя для файла ${oldPath}:`, oldPath);
+    const newName = prompt(`РќРѕРІРѕРµ РёРјСЏ РґР»СЏ С„Р°Р№Р»Р° ${oldPath}:`, oldPath);
     if (!newName || newName === oldPath) return;
 
     const res = await fetch(`${API_BASE}/studio/projects/${currentProjectId}/files/${fileId}/rename`, {
@@ -586,26 +588,26 @@ async function renameFile(fileId, oldPath) {
         body: JSON.stringify({ new_name: newName })
     });
     if (res.ok) await openProject(currentProjectId);
-    else alert("Ошибка переименования. Возможно имя занято.");
+    else window.mpbPopup?.("РћС€РёР±РєР° РїРµСЂРµРёРјРµРЅРѕРІР°РЅРёСЏ. Р’РѕР·РјРѕР¶РЅРѕ РёРјСЏ Р·Р°РЅСЏС‚Рѕ.");
 }
 
 async function deleteFile(fileId, path) {
-    if (!confirm(`Удалить файл ${path}? Это действие необратимо.`)) return;
+    if (!confirm(`РЈРґР°Р»РёС‚СЊ С„Р°Р№Р» ${path}? Р­С‚Рѕ РґРµР№СЃС‚РІРёРµ РЅРµРѕР±СЂР°С‚РёРјРѕ.`)) return;
 
     const res = await fetch(`${API_BASE}/studio/projects/${currentProjectId}/files/${fileId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
     });
     if (res.ok) {
-        if (currentFileId === fileId) currentFileId = null; // Сбрасываем если удалили открытый
+        if (currentFileId === fileId) currentFileId = null; // РЎР±СЂР°СЃС‹РІР°РµРј РµСЃР»Рё СѓРґР°Р»РёР»Рё РѕС‚РєСЂС‹С‚С‹Р№
         await openProject(currentProjectId);
     } else {
-        alert("Ошибка удаления файла.");
+        window.mpbPopup?.("РћС€РёР±РєР° СѓРґР°Р»РµРЅРёСЏ С„Р°Р№Р»Р°.");
     }
 }
 
 
-// === 7. DRAG & DROP ДЛЯ ЗАГРУЗКИ АССЕТОВ ===
+// === 7. DRAG & DROP Р”Р›РЇ Р—РђР“Р РЈР—РљР РђРЎРЎР•РўРћР’ ===
 const sidebar = document.getElementById('sidebar-pane');
 
 sidebar.addEventListener('dragover', (e) => {
@@ -620,7 +622,7 @@ sidebar.addEventListener('drop', async (e) => {
     e.preventDefault();
     sidebar.classList.remove('bg-blue-50', 'border-blue-300');
 
-    if (!currentProjectId) { alert("Сначала откройте проект для загрузки файлов."); return; }
+    if (!currentProjectId) { window.mpbPopup?.("РЎРЅР°С‡Р°Р»Р° РѕС‚РєСЂРѕР№С‚Рµ РїСЂРѕРµРєС‚ РґР»СЏ Р·Р°РіСЂСѓР·РєРё С„Р°Р№Р»РѕРІ."); return; }
 
     const files = e.dataTransfer.files;
     for (let f of files) {
@@ -628,14 +630,14 @@ sidebar.addEventListener('drop', async (e) => {
     }
 });
 
-// Обработчик скрытого input type="file"
+// РћР±СЂР°Р±РѕС‚С‡РёРє СЃРєСЂС‹С‚РѕРіРѕ input type="file"
 async function uploadAsset(event) {
     if (!currentProjectId) return;
     const files = event.target.files;
     for (let f of files) {
         await uploadSingleFile(f);
     }
-    event.target.value = ''; // Сброс
+    event.target.value = ''; // РЎР±СЂРѕСЃ
 }
 
 async function uploadSingleFile(file) {
@@ -653,13 +655,13 @@ async function uploadSingleFile(file) {
         await openProject(currentProjectId);
         setStatus("Saved", false);
     } else {
-        alert(`Ошибка загрузки ${file.name}`);
+        window.mpbPopup?.(`РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё ${file.name}`);
         setStatus("Error", false);
     }
 }
 
 
-// === 8. ФУНКЦИИ ЭКСПОРТА (PDF & ZIP) ===
+// === 8. Р¤РЈРќРљР¦РР Р­РљРЎРџРћР РўРђ (PDF & ZIP) ===
 function downloadPDF() {
     if (!currentBlobUrl) return;
     const a = document.createElement('a');
@@ -691,22 +693,22 @@ function downloadZIP() {
         setStatus("Saved", false);
     })
     .catch(err => {
-        alert("Ошибка выгрузки ZIP архива");
+        window.mpbPopup?.("РћС€РёР±РєР° РІС‹РіСЂСѓР·РєРё ZIP Р°СЂС…РёРІР°");
         setStatus("Error", false);
     });
 }
 
-// === 9. ИНТЕГРАЦИЯ С TELEGRAM ===
+// === 9. РРќРўР•Р“Р РђР¦РРЇ РЎ TELEGRAM ===
 async function sendToTelegram() {
     if (!currentProjectId) return;
 
-    await saveCurrentFile(); // Обязательно сохраняем перед сборкой
+    await saveCurrentFile(); // РћР±СЏР·Р°С‚РµР»СЊРЅРѕ СЃРѕС…СЂР°РЅСЏРµРј РїРµСЂРµРґ СЃР±РѕСЂРєРѕР№
     setStatus("Sending to TG...", true);
     const overlay = document.getElementById('loader-overlay');
 
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');
-    overlay.querySelector('div:last-child').innerText = "Отправка в Telegram...";
+    overlay.querySelector('div:last-child').innerText = "РћС‚РїСЂР°РІРєР° РІ Telegram...";
 
     try {
         const res = await fetch(`${API_BASE}/studio/projects/${currentProjectId}/send_telegram`, {
@@ -716,17 +718,20 @@ async function sendToTelegram() {
 
         const data = await res.json();
         if (res.ok) {
-            alert("Успех! Файл отправлен вам в личные сообщения в Telegram.");
+            window.mpbPopup?.("РЈСЃРїРµС…! Р¤Р°Р№Р» РѕС‚РїСЂР°РІР»РµРЅ РІР°Рј РІ Р»РёС‡РЅС‹Рµ СЃРѕРѕР±С‰РµРЅРёСЏ РІ Telegram.");
             setStatus("Saved", false);
         } else {
-            throw new Error(data.detail || "Ошибка отправки");
+            throw new Error(data.detail || "РћС€РёР±РєР° РѕС‚РїСЂР°РІРєРё");
         }
     } catch (err) {
-        alert(err.message);
+        window.mpbPopup?.(err.message);
         setStatus("Error", false);
     } finally {
         overlay.classList.add('hidden');
         overlay.classList.remove('flex');
-        overlay.querySelector('div:last-child').innerText = "Ожидание сервера..."; // Сброс текста лоадера
+        overlay.querySelector('div:last-child').innerText = "РћР¶РёРґР°РЅРёРµ СЃРµСЂРІРµСЂР°..."; // РЎР±СЂРѕСЃ С‚РµРєСЃС‚Р° Р»РѕР°РґРµСЂР°
     }
 }
+
+
+

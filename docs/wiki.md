@@ -30,6 +30,8 @@ This document covers the user-facing bot, scheduler, and website features curren
 | Unified schedule search | Website schedule page search bar | Find groups, lecturers, and auditoriums from one search field |
 | Full lecturer name toggle | Website schedule page filters | Show the full lecturer name in desktop table cards |
 | iCal subscription links | Website schedule page for authorized users | Copy or rotate a personal calendar subscription link |
+| Configurable frontend API base | `window.__MPB_API_BASE__` or `<meta name="mpb-api-base">` | Use relative `/api` by default or override frontend API host per environment |
+| Styled popup notifications | `window.mpbPopup(message, options)` | Replace browser alerts with unified dismissible popup notifications |
 
 ## Website Schedule Search
 
@@ -434,6 +436,76 @@ With this toggle enabled:
 4. Toggle `Full lecturer name`.
 
 The preference is stored in the same website schedule preferences payload as the existing module and short-name options, so it persists for signed-in users and in local browser storage.
+
+### Configurable Frontend API Base
+
+#### Purpose
+
+Website frontend modules now resolve API endpoints from one shared base instead of hardcoded host strings.
+
+This allows:
+
+- same-origin production deployments through relative `/api`
+- staging/testing environments to override API host without editing multiple JS files
+- consistent API routing across `navbar`, `auth`, `schedule`, `stats`, and `studio` scripts
+
+#### How To Use It
+
+1. Shared static frontend setup:
+   - `main_site_frontend/js/runtime_config.js` now sets:
+   - `window.__MPB_API_BASE__ = "https://api.ivantishchenko.ru/api";`
+2. Default behavior without any override:
+   - frontend uses `/api`
+3. To override globally, set `window.__MPB_API_BASE__` before page scripts:
+
+```html
+<script>
+  window.__MPB_API_BASE__ = "https://example.com/api";
+</script>
+```
+
+4. Or set a page-level meta override:
+
+```html
+<meta name="mpb-api-base" content="https://example.com/api" />
+```
+
+5. Resolution order:
+   - `window.__MPB_API_BASE__`
+   - `<meta name="mpb-api-base">`
+   - fallback `/api`
+
+### Styled Popup Notifications
+
+#### Purpose
+
+Frontend alert dialogs were replaced with a shared popup notification helper for better UX.
+
+#### How To Use It
+
+1. Call:
+
+```js
+window.mpbPopup("Saved successfully", { type: "success" });
+```
+
+2. Supported `type` values:
+   - `info`
+   - `success`
+   - `warning`
+   - `error`
+3. Optional options:
+   - `title`: custom popup header
+   - `duration`: auto-close timeout in milliseconds (default about 4.2 seconds)
+4. The helper auto-injects styles/container and renders stacked, dismissible popups in the top-right corner.
+
+### Schedule/Auth Text Fixes (P3 Front)
+
+#### What Changed
+
+- Replaced remaining hardcoded schedule toggle label fallback to localized `Полное имя преподавателя`.
+- Removed visible mojibake symbols in frontend UI controls that were showing broken characters.
+- Updated auth page/script messages to keep runtime text localized and consistent with UI language.
 
 ### Website iCal Subscription Links
 

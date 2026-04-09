@@ -1,5 +1,5 @@
-// main_site_frontend/js/schedule.js
-const API_BASE = "https://api.ivantishchenko.ru/api";
+﻿// main_site_frontend/js/schedule.js
+const API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : "/api";
 const STORAGE_KEY = "mpb_user_preferences";
 const CALENDAR_SECTION_COLLAPSED_KEY = "mpb_calendar_sync_collapsed";
 
@@ -115,7 +115,7 @@ window.addEventListener('mpb-auth-ready', (event) => {
 
 document.addEventListener('DOMContentLoaded', async () => {
     await initOfflineHistory();
-    await loadInitialPreferences(); // Загружаем настройки из API (если залогинен) или LocalStorage
+    await loadInitialPreferences(); // Р—Р°РіСЂСѓР¶Р°РµРј РЅР°СЃС‚СЂРѕР№РєРё РёР· API (РµСЃР»Рё Р·Р°Р»РѕРіРёРЅРµРЅ) РёР»Рё LocalStorage
     window.mpbI18n?.registerTranslator?.(() => {
         renderOfflineHistory();
         if (!resultsBox.classList.contains('hidden')) {
@@ -166,24 +166,24 @@ async function initOfflineHistory() {
             renderOfflineHistory();
         }
     } catch (e) {
-        console.warn("Не удалось загрузить список кэша:", e);
+        console.warn("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃРїРёСЃРѕРє РєСЌС€Р°:", e);
     }
 }
 
-// === НОВАЯ ЛОГИКА СИНХРОНИЗАЦИИ НАСТРОЕК ===
+// === РќРћР’РђРЇ Р›РћР“РРљРђ РЎРРќРҐР РћРќРР—РђР¦РР РќРђРЎРўР РћР•Рљ ===
 
 async function loadInitialPreferences() {
     const token = localStorage.getItem('jwt_token');
     let remotePrefs = null;
     let localPrefs = null;
 
-    // Читаем из localStorage
+    // Р§РёС‚Р°РµРј РёР· localStorage
     try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) localPrefs = JSON.parse(saved);
     } catch (e) {}
 
-    // Читаем из API, если есть токен
+    // Р§РёС‚Р°РµРј РёР· API, РµСЃР»Рё РµСЃС‚СЊ С‚РѕРєРµРЅ
     if (token) {
         try {
             const res = await fetch(`${API_BASE}/auth/me`, {
@@ -194,26 +194,26 @@ async function loadInitialPreferences() {
                 remotePrefs = user.preferences;
             }
         } catch (e) {
-            console.error("Ошибка загрузки настроек с сервера", e);
+            console.error("РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё РЅР°СЃС‚СЂРѕРµРє СЃ СЃРµСЂРІРµСЂР°", e);
         }
     }
 
-    // Решаем, что применять
+    // Р РµС€Р°РµРј, С‡С‚Рѕ РїСЂРёРјРµРЅСЏС‚СЊ
     let prefsToApply = null;
 
     if (remotePrefs && Object.keys(remotePrefs).length > 0) {
-        // Если в облаке есть данные, они приоритетнее
+        // Р•СЃР»Рё РІ РѕР±Р»Р°РєРµ РµСЃС‚СЊ РґР°РЅРЅС‹Рµ, РѕРЅРё РїСЂРёРѕСЂРёС‚РµС‚РЅРµРµ
         prefsToApply = remotePrefs;
-        // Заодно обновляем локальный сторадж, чтобы работал быстро в следующий раз
+        // Р—Р°РѕРґРЅРѕ РѕР±РЅРѕРІР»СЏРµРј Р»РѕРєР°Р»СЊРЅС‹Р№ СЃС‚РѕСЂР°РґР¶, С‡С‚РѕР±С‹ СЂР°Р±РѕС‚Р°Р» Р±С‹СЃС‚СЂРѕ РІ СЃР»РµРґСѓСЋС‰РёР№ СЂР°Р·
         localStorage.setItem(STORAGE_KEY, JSON.stringify(prefsToApply));
     } else if (localPrefs) {
-        // Если облако пустое (новый аккаунт), но локально что-то есть - берем локальное
+        // Р•СЃР»Рё РѕР±Р»Р°РєРѕ РїСѓСЃС‚РѕРµ (РЅРѕРІС‹Р№ Р°РєРєР°СѓРЅС‚), РЅРѕ Р»РѕРєР°Р»СЊРЅРѕ С‡С‚Рѕ-С‚Рѕ РµСЃС‚СЊ - Р±РµСЂРµРј Р»РѕРєР°Р»СЊРЅРѕРµ
         prefsToApply = localPrefs;
-        // И сразу пушим это в облако, чтобы сохранить
+        // Р СЃСЂР°Р·Сѓ РїСѓС€РёРј СЌС‚Рѕ РІ РѕР±Р»Р°РєРѕ, С‡С‚РѕР±С‹ СЃРѕС…СЂР°РЅРёС‚СЊ
         if (token) pushPreferencesToAPI(prefsToApply, token);
     }
 
-    // Применяем настройки к интерфейсу
+    // РџСЂРёРјРµРЅСЏРµРј РЅР°СЃС‚СЂРѕР№РєРё Рє РёРЅС‚РµСЂС„РµР№СЃСѓ
     if (prefsToApply) {
         if (prefsToApply.useShortNames !== undefined) {
             document.getElementById('useShortNames').checked = prefsToApply.useShortNames;
@@ -234,15 +234,15 @@ async function loadInitialPreferences() {
 async function savePreferences() {
     const prefs = {
         entity: currentEntity,
-        modules: Array.from(selectedModules), // Конвертируем Set в Array для JSON
+        modules: Array.from(selectedModules), // РљРѕРЅРІРµСЂС‚РёСЂСѓРµРј Set РІ Array РґР»СЏ JSON
         useShortNames: document.getElementById('useShortNames').checked,
         showFullLecturerName: document.getElementById('showFullLecturerName').checked
     };
 
-    // Всегда сохраняем локально
+    // Р’СЃРµРіРґР° СЃРѕС…СЂР°РЅСЏРµРј Р»РѕРєР°Р»СЊРЅРѕ
     localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
 
-    // Если есть токен, пушим в облако
+    // Р•СЃР»Рё РµСЃС‚СЊ С‚РѕРєРµРЅ, РїСѓС€РёРј РІ РѕР±Р»Р°РєРѕ
     const token = localStorage.getItem('jwt_token');
     if (token) {
         pushPreferencesToAPI(prefs, token);
@@ -260,11 +260,11 @@ async function pushPreferencesToAPI(prefs, token) {
             body: JSON.stringify({ preferences: prefs })
         });
     } catch (e) {
-        console.error("Ошибка сохранения настроек в облако", e);
+        console.error("РћС€РёР±РєР° СЃРѕС…СЂР°РЅРµРЅРёСЏ РЅР°СЃС‚СЂРѕРµРє РІ РѕР±Р»Р°РєРѕ", e);
     }
 }
 
-// === ОСТАЛЬНОЙ КОД БЕЗ ИЗМЕНЕНИЙ ===
+// === РћРЎРўРђР›Р¬РќРћР™ РљРћР” Р‘Р•Р— РР—РњР•РќР•РќРР™ ===
 
 function renderCalendarSubscription() {
     const container = document.getElementById('calendarSubscriptionSection');
@@ -639,7 +639,7 @@ groupInput.addEventListener('input', debounce(async (e) => {
         const data = await res.json();
         renderSearchResults(data);
     } catch (err) {
-        resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-red-500 text-center font-medium">⚠️ ${escapeHtml(t('schedule.search.error', 'Search failed or the server is unavailable.'))}</div>`;
+        resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-red-500 text-center font-medium">${escapeHtml(t('schedule.search.error', 'Search failed or the server is unavailable.'))}</div>`;
         resultsBox.classList.remove('hidden');
     }
 }, 300));
@@ -677,7 +677,7 @@ function renderSearchResults(results) {
         resultsBox.innerHTML = normalizedResults.map(item => {
             const typeMeta = getSearchResultTypeMeta(item.type);
             const offlineBadge = item.is_offline
-                ? `<span class="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-600">⚡ ${escapeHtml(t('schedule.search.cacheBadge', 'CACHE'))}</span>`
+                ? `<span class="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-600">${escapeHtml(t('schedule.search.cacheBadge', 'CACHE'))}</span>`
                 : '';
             const itemType = escapeJsString(item.type || 'group');
             const itemId = escapeJsString(item.id);
@@ -762,7 +762,7 @@ function renderModuleFilters() {
                 ${isSelected
                     ? 'bg-slate-900 border-slate-900 text-white shadow-lg shadow-slate-900/15'
                     : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-blue-200 hover:text-slate-700'}">
-                ${isSelected ? '<span class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/15 text-[10px]">✓</span>' : ''}
+                ${isSelected ? '<span class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/15 text-[10px]">ON</span>' : ''}
                 <span class="truncate">${escapeHtml(mod)}</span>
             </button>
         `;
@@ -824,7 +824,7 @@ function filterAndRender() {
     weekEnd.setDate(weekEnd.getDate() + 6);
 
     document.getElementById('weekRangeDisplay').innerText =
-        `${formatUiDate(currentWeekStart, {day:'numeric', month:'short'})} — ${formatUiDate(weekEnd, {day:'numeric', month:'short'})}`;
+        `${formatUiDate(currentWeekStart, {day:'numeric', month:'short'})} - ${formatUiDate(weekEnd, {day:'numeric', month:'short'})}`;
 
     const filteredLessons = fullSchedule.filter(lesson => {
         if (lesson.module && !selectedModules.has(lesson.module)) return false;
@@ -1048,9 +1048,9 @@ function renderCard(l, isDesktop) {
 function getBadgeColor(kind) {
     if (!kind) return { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600' };
     const k = kind.toLowerCase();
-    if (k.includes('лекц') || k.includes('lecture')) return { bg: 'bg-emerald-50/60', border: 'border-emerald-200', text: 'text-emerald-700' };
-    if (k.includes('практ') || k.includes('семин') || k.includes('practice') || k.includes('seminar')) return { bg: 'bg-amber-50/60', border: 'border-amber-200', text: 'text-amber-700' };
-    if (k.includes('экзамен') || k.includes('зачет') || k.includes('аттест') || k.includes('exam') || k.includes('credit') || k.includes('test')) return { bg: 'bg-rose-50/60', border: 'border-rose-200', text: 'text-rose-700' };
+    if (k.includes('Р»РµРєС†') || k.includes('lecture')) return { bg: 'bg-emerald-50/60', border: 'border-emerald-200', text: 'text-emerald-700' };
+    if (k.includes('РїСЂР°РєС‚') || k.includes('СЃРµРјРёРЅ') || k.includes('practice') || k.includes('seminar')) return { bg: 'bg-amber-50/60', border: 'border-amber-200', text: 'text-amber-700' };
+    if (k.includes('СЌРєР·Р°РјРµРЅ') || k.includes('Р·Р°С‡РµС‚') || k.includes('Р°С‚С‚РµСЃС‚') || k.includes('exam') || k.includes('credit') || k.includes('test')) return { bg: 'bg-rose-50/60', border: 'border-rose-200', text: 'text-rose-700' };
     return { bg: 'bg-blue-50/60', border: 'border-blue-200', text: 'text-blue-700' };
 }
 
@@ -1101,3 +1101,5 @@ document.addEventListener('click', (e) => {
 function toggleFiltersMobile() {
     window.toggleScheduleFilters?.();
 }
+
+

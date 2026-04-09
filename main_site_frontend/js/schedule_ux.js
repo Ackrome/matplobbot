@@ -1,4 +1,4 @@
-(function scheduleUxEnhancements() {
+﻿(function scheduleUxEnhancements() {
     if (typeof loadSchedule === "undefined" || typeof filterAndRender === "undefined") return;
 
     const UI_PREFS_KEY = "mpb_schedule_ui_prefs";
@@ -232,8 +232,8 @@
         weekEnd.setDate(weekEnd.getDate() + 6);
 
         entityEl.textContent = currentEntity?.name || t("schedule.context.none", "No group selected");
-        weekEl.textContent = `${formatUiDate(currentWeekStart, { day: "numeric", month: "short", year: "numeric" })} — ${formatUiDate(weekEnd, { day: "numeric", month: "short", year: "numeric" })}`;
-        const loadedRangeText = t("schedule.context.loadedRange", "Loaded {start} — {end}", {
+        weekEl.textContent = `${formatUiDate(currentWeekStart, { day: "numeric", month: "short", year: "numeric" })} - ${formatUiDate(weekEnd, { day: "numeric", month: "short", year: "numeric" })}`;
+        const loadedRangeText = t("schedule.context.loadedRange", "Loaded {start} - {end}", {
             start: formatLoadedBound(loadedBounds.start),
             end: formatLoadedBound(loadedBounds.end),
         });
@@ -389,3 +389,5 @@
         window.toggleScheduleFilters = () => toggleFilterSection();
     });
 })();
+
+

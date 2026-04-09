@@ -1,4 +1,4 @@
-const API_BASE = "https://api.ivantishchenko.ru/api";
+﻿const API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : "/api";
 const token = localStorage.getItem("jwt_token");
 
 if (!token) {
@@ -462,7 +462,7 @@ function renderSortIndicators() {
         const th = button.closest("th");
 
         if (field === state.sortBy) {
-            const arrow = state.sortOrder === "asc" ? "↑" : "↓";
+            const arrow = state.sortOrder === "asc" ? "в†‘" : "в†“";
             if (icon) icon.textContent = arrow;
             if (th) th.setAttribute("aria-sort", state.sortOrder === "asc" ? "ascending" : "descending");
         } else {
@@ -1008,3 +1008,4 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }, 60000);
 });
+

@@ -1,149 +1,196 @@
-// main_site_frontend/js/auth.js
-const API_BASE = "https://api.ivantishchenko.ru/api";
+﻿// main_site_frontend/js/auth.js
+const API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : "/api";
 
-const loginForm = document.getElementById('loginForm');
-const registerForm = document.getElementById('registerForm');
+const loginForm = document.getElementById("loginForm");
+const registerForm = document.getElementById("registerForm");
+
+const AUTH_TEXT = {
+    en: {
+        telegramAuthError: "Telegram authorization failed",
+        apiUnavailable: "API server is unavailable",
+        loginError: "Login failed",
+        loginLoading: "Signing in...",
+        loginButton: "Sign in with password",
+        registerError: "Registration failed",
+        registerLoading: "Registering...",
+        registerButton: "Create account",
+        popupWarningTitle: "Warning",
+    },
+    ru: {
+        telegramAuthError: "Ошибка авторизации через Telegram",
+        apiUnavailable: "Сервер API недоступен",
+        loginError: "Ошибка входа",
+        loginLoading: "Вход...",
+        loginButton: "Войти по паролю",
+        registerError: "Ошибка регистрации",
+        registerLoading: "Регистрация...",
+        registerButton: "Зарегистрироваться",
+        popupWarningTitle: "Внимание",
+    },
+};
+
+function getUiLanguage() {
+    const source = window.mpbI18n?.getLanguage?.() || document.documentElement.lang || "ru";
+    return String(source).toLowerCase().startsWith("ru") ? "ru" : "en";
+}
+
+function authT(key) {
+    const lang = getUiLanguage();
+    return AUTH_TEXT[lang]?.[key] || AUTH_TEXT.ru[key] || key;
+}
 
 function getErrorMessage(errData, defaultMsg) {
-    if (errData && Array.isArray(errData.detail)) {
+    if (errData && Array.isArray(errData.detail) && errData.detail.length > 0) {
         return errData.detail[0].msg;
-    } else if (errData && errData.detail) {
+    }
+    if (errData && errData.detail) {
         return errData.detail;
     }
     return defaultMsg;
 }
 
-// --- НОВАЯ ФУНКЦИЯ: Обработка входа через Telegram ---
-window.handleTelegramLogin = async function(telegramUser) {
-    const errorEl = document.getElementById('error');
-    if(errorEl) errorEl.classList.add('hidden');
+window.handleTelegramLogin = async function handleTelegramLogin(telegramUser) {
+    const errorEl = document.getElementById("error");
+    if (errorEl) errorEl.classList.add("hidden");
 
     try {
         const response = await fetch(`${API_BASE}/auth/telegram`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(telegramUser)
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(telegramUser),
         });
 
         if (response.ok) {
             const data = await response.json();
-            localStorage.setItem('jwt_token', data.access_token);
-            // Если всё ок, кидаем на главную страницу (или на расписание)
-            window.location.href = '/schedule';
+            localStorage.setItem("jwt_token", data.access_token);
+            window.location.href = "/schedule";
+            return;
+        }
+
+        const errData = await response.json();
+        const message = getErrorMessage(errData, authT("telegramAuthError"));
+        if (errorEl) {
+            errorEl.innerText = message;
+            errorEl.classList.remove("hidden");
         } else {
-            const errData = await response.json();
-            if(errorEl) {
-                errorEl.innerText = getErrorMessage(errData, "Ошибка авторизации через Telegram");
-                errorEl.classList.remove('hidden');
-            } else {
-                alert("Ошибка авторизации через Telegram");
-            }
+            window.mpbPopup?.(message, {
+                type: "warning",
+                title: authT("popupWarningTitle"),
+            });
         }
     } catch (err) {
         console.error(err);
-        if(errorEl) {
-            errorEl.innerText = "Сервер API недоступен";
-            errorEl.classList.remove('hidden');
+        const message = authT("apiUnavailable");
+        if (errorEl) {
+            errorEl.innerText = message;
+            errorEl.classList.remove("hidden");
+        } else {
+            window.mpbPopup?.(message, { type: "error" });
         }
     }
 };
 
-// --- СТАНДАРТНАЯ АВТОРИЗАЦИЯ ПО ПАРОЛЮ ---
 if (loginForm) {
-    loginForm.addEventListener('submit', async (e) => {
+    loginForm.addEventListener("submit", async (e) => {
         e.preventDefault();
 
-        const errorEl = document.getElementById('error');
-        const btn = e.target.querySelector('button');
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
+        const errorEl = document.getElementById("error");
+        const btn = e.target.querySelector("button");
+        const username = document.getElementById("username").value;
+        const password = document.getElementById("password").value;
 
-        errorEl.classList.add('hidden');
+        errorEl.classList.add("hidden");
         btn.disabled = true;
-        btn.innerText = "Вход...";
+        btn.innerText = authT("loginLoading");
 
         const formData = new URLSearchParams();
-        formData.append('username', username);
-        formData.append('password', password);
+        formData.append("username", username);
+        formData.append("password", password);
 
         try {
             const response = await fetch(`${API_BASE}/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: formData
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: formData,
             });
 
             if (response.ok) {
                 const data = await response.json();
-                localStorage.setItem('jwt_token', data.access_token);
-                window.location.href = '/stats'; // Админов кидаем в статистику
-            } else {
-                const errData = await response.json();
-                errorEl.innerText = getErrorMessage(errData, "Ошибка входа");
-                errorEl.classList.remove('hidden');
+                localStorage.setItem("jwt_token", data.access_token);
+                window.location.href = "/stats";
+                return;
             }
+
+            const errData = await response.json();
+            errorEl.innerText = getErrorMessage(errData, authT("loginError"));
+            errorEl.classList.remove("hidden");
         } catch (err) {
-            errorEl.innerText = "Сервер API недоступен";
-            errorEl.classList.remove('hidden');
+            errorEl.innerText = authT("apiUnavailable");
+            errorEl.classList.remove("hidden");
+            window.mpbPopup?.(authT("apiUnavailable"), { type: "error" });
         } finally {
             btn.disabled = false;
-            btn.innerText = "Войти по паролю";
+            btn.innerText = authT("loginButton");
         }
     });
 }
 
 if (registerForm) {
-    registerForm.addEventListener('submit', async (e) => {
+    registerForm.addEventListener("submit", async (e) => {
         e.preventDefault();
 
-        const errorEl = document.getElementById('reg_error');
-        const successEl = document.getElementById('reg_success');
-        const btn = e.target.querySelector('button');
-        const username = document.getElementById('reg_username').value;
-        const password = document.getElementById('reg_password').value;
+        const errorEl = document.getElementById("reg_error");
+        const successEl = document.getElementById("reg_success");
+        const btn = e.target.querySelector("button");
+        const username = document.getElementById("reg_username").value;
+        const password = document.getElementById("reg_password").value;
 
-        errorEl.classList.add('hidden');
-        successEl.classList.add('hidden');
+        errorEl.classList.add("hidden");
+        successEl.classList.add("hidden");
         btn.disabled = true;
-        btn.innerText = "Регистрация...";
+        btn.innerText = authT("registerLoading");
 
         try {
             const response = await fetch(`${API_BASE}/auth/register`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: username, password: password })
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password }),
             });
 
             if (response.ok) {
-                successEl.classList.remove('hidden');
+                successEl.classList.remove("hidden");
                 const formData = new URLSearchParams();
-                formData.append('username', username);
-                formData.append('password', password);
+                formData.append("username", username);
+                formData.append("password", password);
 
                 const loginResponse = await fetch(`${API_BASE}/auth/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: formData
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: formData,
                 });
 
                 if (loginResponse.ok) {
                     const data = await loginResponse.json();
-                    localStorage.setItem('jwt_token', data.access_token);
-                    setTimeout(() => { window.location.href = '/stats'; }, 1000);
+                    localStorage.setItem("jwt_token", data.access_token);
+                    setTimeout(() => {
+                        window.location.href = "/stats";
+                    }, 1000);
                 }
-            } else {
-                const errData = await response.json();
-                errorEl.innerText = getErrorMessage(errData, "Ошибка регистрации");
-                errorEl.classList.remove('hidden');
-                btn.disabled = false;
-                btn.innerText = "Зарегистрироваться";
+                return;
             }
+
+            const errData = await response.json();
+            errorEl.innerText = getErrorMessage(errData, authT("registerError"));
+            errorEl.classList.remove("hidden");
+            btn.disabled = false;
+            btn.innerText = authT("registerButton");
         } catch (err) {
             console.error(err);
-            errorEl.innerText = "Сервер API недоступен";
-            errorEl.classList.remove('hidden');
+            errorEl.innerText = authT("apiUnavailable");
+            errorEl.classList.remove("hidden");
             btn.disabled = false;
-            btn.innerText = "Зарегистрироваться";
+            btn.innerText = authT("registerButton");
+            window.mpbPopup?.(authT("apiUnavailable"), { type: "error" });
         }
     });
 }

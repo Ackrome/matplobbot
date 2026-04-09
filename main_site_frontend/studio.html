@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ru" class="h-full">
 <head>
     <meta charset="UTF-8">
@@ -6,7 +6,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- 1. ВСЕ БИБЛИОТЕКИ СТРОГО ДО ЗАГРУЗЧИКА MONACO -->
+    <!-- 1. Р’РЎР• Р‘РР‘Р›РРћРўР•РљР РЎРўР РћР“Рћ Р”Рћ Р—РђР“Р РЈР—Р§РРљРђ MONACO -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -14,7 +14,7 @@
     <script src="https://cdn.jsdelivr.net/npm/mermaid@9.4.3/dist/mermaid.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/split.js/1.6.5/split.min.js"></script>
 
-    <!-- 2. Загрузчик MONACO -->
+    <!-- 2. Р—Р°РіСЂСѓР·С‡РёРє MONACO -->
     <script>var require = { paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.38.0/min/vs' } };</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.38.0/min/vs/loader.min.js"></script>
 
@@ -26,7 +26,7 @@
         .nav-hidden { transform: translateY(-100%); opacity: 0; }
         .nav-visible { transform: translateY(0); opacity: 1; }
 
-        /* Стили для Live Preview Markdown */
+        /* РЎС‚РёР»Рё РґР»СЏ Live Preview Markdown */
         #live-preview-content { font-family: 'Inter', sans-serif; line-height: 1.6; padding: 2rem; max-width: 800px; margin: 0 auto; background: white; min-height: 100%; box-shadow: 0 0 15px rgba(0,0,0,0.05); }
         #live-preview-content h1, #live-preview-content h2 { border-bottom: 1px solid #eee; padding-bottom: 0.3em; margin-top: 1em; }
         #live-preview-content pre { background: #f8fafc; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; }
@@ -59,14 +59,14 @@
             <button id="mobile-menu-button" class="2xl:hidden p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" aria-label="Toggle menu">
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
             </button>
-            <!-- Экспорт -->
-            <button id="btn-send-tg" onclick="sendToTelegram()" class="hidden p-2 text-slate-500 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Отправить мне в Telegram">
+            <!-- Р­РєСЃРїРѕСЂС‚ -->
+            <button id="btn-send-tg" onclick="sendToTelegram()" class="hidden p-2 text-slate-500 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="РћС‚РїСЂР°РІРёС‚СЊ РјРЅРµ РІ Telegram">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
             </button>
-            <button id="btn-download-pdf" onclick="downloadPDF()" class="hidden p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Скачать PDF">
+            <button id="btn-download-pdf" onclick="downloadPDF()" class="hidden p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="РЎРєР°С‡Р°С‚СЊ PDF">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
             </button>
-            <button id="btn-download-zip" onclick="downloadZIP()" class="hidden p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors mr-2" title="Скачать ZIP архив">
+            <button id="btn-download-zip" onclick="downloadZIP()" class="hidden p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors mr-2" title="РЎРєР°С‡Р°С‚СЊ ZIP Р°СЂС…РёРІ">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
             </button>
 
@@ -80,10 +80,10 @@
     <div id="mobile-menu" class="hidden 2xl:hidden border-b border-slate-200 bg-white shadow-sm z-20">
         <div id="mobile-nav-links" class="px-3 py-3 space-y-1"></div>
     </div>
-        <!-- MOBILE TABS (Видны только на мобилках) -->
+        <!-- MOBILE TABS (Р’РёРґРЅС‹ С‚РѕР»СЊРєРѕ РЅР° РјРѕР±РёР»РєР°С…) -->
         <div id="mobile-tabs" class="md:hidden flex bg-white border-b border-slate-200 shrink-0 shadow-sm z-20 relative">
-            <button id="tab-btn-sidebar" onclick="switchMobileTab('sidebar-pane')" class="flex-1 py-3 text-xs font-bold text-blue-600 border-b-2 border-blue-600 transition-colors">Файлы</button>
-            <button id="tab-btn-editor" onclick="switchMobileTab('editor-pane')" class="flex-1 py-3 text-xs font-bold text-slate-500 border-b-2 border-transparent transition-colors">Код</button>
+            <button id="tab-btn-sidebar" onclick="switchMobileTab('sidebar-pane')" class="flex-1 py-3 text-xs font-bold text-blue-600 border-b-2 border-blue-600 transition-colors">Р¤Р°Р№Р»С‹</button>
+            <button id="tab-btn-editor" onclick="switchMobileTab('editor-pane')" class="flex-1 py-3 text-xs font-bold text-slate-500 border-b-2 border-transparent transition-colors">РљРѕРґ</button>
             <button id="tab-btn-viewer" onclick="switchMobileTab('viewer-pane')" class="flex-1 py-3 text-xs font-bold text-slate-500 border-b-2 border-transparent transition-colors">Preview</button>
         </div>
 
@@ -93,21 +93,21 @@
         <!-- Loader -->
         <div id="loader-overlay" class="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-50 hidden flex-col items-center justify-center">
             <div class="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
-            <div class="text-sm font-bold text-slate-600">Ожидание сервера...</div>
+            <div class="text-sm font-bold text-slate-600">РћР¶РёРґР°РЅРёРµ СЃРµСЂРІРµСЂР°...</div>
         </div>
 
         <!-- Pane 1: Sidebar (Project Mode) -->
         <div id="sidebar-pane" class="h-full bg-slate-50 flex flex-col border-r border-slate-200 shrink-0 hidden">
             <div class="p-3 border-b border-slate-200">
                 <div class="flex justify-between items-center mb-2">
-                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Проекты</span>
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">РџСЂРѕРµРєС‚С‹</span>
                     <button onclick="createNewProject()" class="text-blue-600 hover:text-blue-800">+</button>
                 </div>
                 <select id="project-selector" class="w-full text-sm border border-slate-200 rounded-md p-1.5 outline-none bg-white" onchange="openProject(this.value)"></select>
             </div>
             <div class="p-3 border-b border-slate-200 bg-slate-100 flex justify-between items-center">
-                <span class="text-xs font-bold text-slate-500 uppercase">Файлы</span>
-                <label class="cursor-pointer text-blue-600 font-bold text-xs" title="Загрузить">
+                <span class="text-xs font-bold text-slate-500 uppercase">Р¤Р°Р№Р»С‹</span>
+                <label class="cursor-pointer text-blue-600 font-bold text-xs" title="Р—Р°РіСЂСѓР·РёС‚СЊ">
                     Upload <input type="file" id="file-uploader" class="hidden" onchange="uploadAsset(event)" multiple>
                 </label>
             </div>
@@ -118,7 +118,7 @@
         <div id="editor-pane" class="h-full bg-white relative flex flex-col">
             <div id="monaco-container" class="flex-grow relative"></div>
 
-            <!-- Статус бар -->
+            <!-- РЎС‚Р°С‚СѓСЃ Р±Р°СЂ -->
             <div class="h-7 bg-blue-600 text-white flex items-center justify-between px-3 text-[11px] font-medium shrink-0 z-10">
                 <div class="flex items-center gap-4">
                     <span id="doc-stats">0 words, 0 chars</span>
@@ -134,7 +134,7 @@
             <div id="error-panel" class="absolute bottom-7 w-full bg-red-50 border-t border-red-200 text-red-800 text-xs p-3 hidden max-h-48 overflow-y-auto font-mono z-20 shadow-[0_-10px_15px_rgba(0,0,0,0.05)]">
                 <div class="font-bold mb-1 flex justify-between">
                     <span>Errors:</span>
-                    <button onclick="document.getElementById('error-panel').classList.add('hidden')" class="hover:text-red-500">✕</button>
+                    <button onclick="document.getElementById('error-panel').classList.add('hidden')" class="hover:text-red-500">x</button>
                 </div>
                 <pre id="error-text" class="whitespace-pre-wrap"></pre>
             </div>
@@ -154,21 +154,21 @@
             </div>
         </div>
     </div>
- <!-- МОДАЛЬНОЕ ОКНО СОЗДАНИЯ ПРОЕКТА (ДОБАВИТЬ СЮДА) -->
+ <!-- РњРћР”РђР›Р¬РќРћР• РћРљРќРћ РЎРћР—Р”РђРќРРЇ РџР РћР•РљРўРђ (Р”РћР‘РђР’РРўР¬ РЎР®Р”Рђ) -->
     <div id="create-project-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] hidden flex items-center justify-center transition-opacity">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 transform transition-all">
             <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
                 <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                Создать проект
+                РЎРѕР·РґР°С‚СЊ РїСЂРѕРµРєС‚
             </h2>
 
             <div class="mb-4">
-                <label class="block text-sm font-medium text-slate-600 mb-1">Название проекта</label>
-                <input type="text" id="new-project-name" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-colors" placeholder="Например: Курсовая работа">
+                <label class="block text-sm font-medium text-slate-600 mb-1">РќР°Р·РІР°РЅРёРµ РїСЂРѕРµРєС‚Р°</label>
+                <input type="text" id="new-project-name" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-colors" placeholder="РќР°РїСЂРёРјРµСЂ: РљСѓСЂСЃРѕРІР°СЏ СЂР°Р±РѕС‚Р°">
             </div>
 
             <div class="mb-4">
-                <label class="block text-sm font-medium text-slate-600 mb-1">Тип проекта</label>
+                <label class="block text-sm font-medium text-slate-600 mb-1">РўРёРї РїСЂРѕРµРєС‚Р°</label>
                 <select id="new-project-type" onchange="updateTemplateOptions()" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none cursor-pointer">
                     <option value="latex">LaTeX Document</option>
                     <option value="markdown">Markdown</option>
@@ -177,23 +177,27 @@
             </div>
 
             <div class="mb-8" id="template-container">
-                <label class="block text-sm font-medium text-slate-600 mb-1">Шаблон</label>
+                <label class="block text-sm font-medium text-slate-600 mb-1">РЁР°Р±Р»РѕРЅ</label>
                 <select id="new-project-template" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none cursor-pointer">
-                    <option value="latex_blank">Пустой документ (Article)</option>
-                    <option value="latex_beamer">Презентация (Beamer)</option>
-                    <option value="latex_report">Отчет (ГОСТ / extreport)</option>
+                    <option value="latex_blank">РџСѓСЃС‚РѕР№ РґРѕРєСѓРјРµРЅС‚ (Article)</option>
+                    <option value="latex_beamer">РџСЂРµР·РµРЅС‚Р°С†РёСЏ (Beamer)</option>
+                    <option value="latex_report">РћС‚С‡РµС‚ (Р“РћРЎРў / extreport)</option>
                 </select>
             </div>
 
             <div class="flex justify-end gap-3">
-                <button onclick="closeCreateProjectModal()" class="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Отмена</button>
-                <button onclick="submitNewProject()" class="px-5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md transition-all active:scale-95">Создать</button>
+                <button onclick="closeCreateProjectModal()" class="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">РћС‚РјРµРЅР°</button>
+                <button onclick="submitNewProject()" class="px-5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md transition-all active:scale-95">РЎРѕР·РґР°С‚СЊ</button>
             </div>
         </div>
     </div>
 
-    <!-- Загрузка нашего скрипта -->
-    <script src="/js/navbar.js?v=17"></script>
-    <script src="/js/studio.js?v=7"></script>
+    <!-- Р—Р°РіСЂСѓР·РєР° РЅР°С€РµРіРѕ СЃРєСЂРёРїС‚Р° -->
+    <script src="/js/runtime_config.js?v=1"></script>
+    <script src="/js/ui_utils.js?v=1"></script>
+    <script src="/js/navbar.js?v=18"></script>
+    <script src="/js/studio.js?v=8"></script>
 </body>
 </html>
+
+

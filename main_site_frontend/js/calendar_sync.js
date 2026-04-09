@@ -1,4 +1,4 @@
-const CALENDAR_PLATFORM_KEY = "mpb_calendar_sync_platform";
+﻿const CALENDAR_PLATFORM_KEY = "mpb_calendar_sync_platform";
 const CALENDAR_REVEALED_PROFILES_KEY = "mpb_calendar_sync_revealed_profiles";
 
 let calendarPlatform = loadCalendarPlatform();
@@ -115,7 +115,7 @@ function getCalendarCurrentViewSummary() {
                 )
             );
 
-    return `${escapeHtml(currentEntity.name)} · ${modulesLabel}`;
+    return `${escapeHtml(currentEntity.name)} В· ${modulesLabel}`;
 }
 
 function getCalendarCacheStatusLabel(status) {
@@ -552,7 +552,7 @@ async function performCalendarMutation(url, options = {}, { justReset = false } 
         console.error('Calendar mutation failed', error);
         calendarSubscriptionState = { ...createDefaultCalendarSubscriptionState(), hasError: true };
         renderCalendarSubscription();
-        window.alert(error.message || t('schedule.calendar.error', 'Failed to load the calendar subscription.'));
+        window.mpbPopup?.(error.message || t('schedule.calendar.error', 'Failed to load the calendar subscription.'), { type: 'error' });
         return null;
     }
 }
@@ -631,3 +631,4 @@ clearAllModules = function(...args) {
     originalClearAllModules(...args);
     renderCalendarSubscription();
 };
+
