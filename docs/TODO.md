@@ -37,8 +37,8 @@ Last updated: 2026-04-09
 ### P2 - Quality and Documentation
 - [ ] add mobile version of auth pages.
 - [ ] Add test for deterministic ordering in unified schedule search results when mixed entity types return equal match quality.
-- [ ] Fix mojibake RU OpenAPI summary/description text in FastAPI routers to restore readable API docs.
-- [ ] Expand mojibake cleanup beyond OpenAPI docs: fix corrupted user-facing text in `main_site_frontend` pages/scripts, `studio_router`, and scheduler admin messages.
+- [x] Fix mojibake RU OpenAPI summary/description text in FastAPI routers to restore readable API docs.
+- [x] Expand mojibake cleanup beyond OpenAPI docs: fix corrupted user-facing text in `main_site_frontend` pages/scripts, `studio_router`, and scheduler admin messages.
 - [ ] Expand encoding guard tests to include website frontend assets (`main_site_frontend/*.html`, `main_site_frontend/js/*.js`) and selected backend user-facing strings.
 - [ ] Add integration tests for Studio router endpoints (`/api/studio/projects/*`) covering ownership checks, rename conflicts, and Telegram send failure responses.
 - [ ] Add wiki section describing schedule search offline fallback semantics and `is_offline` flag behavior for frontend maintainers.

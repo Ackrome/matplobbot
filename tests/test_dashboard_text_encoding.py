@@ -17,8 +17,18 @@ class TestDashboardTextEncoding(unittest.TestCase):
             Path("fastapi_stats_app/static/js/user_details.js"),
             Path("fastapi_stats_app/templates/index.html"),
             Path("fastapi_stats_app/templates/user_details.html"),
+            Path("fastapi_stats_app/main.py"),
             Path("main_site_frontend/login.html"),
             Path("main_site_frontend/register.html"),
+            Path("main_site_frontend/index.html"),
+            Path("main_site_frontend/schedule.html"),
+            Path("main_site_frontend/studio.html"),
+            Path("main_site_frontend/js/auth.js"),
+            Path("main_site_frontend/js/navbar.js"),
+            Path("main_site_frontend/js/schedule.js"),
+            Path("main_site_frontend/js/studio.js"),
+            Path("main_site_frontend/js/calendar_sync.js"),
+            Path("scheduler_app/jobs.py"),
         ]
 
         problems: list[str] = []

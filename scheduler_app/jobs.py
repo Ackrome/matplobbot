@@ -243,11 +243,11 @@ async def send_daily_schedules(
 
 
 # ... existing imports
-from shared_lib.database import get_cached_schedule  # <--- Р”РѕР±Р°РІР»РµРЅ РёРјРїРѕСЂС‚
+from shared_lib.database import get_cached_schedule  # <--- Добавлен импорт
 
 # ... existing imports
 
-# ... (С„СѓРЅРєС†РёСЏ send_telegram_message Рё send_daily_schedules Р±РµР· РёР·РјРµРЅРµРЅРёР№) ...
+# ... (функция send_telegram_message и send_daily_schedules без изменений) ...
 
 
 async def check_for_schedule_updates(
@@ -265,7 +265,7 @@ async def check_for_schedule_updates(
     today = datetime.now(moscow_tz).date()
     current_year = today.year
 
-    # РћРїСЂРµРґРµР»СЏРµРј РіСЂР°РЅРёС†С‹ СЃРµРјРµСЃС‚СЂР° РґР»СЏ РїСЂРѕРІРµСЂРєРё РёР·РјРµРЅРµРЅРёР№
+    # Определяем границы семестра для проверки изменений
     if 2 <= today.month <= 6 or (today.month == 7 and today.day < 15):
         start_date = date(current_year, 2, 1)
         end_date = date(current_year, 7, 14)
@@ -285,7 +285,7 @@ async def check_for_schedule_updates(
         if not all_subscriptions:
             return
 
-        # Р“СЂСѓРїРїРёСЂСѓРµРј РїРѕРґРїРёСЃРєРё РїРѕ СЃСѓС‰РЅРѕСЃС‚СЏРј (Group/Teacher/Auditorium)
+        # Группируем подписки по сущностям (Group/Teacher/Auditorium)
         grouped_subscriptions = collections.defaultdict(list)
         for sub in all_subscriptions:
             entity_key = (sub["entity_type"], sub["entity_id"])
@@ -298,18 +298,18 @@ async def check_for_schedule_updates(
             entity_name = subs_for_entity[0]["entity_name"]
 
             try:
-                # 1. РџРѕР»СѓС‡Р°РµРј РЅРѕРІРѕРµ СЂР°СЃРїРёСЃР°РЅРёРµ РёР· API
+                # 1. Получаем новое расписание из API
                 new_schedule_data = await ruz_api_client.get_schedule(
                     entity_type, entity_id, start=start_date_str, finish=end_date_str
                 )
 
-                # РЎС‡РёС‚Р°РµРј С…СЌС€
+                # Считаем хэш
                 new_hash = hashlib.sha256(
                     json.dumps(new_schedule_data, sort_keys=True).encode()
                 ).hexdigest()
 
-                # Р‘РµСЂРµРј С…СЌС€ Р»СЋР±РѕРіРѕ РїРѕРґРїРёСЃС‡РёРєР° СЌС‚РѕР№ РіСЂСѓРїРїС‹ (РѕРЅРё РґРѕР»Р¶РЅС‹ Р±С‹С‚СЊ РѕРґРёРЅР°РєРѕРІС‹, РµСЃР»Рё СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°РЅС‹)
-                # Р•СЃР»Рё Сѓ РєРѕРіРѕ-С‚Рѕ СЂР°СЃСЃРёРЅС…СЂРѕРЅ, СЌС‚Рѕ РёСЃРїСЂР°РІРёС‚СЃСЏ РїСЂРё РјР°СЃСЃРѕРІРѕРј РѕР±РЅРѕРІР»РµРЅРёРё
+                # Берем хэш любого подписчика этой группы (они должны быть одинаковы, если синхронизированы)
+                # Если у кого-то рассинхрон, это исправится при массовом обновлении
                 reference_hash = subs_for_entity[0].get("last_schedule_hash")
 
                 if reference_hash and new_hash != reference_hash:
@@ -317,23 +317,23 @@ async def check_for_schedule_updates(
                         f"Change detected for entity '{entity_name}' ({entity_type}:{entity_id})."
                     )
 
-                    # 2. РџРѕР»СѓС‡Р°РµРј РЎРўРђР Р«Р• РґР°РЅРЅС‹Рµ РёР· Р‘Р” (CachedSchedule) РґР»СЏ СЃСЂР°РІРЅРµРЅРёСЏ
-                    # Р’Р°Р¶РЅРѕ СЃРґРµР»Р°С‚СЊ СЌС‚Рѕ Р”Рћ РѕР±РЅРѕРІР»РµРЅРёСЏ РєСЌС€Р°
+                    # 2. Получаем СТАРЫЕ данные из БД (CachedSchedule) для сравнения
+                    # Важно сделать это ДО обновления кэша
                     old_schedule_data = await get_cached_schedule(entity_type, entity_id)
 
-                    # 3. РљР РРўРР§Р•РЎРљР Р’РђР–РќРћ: РЎСЂР°Р·Сѓ РѕР±РЅРѕРІР»СЏРµРј Р‘Р” (РљСЌС€ Рё РҐСЌС€Рё РїРѕРґРїРёСЃРѕРє)
-                    # Р­С‚Рѕ РїСЂРµРґРѕС‚РІСЂР°С‰Р°РµС‚ РїРѕРІС‚РѕСЂРЅСѓСЋ РѕР±СЂР°Р±РѕС‚РєСѓ СЌС‚РѕР№ СЃСѓС‰РЅРѕСЃС‚Рё, РµСЃР»Рё РѕС‚РїСЂР°РІРєР° СЃРѕРѕР±С‰РµРЅРёР№ СѓРїР°РґРµС‚.
+                    # 3. IMPORTANT: immediately update DB state (cache + subscription hashes)
+                    # Это предотвращает повторную обработку этой сущности, если отправка сообщений упадет.
                     await upsert_cached_schedule(entity_type, entity_id, new_schedule_data)
                     await batch_update_subscription_hashes(entity_type, entity_id, new_hash)
 
-                    # РўР°РєР¶Рµ РѕР±РЅРѕРІР»СЏРµРј Redis РґР»СЏ СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚Рё (РЅРµРѕР±СЏР·Р°С‚РµР»СЊРЅРѕ, РЅРѕ РїРѕР»РµР·РЅРѕ)
-                    # РћР±РЅРѕРІР»СЏРµРј РґР»СЏ РѕРґРЅРѕРіРѕ "СЂРµС„РµСЂРµРЅСЃРЅРѕРіРѕ" РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ, С‡С‚РѕР±С‹ РЅРµ СЃРїР°РјРёС‚СЊ Redis Р·Р°РїСЂРѕСЃР°РјРё РІ С†РёРєР»Рµ
-                    # (Р’ Р±СѓРґСѓС‰РµРј Р»РѕРіРёРєСѓ redis_client.set_user_cache РјРѕР¶РЅРѕ СѓР±СЂР°С‚СЊ, РµСЃР»Рё РїРµСЂРµС€Р»Рё РЅР° CachedSchedule)
+                    # Также обновляем Redis для совместимости (необязательно, но полезно)
+                    # Обновляем для одного "референсного" пользователя, чтобы не спамить Redis запросами в цикле
+                    # (В будущем логику redis_client.set_user_cache можно убрать, если перешли на CachedSchedule)
                     # await redis_client.set_cache(f"schedule_data:{entity_type}:{entity_id}", json.dumps(new_schedule_data))
 
-                    # 4. Р“РµРЅРµСЂРёСЂСѓРµРј Diff Рё РѕС‚РїСЂР°РІР»СЏРµРј СѓРІРµРґРѕРјР»РµРЅРёСЏ
+                    # 4. Генерируем Diff и отправляем уведомления
                     if old_schedule_data:
-                        # Diff РіРµРЅРµСЂРёСЂСѓРµС‚СЃСЏ РѕРґРёРЅ СЂР°Р· РЅР° СЏР·С‹Рє, С‡С‚РѕР±С‹ РЅРµ РїРµСЂРµСЃС‡РёС‚С‹РІР°С‚СЊ N СЂР°Р·
+                        # Diff генерируется один раз на язык, чтобы не пересчитывать N раз
                         diffs_by_lang = {}
 
                         for sub in subs_for_entity:
@@ -372,11 +372,11 @@ async def check_for_schedule_updates(
                         )
 
                 elif not reference_hash:
-                    # Р•СЃР»Рё С…СЌС€Р° РЅРµС‚ (РїРµСЂРІС‹Р№ Р·Р°РїСѓСЃРє РґР»СЏ СЌС‚РѕР№ РїРѕРґРїРёСЃРєРё), РїСЂРѕСЃС‚Рѕ СЃРѕС…СЂР°РЅСЏРµРј С‚РµРєСѓС‰РёР№
+                    # Если хэша нет (первый запуск для этой подписки), просто сохраняем текущий
                     await batch_update_subscription_hashes(entity_type, entity_id, new_hash)
                     await upsert_cached_schedule(entity_type, entity_id, new_schedule_data)
 
-                # РќРµР±РѕР»СЊС€Р°СЏ РїР°СѓР·Р° РјРµР¶РґСѓ СЃСѓС‰РЅРѕСЃС‚СЏРјРё, С‡С‚РѕР±С‹ РЅРµ РіСЂСѓР·РёС‚СЊ API/Р‘Р” РїРёРєР°РјРё
+                # Небольшая пауза между сущностями, чтобы не грузить API/БД пиками
                 await asyncio.sleep(0.5)
 
             except RuzAPIError as e:
@@ -538,7 +538,7 @@ async def send_admin_summary(
                 # --- 1. Build the Main Summary Text ---
                 summary_parts = []
                 try:
-                    # Р’РђР–РќРћ: РСЃРїРѕР»СЊР·СѓРµРј get_session() РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ SQLAlchemy СЃРµСЃСЃРёРё
+                    # IMPORTANT: use get_session() to acquire an SQLAlchemy session
                     async with get_session() as db:
                         summary_data = await get_admin_daily_summary(db)
                     summary_parts.append(
@@ -547,7 +547,7 @@ async def send_admin_summary(
                 except Exception as e:
                     logger.error(f"Failed to get stats for admin summary: {e}", exc_info=True)
                     summary_parts.append(
-                        "вќЊ РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃС‚Р°С‚РёСЃС‚РёРєСѓ."
+                        "❌ Не удалось загрузить статистику."
                     )
 
                 # Send the main summary message (no buttons usually needed here)
@@ -605,11 +605,11 @@ async def send_admin_summary(
                                 "inline_keyboard": [
                                     [
                                         {
-                                            "text": "вњ… РћРґРѕР±СЂРёС‚СЊ",
+                                            "text": "✅ Одобрить",
                                             "callback_data": f"shorter_name_admin:approve:{data_hash}",
                                         },
                                         {
-                                            "text": "вќЊ РћС‚РєР»РѕРЅРёС‚СЊ",
+                                            "text": "❌ Отклонить",
                                             "callback_data": f"shorter_name_admin:decline:{data_hash}",
                                         },
                                     ]

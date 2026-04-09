@@ -1,37 +1,37 @@
 import logging
 import os
 from contextlib import asynccontextmanager
-from pathlib import Path  # Р”РѕР±Р°РІР»СЏРµРј РёРјРїРѕСЂС‚ pathlib
+from pathlib import Path  # Добавляем импорт pathlib
 
 import aiohttp
-from dotenv import load_dotenv  # Р”РѕР±Р°РІСЊС‚Рµ РёРјРїРѕСЂС‚
+from dotenv import load_dotenv  # Добавьте импорт
 from fastapi.middleware.cors import CORSMiddleware
 
-from fastapi_stats_app.config import (  # РРјРїРѕСЂС‚РёСЂСѓРµРј РєРѕРЅСЃС‚Р°РЅС‚С‹ РґР»СЏ Р»РѕРіРіРёСЂРѕРІР°РЅРёСЏ
+from fastapi_stats_app.config import (  # Import logging constants
     FASTAPI_LOG_FILE_NAME,
     LOG_DIR,
 )
 from shared_lib.request_context import configure_correlation_logging
 
-load_dotenv()  # Р—Р°РіСЂСѓР¶Р°РµРј .env
+load_dotenv()  # Загружаем .env
 
-# --- РџРђРўР§ Р”Р›РЇ РџР РћРљРЎР (РєР°Рє РІ Р±РѕС‚Рµ) ---
+# --- PROXY PATCH (same behavior as bot) ---
 PROXY_URL = os.getenv("PROXY_URL")
 if PROXY_URL:
-    # РСЃРїРѕР»СЊР·СѓРµРј socks5h РґР»СЏ СЂРµР·РѕР»РІРёРЅРіР° DNS РЅР° СЃС‚РѕСЂРѕРЅРµ РїСЂРѕРєСЃРё
+    # Use socks5h so DNS resolution happens on the proxy side
     socks5h_proxy = PROXY_URL.replace("socks5://", "socks5h://")
     os.environ["HTTP_PROXY"] = socks5h_proxy
     os.environ["HTTPS_PROXY"] = socks5h_proxy
     os.environ["ALL_PROXY"] = socks5h_proxy
 # ------------------------------------
-# РћРїСЂРµРґРµР»СЏРµРј РїСѓС‚Рё РґР»СЏ Р»РѕРіРіРёСЂРѕРІР°РЅРёСЏ FastAPI РїСЂРёР»РѕР¶РµРЅРёСЏ
+# Определяем пути для логгирования FastAPI приложения
 LOG_FILE_FASTAPI = os.path.join(
     LOG_DIR, FASTAPI_LOG_FILE_NAME
-)  # РСЃРїРѕР»СЊР·СѓРµРј РєРѕРЅСЃС‚Р°РЅС‚С‹ РёР· config
+)  # Use constants from config
 
-# РќР°СЃС‚СЂРѕР№РєР° Р»РѕРіРіРёСЂРѕРІР°РЅРёСЏ РґР»СЏ FastAPI РїСЂРёР»РѕР¶РµРЅРёСЏ
-# РСЃРїРѕР»СЊР·СѓРµРј С‚РѕС‚ Р¶Рµ С„РѕСЂРјР°С‚, С‡С‚Рѕ Рё РІ bot/logger.py
-# --- Р’РђР–РќРћ: Р­С‚Р° РєРѕРЅС„РёРіСѓСЂР°С†РёСЏ РґРѕР»Р¶РЅР° Р±С‹С‚СЊ РІС‹РїРѕР»РЅРµРЅР° Р”Рћ РёРјРїРѕСЂС‚Р° РґСЂСѓРіРёС… РјРѕРґСѓР»РµР№ РїСЂРёР»РѕР¶РµРЅРёСЏ ---
+# Настройка логгирования для FastAPI приложения
+# Reuse the same logging format as in bot/logger.py
+# --- ВАЖНО: Эта конфигурация должна быть выполнена ДО импорта других модулей приложения ---
 os.makedirs(LOG_DIR, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
@@ -42,9 +42,9 @@ logging.basicConfig(
 configure_correlation_logging()
 logger = logging.getLogger(
     __name__
-)  # РџРѕР»СѓС‡Р°РµРј Р»РѕРіРіРµСЂ РїРѕСЃР»Рµ Р±Р°Р·РѕРІРѕР№ РєРѕРЅС„РёРіСѓСЂР°С†РёРё
+)  # Получаем логгер после базовой конфигурации
 
-# --- РўРµРїРµСЂСЊ РјРѕР¶РЅРѕ Р±РµР·РѕРїР°СЃРЅРѕ РёРјРїРѕСЂС‚РёСЂРѕРІР°С‚СЊ РѕСЃС‚Р°Р»СЊРЅС‹Рµ С‡Р°СЃС‚Рё РїСЂРёР»РѕР¶РµРЅРёСЏ ---
+# --- Теперь можно безопасно импортировать остальные части приложения ---
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -52,7 +52,7 @@ from fastapi.templating import Jinja2Templates
 
 from shared_lib.database import close_db_pool, init_db_pool
 
-from .auth import get_current_user  # РРјРїРѕСЂС‚РёСЂСѓРµРј РЅР°С€Сѓ С„СѓРЅРєС†РёСЋ
+from .auth import get_current_user  # Import auth dependency
 from .middleware import CorrelationIdMiddleware
 from .routers import (
     auth_router,
@@ -84,7 +84,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Bot Stats API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(CorrelationIdMiddleware)
 
-# РќР°СЃС‚СЂРѕР№РєР° CORS РґР»СЏ С„СЂРѕРЅС‚РµРЅРґР°
+# Настройка CORS для фронтенда
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -96,23 +96,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# РћРїСЂРµРґРµР»СЏРµРј Р±Р°Р·РѕРІСѓСЋ РґРёСЂРµРєС‚РѕСЂРёСЋ РїСЂРёР»РѕР¶РµРЅРёСЏ (РіРґРµ РЅР°С…РѕРґРёС‚СЃСЏ main.py)
+# Определяем базовую директорию приложения (где находится main.py)
 APP_BASE_DIR = Path(__file__).resolve().parent
 
-# РќР°СЃС‚СЂРѕР№РєР° Jinja2 РґР»СЏ С€Р°Р±Р»РѕРЅРѕРІ
+# Настройка Jinja2 для шаблонов
 templates = Jinja2Templates(directory=str(APP_BASE_DIR / "templates"))
 
-# РЎРѕР·РґР°РµРј РґРёСЂРµРєС‚РѕСЂРёСЋ РґР»СЏ СЃС‚Р°С‚РёРєРё, РµСЃР»Рё РµРµ РЅРµС‚
+# Создаем директорию для статики, если ее нет
 STATIC_DIR = APP_BASE_DIR / "static"
 STATIC_DIR.mkdir(exist_ok=True)
 (STATIC_DIR / "css").mkdir(exist_ok=True)
 (STATIC_DIR / "js").mkdir(exist_ok=True)
 
-# РњРѕРЅС‚РёСЂСѓРµРј СЃС‚Р°С‚РёС‡РµСЃРєРёРµ С„Р°Р№Р»С‹
+# Монтируем статические файлы
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
-# РР·РјРµРЅСЏРµРј РєРѕСЂРЅРµРІРѕР№ СЌРЅРґРїРѕРёРЅС‚ РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ HTML СЃС‚СЂР°РЅРёС†С‹
+# Root HTML endpoint for stats page
 @app.get(
     "/",
     response_class=HTMLResponse,
@@ -132,7 +132,7 @@ async def read_root_html(request: Request):
     dependencies=[Depends(get_current_user)],
 )
 async def read_user_details_html(request: Request, user_id: int):
-    # user_id РїРµСЂРµРґР°РµС‚СЃСЏ РІ С€Р°Р±Р»РѕРЅ, РЅРѕ РјС‹ Р±СѓРґРµРј Р·Р°РіСЂСѓР¶Р°С‚СЊ РґР°РЅРЅС‹Рµ С‡РµСЂРµР· JS/API
+    # user_id передается в шаблон, но мы будем загружать данные через JS/API
     return templates.TemplateResponse("user_details.html", {"request": request, "user_id": user_id})
 
 

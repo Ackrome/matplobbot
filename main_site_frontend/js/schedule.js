@@ -166,7 +166,7 @@ async function initOfflineHistory() {
             renderOfflineHistory();
         }
     } catch (e) {
-        console.warn("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃРїРёСЃРѕРє РєСЌС€Р°:", e);
+        console.warn("Не удалось загрузить список кэша:", e);
     }
 }
 
@@ -194,7 +194,7 @@ async function loadInitialPreferences() {
                 remotePrefs = user.preferences;
             }
         } catch (e) {
-            console.error("РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё РЅР°СЃС‚СЂРѕРµРє СЃ СЃРµСЂРІРµСЂР°", e);
+            console.error("Ошибка загрузки настроек с сервера", e);
         }
     }
 
@@ -260,7 +260,7 @@ async function pushPreferencesToAPI(prefs, token) {
             body: JSON.stringify({ preferences: prefs })
         });
     } catch (e) {
-        console.error("РћС€РёР±РєР° СЃРѕС…СЂР°РЅРµРЅРёСЏ РЅР°СЃС‚СЂРѕРµРє РІ РѕР±Р»Р°РєРѕ", e);
+        console.error("Ошибка сохранения настроек в облако", e);
     }
 }
 
@@ -1049,14 +1049,14 @@ function getBadgeColor(kind) {
     if (!kind) return { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600' };
     const k = kind.toLowerCase();
 
-    const isLecture = k.includes('лекц') || k.includes('lecture') || k.includes('Р»РµРєС†');
+    const isLecture = k.includes('\u043b\u0435\u043a\u0446') || k.includes('lecture');
     const isPractice =
         k.includes('практ') ||
         k.includes('семин') ||
         k.includes('practice') ||
         k.includes('seminar') ||
-        k.includes('РїСЂР°РєС‚') ||
-        k.includes('СЃРµРјРёРЅ');
+        k.includes('практ') ||
+        k.includes('семин');
     const isExamLike =
         k.includes('экзам') ||
         k.includes('зачет') ||
@@ -1064,9 +1064,9 @@ function getBadgeColor(kind) {
         k.includes('exam') ||
         k.includes('credit') ||
         k.includes('test') ||
-        k.includes('СЌРєР·Р°РјРµРЅ') ||
-        k.includes('Р·Р°С‡РµС‚') ||
-        k.includes('Р°С‚С‚РµСЃС‚');
+        k.includes('экзамен') ||
+        k.includes('зачет') ||
+        k.includes('аттест');
 
     if (isLecture) return { bg: 'bg-emerald-50/60', border: 'border-emerald-200', text: 'text-emerald-700' };
     if (isPractice) return { bg: 'bg-amber-50/60', border: 'border-amber-200', text: 'text-amber-700' };

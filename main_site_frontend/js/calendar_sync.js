@@ -115,7 +115,7 @@ function getCalendarCurrentViewSummary() {
                 )
             );
 
-    return `${escapeHtml(currentEntity.name)} В· ${modulesLabel}`;
+    return `${escapeHtml(currentEntity.name)} - ${modulesLabel}`;
 }
 
 function getCalendarCacheStatusLabel(status) {
