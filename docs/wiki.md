@@ -851,6 +851,25 @@ Jenkins deploy SSH now verifies the deploy host against a pinned SHA256 host fin
 - The build parameter `DEPLOY_HOST_FINGERPRINT` can still be used as a one-off override.
 - If both the override and `APP_VM_SHA256` are empty, the pipeline now fails instead of falling back to TOFU host trust.
 
+### Docker Pull Lease Error Recovery
+
+The production `deploy.sh` now includes automatic recovery for intermittent Docker/containerd pull failures such as:
+
+- `lease "...": not found`
+- `lease does not exist`
+- `failed commit on ref ... lease ... not found`
+
+#### Behavior
+
+1. Images are pulled service-by-service (serial pull, not parallel).
+2. For each service, deploy retries up to 3 times.
+3. On recognized lease errors, deploy runs safe cleanup:
+   - `docker builder prune -af`
+   - `docker image prune -af --filter dangling=true`
+4. Deploy then retries the failed image pull automatically.
+
+If all retries still fail, deploy exits with error as before.
+
 ## P2 API And Dashboard Updates (2026-04-09)
 
 ### User Action Export Date Range And Timezone
