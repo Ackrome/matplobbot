@@ -315,12 +315,14 @@ What it does:
 - Supports Telegram auth handoff.
 - Stores bearer token client-side for API calls.
 - Loads `/api/auth/me` for profile and role-aware UI.
+- Applies shared EN/RU i18n toggle to auth page texts (titles, labels, hints, placeholders, buttons).
 
 How to use:
 
 1. Open `/login`.
-2. Sign in with Telegram or username/password.
-3. After login, navigate to schedule/studio/stats by role.
+2. Use the navbar `EN/RU` switch to change auth page language.
+3. Sign in with Telegram or username/password.
+4. After login, navigate to schedule/studio/stats by role.
 
 ### Shared Navbar And I18n
 
