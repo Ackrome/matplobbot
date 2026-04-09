@@ -1101,5 +1101,3 @@ document.addEventListener('click', (e) => {
 function toggleFiltersMobile() {
     window.toggleScheduleFilters?.();
 }
-
-

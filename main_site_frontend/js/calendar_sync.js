@@ -631,4 +631,3 @@ clearAllModules = function(...args) {
     originalClearAllModules(...args);
     renderCalendarSubscription();
 };
-

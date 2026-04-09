@@ -1012,5 +1012,3 @@ document.addEventListener("DOMContentLoaded", () => {
     window.addEventListener("hashchange", renderNavbar);
     window.addEventListener("popstate", renderNavbar);
 });
-
-

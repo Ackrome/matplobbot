@@ -389,5 +389,3 @@
         window.toggleScheduleFilters = () => toggleFilterSection();
     });
 })();
-
-

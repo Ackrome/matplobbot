@@ -732,6 +732,3 @@ async function sendToTelegram() {
         overlay.querySelector('div:last-child').innerText = "РћР¶РёРґР°РЅРёРµ СЃРµСЂРІРµСЂР°..."; // РЎР±СЂРѕСЃ С‚РµРєСЃС‚Р° Р»РѕР°РґРµСЂР°
     }
 }
-
-
-

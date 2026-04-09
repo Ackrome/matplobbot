@@ -1008,4 +1008,3 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }, 60000);
 });
-
