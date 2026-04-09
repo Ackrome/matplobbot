@@ -33,7 +33,7 @@ const TEMPLATES = {
 };
 
 if (!token) {
-    window.mpbPopup?.("РџРѕР¶Р°Р»СѓР№СЃС‚Р°, Р°РІС‚РѕСЂРёР·СѓР№С‚РµСЃСЊ РґР»СЏ РґРѕСЃС‚СѓРїР° Рє РЎС‚СѓРґРёРё.");
+    window.mpbPopup?.("Пожалуйста, авторизуйтесь для доступа к Студии.");
     setTimeout(() => {
         window.location.href = '/login';
     }, 250);
@@ -310,7 +310,7 @@ async function compileCurrent() {
                 body: JSON.stringify({ type, content: editor.getValue() })
             });
         } else {
-            if(!currentProjectId) throw new Error("РџСЂРѕРµРєС‚ РЅРµ РІС‹Р±СЂР°РЅ");
+            if(!currentProjectId) throw new Error("Проект не выбран");
             response = await fetch(`${API_BASE}/studio/projects/${currentProjectId}/compile`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -439,7 +439,7 @@ async function submitNewProject() {
     const type = document.getElementById('new-project-type').value;
     const templateId = document.getElementById('new-project-template').value; // Р‘РµСЂРµРј ID С€Р°Р±Р»РѕРЅР°
 
-    if (!name) { window.mpbPopup?.("Р’РІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ РїСЂРѕРµРєС‚Р°"); return; }
+    if (!name) { window.mpbPopup?.("Введите название проекта"); return; }
 
     closeCreateProjectModal();
     setStatus("Creating...", true);
@@ -456,7 +456,7 @@ async function submitNewProject() {
         await loadProjects();
         setStatus("Ready", false);
     } else {
-        window.mpbPopup?.("РћС€РёР±РєР° РїСЂРё СЃРѕР·РґР°РЅРёРё РїСЂРѕРµРєС‚Р°");
+        window.mpbPopup?.("Ошибка при создании проекта");
         setStatus("Error", false);
     }
 }
@@ -507,13 +507,13 @@ function renderFileList() {
             const btnRename = document.createElement('button');
             btnRename.innerHTML = 'RENAME';
             btnRename.className = "hover:scale-125 transition-transform text-xs";
-            btnRename.title = "РџРµСЂРµРёРјРµРЅРѕРІР°С‚СЊ";
+            btnRename.title = "Переименовать";
             btnRename.onclick = (e) => { e.stopPropagation(); renameFile(f.id, f.path); };
 
             const btnDelete = document.createElement('button');
             btnDelete.innerHTML = 'DELETE';
             btnDelete.className = "hover:scale-125 transition-transform text-xs";
-            btnDelete.title = "РЈРґР°Р»РёС‚СЊ";
+            btnDelete.title = "Удалить";
             btnDelete.onclick = (e) => { e.stopPropagation(); deleteFile(f.id, f.path); };
 
             actionsDiv.appendChild(btnRename);
@@ -588,7 +588,7 @@ async function renameFile(fileId, oldPath) {
         body: JSON.stringify({ new_name: newName })
     });
     if (res.ok) await openProject(currentProjectId);
-    else window.mpbPopup?.("РћС€РёР±РєР° РїРµСЂРµРёРјРµРЅРѕРІР°РЅРёСЏ. Р’РѕР·РјРѕР¶РЅРѕ РёРјСЏ Р·Р°РЅСЏС‚Рѕ.");
+    else window.mpbPopup?.("Ошибка переименования. Возможно имя занято.");
 }
 
 async function deleteFile(fileId, path) {
@@ -602,7 +602,7 @@ async function deleteFile(fileId, path) {
         if (currentFileId === fileId) currentFileId = null; // РЎР±СЂР°СЃС‹РІР°РµРј РµСЃР»Рё СѓРґР°Р»РёР»Рё РѕС‚РєСЂС‹С‚С‹Р№
         await openProject(currentProjectId);
     } else {
-        window.mpbPopup?.("РћС€РёР±РєР° СѓРґР°Р»РµРЅРёСЏ С„Р°Р№Р»Р°.");
+        window.mpbPopup?.("Ошибка удаления файла.");
     }
 }
 
@@ -622,7 +622,7 @@ sidebar.addEventListener('drop', async (e) => {
     e.preventDefault();
     sidebar.classList.remove('bg-blue-50', 'border-blue-300');
 
-    if (!currentProjectId) { window.mpbPopup?.("РЎРЅР°С‡Р°Р»Р° РѕС‚РєСЂРѕР№С‚Рµ РїСЂРѕРµРєС‚ РґР»СЏ Р·Р°РіСЂСѓР·РєРё С„Р°Р№Р»РѕРІ."); return; }
+    if (!currentProjectId) { window.mpbPopup?.("Сначала откройте проект для загрузки файлов."); return; }
 
     const files = e.dataTransfer.files;
     for (let f of files) {
@@ -693,7 +693,7 @@ function downloadZIP() {
         setStatus("Saved", false);
     })
     .catch(err => {
-        window.mpbPopup?.("РћС€РёР±РєР° РІС‹РіСЂСѓР·РєРё ZIP Р°СЂС…РёРІР°");
+        window.mpbPopup?.("Ошибка выгрузки ZIP архива");
         setStatus("Error", false);
     });
 }
@@ -708,7 +708,7 @@ async function sendToTelegram() {
 
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');
-    overlay.querySelector('div:last-child').innerText = "РћС‚РїСЂР°РІРєР° РІ Telegram...";
+    overlay.querySelector('div:last-child').innerText = "Отправка в Telegram...";
 
     try {
         const res = await fetch(`${API_BASE}/studio/projects/${currentProjectId}/send_telegram`, {
@@ -718,10 +718,10 @@ async function sendToTelegram() {
 
         const data = await res.json();
         if (res.ok) {
-            window.mpbPopup?.("РЈСЃРїРµС…! Р¤Р°Р№Р» РѕС‚РїСЂР°РІР»РµРЅ РІР°Рј РІ Р»РёС‡РЅС‹Рµ СЃРѕРѕР±С‰РµРЅРёСЏ РІ Telegram.");
+            window.mpbPopup?.("Успех! Файл отправлен вам в личные сообщения в Telegram.");
             setStatus("Saved", false);
         } else {
-            throw new Error(data.detail || "РћС€РёР±РєР° РѕС‚РїСЂР°РІРєРё");
+            throw new Error(data.detail || "Ошибка отправки");
         }
     } catch (err) {
         window.mpbPopup?.(err.message);
@@ -729,7 +729,7 @@ async function sendToTelegram() {
     } finally {
         overlay.classList.add('hidden');
         overlay.classList.remove('flex');
-        overlay.querySelector('div:last-child').innerText = "РћР¶РёРґР°РЅРёРµ СЃРµСЂРІРµСЂР°..."; // РЎР±СЂРѕСЃ С‚РµРєСЃС‚Р° Р»РѕР°РґРµСЂР°
+        overlay.querySelector('div:last-child').innerText = "Ожидание сервера..."; // РЎР±СЂРѕСЃ С‚РµРєСЃС‚Р° Р»РѕР°РґРµСЂР°
     }
 }
 

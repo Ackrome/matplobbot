@@ -462,7 +462,7 @@ function renderSortIndicators() {
         const th = button.closest("th");
 
         if (field === state.sortBy) {
-            const arrow = state.sortOrder === "asc" ? "в†‘" : "в†“";
+            const arrow = state.sortOrder === "asc" ? "↑" : "↓";
             if (icon) icon.textContent = arrow;
             if (th) th.setAttribute("aria-sort", state.sortOrder === "asc" ? "ascending" : "descending");
         } else {

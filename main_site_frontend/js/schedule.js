@@ -115,7 +115,7 @@ window.addEventListener('mpb-auth-ready', (event) => {
 
 document.addEventListener('DOMContentLoaded', async () => {
     await initOfflineHistory();
-    await loadInitialPreferences(); // Р—Р°РіСЂСѓР¶Р°РµРј РЅР°СЃС‚СЂРѕР№РєРё РёР· API (РµСЃР»Рё Р·Р°Р»РѕРіРёРЅРµРЅ) РёР»Рё LocalStorage
+    await loadInitialPreferences(); // Загружаем настройки из API (если залогинен) или LocalStorage
     window.mpbI18n?.registerTranslator?.(() => {
         renderOfflineHistory();
         if (!resultsBox.classList.contains('hidden')) {
@@ -170,20 +170,20 @@ async function initOfflineHistory() {
     }
 }
 
-// === РќРћР’РђРЇ Р›РћР“РРљРђ РЎРРќРҐР РћРќРР—РђР¦РР РќРђРЎРўР РћР•Рљ ===
+// === НОВАЯ ЛОГИКА СИНХРОНИЗАЦИИ НАСТРОЕК ===
 
 async function loadInitialPreferences() {
     const token = localStorage.getItem('jwt_token');
     let remotePrefs = null;
     let localPrefs = null;
 
-    // Р§РёС‚Р°РµРј РёР· localStorage
+    // Читаем из localStorage
     try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) localPrefs = JSON.parse(saved);
     } catch (e) {}
 
-    // Р§РёС‚Р°РµРј РёР· API, РµСЃР»Рё РµСЃС‚СЊ С‚РѕРєРµРЅ
+    // Читаем из API, если есть токен
     if (token) {
         try {
             const res = await fetch(`${API_BASE}/auth/me`, {
@@ -198,22 +198,22 @@ async function loadInitialPreferences() {
         }
     }
 
-    // Р РµС€Р°РµРј, С‡С‚Рѕ РїСЂРёРјРµРЅСЏС‚СЊ
+    // Решаем, что применять
     let prefsToApply = null;
 
     if (remotePrefs && Object.keys(remotePrefs).length > 0) {
-        // Р•СЃР»Рё РІ РѕР±Р»Р°РєРµ РµСЃС‚СЊ РґР°РЅРЅС‹Рµ, РѕРЅРё РїСЂРёРѕСЂРёС‚РµС‚РЅРµРµ
+        // Если в облаке есть данные, они приоритетнее
         prefsToApply = remotePrefs;
-        // Р—Р°РѕРґРЅРѕ РѕР±РЅРѕРІР»СЏРµРј Р»РѕРєР°Р»СЊРЅС‹Р№ СЃС‚РѕСЂР°РґР¶, С‡С‚РѕР±С‹ СЂР°Р±РѕС‚Р°Р» Р±С‹СЃС‚СЂРѕ РІ СЃР»РµРґСѓСЋС‰РёР№ СЂР°Р·
+        // Заодно обновляем локальный сторадж, чтобы работал быстро в следующий раз
         localStorage.setItem(STORAGE_KEY, JSON.stringify(prefsToApply));
     } else if (localPrefs) {
-        // Р•СЃР»Рё РѕР±Р»Р°РєРѕ РїСѓСЃС‚РѕРµ (РЅРѕРІС‹Р№ Р°РєРєР°СѓРЅС‚), РЅРѕ Р»РѕРєР°Р»СЊРЅРѕ С‡С‚Рѕ-С‚Рѕ РµСЃС‚СЊ - Р±РµСЂРµРј Р»РѕРєР°Р»СЊРЅРѕРµ
+        // Если облако пустое (новый аккаунт), но локально что-то есть - берем локальное
         prefsToApply = localPrefs;
-        // Р СЃСЂР°Р·Сѓ РїСѓС€РёРј СЌС‚Рѕ РІ РѕР±Р»Р°РєРѕ, С‡С‚РѕР±С‹ СЃРѕС…СЂР°РЅРёС‚СЊ
+        // И сразу пушим это в облако, чтобы сохранить
         if (token) pushPreferencesToAPI(prefsToApply, token);
     }
 
-    // РџСЂРёРјРµРЅСЏРµРј РЅР°СЃС‚СЂРѕР№РєРё Рє РёРЅС‚РµСЂС„РµР№СЃСѓ
+    // Применяем настройки к интерфейсу
     if (prefsToApply) {
         if (prefsToApply.useShortNames !== undefined) {
             document.getElementById('useShortNames').checked = prefsToApply.useShortNames;
@@ -234,15 +234,15 @@ async function loadInitialPreferences() {
 async function savePreferences() {
     const prefs = {
         entity: currentEntity,
-        modules: Array.from(selectedModules), // РљРѕРЅРІРµСЂС‚РёСЂСѓРµРј Set РІ Array РґР»СЏ JSON
+        modules: Array.from(selectedModules), // Конвертируем Set в Array для JSON
         useShortNames: document.getElementById('useShortNames').checked,
         showFullLecturerName: document.getElementById('showFullLecturerName').checked
     };
 
-    // Р’СЃРµРіРґР° СЃРѕС…СЂР°РЅСЏРµРј Р»РѕРєР°Р»СЊРЅРѕ
+    // Всегда сохраняем локально
     localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
 
-    // Р•СЃР»Рё РµСЃС‚СЊ С‚РѕРєРµРЅ, РїСѓС€РёРј РІ РѕР±Р»Р°РєРѕ
+    // Если есть токен, пушим в облако
     const token = localStorage.getItem('jwt_token');
     if (token) {
         pushPreferencesToAPI(prefs, token);
@@ -264,7 +264,7 @@ async function pushPreferencesToAPI(prefs, token) {
     }
 }
 
-// === РћРЎРўРђР›Р¬РќРћР™ РљРћР” Р‘Р•Р— РР—РњР•РќР•РќРР™ ===
+// === ОСТАЛЬНОЙ КОД БЕЗ ИЗМЕНЕНИЙ ===
 
 function renderCalendarSubscription() {
     const container = document.getElementById('calendarSubscriptionSection');
