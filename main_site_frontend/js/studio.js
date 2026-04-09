@@ -732,6 +732,3 @@ async function sendToTelegram() {
         overlay.querySelector('div:last-child').innerText = "Ожидание сервера..."; // РЎР±СЂРѕСЃ С‚РµРєСЃС‚Р° Р»РѕР°РґРµСЂР°
     }
 }
-
-
-
