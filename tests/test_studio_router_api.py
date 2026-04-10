@@ -152,7 +152,9 @@ class TestStudioRouterAPI(unittest.TestCase):
             )
         ]
         self.db.execute.side_effect = [_mock_scalar_result(project), _mock_scalars_result(files)]
-        fake_session = _FakeTelegramSession(_FakeTelegramResponse(status=500, body="tg unavailable"))
+        fake_session = _FakeTelegramSession(
+            _FakeTelegramResponse(status=500, body="tg unavailable")
+        )
 
         with (
             patch.object(studio_router, "BOT_TOKEN", "test-token"),
