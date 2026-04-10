@@ -667,5 +667,3 @@ async def get_myschedule_filters_keyboard(
         )
     )
     return builder.as_markup()
-
-

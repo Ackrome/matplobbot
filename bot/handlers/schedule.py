@@ -1118,9 +1118,7 @@ class ScheduleManager:
             }
         if preset_id == "hide_auditoriums":
             excluded = [
-                int(sub["id"])
-                for sub in active_subs
-                if sub.get("entity_type") == "auditorium"
+                int(sub["id"]) for sub in active_subs if sub.get("entity_type") == "auditorium"
             ]
             return {"excluded_subs": excluded, "excluded_types": []}
         return None

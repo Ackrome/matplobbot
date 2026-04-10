@@ -206,7 +206,9 @@ def upsert_myschedule_filter_preset_entries(
     return filtered[:max_items]
 
 
-def delete_myschedule_filter_preset_entries(existing_presets: list[dict], preset_id: str) -> list[dict]:
+def delete_myschedule_filter_preset_entries(
+    existing_presets: list[dict], preset_id: str
+) -> list[dict]:
     normalized_existing = normalize_myschedule_filter_presets(existing_presets)
     return [item for item in normalized_existing if item.get("id") != preset_id]
 
