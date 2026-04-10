@@ -12,24 +12,22 @@ def _is_invalid_cyrillic(char: str) -> bool:
 
 class TestDashboardTextEncoding(unittest.TestCase):
     def test_dashboard_assets_have_no_mojibake_codepoints(self):
-        targets = [
+        frontend_targets = sorted(Path("main_site_frontend").glob("*.html")) + sorted(
+            Path("main_site_frontend/js").glob("*.js")
+        )
+        backend_targets = [
             Path("fastapi_stats_app/static/js/main.js"),
             Path("fastapi_stats_app/static/js/user_details.js"),
             Path("fastapi_stats_app/templates/index.html"),
             Path("fastapi_stats_app/templates/user_details.html"),
             Path("fastapi_stats_app/main.py"),
-            Path("main_site_frontend/login.html"),
-            Path("main_site_frontend/register.html"),
-            Path("main_site_frontend/index.html"),
-            Path("main_site_frontend/schedule.html"),
-            Path("main_site_frontend/studio.html"),
-            Path("main_site_frontend/js/auth.js"),
-            Path("main_site_frontend/js/navbar.js"),
-            Path("main_site_frontend/js/schedule.js"),
-            Path("main_site_frontend/js/studio.js"),
-            Path("main_site_frontend/js/calendar_sync.js"),
+            Path("fastapi_stats_app/routers/auth_router.py"),
+            Path("fastapi_stats_app/routers/schedule_router.py"),
+            Path("fastapi_stats_app/routers/stats_router.py"),
             Path("scheduler_app/jobs.py"),
+            Path("scheduler_app/main.py"),
         ]
+        targets = frontend_targets + backend_targets
 
         problems: list[str] = []
 

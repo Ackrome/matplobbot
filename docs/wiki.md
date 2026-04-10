@@ -307,6 +307,7 @@ How to use:
 Pages and scripts:
 
 - `main_site_frontend/login.html`
+- `main_site_frontend/register.html`
 - `main_site_frontend/js/auth.js`
 
 What it does:
@@ -316,13 +317,15 @@ What it does:
 - Stores bearer token client-side for API calls.
 - Loads `/api/auth/me` for profile and role-aware UI.
 - Applies shared EN/RU i18n toggle to auth page texts (titles, labels, hints, placeholders, buttons).
+- Uses a mobile-optimized auth layout (viewport meta, compact navbar, adaptive spacing for narrow screens).
 
 How to use:
 
 1. Open `/login`.
-2. Use the navbar `EN/RU` switch to change auth page language.
-3. Sign in with Telegram or username/password.
-4. After login, navigate to schedule/studio/stats by role.
+2. Open `/register` to create an account when needed.
+3. Use the navbar `EN/RU` switch to change auth page language.
+4. Sign in with Telegram or username/password.
+5. After login, navigate to schedule/studio/stats by role.
 
 ### Shared Navbar And I18n
 
@@ -517,6 +520,7 @@ Feature details:
 - `lecturer` -> `person`
 - `teacher` -> `person`
 - `room` -> `auditorium`
+- For mixed entity types with equal relevance, response ordering is deterministic: `group` -> `person` -> `auditorium`, then stable lexical tie-break by label/id.
 - Search automatically falls back to local cache if upstream RUZ fails.
 - Schedule data returns:
 - `schedule`
@@ -524,6 +528,21 @@ Feature details:
 - `is_offline`
 - `source_updated_at`
 - `loaded_bounds`
+
+#### Schedule Search Offline Fallback Semantics (Frontend)
+
+What `is_offline` means:
+
+- In `GET /api/schedule/data/{type}/{id}`, `is_offline=true` means live RUZ data was unavailable and the response was assembled from cached schedule data.
+- In `GET /api/schedule/search`, `is_offline` is per-result. Mixed responses are possible: some entities may come from live RUZ (`false`) while others are cache fallback (`true`).
+- `is_offline=false` means a live upstream response was used for that entity/request path.
+
+Frontend behavior guidance:
+
+1. Keep fallback results selectable and renderable; cache fallback is a degraded-but-valid state, not a hard error.
+2. Surface a visible badge/state (for example `CACHE`) when item-level or schedule-level `is_offline=true`.
+3. Treat `503` from search as a full-source outage state (upstream unavailable and no cache matches), and show retry/help UI.
+4. Use `source_updated_at` together with `is_offline` to communicate data freshness to users.
 
 How to use:
 

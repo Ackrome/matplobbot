@@ -35,13 +35,7 @@ Last updated: 2026-04-09
 - [ ] Add `/myschedule` filter presets (for example "only exams", "hide auditorium subscriptions", custom named sets).
 
 ### P2 - Quality and Documentation
-- [ ] add mobile version of auth pages.
-- [ ] Add test for deterministic ordering in unified schedule search results when mixed entity types return equal match quality.
-- [x] Fix mojibake RU OpenAPI summary/description text in FastAPI routers to restore readable API docs.
-- [x] Expand mojibake cleanup beyond OpenAPI docs: fix corrupted user-facing text in `main_site_frontend` pages/scripts, `studio_router`, and scheduler admin messages.
-- [ ] Expand encoding guard tests to include website frontend assets (`main_site_frontend/*.html`, `main_site_frontend/js/*.js`) and selected backend user-facing strings.
-- [ ] Add integration tests for Studio router endpoints (`/api/studio/projects/*`) covering ownership checks, rename conflicts, and Telegram send failure responses.
-- [ ] Add wiki section describing schedule search offline fallback semantics and `is_offline` flag behavior for frontend maintainers.
+
 
 
 ### P3 back
@@ -52,20 +46,13 @@ Last updated: 2026-04-09
 
 ## Completed In This Iteration
 
-- [x] Add range parameters for user action export (`date_from`, `date_to`, timezone) so weekly PDF and CSV are not fixed to "last 7 days only".
-- [x] Add dashboard UI state for API partial degradation (for example when one stats widget fails but others still load).
-- [x] Add explicit OpenAPI docs/examples for schedule search `type` aliases (`lecturer`, `teacher`, `room`) to reduce frontend/client ambiguity.
-- [x] Add validation/error response for invalid `base_date` format in `GET /api/schedule/data/{type}/{id}` (current path can raise 500 instead of 400/422).
-- [x] Define deprecation plan for legacy stats alias `/api/stats/stats/action_users` and remove it after frontend migration window.
- - [x] replace allerts with cool popups
- - [x] Replace hardcoded frontend API hosts (`https://api.ivantishchenko.ru/api`) with a shared configurable base URL (relative `/api` by default + optional override).
- - [x] Localize/fix remaining hardcoded UI text in schedule/auth pages (for example `Full lecturer name`) and replace mojibake symbols like `вЂ”`, `вљ пёЏ`, `вљЎ`.
-
-- [x] Add range parameters for user action export (`date_from`, `date_to`, timezone) so weekly PDF and CSV are not fixed to "last 7 days only".
-- [x] Add dashboard UI state for API partial degradation (for example when one stats widget fails but others still load).
-- [x] Add explicit OpenAPI docs/examples for schedule search `type` aliases (`lecturer`, `teacher`, `room`) to reduce frontend/client ambiguity.
-- [x] Add validation/error response for invalid `base_date` format in `GET /api/schedule/data/{type}/{id}` (current path can raise 500 instead of 400/422).
-- [x] Define deprecation plan for legacy stats alias `/api/stats/stats/action_users` and remove it after frontend migration window.
+- [x] Fix mojibake RU OpenAPI summary/description text in FastAPI routers to restore readable API docs.
+- [x] Expand mojibake cleanup beyond OpenAPI docs: fix corrupted user-facing text in `main_site_frontend` pages/scripts, `studio_router`, and scheduler admin messages.
+- [x] add mobile version of auth pages.
+- [x] Add test for deterministic ordering in unified schedule search results when mixed entity types return equal match quality.
+- [x] Expand encoding guard tests to include website frontend assets (`main_site_frontend/*.html`, `main_site_frontend/js/*.js`) and selected backend user-facing strings.
+- [x] Add integration tests for Studio router endpoints (`/api/studio/projects/*`) covering ownership checks, rename conflicts, and Telegram send failure responses.
+- [x] Add wiki section describing schedule search offline fallback semantics and `is_offline` flag behavior for frontend maintainers.
 
 ## Chosen not to be implemented at all (cuz implemented partially or just don't want)
 

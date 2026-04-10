@@ -84,6 +84,43 @@ class TestScheduleSearchAPI(unittest.TestCase):
             ],
         )
 
+    def test_search_without_type_has_deterministic_order_for_equal_match_quality(self):
+        fake_client = types.SimpleNamespace(
+            search=AsyncMock(
+                side_effect=[
+                    [
+                        {"id": "group-2", "label": "Alpha"},
+                        {"id": "group-1", "label": "Alpha"},
+                    ],
+                    [
+                        {"id": "person-2", "label": "Alpha"},
+                        {"id": "person-1", "label": "Alpha"},
+                    ],
+                    [
+                        {"id": "room-2", "label": "Alpha"},
+                        {"id": "room-1", "label": "Alpha"},
+                    ],
+                ]
+            )
+        )
+
+        with patch.object(schedule_router, "create_ruz_api_client", return_value=fake_client):
+            response = self.client.get("/api/schedule/search", params={"term": "alpha"})
+
+        self.assertEqual(response.status_code, 200)
+        ordered_pairs = [(item["type"], item["id"]) for item in response.json()]
+        self.assertEqual(
+            ordered_pairs,
+            [
+                ("group", "group-1"),
+                ("group", "group-2"),
+                ("person", "person-1"),
+                ("person", "person-2"),
+                ("auditorium", "room-1"),
+                ("auditorium", "room-2"),
+            ],
+        )
+
     def test_search_without_type_uses_cache_when_one_search_kind_is_unavailable(self):
         fake_client = types.SimpleNamespace(
             search=AsyncMock(

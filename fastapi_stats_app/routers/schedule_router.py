@@ -41,6 +41,7 @@ SEARCH_TYPE_DESCRIPTIONS = {
     "person": "Lecturer",
     "auditorium": "Auditorium",
 }
+SEARCH_TYPE_ORDER = {entity_type: index for index, entity_type in enumerate(SEARCH_ENTITY_TYPES)}
 SEARCH_TYPE_QUERY_DESCRIPTION = (
     "Search scope for schedule entities. "
     "Allowed values: all, group, person, auditorium. "
@@ -145,6 +146,15 @@ def _merge_search_results(results_by_type: dict[str, list[dict]]) -> list[dict]:
             seen_ids.add(identity)
             merged_results.append(item)
 
+    # Keep ordering deterministic for frontend rendering when relevance ties happen
+    # across mixed entity types: fixed type priority, then label/id lexical tie-break.
+    merged_results.sort(
+        key=lambda item: (
+            SEARCH_TYPE_ORDER.get(item["type"], len(SEARCH_ENTITY_TYPES)),
+            str(item.get("label", "")).casefold(),
+            str(item.get("id", "")).casefold(),
+        )
+    )
     return merged_results[:30]
 
 
