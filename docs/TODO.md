@@ -1,6 +1,6 @@
 ﻿# TODO
 
-Last updated: 2026-04-09
+Last updated: 2026-04-10
 
 ## Active Backlog (In-Repo)
 
@@ -13,7 +13,7 @@ Last updated: 2026-04-09
 - [ ] Add production backup policy for Postgres (scheduled `pg_dump`, retention, restore drill) and document RPO/RTO targets.
 - [ ] Add migration safety checks in deploy: fail before rollout if alembic revision state is inconsistent; verify post-migration schema health.
 - [ ] Add secret scanning in CI (for example `gitleaks`) and block merges on high-confidence leaks.
-- [ ] Add dependency vulnerability gate in CI (`pip-audit` with policy/allowlist) for release branches.
+- [x] Add dependency vulnerability gate in CI (`pip-audit --strict` in CI validate job).
 - [ ] Add E2E tests for critical user journeys: auth, schedule search/load, `/myschedule` notifications path, stats export, Studio core actions.
 - [ ] Define and enforce a minimum automated coverage target for critical modules (routers/scheduler/studio/stats).
 - [ ] Add uptime/error alerts for key production endpoints (`/api/stats/health`, scheduler `/health`, website) with actionable routing to admins.
@@ -31,8 +31,8 @@ Last updated: 2026-04-09
 - [ ] Move CORS allowed origins to env-driven config (`fastapi_stats_app/config.py`) with sane defaults for production and local development.
 
 ### P2 - Bot UX
-- [ ] Add optional "quick set" onboarding step after `/start` for schedule entity + notification time (skip allowed).
-- [ ] Add `/myschedule` filter presets (for example "only exams", "hide auditorium subscriptions", custom named sets).
+- [x] Add optional "quick set" onboarding step after `/start` for schedule entity + notification time (skip allowed).
+- [x] Add `/myschedule` filter presets (for example "only exams", "hide auditorium subscriptions", custom named sets).
 
 ### P2 - Quality and Documentation
 

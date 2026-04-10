@@ -16,3 +16,10 @@ repomix-output.xml
 docker-compose.test.yml
 Caddyfile.test
 main_site_frontend/test.default.conf
+
+# graphify artifacts
+graphify-out/
+.graphify_*
+.pycache_tmp_exec_20260410/**
+AGENTS.md
+.codex/**

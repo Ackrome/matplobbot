@@ -101,6 +101,12 @@ class BaseManager:
         self.router.callback_query(F.data == "go_to_onboarding_final")(self.onboarding_final)
         self.router.callback_query(F.data == "onboarding_finish")(self.onboarding_finish)
         self.router.callback_query(F.data == "onboarding_skip")(self.onboarding_skip)
+        self.router.callback_query(F.data == "onboarding_quick_set_start")(
+            self.onboarding_quick_set_start
+        )
+        self.router.callback_query(F.data == "onboarding_quick_set_skip")(
+            self.onboarding_quick_set_skip
+        )
         # Base Commands
         # Private chat handlers
         self.router.message(CommandStart(), F.chat.type == "private")(self.command_start_regular)
@@ -301,6 +307,7 @@ class BaseManager:
             translator.gettext(lang, "choose_next_command"),
             reply_markup=await kb.get_main_reply_keyboard(user_id),
         )
+        await self._send_onboarding_quick_set_prompt(callback.message, user_id, lang)
         await callback.answer()
 
     async def onboarding_skip(self, callback: CallbackQuery, state: FSMContext):
@@ -315,7 +322,42 @@ class BaseManager:
             translator.gettext(lang, "start_welcome", full_name=callback.from_user.full_name),
             reply_markup=await kb.get_main_reply_keyboard(user_id),
         )
+        await self._send_onboarding_quick_set_prompt(callback.message, user_id, lang)
         await callback.answer(translator.gettext(lang, "onboarding_skipped"))
+        await callback.answer()
+
+    async def _send_onboarding_quick_set_prompt(self, message: Message, user_id: int, lang: str):
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "onboarding_quick_set_btn_start"),
+                callback_data="onboarding_quick_set_start",
+            )
+        )
+        builder.row(
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "onboarding_quick_set_btn_skip"),
+                callback_data="onboarding_quick_set_skip",
+            )
+        )
+        await message.answer(
+            translator.gettext(lang, "onboarding_quick_set_prompt"),
+            reply_markup=builder.as_markup(),
+        )
+
+    async def onboarding_quick_set_start(self, callback: CallbackQuery, state: FSMContext):
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id, callback.message.chat.id)
+        await callback.message.edit_text(translator.gettext(lang, "onboarding_quick_set_started"))
+
+        quick_set_message = callback.message.model_copy(update={"from_user": callback.from_user})
+        await self.schedule_manager.cmd_schedule(quick_set_message, state)
+        await callback.answer()
+
+    async def onboarding_quick_set_skip(self, callback: CallbackQuery):
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id, callback.message.chat.id)
+        await callback.message.edit_text(translator.gettext(lang, "onboarding_quick_set_skipped"))
         await callback.answer()
 
     async def command_start_regular(self, message: Message):

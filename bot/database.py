@@ -13,6 +13,9 @@ from shared_lib.database import (
     clear_latex_cache as clear_latex_cache,
 )
 from shared_lib.database import (
+    delete_user_myschedule_filter_preset as delete_user_myschedule_filter_preset,
+)
+from shared_lib.database import (
     delete_user_search_preset as delete_user_search_preset,
 )
 from shared_lib.database import (
@@ -32,6 +35,12 @@ from shared_lib.database import (
 )
 from shared_lib.database import (
     get_subscriptions_for_notification as get_subscriptions_for_notification,
+)
+from shared_lib.database import (
+    get_user_myschedule_filter_preset as get_user_myschedule_filter_preset,
+)
+from shared_lib.database import (
+    get_user_myschedule_filter_presets as get_user_myschedule_filter_presets,
 )
 from shared_lib.database import (
     get_user_myschedule_filters as get_user_myschedule_filters,
@@ -70,6 +79,9 @@ from shared_lib.database import (
     remove_user_repo as remove_user_repo,
 )
 from shared_lib.database import (
+    save_user_myschedule_filter_preset as save_user_myschedule_filter_preset,
+)
+from shared_lib.database import (
     save_user_myschedule_filters as save_user_myschedule_filters,
 )
 from shared_lib.database import (
@@ -103,6 +115,7 @@ DEFAULT_SETTINGS = {
     "language": "en",
     "search_presets": [],
     "myschedule_filters": {"excluded_subs": [], "excluded_types": []},
+    "myschedule_filter_presets": [],
 }
 
 __all__ = [
@@ -137,4 +150,8 @@ __all__ = [
     "delete_user_search_preset",
     "get_user_myschedule_filters",
     "save_user_myschedule_filters",
+    "get_user_myschedule_filter_presets",
+    "get_user_myschedule_filter_preset",
+    "save_user_myschedule_filter_preset",
+    "delete_user_myschedule_filter_preset",
 ]

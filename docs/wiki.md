@@ -62,13 +62,15 @@ What it does:
 - Shows first-start flow with language selector.
 - Supports a guided onboarding tour across major bot capabilities.
 - Supports language cycling and restart onboarding from settings.
+- Adds an optional quick setup step after onboarding to jump directly into schedule subscription setup (`entity + notification time`) with a skip option.
 
 How to use:
 
 1. Send `/start` in private chat.
 2. Pick language.
 3. Continue onboarding or skip.
-4. Open `/settings` to change language later or restart onboarding.
+4. In the quick setup card, either start immediate schedule setup or skip for now.
+5. Open `/settings` to change language later or restart onboarding.
 
 ### Help And Command Menu
 
@@ -207,6 +209,9 @@ What it does:
 - Includes filter controls:
 - include/exclude subscriptions
 - include/exclude lesson types
+- Includes filter presets:
+- built-in (`All lessons`, `Only exams`, `Hide auditoriums`)
+- custom named presets saved from current filter state
 - Supports iCal export and personal calendar link actions.
 - Includes link revocation action for secret calendar URL.
 
@@ -214,8 +219,9 @@ How to use:
 
 1. Ensure at least one active schedule subscription.
 2. Send `/myschedule`.
-3. Use filters and day/week navigation.
-4. Export iCal or manage personal calendar link from inline actions.
+3. Open `Filters` and apply a built-in preset or save the current filters as a named preset.
+4. Toggle per-type/per-source filters and day/week navigation as needed.
+5. Export iCal or manage personal calendar link from inline actions.
 
 ### Settings Center
 

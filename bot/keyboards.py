@@ -573,27 +573,74 @@ def get_myschedule_calendar_keyboard(
 
 
 async def get_myschedule_filters_keyboard(
-    filter_config: dict, subscriptions: list, user_id
+    filter_config: dict, subscriptions: list, user_id: int, presets: list[dict] | None = None
 ) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
+    presets = presets or []
 
     excluded_subs = filter_config.get("excluded_subs", [])
     excluded_types = filter_config.get("excluded_types", [])
 
     lang = await translator.get_language(user_id)
-    # 1. Фильтры по Типам
+    builder.row(
+        InlineKeyboardButton(
+            text=translator.gettext(lang, "kb_header_filter_presets"), callback_data="noop"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text=translator.gettext(lang, "kb_preset_all"),
+            callback_data="mysch_preset_builtin:all",
+        ),
+        InlineKeyboardButton(
+            text=translator.gettext(lang, "kb_preset_only_exams"),
+            callback_data="mysch_preset_builtin:only_exams",
+        ),
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text=translator.gettext(lang, "kb_preset_hide_auditoriums"),
+            callback_data="mysch_preset_builtin:hide_auditoriums",
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text=translator.gettext(lang, "kb_preset_save_current"),
+            callback_data="mysch_preset_save",
+        )
+    )
+
+    for preset in presets[:5]:
+        preset_name = str(preset.get("name", "")).strip()
+        preset_id = str(preset.get("id", "")).strip()
+        if not preset_name or not preset_id:
+            continue
+
+        if len(preset_name) > 18:
+            preset_name = preset_name[:18] + "..."
+
+        builder.row(
+            InlineKeyboardButton(
+                text=f"> {preset_name}",
+                callback_data=f"mysch_preset_apply:{preset_id}",
+            ),
+            InlineKeyboardButton(
+                text="Del",
+                callback_data=f"mysch_preset_del:{preset_id}",
+            ),
+        )
+
     builder.row(
         InlineKeyboardButton(
             text=translator.gettext(lang, "kb_header_lesson_types"), callback_data="noop"
         )
     )
     for f_code, f_name in FILTER_TYPES_MAP.items():
-        state = "❌" if f_code in excluded_types else "✅"
+        state = "[x]" if f_code in excluded_types else "[ ]"
         builder.row(
             InlineKeyboardButton(text=f"{state} {f_name}", callback_data=f"mysch_tog_type:{f_code}")
         )
 
-    # 2. Фильтры по Источникам
     if len(subscriptions) > 1:
         builder.row(
             InlineKeyboardButton(
@@ -601,8 +648,7 @@ async def get_myschedule_filters_keyboard(
             )
         )
         for sub in subscriptions:
-            state = "❌" if sub["id"] in excluded_subs else "✅"
-            # Обрезаем имя, если слишком длинное
+            state = "[x]" if sub["id"] in excluded_subs else "[ ]"
             name = (
                 sub["entity_name"][:20] + "..."
                 if len(sub["entity_name"]) > 20
@@ -621,3 +667,5 @@ async def get_myschedule_filters_keyboard(
         )
     )
     return builder.as_markup()
+
+

@@ -59,6 +59,7 @@ MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 class ScheduleStates(StatesGroup):
     awaiting_search_query = State()
     awaiting_subscription_time = State()
+    awaiting_myschedule_preset_name = State()
 
 
 class ScheduleManager:
@@ -100,6 +101,21 @@ class ScheduleManager:
         )
         self.router.callback_query(F.data.startswith("mysch_tog_"))(
             self.handle_myschedule_toggle_filter
+        )
+        self.router.callback_query(F.data.startswith("mysch_preset_builtin:"))(
+            self.handle_myschedule_apply_builtin_preset
+        )
+        self.router.callback_query(F.data == "mysch_preset_save")(
+            self.handle_myschedule_save_preset_prompt
+        )
+        self.router.callback_query(F.data.startswith("mysch_preset_apply:"))(
+            self.handle_myschedule_apply_saved_preset
+        )
+        self.router.callback_query(F.data.startswith("mysch_preset_del:"))(
+            self.handle_myschedule_delete_saved_preset
+        )
+        self.router.message(ScheduleStates.awaiting_myschedule_preset_name)(
+            self.handle_myschedule_preset_name
         )
         self.router.callback_query(F.data == "mysch_back_cal")(self.handle_myschedule_back_to_cal)
         self.router.callback_query(F.data.startswith("mysch_week:"))(self.handle_myschedule_week)
@@ -1072,6 +1088,43 @@ class ScheduleManager:
         normalized = await database.save_user_myschedule_filters(user_id, filters)
         await redis_client.set_user_cache(user_id, "mysch_filters", normalized, ttl=3600)
 
+    async def _get_active_subscriptions(self, user_id: int) -> list[dict]:
+        subscriptions, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
+        return [sub for sub in subscriptions if sub["is_active"]]
+
+    async def _render_myschedule_filters_menu_message(
+        self, message: Message, user_id: int, *, is_edit: bool
+    ) -> None:
+        filters = await self._get_user_filters(user_id)
+        active_subs = await self._get_active_subscriptions(user_id)
+        presets = await database.get_user_myschedule_filter_presets(user_id)
+        kb = await get_myschedule_filters_keyboard(filters, active_subs, user_id, presets)
+        lang = await translator.get_language(user_id)
+        text = translator.gettext(lang, "kb_header_schedule_filters")
+        if is_edit:
+            await message.edit_text(text, reply_markup=kb)
+        else:
+            await message.answer(text, reply_markup=kb)
+
+    def _build_builtin_myschedule_filter(
+        self, preset_id: str, active_subs: list[dict]
+    ) -> dict | None:
+        if preset_id == "all":
+            return {"excluded_subs": [], "excluded_types": []}
+        if preset_id == "only_exams":
+            return {
+                "excluded_subs": [],
+                "excluded_types": ["Lecture", "Seminar", "Other"],
+            }
+        if preset_id == "hide_auditoriums":
+            excluded = [
+                int(sub["id"])
+                for sub in active_subs
+                if sub.get("entity_type") == "auditorium"
+            ]
+            return {"excluded_subs": excluded, "excluded_types": []}
+        return None
+
     async def _render_calendar(self, callback: CallbackQuery, year: int, month: int):
         user_id = callback.from_user.id
         lang = await translator.get_language(user_id)
@@ -1215,16 +1268,7 @@ class ScheduleManager:
 
     async def handle_myschedule_filters_menu(self, callback: CallbackQuery):
         user_id = callback.from_user.id
-        filters = await self._get_user_filters(user_id)
-        subs, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
-        active_subs = [s for s in subs if s["is_active"]]
-
-        kb = await get_myschedule_filters_keyboard(filters, active_subs, user_id)
-        lang = await translator.get_language(user_id)
-        await callback.message.edit_text(
-            translator.gettext(lang, "kb_header_schedule_filters"),
-            reply_markup=kb,
-        )
+        await self._render_myschedule_filters_menu_message(callback.message, user_id, is_edit=True)
         await callback.answer()
 
     async def handle_myschedule_toggle_filter(self, callback: CallbackQuery):
@@ -1251,15 +1295,90 @@ class ScheduleManager:
 
         await self._save_user_filters(user_id, filters)
 
-        subs, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
-        active_subs = [s for s in subs if s["is_active"]]
-        kb = await get_myschedule_filters_keyboard(filters, active_subs, user_id)
+        active_subs = await self._get_active_subscriptions(user_id)
+        presets = await database.get_user_myschedule_filter_presets(user_id)
+        kb = await get_myschedule_filters_keyboard(filters, active_subs, user_id, presets)
 
         try:
             await callback.message.edit_reply_markup(reply_markup=kb)
         except:
             pass
         await callback.answer()
+
+    async def handle_myschedule_apply_builtin_preset(self, callback: CallbackQuery):
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        preset_id = callback.data.split(":", 1)[1]
+        active_subs = await self._get_active_subscriptions(user_id)
+        preset_filter = self._build_builtin_myschedule_filter(preset_id, active_subs)
+        if preset_filter is None:
+            await callback.answer(
+                translator.gettext(lang, "myschedule_preset_not_found"),
+                show_alert=True,
+            )
+            return
+
+        await self._save_user_filters(user_id, preset_filter)
+        await self._render_myschedule_filters_menu_message(callback.message, user_id, is_edit=True)
+        await callback.answer(translator.gettext(lang, "myschedule_preset_applied"))
+
+    async def handle_myschedule_save_preset_prompt(
+        self, callback: CallbackQuery, state: FSMContext
+    ):
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        await state.set_state(ScheduleStates.awaiting_myschedule_preset_name)
+        await callback.message.answer(translator.gettext(lang, "myschedule_preset_name_prompt"))
+        await callback.answer()
+
+    async def handle_myschedule_preset_name(self, message: Message, state: FSMContext):
+        user_id = message.from_user.id
+        lang = await translator.get_language(user_id, message.chat.id)
+        preset_name = (message.text or "").strip()
+        if not preset_name:
+            await message.answer(translator.gettext(lang, "myschedule_preset_empty_name"))
+            return
+
+        filters = await self._get_user_filters(user_id)
+        saved_preset = await database.save_user_myschedule_filter_preset(
+            user_id, preset_name, filters
+        )
+        await state.clear()
+        await message.answer(
+            translator.gettext(lang, "myschedule_preset_saved", name=saved_preset["name"])
+        )
+        await self._render_myschedule_filters_menu_message(message, user_id, is_edit=False)
+
+    async def handle_myschedule_apply_saved_preset(self, callback: CallbackQuery):
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        preset_id = callback.data.split(":", 1)[1]
+        preset = await database.get_user_myschedule_filter_preset(user_id, preset_id)
+        if not preset:
+            await callback.answer(
+                translator.gettext(lang, "myschedule_preset_not_found"),
+                show_alert=True,
+            )
+            return
+
+        await self._save_user_filters(user_id, preset.get("filters", {}))
+        await self._render_myschedule_filters_menu_message(callback.message, user_id, is_edit=True)
+        await callback.answer(translator.gettext(lang, "myschedule_preset_applied"))
+
+    async def handle_myschedule_delete_saved_preset(self, callback: CallbackQuery):
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        preset_id = callback.data.split(":", 1)[1]
+        deleted = await database.delete_user_myschedule_filter_preset(user_id, preset_id)
+        if not deleted:
+            await callback.answer(
+                translator.gettext(lang, "myschedule_preset_not_found"),
+                show_alert=True,
+            )
+            return
+
+        await self._render_myschedule_filters_menu_message(callback.message, user_id, is_edit=True)
+        await callback.answer(translator.gettext(lang, "myschedule_preset_deleted"))
 
     async def handle_myschedule_back_to_cal(self, callback: CallbackQuery):
         user_id = callback.from_user.id

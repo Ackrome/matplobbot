@@ -92,9 +92,11 @@ DEFAULT_SETTINGS = {
     "show_module_details": True,
     "search_presets": [],
     "myschedule_filters": {"excluded_subs": [], "excluded_types": []},
+    "myschedule_filter_presets": [],
 }
 
 MAX_SEARCH_PRESETS = 15
+MAX_MYSCHEDULE_FILTER_PRESETS = 10
 MYSCHEDULE_FILTER_ALLOWED_TYPES = {"Lecture", "Seminar", "Exam", "Other"}
 
 
@@ -139,6 +141,74 @@ def upsert_search_preset_entries(
 def delete_search_preset_entries(existing_presets: list[dict], preset_id: str) -> list[dict]:
     """Remove a saved search preset from a plain list of preset dicts."""
     return [item for item in existing_presets if item.get("id") != preset_id]
+
+
+def normalize_myschedule_filter_presets(
+    presets: list[dict] | None, max_items: int = MAX_MYSCHEDULE_FILTER_PRESETS
+) -> list[dict]:
+    """Normalize saved my-schedule filter presets."""
+    if not isinstance(presets, list):
+        return []
+
+    normalized_items: list[dict] = []
+    for item in presets:
+        if not isinstance(item, dict):
+            continue
+
+        preset_id = str(item.get("id", "")).strip()
+        name = str(item.get("name", "")).strip()
+        if not preset_id or not name:
+            continue
+
+        created_at = str(item.get("created_at") or "")
+        updated_at = str(item.get("updated_at") or created_at)
+        normalized_items.append(
+            {
+                "id": preset_id,
+                "name": name[:40],
+                "filters": normalize_myschedule_filters(item.get("filters")),
+                "created_at": created_at,
+                "updated_at": updated_at,
+            }
+        )
+
+    normalized_items.sort(
+        key=lambda entry: entry.get("updated_at") or entry.get("created_at") or "",
+        reverse=True,
+    )
+
+    unique_by_id: list[dict] = []
+    seen_ids: set[str] = set()
+    for entry in normalized_items:
+        if entry["id"] in seen_ids:
+            continue
+        seen_ids.add(entry["id"])
+        unique_by_id.append(entry)
+
+    return unique_by_id[:max_items]
+
+
+def upsert_myschedule_filter_preset_entries(
+    existing_presets: list[dict], preset: dict, max_items: int = MAX_MYSCHEDULE_FILTER_PRESETS
+) -> list[dict]:
+    normalized_existing = normalize_myschedule_filter_presets(existing_presets, max_items=max_items)
+    normalized_new = normalize_myschedule_filter_presets([preset], max_items=1)
+    if not normalized_new:
+        return normalized_existing
+
+    new_entry = normalized_new[0]
+    filtered = [item for item in normalized_existing if item.get("id") != new_entry["id"]]
+    filtered.insert(0, new_entry)
+    filtered.sort(
+        key=lambda item: item.get("updated_at") or item.get("created_at") or "",
+        reverse=True,
+    )
+    return filtered[:max_items]
+
+
+def delete_myschedule_filter_preset_entries(existing_presets: list[dict], preset_id: str) -> list[dict]:
+    normalized_existing = normalize_myschedule_filter_presets(existing_presets)
+    return [item for item in normalized_existing if item.get("id") != preset_id]
 
 
 async def log_user_action(
@@ -248,6 +318,65 @@ async def save_user_myschedule_filters(user_id: int, filters: dict) -> dict:
     settings["myschedule_filters"] = normalized
     await update_user_settings_db(user_id, settings)
     return normalized
+
+
+async def get_user_myschedule_filter_presets(user_id: int) -> list[dict]:
+    settings = await get_user_settings(user_id)
+    return normalize_myschedule_filter_presets(settings.get("myschedule_filter_presets"))
+
+
+async def get_user_myschedule_filter_preset(user_id: int, preset_id: str) -> dict | None:
+    presets = await get_user_myschedule_filter_presets(user_id)
+    return next((item for item in presets if item.get("id") == preset_id), None)
+
+
+async def save_user_myschedule_filter_preset(
+    user_id: int,
+    name: str,
+    filters: dict,
+    preset_id: str | None = None,
+) -> dict:
+    settings = await get_user_settings(user_id)
+    existing_presets = settings.get("myschedule_filter_presets", [])
+    existing_preset = None
+    if preset_id:
+        existing_preset = next(
+            (
+                item
+                for item in existing_presets
+                if isinstance(item, dict) and item.get("id") == preset_id
+            ),
+            None,
+        )
+
+    timestamp = datetime.datetime.now(datetime.UTC).isoformat()
+    preset = {
+        "id": preset_id or uuid.uuid4().hex[:12],
+        "name": name.strip(),
+        "filters": normalize_myschedule_filters(filters),
+        "created_at": (existing_preset or {}).get("created_at", timestamp),
+        "updated_at": timestamp,
+    }
+
+    settings["myschedule_filter_presets"] = upsert_myschedule_filter_preset_entries(
+        existing_presets, preset
+    )
+    await update_user_settings_db(user_id, settings)
+
+    normalized_saved = normalize_myschedule_filter_presets([preset], max_items=1)
+    return normalized_saved[0] if normalized_saved else preset
+
+
+async def delete_user_myschedule_filter_preset(user_id: int, preset_id: str) -> bool:
+    settings = await get_user_settings(user_id)
+    existing_presets = settings.get("myschedule_filter_presets", [])
+    updated_presets = delete_myschedule_filter_preset_entries(existing_presets, preset_id)
+    if len(updated_presets) == len(normalize_myschedule_filter_presets(existing_presets)):
+        return False
+
+    settings["myschedule_filter_presets"] = updated_presets
+    await update_user_settings_db(user_id, settings)
+    return True
 
 
 async def update_chat_settings_db(chat_id: int, settings: dict):
