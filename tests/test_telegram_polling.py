@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import unittest
 from unittest.mock import AsyncMock, patch
