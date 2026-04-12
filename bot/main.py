@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+from contextlib import suppress
 
 import aiohttp
 from dotenv import load_dotenv
@@ -20,10 +21,13 @@ if PROXY_URL:
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.exceptions import TelegramNetworkError
 
 from shared_lib.database import init_db_pool
 from shared_lib.i18n import translator
 from shared_lib.services.university_api import create_ruz_api_client
+from shared_lib.telegram_http import normalize_proxy_url
+from shared_lib.telegram_polling import run_polling_with_retry
 
 # Импорт вашего конфига логгера
 from .handlers import setup_handlers
@@ -32,6 +36,7 @@ from .middleware import GroupMentionCommandMiddleware
 from .services.search_utils import index_matplobblib_library
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+POLLING_RETRY_DELAY_SECONDS = float(os.getenv("BOT_POLLING_RETRY_DELAY_SECONDS", "15"))
 
 
 def get_cmd_desc(lang: str, key: str) -> str:
@@ -133,7 +138,7 @@ async def set_bot_commands(bot: Bot):
         logging.error(f"Failed to set bot commands: {e}")
 
 
-async def main():
+async def _legacy_run_bot_once(ruz_api_client_instance) -> None:
     # Настраиваем сессию СПЕЦИАЛЬНО для Telegram-бота
     if PROXY_URL:
         # ИСПРАВЛЕНИЕ: здесь используем logging.info вместо logger.info
@@ -170,6 +175,49 @@ async def main():
         logging.info("Semantic index built.")
 
         await dp.start_polling(bot)
+
+
+async def run_bot_once(ruz_api_client_instance) -> None:
+    normalized_proxy_url = normalize_proxy_url(PROXY_URL)
+    if normalized_proxy_url:
+        logging.info("Using proxy for bot: %s", normalized_proxy_url)
+        bot_session = AiohttpSession(timeout=600, proxy=normalized_proxy_url)
+    else:
+        bot_session = AiohttpSession(timeout=600)
+
+    bot = Bot(BOT_TOKEN, session=bot_session)
+    dp = Dispatcher()
+    dp.update.outer_middleware(GroupMentionCommandMiddleware())
+    dp.update.middleware(UserLoggingMiddleware())
+    setup_handlers(dp, bot=bot, ruz_api_client=ruz_api_client_instance)
+
+    try:
+        await set_bot_commands(bot)
+        await dp.start_polling(bot)
+    finally:
+        logging.warning("Shutting down...")
+        with suppress(Exception):
+            await dp.storage.close()
+        with suppress(Exception):
+            await bot.session.close()
+
+
+async def main():
+    await init_db_pool()
+
+    logging.info("Building semantic search index...")
+    asyncio.create_task(index_matplobblib_library())
+    logging.info("Semantic index built.")
+
+    timeout_client = aiohttp.ClientTimeout(total=600)
+    async with aiohttp.ClientSession(timeout=timeout_client) as ruz_session:
+        ruz_api_client_instance = create_ruz_api_client(ruz_session)
+        await run_polling_with_retry(
+            lambda: run_bot_once(ruz_api_client_instance),
+            retry_delay_seconds=POLLING_RETRY_DELAY_SECONDS,
+            logger=logging.getLogger(__name__),
+            retryable_exceptions=(TelegramNetworkError, aiohttp.ClientError, OSError),
+        )
 
 
 if __name__ == "__main__":

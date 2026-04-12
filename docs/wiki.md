@@ -701,6 +701,26 @@ Other scheduler features:
 - Optional proxy use for Telegram calls via `PROXY_URL`.
 - Correlation IDs in scheduler logs.
 
+### Bot Startup Reliability
+
+Source:
+
+- `bot/main.py`
+- `shared_lib/telegram_http.py`
+- `shared_lib/telegram_polling.py`
+
+What it does:
+
+- Normalizes `socks5h://...` to `socks5://...` before building Telegram client sessions.
+- Treats Telegram/proxy transport failures during startup as retryable instead of fatal.
+- Recreates the aiogram bot session for each retry so shutdown cleanup from a failed polling attempt does not poison the next one.
+
+How to use:
+
+1. Set `PROXY_URL` when Telegram traffic must go through the proxy container.
+2. Optionally set `BOT_POLLING_RETRY_DELAY_SECONDS` to tune the retry backoff.
+3. Watch bot logs for `Bot polling failed with a retryable network error` when diagnosing Telegram reachability problems.
+
 ### Celery Worker Tasks
 
 Source:

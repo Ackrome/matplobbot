@@ -62,7 +62,7 @@ async def main():
         # Increase timeout for scheduler tasks that can be slow on large datasets.
         timeout = aiohttp.ClientTimeout(total=120)
         telegram_session_kwargs, telegram_request_kwargs = build_telegram_http_client_config(
-            timeout, PROXY_URL
+            timeout, PROXY_URL, log_context="scheduler Telegram session"
         )
         async with (
             aiohttp.ClientSession(timeout=timeout) as ruz_session,
