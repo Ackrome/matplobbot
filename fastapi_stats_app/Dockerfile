@@ -15,4 +15,3 @@ RUN grep -Ev '^[[:space:]]*matplobbot-shared==' requirements.txt > /tmp/requirem
 COPY fastapi_stats_app/ /fastapi_stats_app/
 
 CMD ["uvicorn", "fastapi_stats_app.main:app", "--host", "0.0.0.0", "--port", "9583"]
-
