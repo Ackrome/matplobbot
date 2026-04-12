@@ -3,11 +3,9 @@ import base64
 import io
 import logging
 import mimetypes
-import os
 import zipfile
 
 import aiohttp
-from aiohttp_socks import ProxyConnector
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -16,6 +14,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared_lib.database import get_db_session_dependency
+from shared_lib.egress import get_telegram_proxy_url
 from shared_lib.models import Project, ProjectFile
 from shared_lib.tasks import (
     compile_full_latex_task,
@@ -23,6 +22,7 @@ from shared_lib.tasks import (
     render_mermaid,
     render_pdf_task,
 )
+from shared_lib.telegram_http import build_telegram_http_client_config
 
 from ..auth import get_current_user
 
@@ -472,25 +472,16 @@ async def send_project_to_telegram(
     form_data.add_field("caption", f"📄 Ваш проект: <b>{project.name}</b>")
     form_data.add_field("parse_mode", "HTML")
 
-    PROXY_URL = os.getenv("PROXY_URL")
-
-    # Настраиваем коннектор для SOCKS5 если нужно
-    connector = None
-    if PROXY_URL and PROXY_URL.startswith("socks"):
-        connector = ProxyConnector.from_url(PROXY_URL)
+    timeout = aiohttp.ClientTimeout(total=60)
+    session_kwargs, request_kwargs = build_telegram_http_client_config(
+        timeout,
+        get_telegram_proxy_url(),
+        log_context="studio Telegram send",
+    )
 
     try:
-        # Если прокси SOCKS, используем connector. Если HTTP, можно через параметр proxy.
-        # Для универсальности лучше использовать connector
-        async with aiohttp.ClientSession(connector=connector) as session:
-            # Если прокси HTTP, aiohttp_socks сам это поймет.
-            # Если прокси нет, connector будет None и aiohttp сработает напрямую.
-            post_kwargs = {"data": form_data, "timeout": 60}
-
-            # Если это обычный HTTP прокси, а не SOCKS:
-            if PROXY_URL and not PROXY_URL.startswith("socks"):
-                post_kwargs["proxy"] = PROXY_URL
-
+        async with aiohttp.ClientSession(**session_kwargs) as session:
+            post_kwargs = {"data": form_data, **request_kwargs}
             async with session.post(url, **post_kwargs) as resp:
                 if resp.status != 200:
                     err_text = await resp.text()
@@ -503,3 +494,4 @@ async def send_project_to_telegram(
         raise HTTPException(status_code=500, detail=f"Ошибка сети: {str(e)}")
 
     return {"status": "success", "message": "Файл успешно отправлен в Telegram!"}
+

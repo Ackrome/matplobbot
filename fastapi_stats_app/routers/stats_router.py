@@ -26,6 +26,7 @@ from shared_lib.database import (
     get_users_for_action,
     log_user_action,
 )
+from shared_lib.egress import get_telegram_proxy_url
 from shared_lib.redis_client import redis_client
 from shared_lib.request_context import generate_correlation_id, get_correlation_id
 from shared_lib.schemas import (
@@ -33,6 +34,7 @@ from shared_lib.schemas import (
     SendMessageRequest,
     UserProfileResponse,
 )
+from shared_lib.telegram_http import build_telegram_http_client_config
 
 from ..auth import require_admin
 
@@ -707,8 +709,14 @@ async def send_message_to_user(
     payload = {"chat_id": user_id, "text": text, "parse_mode": "HTML"}
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(tg_url, json=payload) as response:
+        timeout = aiohttp.ClientTimeout(total=60)
+        session_kwargs, request_kwargs = build_telegram_http_client_config(
+            timeout,
+            get_telegram_proxy_url(),
+            log_context="stats Telegram send",
+        )
+        async with aiohttp.ClientSession(**session_kwargs) as session:
+            async with session.post(tg_url, json=payload, **request_kwargs) as response:
                 if response.status != 200:
                     error_text = await response.text()
                     _emit_admin_send_audit(

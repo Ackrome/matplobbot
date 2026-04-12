@@ -698,7 +698,8 @@ Configured jobs:
 Other scheduler features:
 
 - Health endpoint on `:9584/health`.
-- Optional proxy use for Telegram calls via `PROXY_URL`.
+- Telegram calls can use `TELEGRAM_PROXY_URL` with `PROXY_URL` as a backward-compatible fallback.
+- RUZ calls are forced direct and bypass proxy.
 - Correlation IDs in scheduler logs.
 
 ### Bot Startup Reliability
@@ -711,15 +712,18 @@ Source:
 
 What it does:
 
-- Normalizes `socks5h://...` to `socks5://...` before building Telegram client sessions.
+- Uses `TELEGRAM_PROXY_URL` for Telegram-only outbound traffic, with `PROXY_URL` kept as a backward-compatible fallback.
+- Keeps `ruz.fa.ru` out of process-level proxy env via `NO_PROXY`, and creates RUZ aiohttp sessions with `trust_env=False` so schedule fetches stay direct.
 - Treats Telegram/proxy transport failures during startup as retryable instead of fatal.
 - Recreates the aiogram bot session for each retry so shutdown cleanup from a failed polling attempt does not poison the next one.
 
 How to use:
 
-1. Set `PROXY_URL` when Telegram traffic must go through the proxy container.
-2. Optionally set `BOT_POLLING_RETRY_DELAY_SECONDS` to tune the retry backoff.
-3. Watch bot logs for `Bot polling failed with a retryable network error` when diagnosing Telegram reachability problems.
+1. Set `TELEGRAM_PROXY_URL` when Telegram traffic must go through the proxy container.
+2. Optionally keep `GLOBAL_HTTP_PROXY_URL` or legacy `PROXY_URL` for other non-RUZ outbound traffic that still needs a process-level proxy.
+3. Do not route `RUZ` through proxy; the app now forces direct aiohttp sessions for `ruz.fa.ru`.
+4. Optionally set `BOT_POLLING_RETRY_DELAY_SECONDS` to tune the retry backoff.
+5. Watch bot logs for `Bot polling failed with a retryable network error` when diagnosing Telegram reachability problems.
 
 ### Celery Worker Tasks
 

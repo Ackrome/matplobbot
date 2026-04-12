@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env before importing config modules that read os.getenv().
 load_dotenv()
 
-from scheduler_app.config import BOT_TOKEN, LOG_DIR, PROXY_URL, SCHEDULER_LOG_FILE
+from scheduler_app.config import BOT_TOKEN, LOG_DIR, SCHEDULER_LOG_FILE, TELEGRAM_PROXY_URL
 from scheduler_app.http_client import build_telegram_http_client_config
 from scheduler_app.jobs import (
     check_for_schedule_updates,
@@ -62,10 +62,10 @@ async def main():
         # Increase timeout for scheduler tasks that can be slow on large datasets.
         timeout = aiohttp.ClientTimeout(total=120)
         telegram_session_kwargs, telegram_request_kwargs = build_telegram_http_client_config(
-            timeout, PROXY_URL, log_context="scheduler Telegram session"
+            timeout, TELEGRAM_PROXY_URL, log_context="scheduler Telegram session"
         )
         async with (
-            aiohttp.ClientSession(timeout=timeout) as ruz_session,
+            aiohttp.ClientSession(timeout=timeout, trust_env=False) as ruz_session,
             aiohttp.ClientSession(**telegram_session_kwargs) as telegram_session,
         ):
             ruz_api_client_instance = create_ruz_api_client(ruz_session)

@@ -3,7 +3,7 @@ import os
 
 # --- Telegram Configuration ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-PROXY_URL = os.getenv("PROXY_URL")
+TELEGRAM_PROXY_URL = os.getenv("TELEGRAM_PROXY_URL") or os.getenv("PROXY_URL")
 
 # --- PostgreSQL Database Configuration ---
 # The DATABASE_URL is now the single source of truth, read from the environment.

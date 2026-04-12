@@ -11,19 +11,15 @@ from fastapi_stats_app.config import (  # Import logging constants
     FASTAPI_LOG_FILE_NAME,
     LOG_DIR,
 )
+from shared_lib.egress import configure_process_http_proxy_env, get_global_http_proxy_url
 from shared_lib.request_context import configure_correlation_logging
 
 load_dotenv()  # Загружаем .env
 
-# --- PROXY PATCH (same behavior as bot) ---
-PROXY_URL = os.getenv("PROXY_URL")
-if PROXY_URL:
-    # Use socks5h so DNS resolution happens on the proxy side
-    socks5h_proxy = PROXY_URL.replace("socks5://", "socks5h://")
-    os.environ["HTTP_PROXY"] = socks5h_proxy
-    os.environ["HTTPS_PROXY"] = socks5h_proxy
-    os.environ["ALL_PROXY"] = socks5h_proxy
-# ------------------------------------
+configure_process_http_proxy_env(
+    get_global_http_proxy_url(),
+    no_proxy_hosts=("ruz.fa.ru",),
+)
 # Определяем пути для логгирования FastAPI приложения
 LOG_FILE_FASTAPI = os.path.join(LOG_DIR, FASTAPI_LOG_FILE_NAME)  # Use constants from config
 
@@ -67,7 +63,10 @@ async def lifespan(app: FastAPI):
     # On startup
     logger.info("Application startup: Initializing database pool...")
     await init_db_pool()
-    app.state.shared_http_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))
+    app.state.shared_http_session = aiohttp.ClientSession(
+        timeout=aiohttp.ClientTimeout(total=30),
+        trust_env=False,
+    )
     yield
     # On shutdown
     shared_http_session = getattr(app.state, "shared_http_session", None)
