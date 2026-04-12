@@ -713,6 +713,7 @@ Source:
 What it does:
 
 - Uses `TELEGRAM_PROXY_URL` for Telegram-only outbound traffic, with `PROXY_URL` kept as a backward-compatible fallback.
+- When `TELEGRAM_PROXY_URL` points to the local Docker `proxy` service on its mixed listener, Telegram traffic is sent through `http://proxy:...` to avoid the SOCKS TLS handshake path.
 - Keeps `ruz.fa.ru` out of process-level proxy env via `NO_PROXY`, and creates RUZ aiohttp sessions with `trust_env=False` so schedule fetches stay direct.
 - Treats Telegram/proxy transport failures during startup as retryable instead of fatal.
 - Recreates the aiogram bot session for each retry so shutdown cleanup from a failed polling attempt does not poison the next one.

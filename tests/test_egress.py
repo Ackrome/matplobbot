@@ -18,6 +18,14 @@ class TestEgressConfig(unittest.TestCase):
         ):
             self.assertEqual(get_telegram_proxy_url(), "socks5://telegram:20170")
 
+    def test_telegram_proxy_uses_http_for_local_mixed_proxy_service(self):
+        with patch.dict(
+            os.environ,
+            {"TELEGRAM_PROXY_URL": "socks5://proxy:20170"},
+            clear=True,
+        ):
+            self.assertEqual(get_telegram_proxy_url(), "http://proxy:20170")
+
     def test_global_proxy_falls_back_to_legacy_variable(self):
         with patch.dict(os.environ, {"PROXY_URL": "socks5://legacy:20170"}, clear=True):
             self.assertEqual(get_global_http_proxy_url(), "socks5://legacy:20170")
