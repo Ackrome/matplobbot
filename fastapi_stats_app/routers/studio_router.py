@@ -494,4 +494,3 @@ async def send_project_to_telegram(
         raise HTTPException(status_code=500, detail=f"Ошибка сети: {str(e)}")
 
     return {"status": "success", "message": "Файл успешно отправлен в Telegram!"}
-
