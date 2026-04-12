@@ -3,6 +3,7 @@ import base64
 import io
 import logging
 import mimetypes
+import os
 import zipfile
 
 import aiohttp
