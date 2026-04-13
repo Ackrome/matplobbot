@@ -4,27 +4,45 @@ mode: rule
 log-level: warning
 
 proxy-providers:
-  something:
+  something-telegram:
     type: http
     url: "http://127.0.0.1:8080/"
     interval: 3600
-    path: ./something.yaml
+    path: ./something-telegram.yaml
     health-check:
       enable: true
       url: https://api.telegram.org
-      interval: 60
-      timeout: 5000
+      interval: 30
+      timeout: 7000
+      lazy: false
+      expected-status: 200-499
+  something-openai:
+    type: http
+    url: "http://127.0.0.1:8080/"
+    interval: 3600
+    path: ./something-openai.yaml
+    health-check:
+      enable: true
+      url: https://api.openai.com/v1/models
+      interval: 30
+      timeout: 7000
       lazy: false
       expected-status: 200-499
 
 proxy-groups:
-  - name: "AUTO-BEST-NODE"
-    type: url-test
-    use: [something]
+  - name: "TELEGRAM-AUTO"
+    type: fallback
+    use: [something-telegram]
     url: https://api.telegram.org
-    interval: 60
-    tolerance: 50
-    timeout: 5000
+    interval: 30
+    timeout: 7000
+    expected-status: 200-499
+  - name: "OPENAI-AUTO"
+    type: fallback
+    use: [something-openai]
+    url: https://api.openai.com/v1/models
+    interval: 30
+    timeout: 7000
     expected-status: 200-499
 
 rules:
@@ -32,4 +50,14 @@ rules:
   - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
   - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
   - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
-  - MATCH, AUTO-BEST-NODE
+  - DOMAIN-SUFFIX,ruz.fa.ru,DIRECT
+  - DOMAIN,api.telegram.org,TELEGRAM-AUTO
+  - DOMAIN-SUFFIX,telegram.org,TELEGRAM-AUTO
+  - DOMAIN-SUFFIX,t.me,TELEGRAM-AUTO
+  - DOMAIN-SUFFIX,telegram.me,TELEGRAM-AUTO
+  - DOMAIN-SUFFIX,telegra.ph,TELEGRAM-AUTO
+  - DOMAIN-SUFFIX,chatgpt.com,OPENAI-AUTO
+  - DOMAIN-SUFFIX,openai.com,OPENAI-AUTO
+  - DOMAIN-SUFFIX,oaistatic.com,OPENAI-AUTO
+  - DOMAIN-SUFFIX,oaiusercontent.com,OPENAI-AUTO
+  - MATCH,DIRECT

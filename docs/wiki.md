@@ -720,7 +720,9 @@ What it does:
 - `socks` or `tcp`: keep SOCKS/TCP mode and do not rewrite the scheme
 - When `TELEGRAM_PROXY_URL` points to the local Docker `proxy` service on its mixed listener and transport is `auto`, Telegram traffic is sent through `http://proxy:...` to avoid the aiogram SOCKS TLS handshake path.
 - The bot uses a custom aiogram session wrapper so HTTP proxies go through native `aiohttp` request proxying instead of aiogram's `aiohttp_socks` proxy connector.
-- The Mihomo proxy health check and `AUTO-BEST-NODE` selection probe Telegram directly (`https://api.telegram.org`) so node selection reflects real bot traffic instead of generic `gstatic` reachability.
+- The Mihomo proxy now routes by exact target domain instead of catch-all proxying: Telegram domains use `TELEGRAM-AUTO`, OpenAI/ChatGPT domains use `OPENAI-AUTO`, and everything else stays direct.
+- The Telegram provider/group health checks probe Telegram directly (`https://api.telegram.org`) so node selection reflects real bot traffic instead of generic `gstatic` reachability.
+- The OpenAI provider/group health checks probe `https://api.openai.com/v1/models` and accept `401`/`403` style responses, so ChatGPT/OpenAI-capable nodes are selected independently from Telegram-capable nodes.
 - The bundled production proxy image pins a current Mihomo core version so modern subscription node formats and Telegram-facing HTTP proxy behavior stay compatible.
 - The subscription cleaner preserves more VLESS Reality fields when converting provider JSON to Mihomo YAML, including `servername`, `alpn`, `skip-cert-verify`, `packet-encoding`, `encryption`, and ML-KEM support flags.
 - The proxy bootstrap can also use `OUTLINE_ACCESS_KEY` directly, including plain `ss://...` access keys and `ssconf://...` dynamic Outline links that resolve to an access payload.
@@ -741,6 +743,7 @@ How to use:
 8. Rebuild the `proxy` container when `proxy/Dockerfile.proxy` or `proxy/proxy_config.yaml` changes, because the production stack builds that service locally instead of pulling it from GHCR.
 9. If your provider ships Xray-style JSON configs, keep the converter in `proxy/proxy_cleaner.py` aligned with the subscription format so Reality and chained dialer settings survive the translation into Mihomo YAML.
 10. If your provider gives an Outline link, set `OUTLINE_ACCESS_KEY` in `.env` and rebuild only the `proxy` service to switch the server-side proxy bootstrap from the VLESS subscription path to the Outline/Shadowsocks path.
+11. Keep the Mihomo rules domain-specific: `api.telegram.org` and related Telegram domains through `TELEGRAM-AUTO`, `chatgpt.com`/`openai.com` domains through `OPENAI-AUTO`, and `MATCH,DIRECT` as the default so unrelated traffic does not consume fragile VPN nodes.
 
 ### Production Frontend Proxy Startup
 
