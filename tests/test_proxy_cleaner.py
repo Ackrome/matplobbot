@@ -1,10 +1,55 @@
 import json
 import unittest
 
-from proxy.proxy_cleaner import process_something_json
+from proxy.proxy_cleaner import (
+    build_outline_mihomo_yaml,
+    parse_outline_ss_uri,
+    process_outline_dynamic_payload,
+    process_something_json,
+)
 
 
 class TestProxyCleaner(unittest.TestCase):
+    def test_parse_outline_ss_uri_supports_plain_userinfo(self):
+        parsed = parse_outline_ss_uri(
+            "ss://chacha20-ietf-poly1305:secret@example.com:8388/?outline=1"
+        )
+
+        self.assertEqual(parsed["server"], "example.com")
+        self.assertEqual(parsed["server_port"], 8388)
+        self.assertEqual(parsed["method"], "chacha20-ietf-poly1305")
+        self.assertEqual(parsed["password"], "secret")
+
+    def test_process_outline_dynamic_payload_supports_nested_access_key(self):
+        rendered = process_outline_dynamic_payload(
+            json.dumps(
+                {
+                    "name": "Outline",
+                    "accessKey": "ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpzZWNyZXQ=@example.com:8388/?outline=1"
+                }
+            )
+        )
+
+        self.assertIsNotNone(rendered)
+        self.assertIn("type: ss", rendered)
+        self.assertIn("server: 'example.com'", rendered)
+        self.assertIn("cipher: 'chacha20-ietf-poly1305'", rendered)
+        self.assertIn("password: 'secret'", rendered)
+
+    def test_build_outline_mihomo_yaml_includes_optional_prefix(self):
+        rendered = build_outline_mihomo_yaml(
+            {
+                "server": "example.com",
+                "server_port": 8388,
+                "method": "chacha20-ietf-poly1305",
+                "password": "secret",
+                "prefix": "hello",
+            },
+            name="outline",
+        )
+
+        self.assertIn("prefix: 'hello'", rendered)
+
     def test_process_something_json_preserves_reality_tls_fields(self):
         raw = json.dumps(
             [

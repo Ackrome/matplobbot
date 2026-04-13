@@ -1,8 +1,10 @@
+import base64
 import json
 import os
 import re
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 CACHE_FILE = "/app/cache/last_good_sub.yaml"
 
@@ -40,6 +42,122 @@ def append_yaml_list(lines, key, values, indent="    "):
     lines.append(f"{indent}{key}:")
     for value in cleaned:
         lines.append(f"{indent}- {value}")
+
+
+def _decode_base64_urlsafe(value):
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(f"{value}{padding}").decode("utf-8")
+
+
+def parse_outline_ss_uri(uri):
+    parsed = urlsplit(uri.strip())
+    if parsed.scheme != "ss":
+        return None
+
+    method = parsed.username
+    password = parsed.password
+    if method and password:
+        return {
+            "server": parsed.hostname,
+            "server_port": parsed.port,
+            "method": method,
+            "password": password,
+            "prefix": parse_qs(parsed.query).get("prefix", [None])[0],
+        }
+
+    userinfo = parsed.netloc.split("@", 1)[0]
+    if not userinfo:
+        return None
+
+    try:
+        decoded = _decode_base64_urlsafe(userinfo)
+        method, password = decoded.split(":", 1)
+    except Exception:
+        return None
+
+    return {
+        "server": parsed.hostname,
+        "server_port": parsed.port,
+        "method": method,
+        "password": password,
+        "prefix": parse_qs(parsed.query).get("prefix", [None])[0],
+    }
+
+
+def build_outline_mihomo_yaml(config, *, name="outline"):
+    server = config.get("server")
+    port = config.get("server_port")
+    method = config.get("method")
+    password = config.get("password")
+    if not (server and port and method and password):
+        return None
+
+    yaml_lines = [
+        "proxies:",
+        f"  - name: '{name}'",
+        "    type: ss",
+        f"    server: '{server}'",
+        f"    port: {port}",
+        f"    cipher: '{method}'",
+        f"    password: '{password}'",
+        "    udp: true",
+    ]
+    append_yaml_field(yaml_lines, "prefix", config.get("prefix"))
+    return "\n".join(yaml_lines)
+
+
+def _outline_url_to_fetch(access_key):
+    parsed = urlsplit(access_key.strip())
+    if parsed.scheme in {"http", "https"}:
+        return access_key.strip()
+    if parsed.scheme == "ssconf":
+        return urlunsplit(("https", parsed.netloc, parsed.path, parsed.query, ""))
+    return None
+
+
+def process_outline_dynamic_payload(raw_data):
+    raw_text = raw_data.strip()
+    if not raw_text:
+        return None
+
+    if raw_text.startswith("ss://"):
+        outline = parse_outline_ss_uri(raw_text)
+        return build_outline_mihomo_yaml(outline) if outline else None
+
+    try:
+        parsed_json = json.loads(raw_text)
+    except Exception:
+        return None
+
+    if isinstance(parsed_json, dict):
+        if "server" in parsed_json and "server_port" in parsed_json:
+            return build_outline_mihomo_yaml(parsed_json)
+        nested_ss = parsed_json.get("accessKey") or parsed_json.get("ssUri") or parsed_json.get("uri")
+        if isinstance(nested_ss, str) and nested_ss.startswith("ss://"):
+            outline = parse_outline_ss_uri(nested_ss)
+            return build_outline_mihomo_yaml(outline) if outline else None
+
+    return None
+
+
+def load_outline_yaml():
+    access_key = os.environ.get("OUTLINE_ACCESS_KEY")
+    if not access_key:
+        return None
+
+    access_key = access_key.strip()
+    if access_key.startswith("ss://"):
+        outline = parse_outline_ss_uri(access_key)
+        return build_outline_mihomo_yaml(outline) if outline else None
+
+    fetch_url = _outline_url_to_fetch(access_key)
+    if not fetch_url:
+        return None
+
+    req = urllib.request.Request(fetch_url, headers={"User-Agent": "Outline-Access-Key"})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        raw = resp.read().decode("utf-8", errors="ignore")
+    return process_outline_dynamic_payload(raw)
 
 
 def process_something_json(raw_data):
@@ -183,15 +301,23 @@ class SubHandler(BaseHTTPRequestHandler):
         url = os.environ.get("SUB_URL")
         yaml_out = None
         try:
-            print("Fetching subscription from somethingsomething...", flush=True)
-            req = urllib.request.Request(url, headers={"User-Agent": "v2rayNG/1.8.5"})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                raw = resp.read().decode("utf-8", errors="ignore").strip()
-                yaml_out = process_something_json(raw)
-                if yaml_out:
-                    with open(CACHE_FILE, "w") as f:
-                        f.write(yaml_out)
-                    print("Success! Cache updated.", flush=True)
+            yaml_out = load_outline_yaml()
+            if yaml_out:
+                print("Loaded Outline access key configuration.", flush=True)
+        except Exception as e:
+            print(f"Outline config error: {e}. Falling back to subscription.", flush=True)
+
+        try:
+            if not yaml_out and url:
+                print("Fetching subscription from somethingsomething...", flush=True)
+                req = urllib.request.Request(url, headers={"User-Agent": "v2rayNG/1.8.5"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    raw = resp.read().decode("utf-8", errors="ignore").strip()
+                    yaml_out = process_something_json(raw)
+                    if yaml_out:
+                        with open(CACHE_FILE, "w") as f:
+                            f.write(yaml_out)
+                        print("Success! Cache updated.", flush=True)
         except Exception as e:
             print(f"Network error: {e}. Trying to load from cache...", flush=True)
 
