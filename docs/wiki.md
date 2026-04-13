@@ -728,6 +728,7 @@ What it does:
 - The proxy bootstrap can also use `OUTLINE_ACCESS_KEY` directly, including plain `ss://...` access keys and `ssconf://...` dynamic Outline links that resolve to an access payload.
 - The proxy keeps localhost and RFC1918 addresses direct so its own subscription refresh path does not recurse back through remote proxy nodes.
 - Keeps `ruz.fa.ru` out of process-level proxy env via `NO_PROXY`, and creates RUZ aiohttp sessions with `trust_env=False` so schedule fetches stay direct.
+- The bot session retries a small number of transport-level Telegram request failures before surfacing an error, which helps when a proxy node briefly resets or times out before the request reaches Telegram.
 - Treats Telegram/proxy transport failures during startup as retryable instead of fatal.
 - Recreates the aiogram bot session for each retry so shutdown cleanup from a failed polling attempt does not poison the next one.
 
@@ -744,6 +745,7 @@ How to use:
 9. If your provider ships Xray-style JSON configs, keep the converter in `proxy/proxy_cleaner.py` aligned with the subscription format so Reality and chained dialer settings survive the translation into Mihomo YAML.
 10. If your provider gives an Outline link, set `OUTLINE_ACCESS_KEY` in `.env` and rebuild only the `proxy` service to switch the server-side proxy bootstrap from the VLESS subscription path to the Outline/Shadowsocks path.
 11. Keep the Mihomo rules domain-specific: `api.telegram.org` and related Telegram domains through `TELEGRAM-AUTO`, `chatgpt.com`/`openai.com` domains through `OPENAI-AUTO`, and `MATCH,DIRECT` as the default so unrelated traffic does not consume fragile VPN nodes.
+12. If the proxy path is flaky, tune `TELEGRAM_REQUEST_RETRY_ATTEMPTS` and `TELEGRAM_REQUEST_RETRY_DELAY_SECONDS` to retry only transport-level Telegram request failures before a response starts; this reduces failures from brief proxy resets without broadly retrying completed Bot API sends.
 
 ### Production Frontend Proxy Startup
 

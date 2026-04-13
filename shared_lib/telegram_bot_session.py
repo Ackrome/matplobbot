@@ -1,3 +1,6 @@
+import asyncio
+import logging
+import os
 from typing import Any, cast
 
 from aiogram.client.session.aiohttp import AiohttpSession
@@ -8,12 +11,49 @@ from aiohttp import ClientError
 
 from shared_lib.telegram_http import normalize_proxy_url
 
+logger = logging.getLogger(__name__)
+
+
+def _read_retry_attempts(value: str | None, default: int) -> int:
+    try:
+        return max(0, int((value or "").strip() or default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _read_retry_delay_seconds(value: str | None, default: float) -> float:
+    try:
+        return max(0.0, float((value or "").strip() or default))
+    except (TypeError, ValueError):
+        return default
+
 
 class TelegramBotSession(AiohttpSession):
     """Aiogram session that uses native aiohttp HTTP proxy support when possible."""
 
-    def __init__(self, proxy_url: str | None = None, limit: int = 100, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        proxy_url: str | None = None,
+        limit: int = 100,
+        *,
+        request_retry_attempts: int | None = None,
+        request_retry_delay_seconds: float | None = None,
+        **kwargs: Any,
+    ) -> None:
         self._request_kwargs: dict[str, Any] = {}
+        self._request_retry_attempts = (
+            request_retry_attempts
+            if request_retry_attempts is not None
+            else _read_retry_attempts(os.getenv("TELEGRAM_REQUEST_RETRY_ATTEMPTS"), 1)
+        )
+        self._request_retry_delay_seconds = (
+            request_retry_delay_seconds
+            if request_retry_delay_seconds is not None
+            else _read_retry_delay_seconds(
+                os.getenv("TELEGRAM_REQUEST_RETRY_DELAY_SECONDS"),
+                0.5,
+            )
+        )
         normalized_proxy_url = normalize_proxy_url(proxy_url)
         super().__init__(limit=limit, **kwargs)
 
@@ -31,24 +71,56 @@ class TelegramBotSession(AiohttpSession):
         session = await self.create_session()
         url = self.api.api_url(token=bot.token, method=method.__api_method__)
         form = self.build_form_data(bot=bot, method=method)
+        request_timeout = self.timeout if timeout is None else timeout
 
-        try:
-            async with session.post(
-                url,
-                data=form,
-                timeout=self.timeout if timeout is None else timeout,
-                **self._request_kwargs,
-            ) as resp:
-                raw_result = await resp.text()
-        except TimeoutError:
-            raise TelegramNetworkError(method=method, message="Request timeout error")
-        except ClientError as exc:
-            raise TelegramNetworkError(method=method, message=f"{type(exc).__name__}: {exc}")
+        for attempt in range(self._request_retry_attempts + 1):
+            response_started = False
 
-        response = self.check_response(
-            bot=bot, method=method, status_code=resp.status, content=raw_result
+            try:
+                async with session.post(
+                    url,
+                    data=form,
+                    timeout=request_timeout,
+                    **self._request_kwargs,
+                ) as resp:
+                    response_started = True
+                    raw_result = await resp.text()
+            except TimeoutError:
+                if attempt < self._request_retry_attempts and not response_started:
+                    await self._sleep_before_retry(method, attempt + 1)
+                    continue
+                raise TelegramNetworkError(method=method, message="Request timeout error")
+            except (ClientError, OSError) as exc:
+                if attempt < self._request_retry_attempts and not response_started:
+                    await self._sleep_before_retry(method, attempt + 1, exc)
+                    continue
+                raise TelegramNetworkError(method=method, message=f"{type(exc).__name__}: {exc}")
+
+            response = self.check_response(
+                bot=bot, method=method, status_code=resp.status, content=raw_result
+            )
+            return cast(TelegramType, response.result)
+
+        raise TelegramNetworkError(
+            method=method,
+            message="Telegram request exhausted retry loop without a response.",
         )
-        return cast(TelegramType, response.result)
+
+    async def _sleep_before_retry(
+        self,
+        method: TelegramMethod[TelegramType],
+        attempt_number: int,
+        exc: Exception | None = None,
+    ) -> None:
+        logger.warning(
+            "Retrying Telegram request %s after transport error (%s/%s): %s",
+            method.__api_method__,
+            attempt_number,
+            self._request_retry_attempts,
+            type(exc).__name__ if exc is not None else "TimeoutError",
+        )
+        if self._request_retry_delay_seconds > 0:
+            await asyncio.sleep(self._request_retry_delay_seconds)
 
     async def stream_content(
         self,
