@@ -18,8 +18,8 @@ from shared_lib.egress import (
     get_telegram_proxy_url,
 )
 from shared_lib.i18n import translator
-from shared_lib.telegram_bot_session import TelegramBotSession
 from shared_lib.services.university_api import create_ruz_api_client
+from shared_lib.telegram_bot_session import TelegramBotSession
 from shared_lib.telegram_http import normalize_proxy_url
 from shared_lib.telegram_polling import run_polling_with_retry
 
