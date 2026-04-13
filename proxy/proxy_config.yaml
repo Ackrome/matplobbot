@@ -31,17 +31,19 @@ proxy-providers:
 
 proxy-groups:
   - name: "TELEGRAM-AUTO"
-    type: fallback
+    type: url-test
     use: [something-telegram]
     url: https://api.telegram.org
     interval: 30
+    tolerance: 100
     timeout: 7000
     expected-status: 200-499
   - name: "OPENAI-AUTO"
-    type: fallback
+    type: url-test
     use: [something-openai]
     url: https://api.openai.com/v1/models
     interval: 30
+    tolerance: 100
     timeout: 7000
     expected-status: 200-499
 

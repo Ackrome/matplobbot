@@ -8,7 +8,8 @@ class TestProxyConfig(unittest.TestCase):
     def test_proxy_config_uses_domain_specific_groups(self):
         self.assertIn('name: "TELEGRAM-AUTO"', PROXY_CONFIG)
         self.assertIn('name: "OPENAI-AUTO"', PROXY_CONFIG)
-        self.assertIn("type: fallback", PROXY_CONFIG)
+        self.assertIn("type: url-test", PROXY_CONFIG)
+        self.assertIn("tolerance: 100", PROXY_CONFIG)
 
     def test_proxy_config_routes_only_target_domains_through_proxy(self):
         self.assertIn("DOMAIN,api.telegram.org,TELEGRAM-AUTO", PROXY_CONFIG)

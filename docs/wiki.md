@@ -721,8 +721,8 @@ What it does:
 - When `TELEGRAM_PROXY_URL` points to the local Docker `proxy` service on its mixed listener and transport is `auto`, Telegram traffic is sent through `http://proxy:...` to avoid the aiogram SOCKS TLS handshake path.
 - The bot uses a custom aiogram session wrapper so HTTP proxies go through native `aiohttp` request proxying instead of aiogram's `aiohttp_socks` proxy connector.
 - The Mihomo proxy now routes by exact target domain instead of catch-all proxying: Telegram domains use `TELEGRAM-AUTO`, OpenAI/ChatGPT domains use `OPENAI-AUTO`, and everything else stays direct.
-- The Telegram provider/group health checks probe Telegram directly (`https://api.telegram.org`) so node selection reflects real bot traffic instead of generic `gstatic` reachability.
-- The OpenAI provider/group health checks probe `https://api.openai.com/v1/models` and accept `401`/`403` style responses, so ChatGPT/OpenAI-capable nodes are selected independently from Telegram-capable nodes.
+- The Telegram provider/group health checks probe Telegram directly (`https://api.telegram.org`), and the `TELEGRAM-AUTO` `url-test` group picks the lowest-latency Telegram-capable node instead of just the first alive node.
+- The OpenAI provider/group health checks probe `https://api.openai.com/v1/models`, accept `401`/`403` style responses, and the `OPENAI-AUTO` `url-test` group independently picks the lowest-latency OpenAI-capable node.
 - The bundled production proxy image pins a current Mihomo core version so modern subscription node formats and Telegram-facing HTTP proxy behavior stay compatible.
 - The subscription cleaner preserves more VLESS Reality fields when converting provider JSON to Mihomo YAML, including `servername`, `alpn`, `skip-cert-verify`, `packet-encoding`, `encryption`, and ML-KEM support flags.
 - The proxy bootstrap can also use `OUTLINE_ACCESS_KEY` directly, including plain `ss://...` access keys and `ssconf://...` dynamic Outline links that resolve to an access payload.
@@ -746,6 +746,7 @@ How to use:
 10. If your provider gives an Outline link, set `OUTLINE_ACCESS_KEY` in `.env` and rebuild only the `proxy` service to switch the server-side proxy bootstrap from the VLESS subscription path to the Outline/Shadowsocks path.
 11. Keep the Mihomo rules domain-specific: `api.telegram.org` and related Telegram domains through `TELEGRAM-AUTO`, `chatgpt.com`/`openai.com` domains through `OPENAI-AUTO`, and `MATCH,DIRECT` as the default so unrelated traffic does not consume fragile VPN nodes.
 12. If the proxy path is flaky, tune `TELEGRAM_REQUEST_RETRY_ATTEMPTS` and `TELEGRAM_REQUEST_RETRY_DELAY_SECONDS` to retry only transport-level Telegram request failures before a response starts; this reduces failures from brief proxy resets without broadly retrying completed Bot API sends.
+13. If you want Mihomo to choose the fastest available provider node for Telegram or OpenAI, keep `TELEGRAM-AUTO` and `OPENAI-AUTO` as `url-test` groups pointed at the real target domains instead of `fallback` groups.
 
 ### Production Frontend Proxy Startup
 
