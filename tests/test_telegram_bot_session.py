@@ -1,9 +1,8 @@
-from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, Mock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
-from aiohttp import ClientConnectionError, ClientOSError
-from aiohttp import TCPConnector
+from aiohttp import ClientConnectionError, ClientOSError, TCPConnector
 
 from shared_lib.telegram_bot_session import TelegramBotSession
 
@@ -78,7 +77,9 @@ class TestTelegramBotSessionRetries(unittest.IsolatedAsyncioTestCase):
         )
 
         session.create_session = AsyncMock(return_value=fake_session)
-        session.api = SimpleNamespace(api_url=lambda token, method: f"https://example.test/{method}")
+        session.api = SimpleNamespace(
+            api_url=lambda token, method: f"https://example.test/{method}"
+        )
         session.build_form_data = Mock(return_value={"chat_id": "1"})
         session.check_response = Mock(return_value=SimpleNamespace(result={"ok": True}))
 
@@ -105,7 +106,9 @@ class TestTelegramBotSessionRetries(unittest.IsolatedAsyncioTestCase):
         )
 
         session.create_session = AsyncMock(return_value=fake_session)
-        session.api = SimpleNamespace(api_url=lambda token, method: f"https://example.test/{method}")
+        session.api = SimpleNamespace(
+            api_url=lambda token, method: f"https://example.test/{method}"
+        )
         session.build_form_data = Mock(return_value={"chat_id": "1"})
         session.check_response = Mock(return_value=SimpleNamespace(result={"ok": True}))
 
