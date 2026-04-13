@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from aiogram import Bot, Dispatcher, types
-from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramNetworkError
 
 from shared_lib.database import init_db_pool
@@ -19,6 +18,7 @@ from shared_lib.egress import (
     get_telegram_proxy_url,
 )
 from shared_lib.i18n import translator
+from shared_lib.telegram_bot_session import TelegramBotSession
 from shared_lib.services.university_api import create_ruz_api_client
 from shared_lib.telegram_http import normalize_proxy_url
 from shared_lib.telegram_polling import run_polling_with_retry
@@ -138,9 +138,9 @@ async def run_bot_once(ruz_api_client_instance) -> None:
     normalized_proxy_url = normalize_proxy_url(TELEGRAM_PROXY_URL)
     if normalized_proxy_url:
         logging.info("Using proxy for bot: %s", normalized_proxy_url)
-        bot_session = AiohttpSession(timeout=600, proxy=normalized_proxy_url)
+        bot_session = TelegramBotSession(timeout=600, proxy_url=normalized_proxy_url)
     else:
-        bot_session = AiohttpSession(timeout=600)
+        bot_session = TelegramBotSession(timeout=600)
 
     bot = Bot(BOT_TOKEN, session=bot_session)
     dp = Dispatcher()
