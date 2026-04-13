@@ -36,7 +36,7 @@ Last updated: 2026-04-10
 
 ### P2 - Quality and Documentation
 
-
+- [ ] Add panel on site /stats page with proxy diagnostics summry (e.g. lattency per server table )
 
 ### P3 back
 

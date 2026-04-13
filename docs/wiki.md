@@ -730,6 +730,7 @@ What it does:
 - The Outline cleaner emits JSON-escaped YAML scalars for dynamic access keys, so provider values such as Shadowsocks `prefix` strings with CRLF control characters stay valid for Mihomo parsing.
 - The proxy keeps localhost and RFC1918 addresses direct so its own subscription refresh path does not recurse back through remote proxy nodes.
 - The proxy cleaner now exposes internal diagnostics endpoints on port `8080`: `/health`, `/diagnostics`, `/summary`, and `/recheck?group=telegram|openai|all`.
+- The proxy image waits for the local cleaner `/health` endpoint before launching Mihomo, which removes the startup race where Mihomo tried to fetch providers before the cleaner was listening.
 - `/diagnostics` reports the last merged-provider build state plus Mihomo controller snapshots for providers and the active Telegram/OpenAI groups.
 - `/summary` extracts the practical view you usually need: selected Telegram/OpenAI group member, candidate counts, and the top candidates sorted by the latest known delay.
 - `/recheck` triggers Mihomo provider health checks and group delay tests immediately, which the bot now uses before retrying a failed Telegram request.
