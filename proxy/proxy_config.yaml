@@ -11,16 +11,21 @@ proxy-providers:
     path: ./something.yaml
     health-check:
       enable: true
-      url: http://www.gstatic.com/generate_204
+      url: https://api.telegram.org
       interval: 60
+      timeout: 5000
+      lazy: false
+      expected-status: 200-499
 
 proxy-groups:
   - name: "AUTO-BEST-NODE"
     type: url-test
     use: [something]
-    url: http://www.gstatic.com/generate_204
+    url: https://api.telegram.org
     interval: 60
     tolerance: 50
+    timeout: 5000
+    expected-status: 200-499
 
 rules:
   - MATCH, AUTO-BEST-NODE

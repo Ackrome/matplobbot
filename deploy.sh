@@ -69,7 +69,10 @@ pull_images_resiliently
 
 echo "--- Restarting services with new images ---"
 BOT_TAG=${BOT_TAG} API_TAG=${API_TAG} SCHEDULER_TAG=${SCHEDULER_TAG} WORKER_TAG=${WORKER_TAG} \
-  docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+  docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
+
+echo "--- Reloading services that consume repo-mounted config files ---"
+docker compose -f "$COMPOSE_FILE" restart main-site-frontend caddy
 
 echo "--- Cleaning up old images ---"
 docker image prune -f

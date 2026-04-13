@@ -699,6 +699,7 @@ Other scheduler features:
 
 - Health endpoint on `:9584/health`.
 - Telegram calls can use `TELEGRAM_PROXY_URL` with `PROXY_URL` as a backward-compatible fallback.
+- Scheduler Telegram delivery uses the same normalized proxy selection as the bot, so the local mixed `proxy` listener is used as `http://proxy:20170` when applicable.
 - RUZ calls are forced direct and bypass proxy.
 - Correlation IDs in scheduler logs.
 
@@ -715,6 +716,7 @@ What it does:
 - Uses `TELEGRAM_PROXY_URL` for Telegram-only outbound traffic, with `PROXY_URL` kept as a backward-compatible fallback.
 - When `TELEGRAM_PROXY_URL` points to the local Docker `proxy` service on its mixed listener, Telegram traffic is sent through `http://proxy:...` to avoid the SOCKS TLS handshake path.
 - The bot uses a custom aiogram session wrapper so HTTP proxies go through native `aiohttp` request proxying instead of aiogram's `aiohttp_socks` proxy connector.
+- The Mihomo proxy health check and `AUTO-BEST-NODE` selection probe Telegram directly (`https://api.telegram.org`) so node selection reflects real bot traffic instead of generic `gstatic` reachability.
 - Keeps `ruz.fa.ru` out of process-level proxy env via `NO_PROXY`, and creates RUZ aiohttp sessions with `trust_env=False` so schedule fetches stay direct.
 - Treats Telegram/proxy transport failures during startup as retryable instead of fatal.
 - Recreates the aiogram bot session for each retry so shutdown cleanup from a failed polling attempt does not poison the next one.
@@ -726,6 +728,24 @@ How to use:
 3. Do not route `RUZ` through proxy; the app now forces direct aiohttp sessions for `ruz.fa.ru`.
 4. Optionally set `BOT_POLLING_RETRY_DELAY_SECONDS` to tune the retry backoff.
 5. Watch bot logs for `Bot polling failed with a retryable network error` when diagnosing Telegram reachability problems.
+6. If the proxy container has many nodes, keep its health-check target aligned with the real destination (`api.telegram.org`) so Mihomo does not prefer nodes that only pass generic web probes.
+
+### Production Frontend Proxy Startup
+
+Source:
+
+- `main_site_frontend/default.conf`
+
+What it does:
+
+- Uses Docker DNS (`127.0.0.11`) for runtime upstream resolution of `mpb-fastapi-stats`.
+- Prevents the frontend Nginx container from crashing on startup when the API container is not yet resolvable during compose boot.
+
+How to use:
+
+1. Keep `/api/cal/*` routed through the internal `mpb-fastapi-stats:9583` upstream.
+2. If the upstream service name changes in compose, update `main_site_frontend/default.conf` to match.
+3. After changing frontend proxy routing, redeploy `main-site-frontend` so Nginx reloads the updated config.
 
 ### Celery Worker Tasks
 
@@ -787,6 +807,7 @@ Jenkins + deploy features:
 - `Jenkinsfile.groovy` performs production deploy and smoke checks.
 - Deploy host fingerprint pinning via `APP_VM_SHA256` (with optional one-off override).
 - `deploy.sh` performs resilient service-by-service pull with lease-error recovery and retries.
+- `deploy.sh` also rebuilds local build services such as `proxy` and restarts config-mounted services such as `main-site-frontend` and `caddy` so repo changes are actually applied in production.
 
 How to use:
 
