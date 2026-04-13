@@ -726,6 +726,7 @@ What it does:
 - The bundled production proxy image pins a current Mihomo core version so modern subscription node formats and Telegram-facing HTTP proxy behavior stay compatible.
 - The subscription cleaner preserves more VLESS Reality fields when converting provider JSON to Mihomo YAML, including `servername`, `alpn`, `skip-cert-verify`, `packet-encoding`, `encryption`, and ML-KEM support flags.
 - The proxy bootstrap can also use `OUTLINE_ACCESS_KEY` directly, including plain `ss://...` access keys and `ssconf://...` dynamic Outline links that resolve to an access payload.
+- The Outline cleaner emits JSON-escaped YAML scalars for dynamic access keys, so provider values such as Shadowsocks `prefix` strings with CRLF control characters stay valid for Mihomo parsing.
 - The proxy keeps localhost and RFC1918 addresses direct so its own subscription refresh path does not recurse back through remote proxy nodes.
 - Keeps `ruz.fa.ru` out of process-level proxy env via `NO_PROXY`, and creates RUZ aiohttp sessions with `trust_env=False` so schedule fetches stay direct.
 - The bot session retries a small number of transport-level Telegram request failures before surfacing an error, which helps when a proxy node briefly resets or times out before the request reaches Telegram.

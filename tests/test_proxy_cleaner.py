@@ -32,9 +32,9 @@ class TestProxyCleaner(unittest.TestCase):
 
         self.assertIsNotNone(rendered)
         self.assertIn("type: ss", rendered)
-        self.assertIn("server: 'example.com'", rendered)
-        self.assertIn("cipher: 'chacha20-ietf-poly1305'", rendered)
-        self.assertIn("password: 'secret'", rendered)
+        self.assertIn('server: "example.com"', rendered)
+        self.assertIn('cipher: "chacha20-ietf-poly1305"', rendered)
+        self.assertIn('password: "secret"', rendered)
 
     def test_build_outline_mihomo_yaml_includes_optional_prefix(self):
         rendered = build_outline_mihomo_yaml(
@@ -48,7 +48,21 @@ class TestProxyCleaner(unittest.TestCase):
             name="outline",
         )
 
-        self.assertIn("prefix: 'hello'", rendered)
+        self.assertIn('prefix: "hello"', rendered)
+
+    def test_build_outline_mihomo_yaml_escapes_control_characters(self):
+        rendered = build_outline_mihomo_yaml(
+            {
+                "server": "example.com",
+                "server_port": 8388,
+                "method": "chacha20-ietf-poly1305",
+                "password": "secret",
+                "prefix": "GET / HTTP/1.1\r\nHost: example.com\r\n",
+            },
+            name="outline",
+        )
+
+        self.assertIn('prefix: "GET / HTTP/1.1\\r\\nHost: example.com\\r\\n"', rendered)
 
     def test_process_something_json_preserves_reality_tls_fields(self):
         raw = json.dumps(
@@ -113,12 +127,12 @@ class TestProxyCleaner(unittest.TestCase):
         self.assertIsNotNone(rendered)
         self.assertIn("type: socks5", rendered)
         self.assertIn("type: vless", rendered)
-        self.assertIn("flow: 'xtls-rprx-vision'", rendered)
-        self.assertIn("packet-encoding: 'xudp'", rendered)
-        self.assertIn("servername: 'cdn.example.com'", rendered)
+        self.assertIn('flow: "xtls-rprx-vision"', rendered)
+        self.assertIn('packet-encoding: "xudp"', rendered)
+        self.assertIn('servername: "cdn.example.com"', rendered)
         self.assertIn("skip-cert-verify: true", rendered)
-        self.assertIn("client-fingerprint: 'chrome'", rendered)
-        self.assertIn("public-key: 'pubkey-123'", rendered)
-        self.assertIn("short-id: 'abcd1234'", rendered)
-        self.assertIn("dialer-proxy: 'provider-chain'", rendered)
+        self.assertIn('client-fingerprint: "chrome"', rendered)
+        self.assertIn('public-key: "pubkey-123"', rendered)
+        self.assertIn('short-id: "abcd1234"', rendered)
+        self.assertIn('dialer-proxy: "provider-chain"', rendered)
         self.assertIn("alpn:", rendered)

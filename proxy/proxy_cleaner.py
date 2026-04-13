@@ -26,22 +26,22 @@ def append_yaml_field(lines, key, value, indent="    "):
     elif isinstance(value, (int, float)):
         rendered = str(value)
     else:
-        value_str = str(value).strip()
-        if not value_str:
+        value_str = str(value)
+        if not value_str.strip():
             return
-        rendered = f"'{value_str}'"
+        rendered = json.dumps(value_str)
 
     lines.append(f"{indent}{key}: {rendered}")
 
 
 def append_yaml_list(lines, key, values, indent="    "):
-    cleaned = [str(value).strip() for value in safe_list(values) if str(value).strip()]
+    cleaned = [str(value) for value in safe_list(values) if str(value).strip()]
     if not cleaned:
         return
 
     lines.append(f"{indent}{key}:")
     for value in cleaned:
-        lines.append(f"{indent}- {value}")
+        lines.append(f"{indent}- {json.dumps(value)}")
 
 
 def _decode_base64_urlsafe(value):
@@ -94,12 +94,12 @@ def build_outline_mihomo_yaml(config, *, name="outline"):
 
     yaml_lines = [
         "proxies:",
-        f"  - name: '{name}'",
+        f"  - name: {json.dumps(str(name))}",
         "    type: ss",
-        f"    server: '{server}'",
+        f"    server: {json.dumps(str(server))}",
         f"    port: {port}",
-        f"    cipher: '{method}'",
-        f"    password: '{password}'",
+        f"    cipher: {json.dumps(str(method))}",
+        f"    password: {json.dumps(str(password))}",
         "    udp: true",
     ]
     append_yaml_field(yaml_lines, "prefix", config.get("prefix"))
@@ -203,11 +203,11 @@ def process_something_json(raw_data):
                 s_usr = safe_dict(safe_list(s_srv.get("users"))[0])
                 if s_srv.get("address"):
                     yaml_lines.append(
-                        f"  - name: '{socks_name}'\n    type: socks5\n    server: '{s_srv.get('address')}'\n    port: {s_srv.get('port', 1080)}"
+                        f"  - name: {json.dumps(str(socks_name))}\n    type: socks5\n    server: {json.dumps(str(s_srv.get('address')))}\n    port: {s_srv.get('port', 1080)}"
                     )
                     if s_usr.get("user"):
                         yaml_lines.append(
-                            f"    username: '{s_usr.get('user')}'\n    password: '{s_usr.get('pass')}'"
+                            f"    username: {json.dumps(str(s_usr.get('user')))}\n    password: {json.dumps(str(s_usr.get('pass')))}"
                         )
                     has_socks = True
             except:
@@ -248,12 +248,12 @@ def process_something_json(raw_data):
                 continue
 
             proxy_lines = [
-                f"  - name: '{safe_name}'",
+                f"  - name: {json.dumps(str(safe_name))}",
                 "    type: vless",
-                f"    server: '{v_srv.get('address')}'",
+                f"    server: {json.dumps(str(v_srv.get('address')))}",
                 f"    port: {v_srv.get('port', 443)}",
-                f"    uuid: '{v_usr.get('id')}'",
-                f"    network: '{network}'",
+                f"    uuid: {json.dumps(str(v_usr.get('id')))}",
+                f"    network: {json.dumps(str(network))}",
                 "    udp: true",
             ]
 
@@ -261,7 +261,7 @@ def process_something_json(raw_data):
                 proxy_lines.append("    tls: true")
 
             if v_usr.get("flow"):
-                proxy_lines.append(f"    flow: '{v_usr.get('flow')}'")
+                proxy_lines.append(f"    flow: {json.dumps(str(v_usr.get('flow')))}")
             append_yaml_field(proxy_lines, "packet-encoding", packet_encoding)
             append_yaml_field(proxy_lines, "servername", server_name)
             append_yaml_field(proxy_lines, "client-fingerprint", client_fingerprint)
@@ -272,7 +272,7 @@ def process_something_json(raw_data):
             public_key = reality.get("publicKey")
             if public_key:
                 proxy_lines.append("    reality-opts:")
-                proxy_lines.append(f"      public-key: '{public_key}'")
+                proxy_lines.append(f"      public-key: {json.dumps(str(public_key))}")
                 if encryption and "mlkem768" in str(encryption).lower():
                     proxy_lines.append("      support-x25519mlkem768: true")
 
@@ -280,13 +280,13 @@ def process_something_json(raw_data):
             if sid and all(c in "0123456789abcdefABCDEF" for c in sid):
                 if not public_key:
                     proxy_lines.append("    reality-opts:")
-                proxy_lines.append(f"      short-id: '{sid}'")
+                proxy_lines.append(f"      short-id: {json.dumps(sid)}")
 
             dialer_proxy = sockopt.get("dialerProxy")
             if dialer_proxy:
-                proxy_lines.append(f"    dialer-proxy: '{dialer_proxy}'")
+                proxy_lines.append(f"    dialer-proxy: {json.dumps(str(dialer_proxy))}")
             elif has_socks:
-                proxy_lines.append(f"    dialer-proxy: '{socks_name}'")
+                proxy_lines.append(f"    dialer-proxy: {json.dumps(str(socks_name))}")
 
             yaml_lines.extend(proxy_lines)
             valid_nodes += 1
