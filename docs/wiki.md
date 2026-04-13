@@ -717,6 +717,7 @@ What it does:
 - When `TELEGRAM_PROXY_URL` points to the local Docker `proxy` service on its mixed listener, Telegram traffic is sent through `http://proxy:...` to avoid the SOCKS TLS handshake path.
 - The bot uses a custom aiogram session wrapper so HTTP proxies go through native `aiohttp` request proxying instead of aiogram's `aiohttp_socks` proxy connector.
 - The Mihomo proxy health check and `AUTO-BEST-NODE` selection probe Telegram directly (`https://api.telegram.org`) so node selection reflects real bot traffic instead of generic `gstatic` reachability.
+- The bundled production proxy image pins a current Mihomo core version so modern subscription node formats and Telegram-facing HTTP proxy behavior stay compatible.
 - Keeps `ruz.fa.ru` out of process-level proxy env via `NO_PROXY`, and creates RUZ aiohttp sessions with `trust_env=False` so schedule fetches stay direct.
 - Treats Telegram/proxy transport failures during startup as retryable instead of fatal.
 - Recreates the aiogram bot session for each retry so shutdown cleanup from a failed polling attempt does not poison the next one.
@@ -729,6 +730,7 @@ How to use:
 4. Optionally set `BOT_POLLING_RETRY_DELAY_SECONDS` to tune the retry backoff.
 5. Watch bot logs for `Bot polling failed with a retryable network error` when diagnosing Telegram reachability problems.
 6. If the proxy container has many nodes, keep its health-check target aligned with the real destination (`api.telegram.org`) so Mihomo does not prefer nodes that only pass generic web probes.
+7. Rebuild the `proxy` container when `proxy/Dockerfile.proxy` or `proxy/proxy_config.yaml` changes, because the production stack builds that service locally instead of pulling it from GHCR.
 
 ### Production Frontend Proxy Startup
 
