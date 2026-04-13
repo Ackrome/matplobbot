@@ -3,13 +3,14 @@ import logging
 import os
 from typing import Any, cast
 
+import aiohttp
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramNetworkError
 from aiogram.methods import TelegramMethod
 from aiogram.methods.base import TelegramType
 from aiohttp import ClientError
 
-from shared_lib.telegram_http import normalize_proxy_url
+from shared_lib.telegram_http import get_telegram_proxy_recheck_url, normalize_proxy_url
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ class TelegramBotSession(AiohttpSession):
         **kwargs: Any,
     ) -> None:
         self._request_kwargs: dict[str, Any] = {}
+        self._proxy_recheck_url = get_telegram_proxy_recheck_url(proxy_url)
         self._request_retry_attempts = (
             request_retry_attempts
             if request_retry_attempts is not None
@@ -119,8 +121,21 @@ class TelegramBotSession(AiohttpSession):
             self._request_retry_attempts,
             type(exc).__name__ if exc is not None else "TimeoutError",
         )
+        await self._trigger_proxy_recheck()
         if self._request_retry_delay_seconds > 0:
             await asyncio.sleep(self._request_retry_delay_seconds)
+
+    async def _trigger_proxy_recheck(self) -> None:
+        if not self._proxy_recheck_url:
+            return
+
+        try:
+            timeout = aiohttp.ClientTimeout(total=5)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(self._proxy_recheck_url):
+                    pass
+        except Exception as exc:
+            logger.warning("Failed to trigger proxy recheck: %s", exc)
 
     async def stream_content(
         self,

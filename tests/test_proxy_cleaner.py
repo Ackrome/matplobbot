@@ -3,6 +3,7 @@ import unittest
 
 from proxy.proxy_cleaner import (
     build_outline_mihomo_yaml,
+    merge_proxy_yaml_documents,
     parse_outline_ss_uri,
     process_outline_dynamic_payload,
     process_something_json,
@@ -63,6 +64,48 @@ class TestProxyCleaner(unittest.TestCase):
         )
 
         self.assertIn('prefix: "GET / HTTP/1.1\\r\\nHost: example.com\\r\\n"', rendered)
+
+    def test_merge_proxy_yaml_documents_combines_outline_and_subscription(self):
+        outline_yaml = build_outline_mihomo_yaml(
+            {
+                "server": "outline.example.com",
+                "server_port": 8388,
+                "method": "chacha20-ietf-poly1305",
+                "password": "secret",
+            },
+            name="outline",
+        )
+        sub_yaml = process_something_json(
+            json.dumps(
+                [
+                    {
+                        "remarks": "Happ node",
+                        "outbounds": [
+                            {
+                                "protocol": "vless",
+                                "settings": {
+                                    "vnext": [
+                                        {
+                                            "address": "edge.example.com",
+                                            "port": 443,
+                                            "users": [{"id": "uuid-123"}],
+                                        }
+                                    ]
+                                },
+                                "streamSettings": {"network": "tcp", "security": "tls"},
+                            }
+                        ],
+                    }
+                ]
+            )
+        )
+
+        rendered = merge_proxy_yaml_documents(outline_yaml, sub_yaml)
+
+        self.assertIsNotNone(rendered)
+        self.assertIn('server: "outline.example.com"', rendered)
+        self.assertIn('server: "edge.example.com"', rendered)
+        self.assertEqual(rendered.count("  - name:"), 2)
 
     def test_process_something_json_preserves_reality_tls_fields(self):
         raw = json.dumps(

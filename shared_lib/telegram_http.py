@@ -1,4 +1,6 @@
 import logging
+import os
+from urllib.parse import urlsplit
 
 import aiohttp
 
@@ -13,6 +15,22 @@ def normalize_proxy_url(proxy_url: str | None) -> str | None:
         return proxy_url.replace("socks5h://", "socks5://", 1)
 
     return proxy_url
+
+
+def get_telegram_proxy_recheck_url(proxy_url: str | None) -> str | None:
+    explicit = os.getenv("TELEGRAM_PROXY_RECHECK_URL")
+    if explicit:
+        return explicit.strip()
+
+    normalized_proxy_url = normalize_proxy_url(proxy_url)
+    if not normalized_proxy_url:
+        return None
+
+    parsed = urlsplit(normalized_proxy_url)
+    if parsed.hostname != "proxy":
+        return None
+
+    return "http://proxy:8080/recheck?group=telegram"
 
 
 def build_telegram_http_client_config(

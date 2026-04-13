@@ -133,6 +133,18 @@ TELEGRAM_PROXY_TRANSPORT=tcp
 SUB_URL=$PROD_SUB_URL
 EOF
 
+                                if [ -n "${PROD_OUTLINE_ACCESS_KEY:-}" ]; then
+                                    echo "OUTLINE_ACCESS_KEY=$PROD_OUTLINE_ACCESS_KEY" >> .env
+                                fi
+
+                                if [ -n "${PROD_TELEGRAM_REQUEST_RETRY_ATTEMPTS:-}" ]; then
+                                    echo "TELEGRAM_REQUEST_RETRY_ATTEMPTS=$PROD_TELEGRAM_REQUEST_RETRY_ATTEMPTS" >> .env
+                                fi
+
+                                if [ -n "${PROD_TELEGRAM_REQUEST_RETRY_DELAY_SECONDS:-}" ]; then
+                                    echo "TELEGRAM_REQUEST_RETRY_DELAY_SECONDS=$PROD_TELEGRAM_REQUEST_RETRY_DELAY_SECONDS" >> .env
+                                fi
+
                                 # Safer cleanup policy than full system prune.
                                 ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "docker image prune -af --filter 'until=168h' && docker container prune -f --filter 'until=24h'"
 

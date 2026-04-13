@@ -10,6 +10,8 @@ class TestProxyConfig(unittest.TestCase):
         self.assertIn('name: "OPENAI-AUTO"', PROXY_CONFIG)
         self.assertIn("type: url-test", PROXY_CONFIG)
         self.assertIn("tolerance: 100", PROXY_CONFIG)
+        self.assertIn("max-failed-times: 1", PROXY_CONFIG)
+        self.assertIn("lazy: false", PROXY_CONFIG)
 
     def test_proxy_config_routes_only_target_domains_through_proxy(self):
         self.assertIn("DOMAIN,api.telegram.org,TELEGRAM-AUTO", PROXY_CONFIG)

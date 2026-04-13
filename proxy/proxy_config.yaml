@@ -2,6 +2,8 @@ mixed-port: 20170
 allow-lan: true
 mode: rule
 log-level: warning
+external-controller: 127.0.0.1:9090
+secret: ""
 
 proxy-providers:
   something-telegram:
@@ -12,7 +14,7 @@ proxy-providers:
     health-check:
       enable: true
       url: https://api.telegram.org
-      interval: 30
+      interval: 15
       timeout: 7000
       lazy: false
       expected-status: 200-499
@@ -24,7 +26,7 @@ proxy-providers:
     health-check:
       enable: true
       url: https://api.openai.com/v1/models
-      interval: 30
+      interval: 15
       timeout: 7000
       lazy: false
       expected-status: 200-499
@@ -34,17 +36,21 @@ proxy-groups:
     type: url-test
     use: [something-telegram]
     url: https://api.telegram.org
-    interval: 30
+    interval: 15
     tolerance: 100
     timeout: 7000
+    lazy: false
+    max-failed-times: 1
     expected-status: 200-499
   - name: "OPENAI-AUTO"
     type: url-test
     use: [something-openai]
     url: https://api.openai.com/v1/models
-    interval: 30
+    interval: 15
     tolerance: 100
     timeout: 7000
+    lazy: false
+    max-failed-times: 1
     expected-status: 200-499
 
 rules:

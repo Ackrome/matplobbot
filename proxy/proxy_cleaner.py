@@ -4,9 +4,16 @@ import os
 import re
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import parse_qs, urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 CACHE_FILE = "/app/cache/last_good_sub.yaml"
+CONTROLLER_URL = os.environ.get("MIHOMO_CONTROLLER_URL", "http://127.0.0.1:9090")
+PROXY_HTTP_BIND = os.environ.get("PROXY_HTTP_BIND", "0.0.0.0")
+
+STATE = {
+    "last_build": None,
+    "last_cache_write": None,
+}
 
 
 def safe_dict(d):
@@ -106,6 +113,49 @@ def build_outline_mihomo_yaml(config, *, name="outline"):
     return "\n".join(yaml_lines)
 
 
+def extract_proxy_entries(yaml_text):
+    if not yaml_text:
+        return []
+
+    lines = str(yaml_text).splitlines()
+    try:
+        start_idx = next(i for i, line in enumerate(lines) if line.strip() == "proxies:")
+    except StopIteration:
+        return []
+
+    return [line for line in lines[start_idx + 1 :] if line.strip()]
+
+
+def merge_proxy_yaml_documents(*yaml_documents):
+    merged_entries = []
+    seen_names = set()
+
+    for yaml_text in yaml_documents:
+        current_entry = []
+
+        for line in extract_proxy_entries(yaml_text):
+            if line.startswith("  - name:"):
+                if current_entry:
+                    proxy_name = current_entry[0].split(":", 1)[1].strip()
+                    if proxy_name not in seen_names:
+                        merged_entries.extend(current_entry)
+                        seen_names.add(proxy_name)
+                current_entry = [line]
+            elif current_entry:
+                current_entry.append(line)
+
+        if current_entry:
+            proxy_name = current_entry[0].split(":", 1)[1].strip()
+            if proxy_name not in seen_names:
+                merged_entries.extend(current_entry)
+                seen_names.add(proxy_name)
+
+    if not merged_entries:
+        return None
+
+    return "\n".join(["proxies:", *merged_entries])
+
+
 def _outline_url_to_fetch(access_key):
     parsed = urlsplit(access_key.strip())
     if parsed.scheme in {"http", "https"}:
@@ -160,6 +210,154 @@ def load_outline_yaml():
     with urllib.request.urlopen(req, timeout=10) as resp:
         raw = resp.read().decode("utf-8", errors="ignore")
     return process_outline_dynamic_payload(raw)
+
+
+def load_subscription_yaml():
+    url = os.environ.get("SUB_URL")
+    if not url:
+        return None
+
+    print("Fetching subscription from somethingsomething...", flush=True)
+    req = urllib.request.Request(url, headers={"User-Agent": "v2rayNG/1.8.5"})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        raw = resp.read().decode("utf-8", errors="ignore").strip()
+    return process_something_json(raw)
+
+
+def build_combined_provider_yaml():
+    outline_yaml = None
+    sub_yaml = None
+    outline_entries = 0
+    sub_entries = 0
+    outline_error = None
+    sub_error = None
+
+    try:
+        outline_yaml = load_outline_yaml()
+        if outline_yaml:
+            print("Loaded Outline access key configuration.", flush=True)
+            outline_entries = len(
+                [line for line in extract_proxy_entries(outline_yaml) if line.startswith("  - name:")]
+            )
+    except Exception as e:
+        print(f"Outline config error: {e}.", flush=True)
+        outline_error = str(e)
+
+    try:
+        sub_yaml = load_subscription_yaml()
+        if sub_yaml:
+            print("Loaded subscription configuration.", flush=True)
+            sub_entries = len(
+                [line for line in extract_proxy_entries(sub_yaml) if line.startswith("  - name:")]
+            )
+    except Exception as e:
+        print(f"Subscription config error: {e}.", flush=True)
+        sub_error = str(e)
+
+    merged_yaml = merge_proxy_yaml_documents(outline_yaml, sub_yaml)
+    merged_entries = 0 if not merged_yaml else len(
+        [line for line in extract_proxy_entries(merged_yaml) if line.startswith("  - name:")]
+    )
+    STATE["last_build"] = {
+        "outline_loaded": bool(outline_yaml),
+        "outline_entries": outline_entries,
+        "outline_error": outline_error,
+        "subscription_loaded": bool(sub_yaml),
+        "subscription_entries": sub_entries,
+        "subscription_error": sub_error,
+        "merged_entries": merged_entries,
+    }
+
+    return merged_yaml
+
+
+def controller_request(path, *, method="GET", query=None, body=None):
+    url = f"{CONTROLLER_URL.rstrip('/')}{path}"
+    if query:
+        url = f"{url}?{urlencode(query)}"
+
+    request = urllib.request.Request(
+        url,
+        method=method,
+        data=None if body is None else json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=10) as resp:
+        raw = resp.read().decode("utf-8", errors="ignore")
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return {"raw": raw}
+
+
+def build_controller_snapshot():
+    snapshot = {"controller_url": CONTROLLER_URL}
+
+    try:
+        snapshot["providers"] = controller_request("/providers/proxies")
+    except Exception as e:
+        snapshot["providers_error"] = str(e)
+
+    try:
+        snapshot["telegram_group"] = controller_request("/group/TELEGRAM-AUTO")
+    except Exception as e:
+        snapshot["telegram_group_error"] = str(e)
+
+    try:
+        snapshot["openai_group"] = controller_request("/group/OPENAI-AUTO")
+    except Exception as e:
+        snapshot["openai_group_error"] = str(e)
+
+    return snapshot
+
+
+def trigger_group_recheck(target):
+    targets = []
+    normalized = (target or "all").strip().lower()
+
+    if normalized in {"telegram", "all"}:
+        targets.append(
+            {
+                "provider": "something-telegram",
+                "group": "TELEGRAM-AUTO",
+                "url": "https://api.telegram.org",
+            }
+        )
+    if normalized in {"openai", "all"}:
+        targets.append(
+            {
+                "provider": "something-openai",
+                "group": "OPENAI-AUTO",
+                "url": "https://api.openai.com/v1/models",
+            }
+        )
+
+    results = []
+    for current in targets:
+        entry = {"target": current["group"]}
+
+        try:
+            entry["provider_healthcheck"] = controller_request(
+                f"/providers/proxies/{current['provider']}/healthcheck",
+                method="PUT",
+                query={"url": current["url"], "timeout": 7000},
+            )
+        except Exception as e:
+            entry["provider_healthcheck_error"] = str(e)
+
+        try:
+            entry["group_delay"] = controller_request(
+                f"/group/{current['group']}/delay",
+                query={"url": current["url"], "timeout": 7000},
+            )
+        except Exception as e:
+            entry["group_delay_error"] = str(e)
+
+        results.append(entry)
+
+    return {"requested_target": normalized, "results": results}
 
 
 def process_something_json(raw_data):
@@ -300,26 +498,44 @@ class SubHandler(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):
-        url = os.environ.get("SUB_URL")
+        if self.path.startswith("/health"):
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"ok": True}).encode("utf-8"))
+            return
+
+        if self.path.startswith("/diagnostics"):
+            payload = {
+                "state": STATE,
+                "cache_exists": os.path.exists(CACHE_FILE),
+                "controller": build_controller_snapshot(),
+            }
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(payload).encode("utf-8"))
+            return
+
+        if self.path.startswith("/recheck"):
+            parsed = urlsplit(self.path)
+            target = parse_qs(parsed.query).get("group", ["all"])[0]
+            payload = trigger_group_recheck(target)
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(payload).encode("utf-8"))
+            return
+
         yaml_out = None
-        try:
-            yaml_out = load_outline_yaml()
-            if yaml_out:
-                print("Loaded Outline access key configuration.", flush=True)
-        except Exception as e:
-            print(f"Outline config error: {e}. Falling back to subscription.", flush=True)
 
         try:
-            if not yaml_out and url:
-                print("Fetching subscription from somethingsomething...", flush=True)
-                req = urllib.request.Request(url, headers={"User-Agent": "v2rayNG/1.8.5"})
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    raw = resp.read().decode("utf-8", errors="ignore").strip()
-                    yaml_out = process_something_json(raw)
-                    if yaml_out:
-                        with open(CACHE_FILE, "w") as f:
-                            f.write(yaml_out)
-                        print("Success! Cache updated.", flush=True)
+            yaml_out = build_combined_provider_yaml()
+            if yaml_out:
+                with open(CACHE_FILE, "w") as f:
+                    f.write(yaml_out)
+                STATE["last_cache_write"] = {"cache_file": CACHE_FILE}
+                print("Success! Cache updated.", flush=True)
         except Exception as e:
             print(f"Network error: {e}. Trying to load from cache...", flush=True)
 
@@ -340,7 +556,7 @@ class SubHandler(BaseHTTPRequestHandler):
 
 def main():
     print("Cleaner with caching started on 8080", flush=True)
-    HTTPServer(("127.0.0.1", 8080), SubHandler).serve_forever()
+    HTTPServer((PROXY_HTTP_BIND, 8080), SubHandler).serve_forever()
 
 
 if __name__ == "__main__":

@@ -21,4 +21,4 @@ COPY proxy_cleaner.py .
 COPY proxy_config.yaml .
 
 # Команда запуска обоих процессов
-CMD python3 -u proxy_cleaner.py & sleep 2 && mihomo -d . -f proxy_config.yaml
+CMD python3 -u proxy_cleaner.py & python3 -c "import socket,time; deadline=time.time()+10\nwhile time.time()<deadline:\n s=socket.socket();\n try:\n  s.connect(('127.0.0.1',8080)); s.close(); raise SystemExit(0)\n except OSError:\n  s.close(); time.sleep(0.2)\nraise SystemExit(1)" && mihomo -d . -f proxy_config.yaml

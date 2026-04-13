@@ -8,6 +8,7 @@ from shared_lib.egress import (
     get_telegram_proxy_transport,
     get_telegram_proxy_url,
 )
+from shared_lib.telegram_http import get_telegram_proxy_recheck_url
 
 
 class TestEgressConfig(unittest.TestCase):
@@ -60,6 +61,24 @@ class TestEgressConfig(unittest.TestCase):
     def test_global_proxy_falls_back_to_legacy_variable(self):
         with patch.dict(os.environ, {"PROXY_URL": "socks5://legacy:20170"}, clear=True):
             self.assertEqual(get_global_http_proxy_url(), "socks5://legacy:20170")
+
+    def test_telegram_proxy_recheck_url_defaults_for_local_proxy_service(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(
+                get_telegram_proxy_recheck_url("socks5://proxy:20170"),
+                "http://proxy:8080/recheck?group=telegram",
+            )
+
+    def test_telegram_proxy_recheck_url_prefers_explicit_env(self):
+        with patch.dict(
+            os.environ,
+            {"TELEGRAM_PROXY_RECHECK_URL": "http://proxy:8080/recheck?group=all"},
+            clear=True,
+        ):
+            self.assertEqual(
+                get_telegram_proxy_recheck_url("socks5://proxy:20170"),
+                "http://proxy:8080/recheck?group=all",
+            )
 
     def test_configure_process_http_proxy_env_sets_no_proxy_and_socks5h(self):
         with patch.dict(os.environ, {"NO_PROXY": "localhost"}, clear=True):

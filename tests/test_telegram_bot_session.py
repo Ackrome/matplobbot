@@ -82,6 +82,7 @@ class TestTelegramBotSessionRetries(unittest.IsolatedAsyncioTestCase):
         )
         session.build_form_data = Mock(return_value={"chat_id": "1"})
         session.check_response = Mock(return_value=SimpleNamespace(result={"ok": True}))
+        session._trigger_proxy_recheck = AsyncMock()
 
         result = await session.make_request(
             bot=SimpleNamespace(token="token"),
@@ -90,6 +91,7 @@ class TestTelegramBotSessionRetries(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result, {"ok": True})
         self.assertEqual(fake_session.calls, 2)
+        session._trigger_proxy_recheck.assert_awaited_once()
 
     async def test_does_not_retry_after_response_has_started(self):
         session = TelegramBotSession(
@@ -111,6 +113,7 @@ class TestTelegramBotSessionRetries(unittest.IsolatedAsyncioTestCase):
         )
         session.build_form_data = Mock(return_value={"chat_id": "1"})
         session.check_response = Mock(return_value=SimpleNamespace(result={"ok": True}))
+        session._trigger_proxy_recheck = AsyncMock()
 
         with self.assertRaisesRegex(Exception, "ClientOSError"):
             await session.make_request(
@@ -119,3 +122,4 @@ class TestTelegramBotSessionRetries(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(fake_session.calls, 1)
+        session._trigger_proxy_recheck.assert_not_awaited()
