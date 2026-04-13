@@ -132,7 +132,9 @@ def process_outline_dynamic_payload(raw_data):
     if isinstance(parsed_json, dict):
         if "server" in parsed_json and "server_port" in parsed_json:
             return build_outline_mihomo_yaml(parsed_json)
-        nested_ss = parsed_json.get("accessKey") or parsed_json.get("ssUri") or parsed_json.get("uri")
+        nested_ss = (
+            parsed_json.get("accessKey") or parsed_json.get("ssUri") or parsed_json.get("uri")
+        )
         if isinstance(nested_ss, str) and nested_ss.startswith("ss://"):
             outline = parse_outline_ss_uri(nested_ss)
             return build_outline_mihomo_yaml(outline) if outline else None

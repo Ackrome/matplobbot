@@ -25,7 +25,7 @@ class TestProxyCleaner(unittest.TestCase):
             json.dumps(
                 {
                     "name": "Outline",
-                    "accessKey": "ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpzZWNyZXQ=@example.com:8388/?outline=1"
+                    "accessKey": "ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpzZWNyZXQ=@example.com:8388/?outline=1",
                 }
             )
         )
