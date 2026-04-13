@@ -2,12 +2,36 @@ import os
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 
+def get_telegram_proxy_transport() -> str:
+    raw_transport = (os.getenv("TELEGRAM_PROXY_TRANSPORT") or "auto").strip().lower()
+    if raw_transport in {"socks", "tcp"}:
+        return "socks"
+    if raw_transport == "http":
+        return "http"
+    return "auto"
+
+
 def get_telegram_proxy_url() -> str | None:
     raw_proxy_url = os.getenv("TELEGRAM_PROXY_URL") or os.getenv("PROXY_URL")
     if not raw_proxy_url:
         return None
 
     parsed = urlsplit(raw_proxy_url)
+    transport = get_telegram_proxy_transport()
+
+    if transport == "socks":
+        return raw_proxy_url
+
+    if transport == "http" and parsed.scheme.startswith("socks"):
+        http_proxy = SplitResult(
+            scheme="http",
+            netloc=parsed.netloc,
+            path=parsed.path,
+            query=parsed.query,
+            fragment=parsed.fragment,
+        )
+        return urlunsplit(http_proxy)
+
     if parsed.scheme.startswith("socks") and parsed.hostname == "proxy":
         # The local mihomo container exposes a mixed HTTP+SOCKS listener.
         # Using HTTP proxy mode avoids the aiohttp_socks TLS handshake path that

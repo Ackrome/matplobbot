@@ -5,11 +5,20 @@ from unittest.mock import patch
 from shared_lib.egress import (
     configure_process_http_proxy_env,
     get_global_http_proxy_url,
+    get_telegram_proxy_transport,
     get_telegram_proxy_url,
 )
 
 
 class TestEgressConfig(unittest.TestCase):
+    def test_telegram_proxy_transport_defaults_to_auto(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(get_telegram_proxy_transport(), "auto")
+
+    def test_telegram_proxy_transport_accepts_tcp_alias(self):
+        with patch.dict(os.environ, {"TELEGRAM_PROXY_TRANSPORT": "tcp"}, clear=True):
+            self.assertEqual(get_telegram_proxy_transport(), "socks")
+
     def test_telegram_proxy_prefers_dedicated_variable(self):
         with patch.dict(
             os.environ,
@@ -25,6 +34,28 @@ class TestEgressConfig(unittest.TestCase):
             clear=True,
         ):
             self.assertEqual(get_telegram_proxy_url(), "http://proxy:20170")
+
+    def test_telegram_proxy_transport_can_force_socks_for_local_proxy_service(self):
+        with patch.dict(
+            os.environ,
+            {
+                "TELEGRAM_PROXY_URL": "socks5://proxy:20170",
+                "TELEGRAM_PROXY_TRANSPORT": "socks",
+            },
+            clear=True,
+        ):
+            self.assertEqual(get_telegram_proxy_url(), "socks5://proxy:20170")
+
+    def test_telegram_proxy_transport_can_force_http_for_non_local_proxy_service(self):
+        with patch.dict(
+            os.environ,
+            {
+                "TELEGRAM_PROXY_URL": "socks5://edge-proxy:20170",
+                "TELEGRAM_PROXY_TRANSPORT": "http",
+            },
+            clear=True,
+        ):
+            self.assertEqual(get_telegram_proxy_url(), "http://edge-proxy:20170")
 
     def test_global_proxy_falls_back_to_legacy_variable(self):
         with patch.dict(os.environ, {"PROXY_URL": "socks5://legacy:20170"}, clear=True):
