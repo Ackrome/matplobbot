@@ -321,6 +321,109 @@ def build_controller_snapshot():
     return snapshot
 
 
+def _collect_named_proxy_records(obj, index):
+    if isinstance(obj, dict):
+        name = obj.get("name")
+        if isinstance(name, str) and name.strip():
+            index.setdefault(name, obj)
+        for value in obj.values():
+            _collect_named_proxy_records(value, index)
+    elif isinstance(obj, list):
+        for value in obj:
+            _collect_named_proxy_records(value, index)
+
+
+def _normalize_delay_value(record):
+    if not isinstance(record, dict):
+        return None
+
+    for key in ("delay", "meanDelay", "mean_delay"):
+        value = record.get(key)
+        if isinstance(value, (int, float)):
+            return value
+
+    history = record.get("history")
+    if isinstance(history, list):
+        delays = [
+            item.get("delay")
+            for item in history
+            if isinstance(item, dict) and isinstance(item.get("delay"), (int, float))
+        ]
+        if delays:
+            return delays[-1]
+
+    return None
+
+
+def _build_group_summary(group_name, group_snapshot, proxy_index):
+    if not isinstance(group_snapshot, dict):
+        return {
+            "group": group_name,
+            "selected": None,
+            "candidate_count": 0,
+            "top_candidates": [],
+        }
+
+    candidate_names = []
+    for key in ("all", "proxies"):
+        values = group_snapshot.get(key)
+        if isinstance(values, list):
+            candidate_names.extend([value for value in values if isinstance(value, str)])
+
+    seen = set()
+    ordered_names = []
+    for name in candidate_names:
+        if name not in seen:
+            ordered_names.append(name)
+            seen.add(name)
+
+    candidates = []
+    for name in ordered_names:
+        record = proxy_index.get(name, {})
+        candidates.append(
+            {
+                "name": name,
+                "alive": record.get("alive"),
+                "delay": _normalize_delay_value(record),
+            }
+        )
+
+    candidates.sort(
+        key=lambda item: (
+            item["delay"] is None,
+            item["delay"] if item["delay"] is not None else float("inf"),
+            item["name"],
+        )
+    )
+
+    return {
+        "group": group_name,
+        "selected": group_snapshot.get("now") or group_snapshot.get("selected"),
+        "candidate_count": len(ordered_names),
+        "top_candidates": candidates[:5],
+    }
+
+
+def build_summary_payload():
+    controller_snapshot = build_controller_snapshot()
+    proxy_index = {}
+    _collect_named_proxy_records(controller_snapshot, proxy_index)
+
+    return {
+        "state": STATE,
+        "telegram": _build_group_summary(
+            "TELEGRAM-AUTO",
+            controller_snapshot.get("telegram_group"),
+            proxy_index,
+        ),
+        "openai": _build_group_summary(
+            "OPENAI-AUTO",
+            controller_snapshot.get("openai_group"),
+            proxy_index,
+        ),
+    }
+
+
 def trigger_group_recheck(target):
     targets = []
     normalized = (target or "all").strip().lower()
@@ -519,6 +622,14 @@ class SubHandler(BaseHTTPRequestHandler):
                 "cache_exists": os.path.exists(CACHE_FILE),
                 "controller": build_controller_snapshot(),
             }
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(payload).encode("utf-8"))
+            return
+
+        if self.path.startswith("/summary"):
+            payload = build_summary_payload()
             self.send_response(200)
             self.send_header("Content-type", "application/json")
             self.end_headers()

@@ -14,7 +14,7 @@ setup(
         "redis",
         "cachetools",
         "celery",
-        "Pillow",
+        "Pillow>=12.2.0",
         "markdown-it-py",
         "mdit-py-plugins",
     ],

@@ -2,7 +2,9 @@ import json
 import unittest
 
 from proxy.proxy_cleaner import (
+    _build_group_summary,
     build_outline_mihomo_yaml,
+    build_summary_payload,
     merge_proxy_yaml_documents,
     parse_outline_ss_uri,
     process_outline_dynamic_payload,
@@ -179,3 +181,45 @@ class TestProxyCleaner(unittest.TestCase):
         self.assertIn('short-id: "abcd1234"', rendered)
         self.assertIn('dialer-proxy: "provider-chain"', rendered)
         self.assertIn("alpn:", rendered)
+
+    def test_build_group_summary_sorts_candidates_by_delay(self):
+        group_snapshot = {"now": "node-b", "all": ["node-a", "node-b", "node-c"]}
+        proxy_index = {
+            "node-a": {"name": "node-a", "delay": 250, "alive": True},
+            "node-b": {"name": "node-b", "delay": 120, "alive": True},
+            "node-c": {"name": "node-c", "alive": False},
+        }
+
+        summary = _build_group_summary("TELEGRAM-AUTO", group_snapshot, proxy_index)
+
+        self.assertEqual(summary["selected"], "node-b")
+        self.assertEqual(summary["candidate_count"], 3)
+        self.assertEqual(
+            [item["name"] for item in summary["top_candidates"]],
+            ["node-b", "node-a", "node-c"],
+        )
+
+    def test_build_summary_payload_uses_controller_snapshot(self):
+        fake_snapshot = {
+            "telegram_group": {"now": "node-a", "all": ["node-a"]},
+            "openai_group": {"now": "node-b", "all": ["node-b"]},
+            "providers": {
+                "something-telegram": {
+                    "proxies": [{"name": "node-a", "delay": 90, "alive": True}]
+                },
+                "something-openai": {
+                    "proxies": [{"name": "node-b", "delay": 140, "alive": True}]
+                },
+            },
+        }
+
+        from unittest.mock import patch
+        import proxy.proxy_cleaner as proxy_cleaner
+
+        proxy_cleaner.STATE["last_build"] = {"merged_entries": 2}
+        with patch.object(proxy_cleaner, "build_controller_snapshot", return_value=fake_snapshot):
+            summary = build_summary_payload()
+
+        self.assertEqual(summary["telegram"]["selected"], "node-a")
+        self.assertEqual(summary["telegram"]["top_candidates"][0]["delay"], 90)
+        self.assertEqual(summary["openai"]["selected"], "node-b")
