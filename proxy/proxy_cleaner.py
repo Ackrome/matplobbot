@@ -15,6 +15,33 @@ def safe_list(l):
     return l if isinstance(l, list) else []
 
 
+def append_yaml_field(lines, key, value, indent="    "):
+    if value is None:
+        return
+
+    if isinstance(value, bool):
+        rendered = "true" if value else "false"
+    elif isinstance(value, (int, float)):
+        rendered = str(value)
+    else:
+        value_str = str(value).strip()
+        if not value_str:
+            return
+        rendered = f"'{value_str}'"
+
+    lines.append(f"{indent}{key}: {rendered}")
+
+
+def append_yaml_list(lines, key, values, indent="    "):
+    cleaned = [str(value).strip() for value in safe_list(values) if str(value).strip()]
+    if not cleaned:
+        return
+
+    lines.append(f"{indent}{key}:")
+    for value in cleaned:
+        lines.append(f"{indent}- {value}")
+
+
 def process_something_json(raw_data):
     try:
         configs = json.loads(raw_data)
@@ -50,6 +77,7 @@ def process_something_json(raw_data):
         has_socks = False
         if socks:
             try:
+                socks_name = str(socks.get("tag") or socks_name)
                 s_sett = safe_dict(socks.get("settings"))
                 s_srv = safe_dict(safe_list(s_sett.get("servers"))[0])
                 s_usr = safe_dict(safe_list(s_srv.get("users"))[0])
@@ -70,23 +98,79 @@ def process_something_json(raw_data):
             v_srv = safe_dict(safe_list(v_sett.get("vnext"))[0])
             v_usr = safe_dict(safe_list(v_srv.get("users"))[0])
             stream = safe_dict(vless.get("streamSettings"))
+            tls_settings = safe_dict(stream.get("tlsSettings"))
             reality = safe_dict(stream.get("realitySettings"))
+            sockopt = safe_dict(stream.get("sockopt"))
+            network = str(stream.get("network", "tcp") or "tcp")
+            security = str(stream.get("security", "") or "").lower()
+
+            server_name = (
+                reality.get("serverName")
+                or tls_settings.get("serverName")
+                or tls_settings.get("sni")
+                or v_srv.get("address")
+            )
+            client_fingerprint = (
+                reality.get("fingerprint")
+                or tls_settings.get("fingerprint")
+                or "chrome"
+            )
+            packet_encoding = (
+                v_usr.get("packetEncoding")
+                or v_sett.get("packetEncoding")
+                or stream.get("packetEncoding")
+                or ("xudp" if v_usr.get("flow") == "xtls-rprx-vision" else None)
+            )
+            encryption = v_usr.get("encryption")
+            skip_cert_verify = tls_settings.get("allowInsecure")
+            if skip_cert_verify is None and security in {"tls", "reality"}:
+                skip_cert_verify = True
 
             if not v_srv.get("address"):
                 continue
-            yaml_lines.append(
-                f"  - name: '{safe_name}'\n    type: vless\n    server: '{v_srv.get('address')}'\n    port: {v_srv.get('port', 443)}\n    uuid: '{v_usr.get('id')}'\n    network: '{stream.get('network', 'tcp')}'\n    tls: true\n    udp: true"
-            )
+
+            proxy_lines = [
+                f"  - name: '{safe_name}'",
+                "    type: vless",
+                f"    server: '{v_srv.get('address')}'",
+                f"    port: {v_srv.get('port', 443)}",
+                f"    uuid: '{v_usr.get('id')}'",
+                f"    network: '{network}'",
+                "    udp: true",
+            ]
+
+            if security in {"tls", "reality"}:
+                proxy_lines.append("    tls: true")
+
             if v_usr.get("flow"):
-                yaml_lines.append(f"    flow: '{v_usr.get('flow')}'")
-            yaml_lines.append(
-                f"    client-fingerprint: '{reality.get('fingerprint', 'chrome')}'\n    servername: '{reality.get('serverName', 'google.com')}'\n    reality-opts:\n      public-key: '{reality.get('publicKey', '')}'"
-            )
+                proxy_lines.append(f"    flow: '{v_usr.get('flow')}'")
+            append_yaml_field(proxy_lines, "packet-encoding", packet_encoding)
+            append_yaml_field(proxy_lines, "servername", server_name)
+            append_yaml_field(proxy_lines, "client-fingerprint", client_fingerprint)
+            append_yaml_field(proxy_lines, "skip-cert-verify", skip_cert_verify)
+            append_yaml_list(proxy_lines, "alpn", tls_settings.get("alpn"))
+            append_yaml_field(proxy_lines, "encryption", encryption)
+
+            public_key = reality.get("publicKey")
+            if public_key:
+                proxy_lines.append("    reality-opts:")
+                proxy_lines.append(f"      public-key: '{public_key}'")
+                if encryption and "mlkem768" in str(encryption).lower():
+                    proxy_lines.append("      support-x25519mlkem768: true")
+
             sid = str(reality.get("shortId", ""))
             if sid and all(c in "0123456789abcdefABCDEF" for c in sid):
-                yaml_lines.append(f"      short-id: '{sid}'")
-            if has_socks:
-                yaml_lines.append(f"    dialer-proxy: '{socks_name}'")
+                if not public_key:
+                    proxy_lines.append("    reality-opts:")
+                proxy_lines.append(f"      short-id: '{sid}'")
+
+            dialer_proxy = sockopt.get("dialerProxy")
+            if dialer_proxy:
+                proxy_lines.append(f"    dialer-proxy: '{dialer_proxy}'")
+            elif has_socks:
+                proxy_lines.append(f"    dialer-proxy: '{socks_name}'")
+
+            yaml_lines.extend(proxy_lines)
             valid_nodes += 1
         except:
             continue
@@ -128,5 +212,10 @@ class SubHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
 
-print("Cleaner with caching started on 8080", flush=True)
-HTTPServer(("127.0.0.1", 8080), SubHandler).serve_forever()
+def main():
+    print("Cleaner with caching started on 8080", flush=True)
+    HTTPServer(("127.0.0.1", 8080), SubHandler).serve_forever()
+
+
+if __name__ == "__main__":
+    main()
