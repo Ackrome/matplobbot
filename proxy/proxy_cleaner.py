@@ -111,9 +111,7 @@ def process_something_json(raw_data):
                 or v_srv.get("address")
             )
             client_fingerprint = (
-                reality.get("fingerprint")
-                or tls_settings.get("fingerprint")
-                or "chrome"
+                reality.get("fingerprint") or tls_settings.get("fingerprint") or "chrome"
             )
             packet_encoding = (
                 v_usr.get("packetEncoding")
