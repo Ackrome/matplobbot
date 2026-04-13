@@ -3,7 +3,6 @@ import os
 import sys
 import urllib.request
 
-
 DEFAULT_URL = os.environ.get("PROXY_SUMMARY_URL", "http://127.0.0.1:8080/summary")
 
 

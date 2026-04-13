@@ -204,16 +204,13 @@ class TestProxyCleaner(unittest.TestCase):
             "telegram_group": {"now": "node-a", "all": ["node-a"]},
             "openai_group": {"now": "node-b", "all": ["node-b"]},
             "providers": {
-                "something-telegram": {
-                    "proxies": [{"name": "node-a", "delay": 90, "alive": True}]
-                },
-                "something-openai": {
-                    "proxies": [{"name": "node-b", "delay": 140, "alive": True}]
-                },
+                "something-telegram": {"proxies": [{"name": "node-a", "delay": 90, "alive": True}]},
+                "something-openai": {"proxies": [{"name": "node-b", "delay": 140, "alive": True}]},
             },
         }
 
         from unittest.mock import patch
+
         import proxy.proxy_cleaner as proxy_cleaner
 
         proxy_cleaner.STATE["last_build"] = {"merged_entries": 2}
