@@ -237,7 +237,11 @@ def build_combined_provider_yaml():
         if outline_yaml:
             print("Loaded Outline access key configuration.", flush=True)
             outline_entries = len(
-                [line for line in extract_proxy_entries(outline_yaml) if line.startswith("  - name:")]
+                [
+                    line
+                    for line in extract_proxy_entries(outline_yaml)
+                    if line.startswith("  - name:")
+                ]
             )
     except Exception as e:
         print(f"Outline config error: {e}.", flush=True)
@@ -255,8 +259,12 @@ def build_combined_provider_yaml():
         sub_error = str(e)
 
     merged_yaml = merge_proxy_yaml_documents(outline_yaml, sub_yaml)
-    merged_entries = 0 if not merged_yaml else len(
-        [line for line in extract_proxy_entries(merged_yaml) if line.startswith("  - name:")]
+    merged_entries = (
+        0
+        if not merged_yaml
+        else len(
+            [line for line in extract_proxy_entries(merged_yaml) if line.startswith("  - name:")]
+        )
     )
     STATE["last_build"] = {
         "outline_loaded": bool(outline_yaml),
