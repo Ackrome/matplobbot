@@ -1,9 +1,8 @@
 mixed-port: 20170
 allow-lan: true
 mode: rule
-log-level: info
+log-level: warning
 ipv6: false
-
 dns:
   enable: true
   ipv6: false
@@ -16,10 +15,8 @@ dns:
   default-nameserver:
     - 8.8.8.8
     - 1.1.1.1
-
 external-controller: 127.0.0.1:9090
 secret: ""
-
 proxy-providers:
   something-telegram:
     type: http
@@ -28,11 +25,11 @@ proxy-providers:
     path: ./something-telegram.yaml
     health-check:
       enable: true
-      url: https://api.telegram.org
+      url: http://cp.cloudflare.com/generate_204
       interval: 15
       timeout: 7000
       lazy: false
-      expected-status: 200-499
+      expected-status: 204
   something-openai:
     type: http
     url: "http://127.0.0.1:8080/"
@@ -45,7 +42,6 @@ proxy-providers:
       timeout: 7000
       lazy: false
       expected-status: 204
-
 proxy-groups:
   - name: "TELEGRAM-AUTO"
     type: url-test
@@ -67,7 +63,6 @@ proxy-groups:
     lazy: false
     max-failed-times: 1
     expected-status: 200-499
-
 rules:
   - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
   - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve

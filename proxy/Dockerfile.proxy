@@ -2,10 +2,8 @@ FROM python:3.11-alpine
 
 ARG MIHOMO_VERSION=v1.19.23
 
-# Устанавливаем системные зависимости
 RUN apk add --no-cache wget gzip curl ca-certificates
 
-# Автоматически определяем архитектуру (amd64 или arm64) и качаем нативный бинарник
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then \
         MIHOMO_ARCH="amd64-compatible"; \
@@ -20,13 +18,7 @@ RUN ARCH=$(uname -m) && \
     mv mihomo /usr/local/bin/
 
 WORKDIR /app
-
-# Создаем папку для кэша подписок
 RUN mkdir -p /app/cache
-
-# Копируем файлы конфигурации из папки proxy (контекст сборки)
 COPY proxy_cleaner.py .
 COPY proxy_config.yaml .
-
-# Команда запуска обоих процессов
 CMD python3 -u proxy_cleaner.py & tries=0; until wget -q -O /dev/null http://127.0.0.1:8080/health; do tries=$((tries+1)); if [ "$tries" -ge 50 ]; then echo "proxy_cleaner failed to start"; exit 1; fi; sleep 0.2; done; mihomo -d . -f proxy_config.yaml
