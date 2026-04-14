@@ -577,9 +577,7 @@ def process_something_json(raw_data):
             elif network == "grpc":
                 grpc_settings = safe_dict(stream.get("grpcSettings"))
                 proxy_lines.append("    grpc-opts:")
-                proxy_lines.append(
-                    f"      grpc-service-name: {json.dumps(str(grpc_settings.get('serviceName', '')))}"
-                )
+                proxy_lines.append(f"      grpc-service-name: {json.dumps(str(grpc_settings.get('serviceName', '')))}")
 
             if security in {"tls", "reality"}:
                 proxy_lines.append("    tls: true")
