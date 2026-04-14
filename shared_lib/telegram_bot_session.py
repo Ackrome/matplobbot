@@ -57,6 +57,13 @@ class TelegramBotSession(AiohttpSession):
             )
         )
         normalized_proxy_url = normalize_proxy_url(proxy_url)
+        if normalized_proxy_url and normalized_proxy_url.startswith("socks"):
+            from aiohttp_socks import ProxyConnector
+            kwargs["connector"] = ProxyConnector.from_url(normalized_proxy_url)
+        elif normalized_proxy_url:
+            self._request_kwargs["proxy"] = normalized_proxy_url
+
+        # super() вызываем ПОСЛЕ того как добавили connector в kwargs
         super().__init__(limit=limit, **kwargs)
 
         if not normalized_proxy_url:

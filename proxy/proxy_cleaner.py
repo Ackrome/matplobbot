@@ -565,6 +565,19 @@ def process_something_json(raw_data):
                 f"    network: {json.dumps(str(network))}",
                 "    udp: true",
             ]
+            if network == "ws":
+                ws_settings = safe_dict(stream.get("wsSettings"))
+                proxy_lines.append("    ws-opts:")
+                proxy_lines.append(f"      path: {json.dumps(str(ws_settings.get('path', '/')))}")
+                headers = safe_dict(ws_settings.get("headers"))
+                if headers:
+                    proxy_lines.append("      headers:")
+                    for k, v in headers.items():
+                        proxy_lines.append(f"        {k}: {json.dumps(str(v))}")
+            elif network == "grpc":
+                grpc_settings = safe_dict(stream.get("grpcSettings"))
+                proxy_lines.append("    grpc-opts:")
+                proxy_lines.append(f"      grpc-service-name: {json.dumps(str(grpc_settings.get('serviceName', '')))}")
 
             if security in {"tls", "reality"}:
                 proxy_lines.append("    tls: true")
