@@ -7,7 +7,7 @@ RUN apk add --no-cache wget gzip curl ca-certificates
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then \
         MIHOMO_ARCH="amd64-compatible"; \
-    elif [ "$ARCH" = "aarch64" ] ||[ "$ARCH" = "arm64" ]; then \
+    elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then \
         MIHOMO_ARCH="arm64"; \
     else \
         echo "Unsupported architecture: $ARCH" && exit 1; \
@@ -18,7 +18,10 @@ RUN ARCH=$(uname -m) && \
     mv mihomo /usr/local/bin/
 
 WORKDIR /app
+
 RUN mkdir -p /app/cache
+
 COPY proxy_cleaner.py .
 COPY proxy_config.yaml .
+
 CMD python3 -u proxy_cleaner.py & tries=0; until wget -q -O /dev/null http://127.0.0.1:8080/health; do tries=$((tries+1)); if [ "$tries" -ge 50 ]; then echo "proxy_cleaner failed to start"; exit 1; fi; sleep 0.2; done; mihomo -d . -f proxy_config.yaml

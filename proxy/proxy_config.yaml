@@ -25,11 +25,11 @@ proxy-providers:
     path: ./something-telegram.yaml
     health-check:
       enable: true
-      url: http://cp.cloudflare.com/generate_204
+      url: https://api.telegram.org
       interval: 15
       timeout: 7000
       lazy: false
-      expected-status: 204
+      expected-status: 200-499
   something-openai:
     type: http
     url: "http://127.0.0.1:8080/"
@@ -37,11 +37,11 @@ proxy-providers:
     path: ./something-openai.yaml
     health-check:
       enable: true
-      url: http://cp.cloudflare.com/generate_204
+      url: https://api.telegram.org
       interval: 15
       timeout: 7000
       lazy: false
-      expected-status: 204
+      expected-status: 200-499
 proxy-groups:
   - name: "TELEGRAM-AUTO"
     type: url-test
