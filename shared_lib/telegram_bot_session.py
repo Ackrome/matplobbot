@@ -31,7 +31,6 @@ def _read_retry_delay_seconds(value: str | None, default: float) -> float:
 
 class TelegramBotSession(AiohttpSession):
     """Aiogram session that uses native aiohttp HTTP proxy support when possible."""
-
     def __init__(
         self,
         proxy_url: str | None = None,
@@ -57,23 +56,27 @@ class TelegramBotSession(AiohttpSession):
             )
         )
         normalized_proxy_url = normalize_proxy_url(proxy_url)
-        if normalized_proxy_url and normalized_proxy_url.startswith("socks"):
-            from aiohttp_socks import ProxyConnector
-
-            kwargs["connector"] = ProxyConnector.from_url(normalized_proxy_url)
-        elif normalized_proxy_url:
-            self._request_kwargs["proxy"] = normalized_proxy_url
-
-        # super() вызываем ПОСЛЕ того как добавили connector в kwargs
+        
+        # ВЫЗЫВАЕМ БЕЗ CONNECTOR
         super().__init__(limit=limit, **kwargs)
-
+        
         if not normalized_proxy_url:
             return
-
         if normalized_proxy_url.startswith("socks"):
             self._setup_proxy_connector(normalized_proxy_url)
         else:
             self._request_kwargs["proxy"] = normalized_proxy_url
+
+    # ДОБАВЛЯЕМ ЭТОТ МЕТОД:
+    def _setup_proxy_connector(self, proxy_url: str) -> None:
+        from aiohttp_socks import ProxyConnector
+        
+        # Aiogram 3 создает коннектор внутренними механизмами. 
+        # Мы подменяем тип коннектора на фабрику, которая вернет ProxyConnector.
+        def custom_connector_factory(**kwargs):
+            return ProxyConnector.from_url(proxy_url, **kwargs)
+            
+        self._connector_type = custom_connector_factory
 
     async def make_request(
         self, bot, method: TelegramMethod[TelegramType], timeout: int | None = None
