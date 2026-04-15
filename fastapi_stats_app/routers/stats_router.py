@@ -31,6 +31,11 @@ from shared_lib.redis_client import redis_client
 from shared_lib.request_context import generate_correlation_id, get_correlation_id
 from shared_lib.schemas import (
     ActionUsersResponse,
+    ActivitySeriesEntry,
+    CorrelationStatusResponse,
+    ExportActionsResponse,
+    HealthStatusResponse,
+    LeaderboardEntry,
     SendMessageRequest,
     UserProfileResponse,
 )
@@ -320,7 +325,7 @@ def _build_weekly_pdf_bytes(html_content: str) -> bytes:
     "/health",
     summary="Health Check",
     description="Checks service availability and database connectivity.",
-    response_model=dict[str, str],
+    response_model=HealthStatusResponse,
     status_code=status.HTTP_200_OK,
 )
 async def health_check(db: AsyncSession = Depends(get_db_session_dependency)) -> dict[str, str]:
@@ -547,8 +552,18 @@ async def get_action_users_legacy_alias(
         "Exports user actions in JSON, CSV, or PDF. "
         "Optional date range and timezone filters are applied before export."
     ),
-    response_model=None,
+    response_model=ExportActionsResponse,
     dependencies=[Depends(require_admin)],
+    responses={
+        200: {
+            "description": "JSON export payload by default, or a downloadable CSV/PDF when requested.",
+            "content": {
+                "application/json": {},
+                "text/csv": {"schema": {"type": "string", "example": "id,action_type,..."}},
+                "application/pdf": {"schema": {"type": "string", "format": "binary"}},
+            },
+        }
+    },
 )
 async def export_user_actions(
     user_id: int,
@@ -657,6 +672,7 @@ async def export_user_actions(
     "/users/{user_id}/send_message",
     summary="Send message to user",
     description="Sends a Telegram message and stores it as an outgoing admin action.",
+    response_model=CorrelationStatusResponse,
     status_code=status.HTTP_200_OK,
 )
 async def send_message_to_user(
@@ -766,7 +782,12 @@ async def send_message_to_user(
     return {"status": "success", "correlation_id": correlation_id}
 
 
-@router.get("/leaderboard")
+@router.get(
+    "/leaderboard",
+    response_model=list[LeaderboardEntry],
+    summary="Get leaderboard data",
+    description="Returns the top users by action count for the admin dashboard.",
+)
 async def get_leaderboard(current_user: dict = Depends(require_admin)):
     try:
         async with get_session() as db:
@@ -776,7 +797,12 @@ async def get_leaderboard(current_user: dict = Depends(require_admin)):
         raise HTTPException(status_code=500, detail="Internal Database Error")
 
 
-@router.get("/activity")
+@router.get(
+    "/activity",
+    response_model=list[ActivitySeriesEntry],
+    summary="Get activity-over-time series",
+    description="Returns daily admin dashboard activity buckets.",
+)
 async def get_activity(current_user: dict = Depends(require_admin)):
     try:
         async with get_session() as db:

@@ -17,6 +17,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared_lib.database import get_db_session_dependency
 from shared_lib.egress import get_telegram_proxy_url
 from shared_lib.models import Project, ProjectFile
+from shared_lib.schemas import (
+    StatusResponse,
+    StudioCompileResponse,
+    StudioProjectFileSchema,
+    StudioProjectSummary,
+    StudioTelegramSendResponse,
+    StudioUploadAssetResponse,
+)
 from shared_lib.tasks import (
     compile_full_latex_task,
     compile_project_task,
@@ -97,7 +105,12 @@ class CompileRequest(BaseModel):
     content: str  # Исходный код
 
 
-@router.post("/compile")
+@router.post(
+    "/compile",
+    response_model=StudioCompileResponse,
+    summary="Compile an ad-hoc document payload",
+    description="Compiles one-off LaTeX, Markdown, or Mermaid content through the worker pipeline.",
+)
 async def compile_document(req: CompileRequest, current_user: dict = Depends(get_current_user)):
     """
     Отправляет документ на компиляцию в Celery и дожидается результата.
@@ -132,7 +145,11 @@ async def compile_document(req: CompileRequest, current_user: dict = Depends(get
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/projects")
+@router.get(
+    "/projects",
+    response_model=list[StudioProjectSummary],
+    summary="List projects for the current user",
+)
 async def get_projects(
     db: AsyncSession = Depends(get_db_session_dependency),
     current_user: dict = Depends(get_current_user),
@@ -146,7 +163,11 @@ async def get_projects(
     return [{"id": p.id, "name": p.name, "type": p.project_type} for p in projects]
 
 
-@router.post("/projects")
+@router.post(
+    "/projects",
+    response_model=StudioProjectSummary,
+    summary="Create a Studio project",
+)
 async def create_project(
     data: ProjectCreate,
     db: AsyncSession = Depends(get_db_session_dependency),
@@ -169,7 +190,11 @@ async def create_project(
     return {"id": new_proj.id, "name": new_proj.name, "type": new_proj.project_type}
 
 
-@router.get("/projects/{project_id}")
+@router.get(
+    "/projects/{project_id}",
+    response_model=list[StudioProjectFileSchema],
+    summary="List files inside a Studio project",
+)
 async def get_project_files(
     project_id: int,
     db: AsyncSession = Depends(get_db_session_dependency),
@@ -196,7 +221,11 @@ async def get_project_files(
     ]
 
 
-@router.put("/projects/{project_id}/files/{file_id}")
+@router.put(
+    "/projects/{project_id}/files/{file_id}",
+    response_model=StatusResponse,
+    summary="Save a text file in a Studio project",
+)
 async def save_file(
     project_id: int,
     file_id: int,
@@ -216,7 +245,11 @@ async def save_file(
     return {"status": "success"}
 
 
-@router.post("/projects/{project_id}/upload")
+@router.post(
+    "/projects/{project_id}/upload",
+    response_model=StudioUploadAssetResponse,
+    summary="Upload or replace a binary asset in a Studio project",
+)
 async def upload_asset(
     project_id: int,
     file: UploadFile = File(...),
@@ -240,7 +273,11 @@ async def upload_asset(
     return {"status": "success", "filename": file.filename}
 
 
-@router.post("/projects/{project_id}/compile")
+@router.post(
+    "/projects/{project_id}/compile",
+    response_model=StudioCompileResponse,
+    summary="Compile a stored Studio project",
+)
 async def compile_project(
     project_id: int,
     db: AsyncSession = Depends(get_db_session_dependency),
@@ -293,7 +330,11 @@ async def compile_project(
         raise HTTPException(status_code=504, detail="Compilation timed out.")
 
 
-@router.delete("/projects/{project_id}/files/{file_id}")
+@router.delete(
+    "/projects/{project_id}/files/{file_id}",
+    response_model=StatusResponse,
+    summary="Delete a non-main project file",
+)
 async def delete_file(
     project_id: int,
     file_id: int,
@@ -319,7 +360,11 @@ async def delete_file(
     return {"status": "success"}
 
 
-@router.put("/projects/{project_id}/files/{file_id}/rename")
+@router.put(
+    "/projects/{project_id}/files/{file_id}/rename",
+    response_model=StatusResponse,
+    summary="Rename a project file",
+)
 async def rename_file(
     project_id: int,
     file_id: int,
@@ -347,7 +392,16 @@ async def rename_file(
         raise HTTPException(status_code=400, detail="Filename might already exist or invalid")
 
 
-@router.get("/projects/{project_id}/export/zip")
+@router.get(
+    "/projects/{project_id}/export/zip",
+    summary="Download a Studio project as ZIP",
+    responses={
+        200: {
+            "description": "ZIP archive containing every stored file in the project.",
+            "content": {"application/zip": {"schema": {"type": "string", "format": "binary"}}},
+        }
+    },
+)
 async def export_project_zip(
     project_id: int,
     db: AsyncSession = Depends(get_db_session_dependency),
@@ -377,7 +431,18 @@ async def export_project_zip(
 
 
 # --- Эндпоинт для локальных картинок в Markdown ---
-@router.get("/projects/{project_id}/assets/{file_path:path}")
+@router.get(
+    "/projects/{project_id}/assets/{file_path:path}",
+    summary="Read a project asset by path",
+    responses={
+        200: {
+            "description": "Raw project asset bytes with a best-effort detected content type.",
+            "content": {
+                "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}
+            },
+        }
+    },
+)
 async def get_project_asset(
     project_id: int,
     file_path: str,
@@ -411,7 +476,11 @@ async def get_project_asset(
     return Response(content=content, media_type=mime_type or "application/octet-stream")
 
 
-@router.post("/projects/{project_id}/send_telegram")
+@router.post(
+    "/projects/{project_id}/send_telegram",
+    response_model=StudioTelegramSendResponse,
+    summary="Compile a project and send the PDF to the linked Telegram account",
+)
 async def send_project_to_telegram(
     project_id: int,
     db: AsyncSession = Depends(get_db_session_dependency),

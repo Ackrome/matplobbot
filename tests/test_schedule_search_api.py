@@ -275,3 +275,18 @@ class TestScheduleSearchAPI(unittest.TestCase):
         self.assertIn("lecturer", examples)
         self.assertIn("teacher", examples)
         self.assertIn("room", examples)
+
+    def test_schedule_data_openapi_documents_response_shape(self):
+        schema = self.app.openapi()
+        operation = schema["paths"]["/api/schedule/data/{type}/{id}"]["get"]
+        response_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+
+        self.assertEqual(response_schema["$ref"], "#/components/schemas/ScheduleDataResponse")
+
+        schedule_data_schema = schema["components"]["schemas"]["ScheduleDataResponse"]
+        self.assertIn("loaded_bounds", schedule_data_schema["properties"])
+        self.assertIn("source_updated_at", schedule_data_schema["properties"])
+
+        lesson_schema = schema["components"]["schemas"]["ScheduleLessonSchema"]
+        self.assertIn("discipline_short", lesson_schema["properties"])
+        self.assertIn("module", lesson_schema["properties"])

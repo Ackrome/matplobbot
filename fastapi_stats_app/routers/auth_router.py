@@ -9,6 +9,7 @@ from shared_lib.database import get_db_session_dependency
 from shared_lib.models import User, WebAccount
 from shared_lib.schemas import (
     CurrentUserResponse,
+    StatusResponse,
     TelegramAuthData,
     Token,
     WebAccountCreate,
@@ -27,7 +28,13 @@ from ..config import ADMIN_USER_IDS
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=StatusResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Register a website account",
+    description="Creates a password-based website account for Swagger UI and the website login flow.",
+)
 async def register(
     user_data: WebAccountCreate, db: AsyncSession = Depends(get_db_session_dependency)
 ):
@@ -52,7 +59,12 @@ async def register(
     return {"status": "success"}
 
 
-@router.post("/login", response_model=Token)
+@router.post(
+    "/login",
+    response_model=Token,
+    summary="Login with username and password",
+    description="Password grant endpoint used by the website and Swagger UI Authorize dialog.",
+)
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db_session_dependency),
@@ -71,7 +83,12 @@ async def login(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@router.post("/telegram", response_model=Token)
+@router.post(
+    "/telegram",
+    response_model=Token,
+    summary="Exchange Telegram login payload for a bearer token",
+    description="Validates Telegram Login Widget data and returns a JWT for the linked website account.",
+)
 async def telegram_login(
     tg_data: TelegramAuthData, db: AsyncSession = Depends(get_db_session_dependency)
 ):
@@ -122,19 +139,33 @@ async def telegram_login(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@router.get("/me", response_model=CurrentUserResponse)
+@router.get(
+    "/me",
+    response_model=CurrentUserResponse,
+    summary="Get the current authenticated user",
+)
 async def get_me(current_user: dict = Depends(get_current_user)):
     return current_user
 
 
-@router.post("/logout", status_code=status.HTTP_200_OK)
+@router.post(
+    "/logout",
+    response_model=StatusResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Logout the current user",
+    description="Stateless JWT logout endpoint for explicit client workflows.",
+)
 async def logout(_current_user: dict = Depends(get_current_user)):
     # JWT auth is stateless: client-side token disposal is sufficient for logout.
     # Endpoint exists for explicit UX flow and API contract symmetry.
     return {"status": "success"}
 
 
-@router.put("/preferences", response_model=CurrentUserResponse)
+@router.put(
+    "/preferences",
+    response_model=CurrentUserResponse,
+    summary="Update website preferences for the current user",
+)
 async def update_preferences(
     prefs: WebAccountPreferencesUpdate,
     current_user: dict = Depends(get_current_user),

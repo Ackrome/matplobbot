@@ -19,40 +19,51 @@ Last updated: 2026-04-10
 - [ ] Add uptime/error alerts for key production endpoints (`/api/stats/health`, scheduler `/health`, website) with actionable routing to admins.
 - [ ] Publish `v1.0.0` operator runbook: deploy, rollback, backup/restore, common incident playbooks, and on-call triage steps.
 - [ ] Prepare `v1.0.0` release notes/changelog template with upgrade notes, known limitations, and post-release monitoring checklist.
+- [ ] Implement Graceful Shutdown: ensure Celery worker waits for active tasks to finish (SIGTERM handling) and FastAPI drains active requests before exiting during deployments.
+- [ ] Verify Redis persistence strategy (AOF/RDB) so pending Celery tasks and critical rate-limit states survive container restarts.
+- [ ] Enforce strict Rate Limiting (e.g., Token Bucket via Redis) on CPU-intensive endpoints (/api/studio/compile) and bot render commands to prevent OOM/DDoS.
+- [ ] Hardcap user inputs: set maximum payload sizes, max execution time for Pandoc/LaTeX, and memory limits inside Celery tasks.
+- [ ] Configure Log Rotation (via Docker logging driver or Python's TimedRotatingFileHandler) with size limits and retention policies to prevent disk exhaustion.
+- [ ] Create a safe broadcast script/admin command to send the announcements and changelog to all active users with proper rate-limiting (max ~30 msgs/sec for Telegram).
+- [ ] Add `/developer_info` command to bot, so it shows Ivan Tishchenko info 
 
 ### P1 - Reliability, Security, and Delivery
+- [ ] Publish minimal Terms of Service and Privacy Policy on the website and add a /privacy command to the bot.
 - [ ] Escape HTML-sensitive `project.name` before Studio Telegram send (`parse_mode=HTML`) to prevent malformed captions/injection-like rendering; add regression test with `<`, `>`, `&`, and quotes.
 - [ ] Add Jenkins pre-deploy quality gate (`python -m unittest` or `pytest` + lint) and fail fast when FastAPI test modules are skipped because dependencies are missing.
 
-### P2 - API and Dashboard
+### P2 - API, Dashboard & Architecture
+- [ ] Fix `/api/schedule/cached_list` duplicates by returning only latest row per (`entity_type`, `entity_id`) and add API test.
+- [ ] Add backend validation for `/api/schedule/search` term length (reject empty/1-char queries).
+- [ ] Move CORS allowed origins to env-driven config (`fastapi_stats_app/config.py`).
+- [ ] **Rate Limiting:** Add Redis-based rate limiting to heavy endpoints (e.g., PDF rendering, API searches) to prevent abuse.
 
-- [ ] Fix `/api/schedule/cached_list` duplicates by returning only latest row per (`entity_type`, `entity_id`) and add API test for stable deduplicated output.
-- [ ] Add backend validation for `/api/schedule/search` term length (reject empty/1-char queries) to reduce noisy upstream calls and expensive cache scans.
-- [ ] Move CORS allowed origins to env-driven config (`fastapi_stats_app/config.py`) with sane defaults for production and local development.
+### P2 - Killer Features & Integrations (The "Cool" Factor)
+- [ ] **Telegram Mini App (TMA):** Integrate `/schedule` and `/studio` as seamless Web Apps inside Telegram.
+- [ ] **Smart OCR:** Accept photos of formulas/boards, convert to LaTeX (via API), and open in Document Studio.
+- [ ] **PWA Upgrade:** Add a Service Worker to `main_site_frontend` for instant offline loading and mobile app installation.
 
-### P2 - Bot UX
-- [x] Add optional "quick set" onboarding step after `/start` for schedule entity + notification time (skip allowed).
-- [x] Add `/myschedule` filter presets (for example "only exams", "hide auditorium subscriptions", custom named sets).
+### P3 - Observability & DevEx
+- [ ] Add panel on site /stats page with proxy diagnostics summary (e.g. latency per server table).
+- [ ] Integrate OpenTelemetry for distributed tracing across Bot, FastAPI, and Celery workers.
+- [x] Enhance OpenAPI (`/docs`) with full schemas, auth instructions, and custom branding.
+- [ ] Add a `Makefile` for streamlined local development and testing workflows.
+- [ ] Add CI matrix run for Python 3.11 and 3.12.
 
-### P2 - Quality and Documentation
+### Ideas
 
-- [ ] Add panel on site /stats page with proxy diagnostics summry (e.g. lattency per server table )
-
-### P3 back
-
-- [ ] Qdrant for search
-- [ ] Add CI matrix run for Python 3.11 and 3.12 to catch version-specific typing/FastAPI regressions earlier.
+- [ ] Feature: OCR for math. Accept photos, convert to LaTeX code, and allow opening in Studio.
+- [ ] Integrate OpenTelemetry (Tracing + Metrics) with Jaeger/Grafana to trace requests across FastAPI, Bot, and Celery workers.
+- [ ] Upgrade frontend to full PWA: Add Service Worker for offline asset caching and "Install App" prompt.
+- [ ] User Achievements/Badges system (e.g., "Late Night Coder", "LaTeX Master") displayed in /profile or /stats.
+- [ ] Enhance FastAPI OpenAPI docs: Add Markdown descriptions, response schemas, and ReDoc styling.
 
 
 ## Completed In This Iteration
 
-- [x] Fix mojibake RU OpenAPI summary/description text in FastAPI routers to restore readable API docs.
-- [x] Expand mojibake cleanup beyond OpenAPI docs: fix corrupted user-facing text in `main_site_frontend` pages/scripts, `studio_router`, and scheduler admin messages.
-- [x] add mobile version of auth pages.
-- [x] Add test for deterministic ordering in unified schedule search results when mixed entity types return equal match quality.
-- [x] Expand encoding guard tests to include website frontend assets (`main_site_frontend/*.html`, `main_site_frontend/js/*.js`) and selected backend user-facing strings.
-- [x] Add integration tests for Studio router endpoints (`/api/studio/projects/*`) covering ownership checks, rename conflicts, and Telegram send failure responses.
-- [x] Add wiki section describing schedule search offline fallback semantics and `is_offline` flag behavior for frontend maintainers.
+### P2 - Bot UX
+- [x] Add optional "quick set" onboarding step after `/start` for schedule entity + notification time (skip allowed).
+- [x] Add `/myschedule` filter presets (for example "only exams", "hide auditorium subscriptions", custom named sets).
 
 ## Chosen not to be implemented at all (cuz implemented partially or just don't want)
 
@@ -67,3 +78,11 @@ Last updated: 2026-04-10
   - partial: repository indexing can already be triggered and logs indexed file counts, but there is no surfaced status UI yet.
 - [ ] Add onboarding wizard for first-time users (`/start`) to configure language, schedule entity, and notifications.
   - partial: `/start` already has onboarding with language selection and a feature tour, but it does not yet collect schedule entity or notification preferences.
+
+
+## some duplicates, idk. maybe use later
+
+
+
+- [ ] **AI Assistant:** Add an "Explain this" inline button for library/GitHub code snippets using LLM API.
+- [ ] **Vector Search:** Implement Hybrid Search (Qdrant + BM25) for GitHub notes and Library to improve relevance.

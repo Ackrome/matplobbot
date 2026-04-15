@@ -1,0 +1,167 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=swap");
+
+:root {
+    --mpb-ink: #132238;
+    --mpb-sky: #1678c2;
+    --mpb-cyan: #31b5e7;
+    --mpb-cloud: #f4f9ff;
+    --mpb-line: #d8e6f5;
+    --mpb-panel: rgba(255, 255, 255, 0.9);
+}
+
+html {
+    background:
+        radial-gradient(circle at top left, rgba(49, 181, 231, 0.18), transparent 34%),
+        linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
+}
+
+body,
+.swagger-ui {
+    font-family: "Manrope", "Segoe UI", sans-serif;
+}
+
+.swagger-ui .topbar {
+    background: linear-gradient(120deg, #0d3a63 0%, var(--mpb-sky) 55%, var(--mpb-cyan) 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 14px 30px rgba(13, 58, 99, 0.18);
+}
+
+.swagger-ui .topbar-wrapper {
+    max-width: 1460px;
+}
+
+.swagger-ui .topbar-wrapper a {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-height: 40px;
+    color: #fff;
+    text-decoration: none;
+}
+
+.swagger-ui .topbar-wrapper a img,
+.swagger-ui .topbar-wrapper a span {
+    display: none;
+}
+
+.swagger-ui .topbar-wrapper a::before {
+    content: "";
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.18)),
+        linear-gradient(135deg, #ffffff, #8dd8ff);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.45),
+        0 10px 20px rgba(7, 21, 34, 0.16);
+}
+
+.swagger-ui .topbar-wrapper a::after {
+    content: "Matplobbot API";
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+}
+
+.swagger-ui .download-url-wrapper {
+    display: none;
+}
+
+.swagger-ui .information-container {
+    padding-bottom: 0;
+}
+
+.swagger-ui .info {
+    max-width: 1160px;
+    margin: 0 auto 18px;
+    padding: 30px 34px;
+    border: 1px solid var(--mpb-line);
+    border-radius: 24px;
+    background: var(--mpb-panel);
+    box-shadow: 0 24px 60px rgba(19, 34, 56, 0.08);
+    backdrop-filter: blur(10px);
+}
+
+.swagger-ui .info .title {
+    color: var(--mpb-ink);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.swagger-ui .info .title small.version-stamp {
+    background: #e2f3ff;
+    color: #0d5d94;
+    border-radius: 999px;
+    padding: 4px 10px;
+}
+
+.swagger-ui .info p,
+.swagger-ui .info li,
+.swagger-ui .info a,
+.swagger-ui .markdown p,
+.swagger-ui .markdown li {
+    color: #2d4158;
+}
+
+.swagger-ui .scheme-container {
+    background: transparent;
+    box-shadow: none;
+    padding: 12px 0 20px;
+}
+
+.swagger-ui .opblock-tag {
+    background: rgba(255, 255, 255, 0.74);
+    border: 1px solid var(--mpb-line);
+    border-radius: 18px;
+    color: var(--mpb-ink);
+    margin-bottom: 10px;
+    box-shadow: 0 8px 20px rgba(19, 34, 56, 0.05);
+}
+
+.swagger-ui .opblock {
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 14px 28px rgba(19, 34, 56, 0.07);
+}
+
+.swagger-ui .btn.authorize {
+    border-color: #0d5d94;
+    color: #0d5d94;
+}
+
+.swagger-ui .btn.authorize svg {
+    fill: #0d5d94;
+}
+
+.swagger-ui .btn.execute {
+    background: linear-gradient(120deg, #0d5d94, #1a86c7);
+    border-color: #0d5d94;
+}
+
+.swagger-ui .response-col_status,
+.swagger-ui .response-col_links,
+.swagger-ui table thead tr td,
+.swagger-ui table thead tr th {
+    color: var(--mpb-ink);
+}
+
+.swagger-ui .model-box,
+.swagger-ui section.models {
+    border-radius: 18px;
+    border-color: var(--mpb-line);
+}
+
+.mpb-docs-note {
+    margin: 18px 0 4px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: 1px solid #cce7ff;
+    background: linear-gradient(135deg, #f1f8ff, #ffffff);
+    color: var(--mpb-ink);
+}
+
+.mpb-docs-note strong {
+    display: block;
+    margin-bottom: 4px;
+}

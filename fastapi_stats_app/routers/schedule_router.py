@@ -14,6 +14,12 @@ from shared_lib.database import (
     get_discipline_modules_map,
     search_cached_entities,
 )
+from shared_lib.schemas import (
+    CachedScheduleEntitySchema,
+    ScheduleDataResponse,
+    ScheduleFallbackCountersResponse,
+    ScheduleSearchResultSchema,
+)
 from shared_lib.services.schedule_service import (
     get_module_name,
     get_schedule_fallback_counters,
@@ -158,9 +164,17 @@ def _merge_search_results(results_by_type: dict[str, list[dict]]) -> list[dict]:
     return merged_results[:30]
 
 
-@router.get("/search")
+@router.get(
+    "/search",
+    response_model=list[ScheduleSearchResultSchema],
+    summary="Search schedule entities",
+    description=(
+        "Searches groups, lecturers, and auditoriums. Results can mix live university data "
+        "with local cache fallback items when the upstream API is degraded."
+    ),
+)
 async def search_entity(
-    term: str,
+    term: str = Query(..., description="Search term used against schedule entities."),
     type: str = Query(
         "all",
         description=SEARCH_TYPE_QUERY_DESCRIPTION,
@@ -216,7 +230,11 @@ async def search_entity(
     return []
 
 
-@router.get("/cached_list")
+@router.get(
+    "/cached_list",
+    response_model=list[CachedScheduleEntitySchema],
+    summary="List recently cached schedule entities",
+)
 async def get_cached_list(db: AsyncSession = Depends(get_db_session_dependency)):
     """Returns recently cached groups for the right-side panel."""
     stmt = text(
@@ -239,14 +257,24 @@ async def get_cached_list(db: AsyncSession = Depends(get_db_session_dependency))
 
 @router.get(
     "/fallback_counters",
+    response_model=ScheduleFallbackCountersResponse,
     dependencies=[Depends(require_admin)],
+    summary="Get schedule source fallback counters",
 )
 async def get_fallback_counters():
     """Returns counters for schedule source outcomes: API success, cache fallback, and no cache."""
     return await get_schedule_fallback_counters()
 
 
-@router.get("/data/{type}/{id}")
+@router.get(
+    "/data/{type}/{id}",
+    response_model=ScheduleDataResponse,
+    summary="Load a schedule window for a specific entity",
+    description=(
+        "Returns a centered 29-day schedule window, module metadata, offline-mode signal, "
+        "and the loaded date bounds used by the frontend."
+    ),
+)
 async def get_schedule_data(
     type: str,
     id: str,

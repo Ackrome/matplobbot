@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Matplobbot">
+  <defs>
+    <linearGradient id="bg" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#0d3a63" />
+      <stop offset="55%" stop-color="#1678c2" />
+      <stop offset="100%" stop-color="#31b5e7" />
+    </linearGradient>
+    <linearGradient id="fg" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#dff6ff" />
+    </linearGradient>
+  </defs>
+  <rect width="96" height="96" rx="26" fill="url(#bg)" />
+  <path
+    fill="url(#fg)"
+    d="M22 70V26h10l16 20 16-20h10v44H62V43L48 59 34 43v27H22Z"
+  />
+</svg>

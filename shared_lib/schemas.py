@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 # extra='ignore': Если база вернет лишние поля, Pydantic их просто проигнорирует, а не упадет с ошибкой.
 # from_attributes=True: Позволяет создавать модели из объектов (ORM-style), если это понадобится в будущем.
 BASE_CONFIG = ConfigDict(extra="ignore", from_attributes=True)
+ALLOW_EXTRA_CONFIG = ConfigDict(extra="allow", from_attributes=True)
 
 # --- Вспомогательные модели ---
 
@@ -314,3 +315,153 @@ class CalendarSubscriptionProfileCreateRequest(BaseModel):
 
 class CalendarSubscriptionProfileSelectRequest(BaseModel):
     profile_id: str = Field(..., min_length=1, max_length=64)
+
+
+class StatusResponse(BaseModel):
+    status: Literal["success"] = "success"
+
+    model_config = BASE_CONFIG
+
+
+class CorrelationStatusResponse(StatusResponse):
+    correlation_id: str = Field(..., description="Correlation id for tracing and audit log lookup.")
+
+    model_config = BASE_CONFIG
+
+
+class HealthStatusResponse(BaseModel):
+    status: Literal["ok"] = "ok"
+    database: Literal["connected"] = "connected"
+
+    model_config = BASE_CONFIG
+
+
+class ScheduleSearchResultSchema(BaseModel):
+    id: str = Field(..., description="Entity identifier used by the schedule API.")
+    label: str = Field(..., description="Display label for the entity.")
+    description: str = Field(..., description="Human-friendly entity description.")
+    type: Literal["group", "person", "auditorium"] = Field(
+        ..., description="Normalized entity type."
+    )
+    is_offline: bool = Field(
+        False,
+        description="True when the result came from local cache instead of the live university API.",
+    )
+
+    model_config = BASE_CONFIG
+
+
+class CachedScheduleEntitySchema(BaseModel):
+    id: str = Field(..., description="Cached entity identifier.")
+    type: str = Field(..., description="Entity type represented in cache.")
+    label: str = Field(..., description="Display label for the cached entity.")
+
+    model_config = BASE_CONFIG
+
+
+class ScheduleFallbackCountersResponse(BaseModel):
+    ruz_api_success: int = Field(0, ge=0)
+    cache_fallback: int = Field(0, ge=0)
+    no_cache: int = Field(0, ge=0)
+
+    model_config = ALLOW_EXTRA_CONFIG
+
+
+class ScheduleLessonSchema(BaseModel):
+    date: str | None = None
+    discipline: str | None = None
+    discipline_short: str | None = None
+    discipline_full: str | None = None
+    group: str | None = None
+    beginLesson: str | None = None
+    endLesson: str | None = None
+    auditorium: str | None = None
+    kindOfWork: str | None = None
+    lecturer: str | None = None
+    lecturer_title: str | None = None
+    simple_type: str | None = None
+    module: str | None = None
+    source_entity_type: str | None = None
+    source_entity_id: str | None = None
+
+    model_config = ALLOW_EXTRA_CONFIG
+
+
+class LoadedBoundsSchema(BaseModel):
+    start: str = Field(..., description="Start date of the loaded schedule window in YYYY-MM-DD.")
+    end: str = Field(..., description="End date of the loaded schedule window in YYYY-MM-DD.")
+
+    model_config = BASE_CONFIG
+
+
+class ScheduleDataResponse(BaseModel):
+    schedule: list[ScheduleLessonSchema] = Field(default_factory=list)
+    available_modules: list[str] = Field(default_factory=list)
+    is_offline: bool = False
+    source_updated_at: str | None = None
+    loaded_bounds: LoadedBoundsSchema
+
+    model_config = BASE_CONFIG
+
+
+class ActivitySeriesEntry(BaseModel):
+    period_start: str = Field(..., description="Bucket label for the selected aggregation period.")
+    actions_count: int = Field(..., ge=0, description="Number of actions in the bucket.")
+
+    model_config = BASE_CONFIG
+
+
+class StudioProjectSummary(BaseModel):
+    id: int
+    name: str
+    type: str
+
+    model_config = BASE_CONFIG
+
+
+class StudioProjectFileSchema(BaseModel):
+    id: int
+    path: str
+    is_main: bool
+    is_binary: bool
+    content: str | None = None
+
+    model_config = BASE_CONFIG
+
+
+class StudioUploadAssetResponse(StatusResponse):
+    filename: str = Field(..., description="Stored asset filename inside the project.")
+
+    model_config = BASE_CONFIG
+
+
+class StudioTelegramSendResponse(StatusResponse):
+    message: str = Field(..., description="User-facing result message after Telegram delivery.")
+
+    model_config = BASE_CONFIG
+
+
+class StudioCompileErrorSchema(BaseModel):
+    line: int = Field(..., ge=1)
+    message: str
+
+    model_config = BASE_CONFIG
+
+
+class StudioCompileResponse(BaseModel):
+    status: str = Field(..., description="Compile task status reported by the worker.")
+    pdf: str | None = Field(None, description="Base64-encoded PDF output when compilation succeeds.")
+    image: str | None = Field(
+        None,
+        description="Base64-encoded PNG output for Mermaid or LaTeX image rendering flows.",
+    )
+    html: str | None = Field(None, description="Rendered HTML payload for Markdown preview flows.")
+    build_cache: str | None = Field(
+        None,
+        description="Base64-encoded incremental build cache returned by project compilation.",
+    )
+    message: str | None = None
+    error: str | None = None
+    errors: list[StudioCompileErrorSchema] = Field(default_factory=list)
+
+    model_config = ALLOW_EXTRA_CONFIG

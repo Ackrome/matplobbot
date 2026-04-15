@@ -173,3 +173,21 @@ class TestStudioRouterAPI(unittest.TestCase):
 
         self.assertEqual(response.status_code, 500)
         self.assertTrue(response.json().get("detail"))
+
+    def test_studio_openapi_documents_typed_and_binary_responses(self):
+        schema = self.app.openapi()
+
+        compile_schema = schema["paths"]["/api/studio/compile"]["post"]["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]
+        self.assertEqual(compile_schema["$ref"], "#/components/schemas/StudioCompileResponse")
+
+        zip_content = schema["paths"]["/api/studio/projects/{project_id}/export/zip"]["get"][
+            "responses"
+        ]["200"]["content"]
+        self.assertIn("application/zip", zip_content)
+
+        asset_content = schema["paths"]["/api/studio/projects/{project_id}/assets/{file_path}"][
+            "get"
+        ]["responses"]["200"]["content"]
+        self.assertIn("application/octet-stream", asset_content)

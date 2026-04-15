@@ -37,6 +37,7 @@ This page is a full feature map of the project: bot, website, API, scheduler, wo
 
 | Feature | Entry point | Purpose |
 | --- | --- | --- |
+| [OpenAPI docs](#openapi-docs) | `/docs` | Branded interactive API docs with auth-aware try-it-out |
 | [Auth API](#auth-api) | `/api/auth/*` | Registration, login, Telegram auth, profile, preferences |
 | [Schedule API](#schedule-api) | `/api/schedule/*` | Search entities, fetch schedule windows, fallback counters |
 | [Stats API](#stats-api) | `/api/stats/*` | Health, profiles, exports, admin messaging, dashboards |
@@ -485,6 +486,26 @@ window.mpbPopup("Saved", { type: "success" });
 ```
 
 ## API Features
+
+### OpenAPI Docs
+
+Entry point:
+
+- `/docs`
+
+Feature details:
+
+- Swagger UI is branded for Matplobbot instead of using the stock FastAPI styling.
+- The info block includes auth instructions for both username/password login and Telegram-issued JWTs.
+- JSON endpoints expose concrete request/response schemas, while ZIP/PDF/iCal routes document their content types explicitly.
+- Protected HTML pages are excluded from the schema so the docs stay API-focused.
+
+How to use:
+
+1. Open `/docs`.
+2. For password auth, click `Authorize` and enter website credentials; Swagger UI will fetch a token from `/api/auth/login`.
+3. For Telegram auth, call `/api/auth/telegram`, copy `access_token`, then paste that JWT into `Authorize`.
+4. Use the schema panels to inspect payload fields before trying schedule, stats, studio, or calendar endpoints.
 
 ### Auth API
 

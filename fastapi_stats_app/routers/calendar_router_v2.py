@@ -61,6 +61,12 @@ BUILT_IN_PROFILES = (
         "scope_label": "Exams and pass/fail assessments from all active subscriptions",
     },
 )
+CALENDAR_FEED_RESPONSE = {
+    200: {
+        "description": "iCal feed payload for calendar clients.",
+        "content": {"text/calendar": {"schema": {"type": "string"}}},
+    }
+}
 
 
 def _get_calendar_base_url(request: Request) -> str:
@@ -903,11 +909,13 @@ async def _render_telegram_filtered_feed(
     "/cal/{secret_token}/basic.ics",
     methods=["GET", "HEAD"],
     summary="Public personal schedule iCal feed",
+    responses=CALENDAR_FEED_RESPONSE,
 )
 @router.api_route(
     "/cal/{secret_token}.ics",
     methods=["GET", "HEAD"],
     summary="Public personal schedule iCal feed",
+    responses=CALENDAR_FEED_RESPONSE,
 )
 async def get_webcal_schedule(
     request: Request,
@@ -939,11 +947,13 @@ async def get_webcal_schedule(
     "/cal/{secret_token}/telegram.ics",
     methods=["GET", "HEAD"],
     summary="Public Telegram-filtered personal schedule iCal feed",
+    responses=CALENDAR_FEED_RESPONSE,
 )
 @router.api_route(
     "/cal/{secret_token}/telegram/basic.ics",
     methods=["GET", "HEAD"],
     summary="Public Telegram-filtered personal schedule iCal feed",
+    responses=CALENDAR_FEED_RESPONSE,
 )
 async def get_webcal_schedule_telegram_filtered(
     request: Request,
@@ -970,11 +980,13 @@ async def get_webcal_schedule_telegram_filtered(
     "/cal/{secret_token}/profiles/{profile_id}.ics",
     methods=["GET", "HEAD"],
     summary="Public profile-specific schedule iCal feed",
+    responses=CALENDAR_FEED_RESPONSE,
 )
 @router.api_route(
     "/cal/{secret_token}/profiles/{profile_id}/basic.ics",
     methods=["GET", "HEAD"],
     summary="Public profile-specific schedule iCal feed",
+    responses=CALENDAR_FEED_RESPONSE,
 )
 async def get_webcal_schedule_profile(
     request: Request,

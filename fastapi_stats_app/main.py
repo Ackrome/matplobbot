@@ -46,6 +46,7 @@ from shared_lib.database import close_db_pool, init_db_pool
 
 from .auth import get_current_user  # Import auth dependency
 from .middleware import CorrelationIdMiddleware
+from .openapi_docs import configure_openapi
 from .routers import (
     auth_router,
     schedule_router,
@@ -76,7 +77,13 @@ async def lifespan(app: FastAPI):
     await close_db_pool()
 
 
-app = FastAPI(title="Bot Stats API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title="Matplobbot API",
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+)
 app.add_middleware(CorrelationIdMiddleware)
 
 # Настройка CORS для фронтенда
@@ -102,9 +109,11 @@ STATIC_DIR = APP_BASE_DIR / "static"
 STATIC_DIR.mkdir(exist_ok=True)
 (STATIC_DIR / "css").mkdir(exist_ok=True)
 (STATIC_DIR / "js").mkdir(exist_ok=True)
+(STATIC_DIR / "img").mkdir(exist_ok=True)
 
 # Монтируем статические файлы
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+configure_openapi(app)
 
 
 # Root HTML endpoint for stats page
@@ -114,6 +123,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     summary="Главная страница статистики",
     description="Отображает HTML страницу со статистикой бота.",
     dependencies=[Depends(get_current_user)],
+    include_in_schema=False,
 )
 async def read_root_html(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
@@ -125,6 +135,7 @@ async def read_root_html(request: Request):
     summary="Страница профиля пользователя",
     description="Отображает страницу с детальной информацией о действиях пользователя.",
     dependencies=[Depends(get_current_user)],
+    include_in_schema=False,
 )
 async def read_user_details_html(request: Request, user_id: int):
     # user_id передается в шаблон, но мы будем загружать данные через JS/API

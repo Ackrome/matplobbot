@@ -194,3 +194,22 @@ class TestStatsExportAPI(unittest.TestCase):
         kwargs = mocked_html_builder.call_args.kwargs
         self.assertEqual(kwargs["week_start_date"], date(2024, 1, 1))
         self.assertEqual(kwargs["week_end_date"], date(2024, 1, 31))
+
+    def test_stats_openapi_documents_export_and_series_schemas(self):
+        schema = self.app.openapi()
+
+        export_content = schema["paths"]["/api/stats/users/{user_id}/export_actions"]["get"][
+            "responses"
+        ]["200"]["content"]
+        self.assertIn("application/json", export_content)
+        self.assertIn("text/csv", export_content)
+        self.assertIn("application/pdf", export_content)
+
+        activity_schema = schema["paths"]["/api/stats/activity"]["get"]["responses"]["200"][
+            "content"
+        ]["application/json"]["schema"]
+        self.assertEqual(activity_schema["type"], "array")
+        self.assertEqual(
+            activity_schema["items"]["$ref"],
+            "#/components/schemas/ActivitySeriesEntry",
+        )
