@@ -86,10 +86,7 @@ def _inject_custom_assets(html: HTMLResponse) -> HTMLResponse:
     body = html.body.decode("utf-8")
     body = body.replace(
         "</head>",
-        (
-            f'<link rel="stylesheet" type="text/css" href="{DOCS_CSS_URL}" />\n'
-            "</head>"
-        ),
+        (f'<link rel="stylesheet" type="text/css" href="{DOCS_CSS_URL}" />\n' "</head>"),
     )
     body = body.replace(
         "</body>",

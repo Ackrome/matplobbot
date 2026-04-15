@@ -177,9 +177,9 @@ class TestStudioRouterAPI(unittest.TestCase):
     def test_studio_openapi_documents_typed_and_binary_responses(self):
         schema = self.app.openapi()
 
-        compile_schema = schema["paths"]["/api/studio/compile"]["post"]["responses"]["200"]["content"][
-            "application/json"
-        ]["schema"]
+        compile_schema = schema["paths"]["/api/studio/compile"]["post"]["responses"]["200"][
+            "content"
+        ]["application/json"]["schema"]
         self.assertEqual(compile_schema["$ref"], "#/components/schemas/StudioCompileResponse")
 
         zip_content = schema["paths"]["/api/studio/projects/{project_id}/export/zip"]["get"][

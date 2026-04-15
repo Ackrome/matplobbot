@@ -43,7 +43,9 @@ class TestOpenApiDocs(unittest.TestCase):
     def test_openapi_schema_includes_auth_instructions_and_logo(self):
         schema = self.app.openapi()
 
-        self.assertEqual(schema["info"]["summary"], "Schedule, stats, studio, and calendar APIs for Matplobbot.")
+        self.assertEqual(
+            schema["info"]["summary"], "Schedule, stats, studio, and calendar APIs for Matplobbot."
+        )
         self.assertIn("Username/password flow", schema["info"]["description"])
         self.assertIn("Telegram flow", schema["info"]["description"])
         self.assertEqual(schema["info"]["x-logo"]["url"], "/static/img/matplobbot-mark.svg")

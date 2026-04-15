@@ -450,7 +450,9 @@ class StudioCompileErrorSchema(BaseModel):
 
 class StudioCompileResponse(BaseModel):
     status: str = Field(..., description="Compile task status reported by the worker.")
-    pdf: str | None = Field(None, description="Base64-encoded PDF output when compilation succeeds.")
+    pdf: str | None = Field(
+        None, description="Base64-encoded PDF output when compilation succeeds."
+    )
     image: str | None = Field(
         None,
         description="Base64-encoded PNG output for Mermaid or LaTeX image rendering flows.",
