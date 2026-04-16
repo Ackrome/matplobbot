@@ -1,7 +1,5 @@
-﻿// main_site_frontend/js/schedule.js
 const API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : "/api";
 const STORAGE_KEY = "mpb_user_preferences";
-const CALENDAR_SECTION_COLLAPSED_KEY = "mpb_calendar_sync_collapsed";
 const FIXED_TIMES =[
     { start: '08:30', end: '10:00' },
     { start: '10:10', end: '11:40' },
@@ -12,6 +10,7 @@ const FIXED_TIMES =[
     { start: '18:55', end: '20:25' },
     { start: '20:30', end: '22:00' }
 ];
+
 let fullSchedule =[];
 let loadedBounds = { start: null, end: null };
 let sourceUpdatedAt = null;
@@ -22,29 +21,36 @@ let isOfflineMode = false;
 let currentWeekStart = getMonday(new Date());
 let cachedOfflineEntities = [];
 let latestSearchResults =[];
-let scheduleAuthUser = null;
-let calendarSubscriptionState = createDefaultCalendarSubscriptionState();
-let isCalendarSubscriptionCollapsed = loadCalendarSectionCollapsed();
+
+// Делаем юзера глобальным, чтобы calendar_sync.js тоже его видел
+window.scheduleAuthUser = null;
+
 const groupInput = document.getElementById('groupSearch');
 const resultsBox = document.getElementById('searchResults');
 const searchContainer = document.getElementById('searchContainer');
+
 function getUiLanguage() {
     const source = window.mpbI18n?.getLanguage?.() || document.documentElement.lang || 'ru';
     return String(source).toLowerCase().startsWith('ru') ? 'ru' : 'en';
 }
+
 function getUiLocale() {
     return getUiLanguage() === 'ru' ? 'ru-RU' : 'en-US';
 }
+
 function t(key, fallback = '', params = {}) {
     return window.mpbI18n?.t?.(key, fallback, params) || fallback || key;
 }
+
 function formatUiDate(date, options) {
     return new Intl.DateTimeFormat(getUiLocale(), options).format(date);
 }
+
 function formatUiDateCapitalized(date, options) {
     const value = formatUiDate(date, options);
     return value ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
 }
+
 function escapeHtml(value) {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -53,47 +59,21 @@ function escapeHtml(value) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 }
+
 function escapeJsString(value) {
     return String(value ?? '')
         .replace(/\\/g, '\\\\')
         .replace(/'/g, "\\'");
 }
-function createDefaultCalendarSubscriptionState() {
-    return {
-        loading: false,
-        enabled: false,
-        httpUrl: '',
-        webcalUrl: '',
-        hasError: false,
-        justReset: false
-    };
-}
-function loadCalendarSectionCollapsed() {
-    try {
-        return localStorage.getItem(CALENDAR_SECTION_COLLAPSED_KEY) === 'true';
-    } catch (error) {
-        return false;
-    }
-}
-function setCalendarSectionCollapsed(nextValue) {
-    isCalendarSubscriptionCollapsed = Boolean(nextValue);
-    try {
-        localStorage.setItem(CALENDAR_SECTION_COLLAPSED_KEY, isCalendarSubscriptionCollapsed ? 'true' : 'false');
-    } catch (error) {}
-}
-function toggleCalendarSubscriptionSection() {
-    setCalendarSectionCollapsed(!isCalendarSubscriptionCollapsed);
-    renderCalendarSubscription();
-}
+
 window.addEventListener('mpb-auth-ready', (event) => {
-    scheduleAuthUser = event.detail?.user || null;
-    if (!scheduleAuthUser) {
-        calendarSubscriptionState = createDefaultCalendarSubscriptionState();
-        renderCalendarSubscription();
-        return;
+    window.scheduleAuthUser = event.detail?.user || null;
+    // Вызываем функцию из calendar_sync.js, если она уже загрузилась
+    if (window.refreshCalendarSubscription) {
+        window.refreshCalendarSubscription();
     }
-    refreshCalendarSubscription();
 });
+
 document.addEventListener('DOMContentLoaded', async () => {
     await initOfflineHistory();
     await loadInitialPreferences();
@@ -106,14 +86,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderModuleFilters();
             filterAndRender();
         }
-        renderCalendarSubscription();
+        if (window._renderCalendarSubscriptionImpl) window._renderCalendarSubscriptionImpl();
     });
 });
+
 function renderOfflineHistory(list = cachedOfflineEntities) {
     const container = document.getElementById('cachedEntitiesList');
     if (!container) return;
     if (!Array.isArray(list) || list.length === 0) {
-        container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400 italic">${escapeHtml(t('schedule.history.empty', 'History is empty'))}</div>`;
+        container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400 italic">${escapeHtml(t('schedule.history.empty', 'История пуста'))}</div>`;
         return;
     }
     container.innerHTML = list.map(item => {
@@ -121,7 +102,7 @@ function renderOfflineHistory(list = cachedOfflineEntities) {
         const itemId = escapeJsString(item.id);
         const itemLabel = escapeJsString(item.label);
         const labelText = escapeHtml(item.label);
-        const savedText = escapeHtml(t('schedule.history.saved', 'Saved offline'));
+        const savedText = escapeHtml(t('schedule.history.saved', 'Сохранено оффлайн'));
         return `
             <button onclick="loadSchedule('${itemType}', '${itemId}', '${itemLabel}'); closeOfflinePanel();"
                     class="group w-full text-left px-4 py-3 bg-white hover:bg-blue-50 rounded-xl transition-all flex items-center justify-between border border-transparent hover:border-blue-100">
@@ -134,6 +115,7 @@ function renderOfflineHistory(list = cachedOfflineEntities) {
         `;
     }).join('');
 }
+
 async function initOfflineHistory() {
     try {
         const res = await fetch(`${API_BASE}/schedule/cached_list`);
@@ -145,6 +127,7 @@ async function initOfflineHistory() {
         console.warn("Не удалось загрузить список кэша:", e);
     }
 }
+
 async function loadInitialPreferences() {
     const token = localStorage.getItem('jwt_token');
     let remotePrefs = null;
@@ -153,6 +136,7 @@ async function loadInitialPreferences() {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) localPrefs = JSON.parse(saved);
     } catch (e) {}
+
     if (token) {
         try {
             const res = await fetch(`${API_BASE}/auth/me`, {
@@ -166,6 +150,7 @@ async function loadInitialPreferences() {
             console.error("Ошибка загрузки настроек с сервера", e);
         }
     }
+
     let prefsToApply = null;
     if (remotePrefs && Object.keys(remotePrefs).length > 0) {
         prefsToApply = remotePrefs;
@@ -174,12 +159,15 @@ async function loadInitialPreferences() {
         prefsToApply = localPrefs;
         if (token) pushPreferencesToAPI(prefsToApply, token);
     }
+
     if (prefsToApply) {
         if (prefsToApply.useShortNames !== undefined) {
-            document.getElementById('useShortNames').checked = prefsToApply.useShortNames;
+            const el = document.getElementById('useShortNames');
+            if (el) el.checked = prefsToApply.useShortNames;
         }
         if (prefsToApply.showFullLecturerName !== undefined) {
-            document.getElementById('showFullLecturerName').checked = prefsToApply.showFullLecturerName;
+            const el = document.getElementById('showFullLecturerName');
+            if (el) el.checked = prefsToApply.showFullLecturerName;
         }
         if (prefsToApply.entity && prefsToApply.entity.id) {
             if (prefsToApply.modules && prefsToApply.modules.length > 0) {
@@ -189,12 +177,13 @@ async function loadInitialPreferences() {
         }
     }
 }
+
 async function savePreferences() {
     const prefs = {
         entity: currentEntity,
         modules: Array.from(selectedModules),
-        useShortNames: document.getElementById('useShortNames').checked,
-        showFullLecturerName: document.getElementById('showFullLecturerName').checked
+        useShortNames: document.getElementById('useShortNames')?.checked ?? true,
+        showFullLecturerName: document.getElementById('showFullLecturerName')?.checked ?? false
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
     const token = localStorage.getItem('jwt_token');
@@ -202,6 +191,7 @@ async function savePreferences() {
         pushPreferencesToAPI(prefs, token);
     }
 }
+
 async function pushPreferencesToAPI(prefs, token) {
     try {
         await fetch(`${API_BASE}/auth/preferences`, {
@@ -217,23 +207,18 @@ async function pushPreferencesToAPI(prefs, token) {
     }
 }
 
-// Заглушка для внешнего calendar_sync.js, чтобы не сломать если он загрузится позже
-function renderCalendarSubscription() {
-    if (window._renderCalendarSubscriptionImpl) {
-        window._renderCalendarSubscriptionImpl();
-    }
-}
-
 function parseDate(dateStr) {
     const [y, m, d] = dateStr.replace(/\./g, '-').split('-');
     return new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
 }
+
 function getISODateStr(d) {
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
 }
+
 function getMonday(d) {
     const date = new Date(d);
     const day = date.getDay();
@@ -242,6 +227,7 @@ function getMonday(d) {
     date.setHours(0, 0, 0, 0);
     return date;
 }
+
 async function changeWeek(offset) {
     currentWeekStart.setDate(currentWeekStart.getDate() + offset * 7);
     const weekEnd = new Date(currentWeekStart);
@@ -255,10 +241,12 @@ async function changeWeek(offset) {
         filterAndRender();
     }
 }
+
 async function setTodayWeek() {
     currentWeekStart = getMonday(new Date());
     await changeWeek(0);
 }
+
 function copyToClipboard(text, event) {
     navigator.clipboard.writeText(text).then(() => {
         const el = event.currentTarget;
@@ -267,6 +255,7 @@ function copyToClipboard(text, event) {
         setTimeout(() => el.innerHTML = originalHtml, 1500);
     });
 }
+
 groupInput.addEventListener('input', debounce(async (e) => {
     const query = e.target.value.trim();
     if (query.length < 2) {
@@ -284,25 +273,18 @@ groupInput.addEventListener('input', debounce(async (e) => {
         resultsBox.classList.remove('hidden');
     }
 }, 300));
+
 function getSearchResultTypeMeta(type) {
     const normalizedType = String(type || 'group').toLowerCase();
     if (normalizedType === 'person') {
-        return {
-            label: t('schedule.search.type.person', 'Преподаватель'),
-            badgeClass: 'bg-sky-100 text-sky-700'
-        };
+        return { label: t('schedule.search.type.person', 'Преподаватель'), badgeClass: 'bg-sky-100 text-sky-700' };
     }
     if (normalizedType === 'auditorium') {
-        return {
-            label: t('schedule.search.type.auditorium', 'Аудитория'),
-            badgeClass: 'bg-emerald-100 text-emerald-700'
-        };
+        return { label: t('schedule.search.type.auditorium', 'Аудитория'), badgeClass: 'bg-emerald-100 text-emerald-700' };
     }
-    return {
-        label: t('schedule.search.type.group', 'Группа'),
-        badgeClass: 'bg-violet-100 text-violet-700'
-    };
+    return { label: t('schedule.search.type.group', 'Группа'), badgeClass: 'bg-violet-100 text-violet-700' };
 }
+
 function renderSearchResults(results) {
     const normalizedResults = Array.isArray(results) ? results :[];
     latestSearchResults = normalizedResults;
@@ -333,6 +315,7 @@ function renderSearchResults(results) {
     }
     resultsBox.classList.remove('hidden');
 }
+
 async function loadSchedule(type, id, name, targetDate = null) {
     resultsBox.classList.add('hidden');
     groupInput.value = name;
@@ -348,7 +331,7 @@ async function loadSchedule(type, id, name, targetDate = null) {
     try {
         const res = await fetch(url);
         const data = await res.json();
-        fullSchedule = data.schedule || [];
+        fullSchedule = data.schedule ||[];
         allAvailableModules = data.available_modules ||[];
         loadedBounds = data.loaded_bounds || {start: "2000-01-01", end: "2099-01-01"};
         sourceUpdatedAt = data.source_updated_at || null;
@@ -359,15 +342,19 @@ async function loadSchedule(type, id, name, targetDate = null) {
         isOfflineMode = data.is_offline || false;
         renderModuleFilters();
         filterAndRender();
+        // Вызываем обновление календаря, так как сменилась сущность
+        if (window._renderCalendarSubscriptionImpl) window._renderCalendarSubscriptionImpl();
     } catch (err) {
-        const errorText = escapeHtml(t('schedule.error.load', 'Ошибка загрузки.'));
+        const errorText = escapeHtml(t('schedule.error.load', 'Ошибка загрузки расписания.'));
         document.getElementById('desktopSchedule').innerHTML = `<div class="p-10 text-center text-red-500 font-bold">${errorText}</div>`;
         document.getElementById('mobileSchedule').innerHTML = `<div class="p-10 text-center text-red-500 font-bold">${errorText}</div>`;
     }
 }
+
 function renderModuleFilters() {
     const container = document.getElementById('moduleContainer');
     const section = document.getElementById('moduleFilterSection');
+    if (!container || !section) return;
     if (allAvailableModules.length === 0) {
         section.classList.add('hidden');
         return;
@@ -375,9 +362,10 @@ function renderModuleFilters() {
     section.classList.remove('hidden');
     const selected = allAvailableModules.filter((mod) => selectedModules.has(mod));
     const available = allAvailableModules.filter((mod) => !selectedModules.has(mod));
+
     function renderModuleChip(mod, isSelected) {
         return `
-            <button onclick="toggleModule('${escapeJsString(mod)}')"
+            <button onclick="window.toggleModule('${escapeJsString(mod)}')"
                 class="inline-flex max-w-full items-center gap-2 rounded-xl border px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-200
                 ${isSelected
                     ? 'bg-slate-900 border-slate-900 text-white shadow-lg shadow-slate-900/15'
@@ -387,6 +375,7 @@ function renderModuleFilters() {
             </button>
         `;
     }
+
     function renderModuleGroup(labelKey, fallback, items, toneClass) {
         if (items.length === 0) return '';
         return `
@@ -401,6 +390,7 @@ function renderModuleFilters() {
             </section>
         `;
     }
+
     container.innerHTML = `
         <div class="space-y-3">
             ${renderModuleGroup('schedule.filters.selected', 'Активные', selected, 'border-slate-200 bg-slate-50/80')}
@@ -408,32 +398,42 @@ function renderModuleFilters() {
         </div>
     `;
 }
-function toggleModule(mod) {
+
+// Делаем функции глобальными, чтобы onClick из HTML мог их дергать
+window.toggleModule = function(mod) {
     if (selectedModules.has(mod)) selectedModules.delete(mod);
     else selectedModules.add(mod);
     renderModuleFilters();
     filterAndRender();
     savePreferences();
+    if (window._renderCalendarSubscriptionImpl) window._renderCalendarSubscriptionImpl();
 }
-function selectAllModules() {
+
+window.selectAllModules = function() {
     selectedModules = new Set(allAvailableModules);
     renderModuleFilters();
     filterAndRender();
     savePreferences();
+    if (window._renderCalendarSubscriptionImpl) window._renderCalendarSubscriptionImpl();
 }
-function clearAllModules() {
+
+window.clearAllModules = function() {
     selectedModules.clear();
     renderModuleFilters();
     filterAndRender();
     savePreferences();
+    if (window._renderCalendarSubscriptionImpl) window._renderCalendarSubscriptionImpl();
 }
+
 function filterAndRender() {
     if (isOfflineMode) document.getElementById('offlineWarning').classList.remove('hidden');
     else document.getElementById('offlineWarning').classList.add('hidden');
+
     const weekEnd = new Date(currentWeekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
     document.getElementById('weekRangeDisplay').innerText =
         `${formatUiDate(currentWeekStart, {day:'numeric', month:'short'})} - ${formatUiDate(weekEnd, {day:'numeric', month:'short'})}`;
+
     const filteredLessons = fullSchedule.filter(lesson => {
         if (lesson.module && !selectedModules.has(lesson.module)) return false;
         const lessonDate = parseDate(lesson.date);
@@ -443,6 +443,7 @@ function filterAndRender() {
     renderDesktopGrid(filteredLessons);
     renderMobileFeed(filteredLessons);
 }
+
 function renderDesktopGrid(lessons) {
     const container = document.getElementById('desktopSchedule');
     const weekDates =[];
@@ -455,11 +456,13 @@ function renderDesktopGrid(lessons) {
     lessons.forEach(l => {
         const normDate = getISODateStr(parseDate(l.date));
         if (!gridData[normDate]) gridData[normDate] = {};
-        if (!gridData[normDate][l.beginLesson]) gridData[normDate][l.beginLesson] =[];
+        if (!gridData[normDate][l.beginLesson]) gridData[normDate][l.beginLesson] = [];
         gridData[normDate][l.beginLesson].push(l);
     });
+
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
     let html = `
     <div class="overflow-hidden relative">
         <table class="w-full table-fixed border-collapse text-left">
@@ -477,9 +480,10 @@ function renderDesktopGrid(lessons) {
         </th>`;
     });
     html += `</tr></thead><tbody class="divide-y divide-slate-100 relative">`;
+
     FIXED_TIMES.forEach(timeSlot => {
         const timeStr = timeSlot.start;
-        const [hStart, mStart] = timeSlot.start.split(':').map(Number);
+        const[hStart, mStart] = timeSlot.start.split(':').map(Number);
         const[hEnd, mEnd] = timeSlot.end.split(':').map(Number);
         const slotStartMins = hStart * 60 + mStart;
         const slotEndMins = hEnd * 60 + mEnd;
@@ -507,6 +511,7 @@ function renderDesktopGrid(lessons) {
     html += `</tbody></table></div>`;
     container.innerHTML = html;
 }
+
 function renderMobileFeed(lessons) {
     const container = document.getElementById('mobileSchedule');
     if (lessons.length === 0) {
@@ -516,7 +521,7 @@ function renderMobileFeed(lessons) {
     const byDate = {};
     lessons.forEach(l => {
         const normDate = getISODateStr(parseDate(l.date));
-        if(!byDate[normDate]) byDate[normDate] = [];
+        if(!byDate[normDate]) byDate[normDate] =[];
         byDate[normDate].push(l);
     });
     const sortedDates = Object.keys(byDate).sort();
@@ -542,6 +547,7 @@ function renderMobileFeed(lessons) {
     });
     container.innerHTML = html;
 }
+
 function getShortKind(kind) {
     if (!kind) return '';
     const k = kind.toLowerCase();
@@ -552,10 +558,11 @@ function getShortKind(kind) {
     if (k.includes('консульт')) return 'Консультация';
     return kind;
 }
+
 function renderCard(l, isDesktop) {
     const color = getBadgeColor(l.kindOfWork);
-    const useShort = document.getElementById('useShortNames').checked;
-    const showFullLecturerName = document.getElementById('showFullLecturerName').checked;
+    const useShort = document.getElementById('useShortNames')?.checked ?? true;
+    const showFullLecturerName = document.getElementById('showFullLecturerName')?.checked ?? false;
     const discName = useShort ? l.discipline_short : l.discipline_full;
     const safeKind = escapeHtml(getShortKind(l.kindOfWork));
     const safeModule = escapeHtml(l.module || '');
@@ -638,6 +645,7 @@ function renderCard(l, isDesktop) {
         </div>
     </article>`;
 }
+
 function getBadgeColor(kind) {
     if (!kind) return { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600' };
     const k = kind.toLowerCase();
@@ -646,31 +654,30 @@ function getBadgeColor(kind) {
         k.includes('практ') ||
         k.includes('семин') ||
         k.includes('practice') ||
-        k.includes('seminar') ||
-        k.includes('практ') ||
-        k.includes('семин');
+        k.includes('seminar');
     const isExamLike =
         k.includes('экзам') ||
         k.includes('зачет') ||
         k.includes('аттест') ||
         k.includes('exam') ||
         k.includes('credit') ||
-        k.includes('test') ||
-        k.includes('экзамен') ||
-        k.includes('зачет') ||
-        k.includes('аттест');
+        k.includes('test');
+
     if (isLecture) return { bg: 'bg-emerald-50/60', border: 'border-emerald-200', text: 'text-emerald-700' };
     if (isPractice) return { bg: 'bg-amber-50/60', border: 'border-amber-200', text: 'text-amber-700' };
     if (isExamLike) return { bg: 'bg-rose-50/60', border: 'border-rose-200', text: 'text-rose-700' };
     return { bg: 'bg-blue-50/60', border: 'border-blue-200', text: 'text-blue-700' };
 }
+
 function debounce(func, timeout = 300){
     let timer;
     return (...args) => { clearTimeout(timer); timer = setTimeout(() => { func.apply(this, args); }, timeout); };
 }
+
 function isSameDay(d1, d2) {
     return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 }
+
 function toggleOfflinePanel(event) {
     if (event) event.stopPropagation();
     const dropdown = document.getElementById('offlineDropdown');
@@ -687,14 +694,18 @@ function toggleOfflinePanel(event) {
         closeOfflinePanel();
     }
 }
+
 function closeOfflinePanel() {
     const dropdown = document.getElementById('offlineDropdown');
     const arrow = document.getElementById('offlineArrow');
-    dropdown.classList.add('opacity-0', 'translate-y-2');
-    dropdown.classList.remove('opacity-100', 'translate-y-0');
-    arrow.classList.remove('rotate-180');
-    setTimeout(() => dropdown.classList.add('hidden'), 200);
+    if(dropdown && arrow) {
+        dropdown.classList.add('opacity-0', 'translate-y-2');
+        dropdown.classList.remove('opacity-100', 'translate-y-0');
+        arrow.classList.remove('rotate-180');
+        setTimeout(() => dropdown.classList.add('hidden'), 200);
+    }
 }
+
 document.addEventListener('click', (e) => {
     if (!searchContainer.contains(e.target)) resultsBox.classList.add('hidden');
     const offlineContainer = document.getElementById('offlinePanelContainer');
@@ -702,202 +713,8 @@ document.addEventListener('click', (e) => {
         closeOfflinePanel();
     }
 });
-function toggleFiltersMobile() {
+
+// Глобальная функция для вызова из HTML onClick
+window.toggleFiltersMobile = function() {
     window.toggleScheduleFilters?.();
-}
-// Экспортируем функцию для UI Utils
-window._renderCalendarSubscriptionImpl = function() {
-    const container = document.getElementById('calendarSubscriptionSection');
-    if (!container) return;
-    if (!scheduleAuthUser) {
-        container.classList.add('hidden');
-        container.innerHTML = '';
-        return;
-    }
-    container.classList.remove('hidden');
-    const selectedProfile = window.getSelectedCalendarProfile ? window.getSelectedCalendarProfile() : null;
-    const isProfileRevealed = selectedProfile && window.revealedCalendarProfileIds ? window.revealedCalendarProfileIds.has(selectedProfile.id) : false;
-    const syncReady = Boolean(calendarSubscriptionState.enabled);
-    const syncPaused = !calendarSubscriptionState.sync_enabled;
-    const title = escapeHtml(t('schedule.calendar.title', 'Подписка на календарь'));
-    const summary = syncReady
-        ? escapeHtml(t('schedule.calendar.summaryReady', 'Приватные iCal-ленты для ваших профилей синхронизации на сайте.'))
-        : syncPaused
-            ? escapeHtml(t('schedule.calendar.summaryPaused', 'Ссылки календаря на паузе.'))
-            : escapeHtml(t('schedule.calendar.summarySetup', 'Настройте приватные ленты расписания.'));
-    const badgeText = syncReady
-        ? escapeHtml(t('schedule.calendar.statusReady', 'Готово'))
-        : syncPaused
-            ? escapeHtml(t('schedule.calendar.statusPaused', 'На паузе'))
-            : escapeHtml(t('schedule.calendar.statusSetup', 'Настройка'));
-    const badgeClass = syncReady
-        ? 'border-emerald-200 bg-emerald-100 text-emerald-700'
-        : syncPaused
-            ? 'border-slate-200 bg-slate-200 text-slate-700'
-            : 'border-amber-200 bg-amber-100 text-amber-700';
-    const toggleText = escapeHtml(
-        t(
-            isCalendarSubscriptionCollapsed ? 'schedule.calendar.expand' : 'schedule.calendar.collapse',
-            isCalendarSubscriptionCollapsed ? 'Развернуть' : 'Свернуть'
-        )
-    );
-    const toggleIconClass = isCalendarSubscriptionCollapsed ? '' : 'rotate-180';
-
-    if (calendarSubscriptionState.loading) {
-        container.innerHTML = `
-            <div class="rounded-2xl border border-slate-200 bg-white p-4 md:p-5 shadow-sm">
-                <div class="flex items-center gap-4 text-left">
-                    <div class="flex items-center justify-center w-10 h-10 rounded-full bg-blue-50 text-blue-600 shrink-0">
-                        <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                    </div>
-                    <div>
-                        <h2 class="text-base font-bold text-slate-900">${title}</h2>
-                        <p class="text-xs text-slate-500 mt-0.5">${escapeHtml(t('schedule.calendar.loading', 'Загружаем данные...'))}</p>
-                    </div>
-                </div>
-            </div>
-        `;
-        return;
-    }
-
-    const eligibilityNotice = calendarSubscriptionState.hasError
-        ? `<div class="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600 mb-3">${escapeHtml(t('schedule.calendar.error', 'Ошибка загрузки подписки.'))}</div>`
-        : !calendarSubscriptionState.eligibility?.available
-            ? `<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700 mb-3">${escapeHtml(calendarSubscriptionState.eligibility?.detail || t('schedule.calendar.unavailable', 'Подписка на календарь доступна после привязки Telegram-аккаунта.'))}</div>`
-            : syncPaused
-                ? `<div class="rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm text-slate-700 mb-3">${escapeHtml(t('schedule.calendar.pausedNotice', 'Синхронизация на паузе.'))}</div>`
-                : calendarSubscriptionState.justReset
-                    ? `<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 mb-3">${escapeHtml(t('schedule.calendar.resetDone', 'Ссылка обновлена.'))}</div>`
-                    : '';
-
-    const profileButtons = (calendarSubscriptionState.profiles ||[]).map((profile) => `
-        <button type="button"
-                onclick="window.selectCalendarSubscriptionProfile('${escapeJsString(profile.id)}')"
-                class="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold transition-colors ${profile.selected ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-600'}">
-            <span>${escapeHtml(profile.name)}</span>
-            <span class="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] ${profile.selected ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-400'}">${escapeHtml(profile.kind === 'custom' ? t('schedule.calendar.profile.custom', 'Пресет') : t('schedule.calendar.profile.builtin', 'Базовый'))}</span>
-        </button>
-    `).join('');
-
-    const visibleLink = selectedProfile
-        ? (isProfileRevealed ? selectedProfile.links.http_url : selectedProfile.links.masked_http_url)
-        : '';
-    const modulesLabel = selectedProfile?.modules?.length
-        ? escapeHtml(selectedProfile.modules.join(', '))
-        : escapeHtml(t('schedule.calendar.meta.modulesAll', 'Все модули'));
-
-    const profileDetailsHtml = selectedProfile
-        ? `
-            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3 mb-4">
-                <div class="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
-                    <div class="text-[10px] font-black uppercase tracking-wider text-slate-400">${escapeHtml(t('schedule.calendar.urlLabel', 'URL подписки'))}</div>
-                    <code class="mt-1 block break-all text-xs font-medium text-slate-700">${escapeHtml(visibleLink || '')}</code>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
-                    <div class="text-[10px] font-black uppercase tracking-wider text-slate-400">${escapeHtml(t('schedule.calendar.meta.scope', 'Состав'))}</div>
-                    <div class="mt-1 text-sm font-bold text-slate-800">${escapeHtml(selectedProfile.scope_label || selectedProfile.name)}</div>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
-                    <div class="text-[10px] font-black uppercase tracking-wider text-slate-400">${escapeHtml(t('schedule.calendar.meta.modules', 'Модули'))}</div>
-                    <div class="mt-1 text-sm font-bold text-slate-800">${modulesLabel}</div>
-                </div>
-            </div>
-        `
-        : '';
-
-    const canUseLinks = Boolean(calendarSubscriptionState.sync_enabled && selectedProfile?.links?.http_url);
-    const actionButtonsHtml = selectedProfile ? `
-        <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap mb-4 border-t border-slate-100 pt-4">
-            <button type="button" ${canUseLinks ? '' : 'disabled'}
-                    onclick="window.copyCalendarSubscriptionLink(event)"
-                    class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold transition-colors ${canUseLinks ? 'text-slate-700 hover:border-blue-200 hover:text-blue-600' : 'cursor-not-allowed text-slate-400'}">
-                ${escapeHtml(t('schedule.calendar.copy', 'Копировать'))}
-            </button>
-            <button type="button"
-                    onclick="window.toggleCalendarProfileReveal('${escapeJsString(selectedProfile.id)}')"
-                    class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-blue-200 hover:text-blue-600">
-                ${escapeHtml(isProfileRevealed ? t('schedule.calendar.hide', 'Скрыть') : t('schedule.calendar.reveal', 'Показать'))}
-            </button>
-            <button type="button" ${canUseLinks ? '' : 'disabled'}
-                    onclick="window.openCalendarProfileLink('webcal')"
-                    class="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors ${canUseLinks ? 'hover:bg-blue-700' : 'cursor-not-allowed opacity-60'}">
-                ${escapeHtml(t('schedule.calendar.apple', 'Настроить (iOS / Mac)'))}
-            </button>
-            <button type="button"
-                    onclick="window.toggleCalendarSync(!calendarSubscriptionState.sync_enabled)"
-                    class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-200">
-                ${escapeHtml(calendarSubscriptionState.sync_enabled ? t('schedule.calendar.disable', 'Выключить') : t('schedule.calendar.enable', 'Включить'))}
-            </button>
-            <button type="button"
-                    onclick="window.resetCalendarSubscription()"
-                    class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-200">
-                ${escapeHtml(t('schedule.calendar.reset', 'Сбросить'))}
-            </button>
-        </div>
-    ` : '';
-
-    const currentViewCardHtml = `
-        <div class="rounded-2xl border border-blue-100 bg-blue-50/50 p-4 border-dashed mt-4">
-            <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                <div class="min-w-0">
-                    <div class="text-[10px] font-black uppercase tracking-wider text-blue-400">${escapeHtml(t('schedule.calendar.currentView.title', 'Пресет текущей страницы'))}</div>
-                    <div class="mt-1 text-sm font-bold text-slate-800">${window.getCalendarCurrentViewSummary ? window.getCalendarCurrentViewSummary() : ''}</div>
-                    <p class="mt-1 text-xs text-slate-500">${escapeHtml(t('schedule.calendar.currentView.description', 'Сохранить эту страницу как iCal-ленту.'))}</p>
-                </div>
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <select id="calendarCurrentViewMode" onchange="window.calendarCurrentViewMode=this.value" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 outline-none focus:border-blue-400">
-                        <option value="all" ${window.calendarCurrentViewMode === 'all' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.all', 'Все занятия'))}</option>
-                        <option value="exams_only" ${window.calendarCurrentViewMode === 'exams_only' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.exams', 'Только экзамены'))}</option>
-                    </select>
-                    <button type="button" ${currentEntity?.id ? '' : 'disabled'}
-                            onclick="window.createCalendarProfileFromCurrentView()"
-                            class="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold transition-colors ${currentEntity?.id ? 'text-blue-700 hover:bg-blue-100' : 'cursor-not-allowed text-slate-400'}">
-                        ${escapeHtml(t('schedule.calendar.currentView.save', 'Сохранить'))}
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-
-    const panelBodyHtml = isCalendarSubscriptionCollapsed ? '' : `
-        <div class="mt-4 flex flex-col border-t border-slate-100 pt-4 animate-fade-in-up">
-            ${eligibilityNotice}
-            <div class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-3">Ваши пресеты (Профили синхронизации)</div>
-            <div class="flex flex-wrap gap-2 mb-4">${profileButtons}</div>
-            ${profileDetailsHtml}
-            ${actionButtonsHtml}
-            ${currentViewCardHtml}
-        </div>
-    `;
-
-    container.innerHTML = `
-        <div class="rounded-2xl border border-slate-200 bg-white p-4 md:p-5 shadow-sm">
-            <button type="button" onclick="toggleCalendarSubscriptionSection()" class="flex w-full items-center justify-between gap-4 text-left group">
-                <div class="flex items-center gap-3">
-                    <div class="flex items-center justify-center w-10 h-10 rounded-full bg-slate-50 group-hover:bg-blue-50 text-slate-400 group-hover:text-blue-600 shrink-0 transition-colors">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                    </div>
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <div class="text-[10px] font-black uppercase tracking-wider text-emerald-500">СИНХРОНИЗАЦИЯ</div>
-                        </div>
-                        <div class="flex items-center gap-2 mt-0.5">
-                            <h2 class="text-lg font-black tracking-tight text-slate-900">${title}</h2>
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${statusBadgeClass}">
-                                ${statusBadge}
-                            </span>
-                        </div>
-                        <p class="text-xs text-slate-500 mt-1 hidden sm:block">${summary}</p>
-                    </div>
-                </div>
-                <span class="inline-flex shrink-0 items-center justify-center w-8 h-8 md:w-auto md:h-auto md:px-3 md:py-1.5 md:rounded-xl rounded-full border border-slate-200 bg-white text-xs font-bold text-slate-600 shadow-sm hover:bg-slate-50 transition-colors">
-                    <span class="hidden md:inline mr-2">${toggleText}</span>
-                    <svg class="h-4 w-4 transition-transform ${toggleIconClass}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                    </svg>
-                </span>
-            </button>
-            ${panelBodyHtml}
-        </div>
-    `;
 };
