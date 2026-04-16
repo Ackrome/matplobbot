@@ -4,6 +4,8 @@ import datetime
 import io
 import logging
 
+from shared_lib.celery_app import dispatch_traced_task
+
 # Импортируем задачи из shared_lib
 from shared_lib.tasks import render_html_task, render_latex, render_mermaid, render_pdf_task
 
@@ -65,7 +67,7 @@ async def render_latex_to_image(
     is_display = is_display_override if is_display_override is not None else True
 
     # Отправляем задачу (.delay не блокирует, возвращает AsyncResult)
-    task = render_latex.delay(latex_string, padding, dpi, is_display)
+    task = dispatch_traced_task(render_latex, latex_string, padding, dpi, is_display)
 
     # Блокирующее ожидание переносим в тред
     def wait_for_result():
@@ -86,7 +88,7 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
     """
     Отправляет задачу рендеринга Mermaid в Celery.
     """
-    task = render_mermaid.delay(mermaid_code)
+    task = dispatch_traced_task(render_mermaid, mermaid_code)
 
     def wait_for_result():
         return task.get(timeout=40)
@@ -123,7 +125,13 @@ async def convert_md_to_pdf_pandoc(
     date_string = last_modified_date or datetime.datetime.now().strftime("%d %B %Y")
 
     # Отправка задачи
-    task = render_pdf_task.delay(markdown_string, title, author_string, date_string)
+    task = dispatch_traced_task(
+        render_pdf_task,
+        markdown_string,
+        title,
+        author_string,
+        date_string,
+    )
 
     def wait_for_result():
         # PDF может собираться долго, ставим таймаут побольше
@@ -148,7 +156,7 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
     """
     Отправляет задачу генерации HTML (Markdown -> HTML + KaTeX) в Celery.
     """
-    task = render_html_task.delay(content, page_title)
+    task = dispatch_traced_task(render_html_task, content, page_title)
 
     def wait_for_result():
         return task.get(timeout=60)

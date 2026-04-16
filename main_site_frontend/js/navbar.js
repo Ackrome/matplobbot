@@ -1,6 +1,5 @@
 ﻿const NAV_API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : "/api";
 const UI_LANG_KEY = "mpb_ui_lang";
-
 const I18N = {
     en: {
         "nav.home": "Home",
@@ -184,11 +183,12 @@ const I18N = {
         "schedule.filters.mobile": "Фильтры и модули",
         "schedule.filters.desktop": "Фильтры и модули",
         "schedule.filters.shortNames": "Короткие названия",
+        "schedule.filters.fullLecturer": "ФИО полностью",
         "schedule.filters.all": "Всё",
         "schedule.filters.clear": "Сброс",
         "schedule.filters.selected": "Активные",
         "schedule.filters.available": "Доступные",
-        "schedule.offline.warning": "ВУЗ недоступен. Загружена копия.",
+        "schedule.offline.warning": "ВУЗ недоступен. Загружена сохраненная копия.",
         "schedule.state.default": "Выберите расписание",
         "schedule.context.reset": "Сброс",
         "schedule.action.today": "Сегодня",
@@ -201,9 +201,9 @@ const I18N = {
         "schedule.context.none": "Группа не выбрана",
         "schedule.context.loadedRange": "Загружено {start} - {end}",
         "schedule.context.parsedAt": "Обновлено в вузе: {value}",
-        "schedule.context.parsedUnknown": "Время последнего обновления неизвестно",
+        "schedule.context.parsedUnknown": "Время обновления неизвестно",
         "schedule.history.empty": "История пуста",
-        "schedule.history.saved": "Сохранено локально",
+        "schedule.history.saved": "Сохранено оффлайн",
         "schedule.search.error": "Ошибка поиска или сервер недоступен.",
         "schedule.search.empty": "Ничего не найдено",
         "schedule.search.cacheBadge": "КЭШ",
@@ -241,34 +241,38 @@ const I18N = {
         "register.signin": "Войти"
     }
 };
-
 Object.assign(I18N.ru, {
     "schedule.search.placeholder": "\u041d\u0430\u0439\u0442\u0438 \u0433\u0440\u0443\u043f\u043f\u0443, \u043f\u0440\u0435\u043f\u043e\u0434\u0430\u0432\u0430\u0442\u0435\u043b\u044f \u0438\u043b\u0438 \u0430\u0443\u0434\u0438\u0442\u043e\u0440\u0438\u044e...",
     "schedule.search.type.group": "\u0413\u0440\u0443\u043f\u043f\u0430",
     "schedule.search.type.person": "\u041f\u0440\u0435\u043f\u043e\u0434\u0430\u0432\u0430\u0442\u0435\u043b\u044c",
     "schedule.search.type.auditorium": "\u0410\u0443\u0434\u0438\u0442\u043e\u0440\u0438\u044f",
-    "schedule.filters.fullLecturer": "Полное имя преподавателя",
     "schedule.calendar.eyebrow": "Синхронизация",
     "schedule.calendar.title": "Подписка на календарь",
     "schedule.calendar.description": "Подключите персональную ICS-ленту к Apple Calendar, Google Calendar или любому другому приложению календаря.",
-    "schedule.calendar.loading": "Загружаем данные календарной подписки...",
-    "schedule.calendar.error": "Не удалось загрузить подписку на календарь.",
-    "schedule.calendar.unavailable": "Подписка на календарь доступна для аккаунтов, связанных с Telegram и подписками бота на расписание.",
-    "schedule.calendar.resetDone": "Ссылка обновлена. Предыдущая ссылка больше не работает.",
-    "schedule.calendar.urlLabel": "Ссылка подписки",
-    "schedule.calendar.copy": "Скопировать ссылку",
-    "schedule.calendar.apple": "Открыть на iOS / Mac",
-    "schedule.calendar.reset": "Сбросить ссылку",
-    "schedule.calendar.instructions": "Для Apple Calendar используйте кнопку iOS / Mac. Для Google Calendar скопируйте HTTPS-ссылку и добавьте ее по URL в веб-версии."
+    "schedule.calendar.loading": "Загружаем данные...",
+    "schedule.calendar.error": "Ошибка загрузки подписки.",
+    "schedule.calendar.unavailable": "Недоступно.",
+    "schedule.calendar.resetDone": "Ссылка обновлена.",
+    "schedule.calendar.urlLabel": "URL подписки",
+    "schedule.calendar.copy": "Копировать",
+    "schedule.calendar.apple": "Настроить (iOS / Mac)",
+    "schedule.calendar.reset": "Сбросить",
+    "schedule.calendar.instructions": "Для Apple Calendar используйте кнопку iOS / Mac. Для Google Calendar скопируйте HTTPS-ссылку и добавьте ее по URL в веб-версии.",
+    "schedule.calendar.hide": "Скрыть",
+    "schedule.calendar.reveal": "Показать",
+    "schedule.calendar.preview": "Тест ленты",
+    "schedule.calendar.download": "Скачать ICS",
+    "schedule.calendar.disable": "Выключить",
+    "schedule.calendar.enable": "Включить"
 });
-
 Object.assign(I18N.ru, {
-    "schedule.calendar.summary": "Персональная календарная лента для ваших активных подписок и фильтров расписания.",
+    "schedule.calendar.summary": "Приватные iCal-ленты для профилей синхронизации.",
     "schedule.calendar.settingsTitle": "Что входит в синхронизацию",
     "schedule.calendar.expand": "Развернуть",
     "schedule.calendar.collapse": "Свернуть",
     "schedule.calendar.statusReady": "Готово",
     "schedule.calendar.statusSetup": "Настройка",
+    "schedule.calendar.statusPaused": "На паузе",
     "schedule.calendar.setting.source.label": "Источник",
     "schedule.calendar.setting.source.value": "Ваши активные Telegram-подписки на расписание",
     "schedule.calendar.setting.scope.label": "Состав",
@@ -276,123 +280,30 @@ Object.assign(I18N.ru, {
     "schedule.calendar.setting.window.label": "Период",
     "schedule.calendar.setting.window.value": "Последние 14 дней и следующие 90 дней расписания",
     "schedule.calendar.setting.access.label": "Доступ",
-    "schedule.calendar.setting.access.value": "Приватная секретная ссылка. Ее можно сбросить в любой момент, чтобы отозвать прежний URL."
-});
-
-Object.assign(I18N.en, {
-    "schedule.calendar.summaryReady": "Private iCal feeds for your website sync profiles.",
-    "schedule.calendar.summaryPaused": "Your calendar links are paused until you enable sync again.",
-    "schedule.calendar.summarySetup": "Build private feeds for all classes, exams only, or the current schedule page.",
-    "schedule.calendar.statusPaused": "Paused",
-    "schedule.calendar.pausedNotice": "Sync is paused. External calendar apps will stop updating until you enable the feed again.",
-    "schedule.calendar.profile.custom": "Preset",
-    "schedule.calendar.profile.builtin": "Built-in",
-    "schedule.calendar.hide": "Hide link",
-    "schedule.calendar.reveal": "Reveal link",
-    "schedule.calendar.preview": "Test feed",
-    "schedule.calendar.download": "Download .ics",
-    "schedule.calendar.disable": "Disable sync",
-    "schedule.calendar.enable": "Enable sync",
-    "schedule.calendar.instructionsTitle": "How to subscribe",
-    "schedule.calendar.platform.apple": "Use the Apple button below or paste the webcal link into Apple Calendar on iPhone, iPad, or Mac.",
-    "schedule.calendar.platform.google": "Open Google Calendar on the web, choose Other calendars, then Add by URL and paste the HTTPS feed link.",
-    "schedule.calendar.platform.outlook": "In Outlook, use Add calendar or Subscribe from web, then paste the HTTPS feed link and confirm the subscription.",
-    "schedule.calendar.platform.apple.label": "Apple",
-    "schedule.calendar.platform.google.label": "Google",
-    "schedule.calendar.platform.outlook.label": "Outlook",
-    "schedule.calendar.meta.scope": "Scope",
-    "schedule.calendar.meta.modules": "Modules",
-    "schedule.calendar.meta.modulesAll": "No module restriction",
-    "schedule.calendar.meta.events": "Events in feed",
-    "schedule.calendar.meta.next": "Next event",
-    "schedule.calendar.meta.none": "No upcoming event in range",
-    "schedule.calendar.meta.health": "Feed health",
-    "schedule.calendar.meta.sources": "{used}/{total} cached source(s)",
-    "schedule.calendar.meta.updated": "Source updated",
-    "schedule.calendar.meta.accessed": "Last external access",
-    "schedule.calendar.meta.generated": "Preview generated",
-    "schedule.calendar.meta.never": "Not yet",
-    "schedule.calendar.setting.scope.currentValue": "{subs} subscription(s), {entities} unique source(s)",
-    "schedule.calendar.health.cached": "Cached sources ready",
-    "schedule.calendar.health.partial": "Partially cached",
-    "schedule.calendar.health.empty": "No cached lessons yet",
-    "schedule.calendar.currentView.title": "Current page preset",
-    "schedule.calendar.currentView.description": "Save the current website schedule page as a separate iCal feed. This sync config is stored on the website and does not reuse Telegram quick filters.",
-    "schedule.calendar.currentView.save": "Save current view",
-    "schedule.calendar.currentView.empty": "Open a schedule first to save the current page as a separate feed.",
-    "schedule.calendar.currentView.noModules": "No module filter on this page",
-    "schedule.calendar.currentView.allModules": "All modules selected",
-    "schedule.calendar.currentView.someModules": "{count} module(s) selected",
-    "schedule.calendar.mode.all": "All classes",
-    "schedule.calendar.mode.exams": "Exams only",
-    "schedule.calendar.delete": "Delete preset",
-    "schedule.calendar.confirmReset": "Reset the private calendar link? The previous URL will stop working immediately.",
-    "schedule.calendar.confirmEnable": "Enable sync again for all of your website calendar feeds?",
-    "schedule.calendar.confirmDisable": "Disable sync for all of your website calendar feeds? Existing external subscriptions will stop updating.",
-    "schedule.calendar.confirmDelete": "Delete this saved website calendar preset?"
-});
-
-Object.assign(I18N.ru, {
-    "schedule.calendar.summaryReady": "Приватные iCal-ленты для ваших профилей синхронизации на сайте.",
-    "schedule.calendar.summaryPaused": "Ссылки календаря на паузе, пока вы снова не включите синхронизацию.",
-    "schedule.calendar.summarySetup": "Создайте приватные ленты для всех занятий, только экзаменов или текущей страницы расписания.",
-    "schedule.calendar.statusPaused": "На паузе",
-    "schedule.calendar.pausedNotice": "Синхронизация на паузе. Внешние календарные приложения перестанут обновляться, пока вы снова не включите ленту.",
+    "schedule.calendar.setting.access.value": "Приватная секретная ссылка. Ее можно сбросить в любой момент, чтобы отозвать прежний URL.",
     "schedule.calendar.profile.custom": "Пресет",
     "schedule.calendar.profile.builtin": "Базовый",
-    "schedule.calendar.hide": "Скрыть ссылку",
-    "schedule.calendar.reveal": "Показать ссылку",
-    "schedule.calendar.preview": "Проверить ленту",
-    "schedule.calendar.download": "Скачать .ics",
-    "schedule.calendar.disable": "Выключить синхронизацию",
-    "schedule.calendar.enable": "Включить синхронизацию",
-    "schedule.calendar.instructionsTitle": "Как подписаться",
-    "schedule.calendar.platform.apple": "Используйте кнопку Apple ниже или вставьте ссылку webcal в Apple Calendar на iPhone, iPad или Mac.",
-    "schedule.calendar.platform.google": "Откройте Google Calendar в веб-версии, выберите Other calendars, затем Add by URL и вставьте HTTPS-ссылку.",
-    "schedule.calendar.platform.outlook": "В Outlook используйте Add calendar или Subscribe from web, затем вставьте HTTPS-ссылку и подтвердите подписку.",
-    "schedule.calendar.platform.apple.label": "Apple",
-    "schedule.calendar.platform.google.label": "Google",
-    "schedule.calendar.platform.outlook.label": "Outlook",
-    "schedule.calendar.meta.scope": "Охват",
+    "schedule.calendar.meta.scope": "Состав",
     "schedule.calendar.meta.modules": "Модули",
-    "schedule.calendar.meta.modulesAll": "Без ограничений по модулям",
-    "schedule.calendar.meta.events": "Событий в ленте",
-    "schedule.calendar.meta.next": "Ближайшее событие",
-    "schedule.calendar.meta.none": "Ближайших событий в диапазоне нет",
-    "schedule.calendar.meta.health": "Состояние ленты",
-    "schedule.calendar.meta.sources": "{used}/{total} источников в кэше",
-    "schedule.calendar.meta.updated": "Источник обновлен",
-    "schedule.calendar.meta.accessed": "Последнее внешнее обращение",
-    "schedule.calendar.meta.generated": "Предпросмотр создан",
-    "schedule.calendar.meta.never": "Еще нет",
-    "schedule.calendar.setting.scope.currentValue": "{subs} активных подписок, {entities} уникальных источников",
-    "schedule.calendar.health.cached": "Кэшированные источники готовы",
-    "schedule.calendar.health.partial": "Часть источников в кэше",
-    "schedule.calendar.health.empty": "В кэше пока нет занятий",
+    "schedule.calendar.meta.modulesAll": "Все модули",
     "schedule.calendar.currentView.title": "Пресет текущей страницы",
-    "schedule.calendar.currentView.description": "Сохраните текущую страницу расписания на сайте как отдельную iCal-ленту. Эта настройка хранится на сайте и не использует быстрые фильтры Telegram.",
-    "schedule.calendar.currentView.save": "Сохранить текущий вид",
-    "schedule.calendar.currentView.empty": "Сначала откройте расписание, чтобы сохранить текущую страницу как отдельную ленту.",
-    "schedule.calendar.currentView.noModules": "На этой странице нет фильтра по модулям",
-    "schedule.calendar.currentView.allModules": "Выбраны все модули",
-    "schedule.calendar.currentView.someModules": "Выбрано модулей: {count}",
+    "schedule.calendar.currentView.description": "Сохранить эту страницу как iCal-ленту.",
+    "schedule.calendar.currentView.save": "Сохранить",
     "schedule.calendar.mode.all": "Все занятия",
     "schedule.calendar.mode.exams": "Только экзамены",
-    "schedule.calendar.delete": "Удалить пресет",
-    "schedule.calendar.confirmReset": "Сбросить приватную ссылку календаря? Прежний URL сразу перестанет работать.",
-    "schedule.calendar.confirmEnable": "Включить синхронизацию снова для всех веб-лент календаря?",
-    "schedule.calendar.confirmDisable": "Выключить синхронизацию для всех веб-лент календаря? Внешние подписки перестанут обновляться.",
-    "schedule.calendar.confirmDelete": "Удалить этот сохраненный пресет календаря?"
+    "schedule.calendar.confirmReset": "Сбросить приватную ссылку? Прежний URL сразу перестанет работать.",
+    "schedule.calendar.confirmEnable": "Включить синхронизацию снова?",
+    "schedule.calendar.confirmDisable": "Выключить синхронизацию? Внешние подписки перестанут обновляться.",
+    "schedule.calendar.confirmDelete": "Удалить пресет?"
 });
 
-const NAV_ITEMS = [
+const NAV_ITEMS =[
     { href: "/", key: "nav.home" },
     { href: "/#projects", key: "nav.projects" },
     { href: "/schedule", key: "nav.schedule" },
     { href: "/studio", key: "nav.studio" },
     { href: "/stats", key: "nav.admin", adminOnly: true }
 ];
-
 const navState = {
     lang: "en",
     user: null,
@@ -403,20 +314,17 @@ const navState = {
     activeSection: ""
 };
 const pageTranslators = new Set();
-
 function getStoredLanguage() {
     const saved = localStorage.getItem(UI_LANG_KEY);
     if (saved === "ru" || saved === "en") return saved;
     const htmlLang = (document.documentElement.lang || "").toLowerCase();
     return htmlLang.startsWith("ru") ? "ru" : "en";
 }
-
 function translate(key, fallback = "", params = {}) {
     const source = I18N[navState.lang] || I18N.en;
     const template = source[key] || I18N.en[key] || fallback || key;
     return template.replace(/\{(\w+)\}/g, (_, param) => String(params[param] ?? ""));
 }
-
 function setLanguage(lang, { broadcast = true } = {}) {
     if (lang !== "ru" && lang !== "en") return;
     navState.lang = lang;
@@ -429,7 +337,6 @@ function setLanguage(lang, { broadcast = true } = {}) {
         window.dispatchEvent(new CustomEvent("mpb-language-change", { detail: { lang } }));
     }
 }
-
 function runPageTranslators() {
     pageTranslators.forEach((translator) => {
         try {
@@ -439,7 +346,6 @@ function runPageTranslators() {
         }
     });
 }
-
 function applyTranslations() {
     document.querySelectorAll("[data-i18n]").forEach((element) => {
         const key = element.getAttribute("data-i18n");
@@ -462,12 +368,10 @@ function applyTranslations() {
         element.setAttribute("aria-label", translate(key, element.getAttribute("aria-label") || ""));
     });
 }
-
 function normalizePath(path) {
     if (!path) return "/";
     return path.endsWith("/") && path !== "/" ? path.slice(0, -1) : path;
 }
-
 function isActiveNavItem(item) {
     const pathname = normalizePath(window.location.pathname);
     if (item.href === "/") {
@@ -478,7 +382,6 @@ function isActiveNavItem(item) {
     }
     return pathname === normalizePath(item.href);
 }
-
 function escapeHtml(value) {
     return String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -487,17 +390,14 @@ function escapeHtml(value) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
 }
-
 function shouldShowNavItem(item) {
     if (!item.adminOnly) return true;
     return navState.user?.role === "admin";
 }
-
 function getProfileLink() {
     if (!navState.user) return "/login";
     return navState.user.role === "admin" ? "/stats" : "/schedule";
 }
-
 function getAvatarHtml(sizeClass = "w-6 h-6", textClass = "text-xs") {
     const username = (navState.user?.username || "?").trim();
     const initial = username.length > 0 ? username[0].toUpperCase() : "?";
@@ -506,7 +406,6 @@ function getAvatarHtml(sizeClass = "w-6 h-6", textClass = "text-xs") {
     }
     return `<div class="${sizeClass} rounded-full bg-blue-600 text-white flex items-center justify-center ${textClass} font-bold shrink-0">${escapeHtml(initial)}</div>`;
 }
-
 function renderDesktopAuth() {
     if (!navState.user) {
         return `
@@ -516,7 +415,6 @@ function renderDesktopAuth() {
             </a>
         `;
     }
-
     return `
         <a href="${getProfileLink()}" class="flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors max-w-[220px]">
             ${getAvatarHtml("w-6 h-6", "text-xs")}
@@ -525,7 +423,6 @@ function renderDesktopAuth() {
         <button type="button" data-logout-btn class="text-sm font-medium text-slate-400 hover:text-red-500 transition-colors">${translate("nav.logout")}</button>
     `;
 }
-
 function renderMobileAuth() {
     if (!navState.user) {
         return `
@@ -534,7 +431,6 @@ function renderMobileAuth() {
             </a>
         `;
     }
-
     return `
         <div class="mt-4 pt-4 border-t border-slate-100">
             <a href="${getProfileLink()}" class="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-slate-50 transition-colors">
@@ -550,7 +446,6 @@ function renderMobileAuth() {
         </div>
     `;
 }
-
 function renderLanguageToggle(isMobile = false) {
     const base = isMobile
         ? "mt-3 w-full flex items-center gap-2 rounded-xl bg-slate-100 p-1"
@@ -562,13 +457,10 @@ function renderLanguageToggle(isMobile = false) {
         </div>
     `;
 }
-
 function renderNavbar() {
     const desktopRoot = document.getElementById("desktop-nav-links");
     const mobileRoot = document.getElementById("mobile-nav-links");
-
     const links = NAV_ITEMS.filter(shouldShowNavItem);
-
     if (desktopRoot) {
         const linksHtml = links
             .map((item) => {
@@ -579,14 +471,12 @@ function renderNavbar() {
                 return `<a href="${item.href}" class="px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${classes}">${translate(item.key)}</a>`;
             })
             .join("");
-
         desktopRoot.innerHTML = `
             ${linksHtml}
             <div id="desktop-auth-container" class="flex items-center gap-3">${renderDesktopAuth()}</div>
             ${renderLanguageToggle(false)}
         `;
     }
-
     if (mobileRoot) {
         const mobileLinksHtml = links
             .map((item) => {
@@ -597,7 +487,6 @@ function renderNavbar() {
                 return `<a href="${item.href}" class="block px-3 py-3 rounded-lg text-base font-medium transition-colors ${classes}">${translate(item.key)}</a>`;
             })
             .join("");
-
         mobileRoot.innerHTML = `
             ${mobileLinksHtml}
             ${renderLanguageToggle(true)}
@@ -605,12 +494,10 @@ function renderNavbar() {
         `;
     }
 }
-
 window.performLogout = function performLogout() {
     localStorage.removeItem("jwt_token");
     window.location.href = "/login";
 };
-
 async function checkAuthAndRenderNavbar() {
     const token = localStorage.getItem("jwt_token");
     if (!token) {
@@ -619,7 +506,6 @@ async function checkAuthAndRenderNavbar() {
         window.dispatchEvent(new CustomEvent("mpb-auth-ready", { detail: { user: null } }));
         return;
     }
-
     try {
         const response = await fetch(`${NAV_API_BASE}/auth/me`, {
             headers: { Authorization: `Bearer ${token}` }
@@ -637,16 +523,13 @@ async function checkAuthAndRenderNavbar() {
         console.error("Auth check failed", error);
         navState.user = null;
     }
-
     renderNavbar();
     window.dispatchEvent(new CustomEvent("mpb-auth-ready", { detail: { user: navState.user } }));
 }
-
 function setupMobileMenu() {
     const button = document.getElementById("mobile-menu-button");
     const menu = document.getElementById("mobile-menu");
     if (!button || !menu) return;
-
     button.setAttribute("aria-label", translate("nav.menu"));
     button.setAttribute("aria-controls", "mobile-menu");
     button.setAttribute("aria-expanded", "false");
@@ -654,7 +537,6 @@ function setupMobileMenu() {
         menu.classList.toggle("hidden");
         button.setAttribute("aria-expanded", String(!menu.classList.contains("hidden")));
     });
-
     menu.addEventListener("click", (event) => {
         const target = event.target;
         if (target instanceof HTMLElement && target.closest("a")) {
@@ -663,12 +545,10 @@ function setupMobileMenu() {
         }
     });
 }
-
 function setupHomeSectionSpy() {
     if (normalizePath(window.location.pathname) !== "/") return;
     const projectsSection = document.getElementById("projects");
     if (!(projectsSection instanceof HTMLElement)) return;
-
     const observer = new IntersectionObserver(
         (entries) => {
             const nextSection = entries.some((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.35)
@@ -684,18 +564,14 @@ function setupHomeSectionSpy() {
             rootMargin: "-120px 0px -35% 0px",
         }
     );
-
     observer.observe(projectsSection);
 }
-
 function setupNavbarScrollBehavior() {
     const navbar = document.getElementById("navbar");
     if (!navbar) return;
-
     let lastScrollY = window.scrollY;
     let ticking = false;
     const scrollThreshold = 100;
-
     function updateNavbar() {
         const currentScrollY = window.scrollY;
         if (currentScrollY > scrollThreshold) {
@@ -710,12 +586,10 @@ function setupNavbarScrollBehavior() {
             navbar.classList.remove("nav-hidden");
             navbar.classList.add("nav-visible");
         }
-
         navbar.classList.toggle("shadow-md", currentScrollY > 20);
         lastScrollY = currentScrollY;
         ticking = false;
     }
-
     window.addEventListener(
         "scroll",
         () => {
@@ -727,9 +601,8 @@ function setupNavbarScrollBehavior() {
         { passive: true }
     );
 }
-
 function getCommandPaletteCommands() {
-    const commands = [
+    const commands =[
         { id: "go-home", label: translate("nav.home"), run: () => (window.location.href = "/") },
         { id: "go-projects", label: translate("nav.projects"), run: () => (window.location.href = "/#projects") },
         { id: "go-schedule", label: translate("nav.schedule"), run: () => (window.location.href = "/schedule") },
@@ -750,7 +623,6 @@ function getCommandPaletteCommands() {
             run: () => toggleShortcutHelp(true)
         }
     ];
-
     if (navState.user?.role === "admin") {
         commands.splice(4, 0, {
             id: "go-admin",
@@ -758,13 +630,10 @@ function getCommandPaletteCommands() {
             run: () => (window.location.href = "/stats")
         });
     }
-
     return commands;
 }
-
 function ensureOverlays() {
     if (document.getElementById("mpbCommandPalette")) return;
-
     const overlays = document.createElement("div");
     overlays.innerHTML = `
         <div id="mpbCommandPalette" class="hidden fixed inset-0 z-[120] bg-slate-900/50 backdrop-blur-sm px-4">
@@ -798,26 +667,21 @@ function ensureOverlays() {
     document.body.appendChild(overlays);
     applyTranslations();
 }
-
 function getVisibleCommands() {
     const query = navState.commandQuery.trim().toLowerCase();
     const commands = getCommandPaletteCommands();
     if (!query) return commands;
     return commands.filter((command) => command.label.toLowerCase().includes(query));
 }
-
 function renderCommandList() {
     const list = document.getElementById("mpbCommandList");
     if (!list) return;
-
     const commands = getVisibleCommands();
     navState.selectedCommandIndex = Math.min(navState.selectedCommandIndex, Math.max(commands.length - 1, 0));
-
     if (commands.length === 0) {
         list.innerHTML = `<div class="rounded-xl px-3 py-3 text-sm text-slate-500">${translate("palette.empty")}</div>`;
         return;
     }
-
     list.innerHTML = commands
         .map((command, index) => {
             const selected = index === navState.selectedCommandIndex;
@@ -829,13 +693,11 @@ function renderCommandList() {
         })
         .join("");
 }
-
 function openCommandPalette() {
     ensureOverlays();
     const palette = document.getElementById("mpbCommandPalette");
     const input = document.getElementById("mpbCommandInput");
     if (!palette || !input) return;
-
     navState.paletteOpen = true;
     navState.commandQuery = "";
     navState.selectedCommandIndex = 0;
@@ -844,14 +706,12 @@ function openCommandPalette() {
     renderCommandList();
     window.setTimeout(() => input.focus(), 20);
 }
-
 function closeCommandPalette() {
     const palette = document.getElementById("mpbCommandPalette");
     if (!palette) return;
     navState.paletteOpen = false;
     palette.classList.add("hidden");
 }
-
 function runSelectedCommand() {
     const commands = getVisibleCommands();
     if (commands.length === 0) return;
@@ -860,17 +720,14 @@ function runSelectedCommand() {
     closeCommandPalette();
     selected.run();
 }
-
 function toggleShortcutHelp(forceOpen) {
     ensureOverlays();
     const modal = document.getElementById("mpbShortcutHelp");
     if (!modal) return;
-
     const shouldOpen = typeof forceOpen === "boolean" ? forceOpen : !navState.helpOpen;
     navState.helpOpen = shouldOpen;
     modal.classList.toggle("hidden", !shouldOpen);
 }
-
 function focusPrimarySearch() {
     const target = document.querySelector(
         '[data-search-input], #groupSearch, #leaderboardSearch, input[type="search"]'
@@ -881,24 +738,20 @@ function focusPrimarySearch() {
         target.select?.();
     }
 }
-
 function registerGlobalHandlers() {
     document.body.addEventListener("click", (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
-
         const langButton = target.closest(".js-lang-switch");
         if (langButton instanceof HTMLElement) {
             const lang = langButton.getAttribute("data-lang");
             if (lang) setLanguage(lang);
             return;
         }
-
         if (target.closest("[data-logout-btn]")) {
             window.performLogout();
             return;
         }
-
         const commandButton = target.closest("[data-command-id]");
         if (commandButton instanceof HTMLElement) {
             const commandId = commandButton.getAttribute("data-command-id");
@@ -909,12 +762,10 @@ function registerGlobalHandlers() {
             }
             return;
         }
-
         if (target.closest("[data-close-help]")) {
             toggleShortcutHelp(false);
         }
     });
-
     document.addEventListener("keydown", (event) => {
         const isMetaK = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k";
         if (isMetaK) {
@@ -926,13 +777,11 @@ function registerGlobalHandlers() {
             }
             return;
         }
-
         const activeTag = document.activeElement?.tagName || "";
         const isTypingContext =
             activeTag === "INPUT" ||
             activeTag === "TEXTAREA" ||
             document.activeElement?.getAttribute("contenteditable") === "true";
-
         if (navState.paletteOpen) {
             if (event.key === "Escape") {
                 closeCommandPalette();
@@ -959,7 +808,6 @@ function registerGlobalHandlers() {
                 return;
             }
         }
-
         if (event.key === "Escape") {
             const mobileMenu = document.getElementById("mobile-menu");
             const mobileMenuButton = document.getElementById("mobile-menu-button");
@@ -971,42 +819,34 @@ function registerGlobalHandlers() {
             closeCommandPalette();
             return;
         }
-
         if (isTypingContext) return;
-
         if (event.key === "?" || (event.key === "/" && event.shiftKey)) {
             event.preventDefault();
             toggleShortcutHelp(true);
             return;
         }
-
         if (event.key === "/") {
             event.preventDefault();
             focusPrimarySearch();
             return;
         }
-
         if (event.key.toLowerCase() === "r") {
             window.dispatchEvent(new CustomEvent("mpb-shortcut-refresh"));
             return;
         }
-
         if (event.key.toLowerCase() === "n") {
             window.dispatchEvent(new CustomEvent("mpb-shortcut-pagination", { detail: { direction: "next" } }));
             return;
         }
-
         if (event.key.toLowerCase() === "p") {
             window.dispatchEvent(new CustomEvent("mpb-shortcut-pagination", { detail: { direction: "prev" } }));
             return;
         }
-
         if (event.altKey && event.key.toLowerCase() === "l") {
             event.preventDefault();
             setLanguage(navState.lang === "ru" ? "en" : "ru");
         }
     });
-
     document.addEventListener("input", (event) => {
         const input = document.getElementById("mpbCommandInput");
         if (!input) return;
@@ -1017,7 +857,6 @@ function registerGlobalHandlers() {
         }
     });
 }
-
 function exposePublicI18nApi() {
     window.mpbI18n = {
         getLanguage: () => navState.lang,
@@ -1037,12 +876,10 @@ function exposePublicI18nApi() {
         unregisterTranslator: (fn) => pageTranslators.delete(fn),
     };
 }
-
 document.addEventListener("DOMContentLoaded", () => {
     navState.lang = getStoredLanguage();
     document.documentElement.lang = navState.lang;
     exposePublicI18nApi();
-
     setupMobileMenu();
     setupNavbarScrollBehavior();
     setupHomeSectionSpy();

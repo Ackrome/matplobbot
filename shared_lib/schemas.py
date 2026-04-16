@@ -411,6 +411,92 @@ class ActivitySeriesEntry(BaseModel):
     model_config = BASE_CONFIG
 
 
+class ProxyCandidateEntry(BaseModel):
+    name: str = Field(..., description="Proxy node name as reported by the proxy cleaner.")
+    alive: bool | None = Field(
+        None,
+        description="Most recent liveness state from Mihomo health checks.",
+    )
+    delay: float | None = Field(
+        None,
+        ge=0,
+        description="Latest measured latency in milliseconds when available.",
+    )
+    selected: bool = Field(
+        False,
+        description="True when the node is currently selected for the route group.",
+    )
+
+    model_config = BASE_CONFIG
+
+
+class ProxyGroupSummaryResponse(BaseModel):
+    group: str = Field(..., description="Proxy group name inside Mihomo.")
+    selected: str | None = Field(
+        None,
+        description="Currently selected node for the group.",
+    )
+    candidate_count: int = Field(
+        0,
+        ge=0,
+        description="Number of candidate nodes available in the group.",
+    )
+    top_candidates: list[ProxyCandidateEntry] = Field(
+        default_factory=list,
+        description="Top candidate nodes sorted by measured latency.",
+    )
+
+    model_config = BASE_CONFIG
+
+
+class ProxyBuildStateResponse(BaseModel):
+    merged_entries: int | None = Field(
+        None,
+        ge=0,
+        description="Combined node count emitted by the latest cleaner build.",
+    )
+    outline_entries: int | None = Field(
+        None,
+        ge=0,
+        description="Node count sourced from Outline access keys in the latest build.",
+    )
+    subscription_entries: int | None = Field(
+        None,
+        ge=0,
+        description="Node count sourced from subscription feeds in the latest build.",
+    )
+
+    model_config = BASE_CONFIG
+
+
+class ProxyDiagnosticsResponse(BaseModel):
+    available: bool = Field(
+        False,
+        description="False when the stats API could not reach the proxy diagnostics source.",
+    )
+    source_url: str | None = Field(
+        None,
+        description="Resolved proxy summary endpoint that served the diagnostics payload.",
+    )
+    fetched_at: str | None = Field(
+        None,
+        description="UTC timestamp when the stats API fetched the proxy summary.",
+    )
+    error: str | None = Field(
+        None,
+        description="Diagnostic error message when the upstream summary could not be loaded.",
+    )
+    last_build: ProxyBuildStateResponse = Field(default_factory=ProxyBuildStateResponse)
+    telegram: ProxyGroupSummaryResponse = Field(
+        default_factory=lambda: ProxyGroupSummaryResponse(group="TELEGRAM-AUTO")
+    )
+    openai: ProxyGroupSummaryResponse = Field(
+        default_factory=lambda: ProxyGroupSummaryResponse(group="OPENAI-AUTO")
+    )
+
+    model_config = BASE_CONFIG
+
+
 class StudioProjectSummary(BaseModel):
     id: int
     name: str

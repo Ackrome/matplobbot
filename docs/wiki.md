@@ -783,6 +783,54 @@ How to use:
 18. Use `http://proxy:8080/recheck?group=telegram` to force an immediate Telegram-side health recheck when troubleshooting provider failover.
 19. The repo includes `scripts/proxy_summary.py`, which fetches `/summary` and prints the merged entry counts plus the top Telegram/OpenAI candidates in a human-readable CLI format.
 
+### Stats Proxy Diagnostics Panel
+
+Source:
+
+- `fastapi_stats_app/routers/stats_router.py`
+- `main_site_frontend/stats.html`
+- `main_site_frontend/js/stats.js`
+
+What it does:
+
+- Adds an admin diagnostics block on the site `/stats` page that summarizes the proxy cleaner state without leaving the dashboard.
+- Fetches `/api/stats/proxy_diagnostics`, which normalizes the proxy cleaner `/summary` response into a stable UI contract.
+- Shows the currently selected Telegram and OpenAI nodes, merged node inventory, the summary source URL, and a latency-ranked per-server table.
+- Fails softly when the proxy cleaner is unreachable, so the main stats widgets still load while the diagnostics panel shows the upstream error.
+
+How to use:
+
+1. Keep the proxy cleaner reachable from FastAPI at `http://proxy:8080/summary` inside Docker, or set `PROXY_SUMMARY_URL` when the summary endpoint lives elsewhere.
+2. Open the site `/stats` page with an admin account and press `Diagnostics`.
+3. Read `Telegram selected node` and `OpenAI selected node` first to confirm which Mihomo candidates are active right now.
+4. Use the table rows to compare the latest known latency and liveness per candidate server for each route group.
+5. If the panel reports `Proxy summary unavailable`, verify the proxy container, then check `/summary` directly or use `scripts/proxy_summary.py`.
+
+### OpenTelemetry Tracing
+
+Source:
+
+- `shared_lib/telemetry.py`
+- `shared_lib/celery_app.py`
+- `fastapi_stats_app/telemetry.py`
+- `bot/tracing.py`
+
+What it does:
+
+- Enables OTLP trace export for FastAPI, the Telegram bot, and Celery workers.
+- Creates spans for FastAPI requests, Telegram bot update handling, Celery task publish, and Celery task execution.
+- Propagates W3C trace context plus the existing correlation ID through Celery headers so worker traces stay attached to the originating request or bot update.
+- Instruments `aiohttp` client requests so outbound Telegram, GitHub, and other HTTP calls appear inside the same trace tree.
+
+How to use:
+
+1. Set `OTEL_ENABLED=true` or provide `OTEL_EXPORTER_OTLP_ENDPOINT` or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`.
+2. Point the exporter at your collector, for example `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318`.
+3. Optionally set `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_DEPLOYMENT_ENVIRONMENT`, and `OTEL_SERVICE_NAMESPACE` to match your collector and environment conventions.
+4. Restart `mpb-fastapi-stats`, `mpb-telegram-bot`, and `mpb-worker` after changing tracing env vars.
+5. Look for service names `matplobbot-fastapi`, `matplobbot-bot`, and `matplobbot-worker` in your tracing backend.
+6. Use the existing `X-Request-ID` and `[cid=...]` log fields to line up log lines with exported spans during incident analysis.
+
 ### Dependency Audit
 
 Source:

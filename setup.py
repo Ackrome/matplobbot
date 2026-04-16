@@ -17,6 +17,10 @@ setup(
         "Pillow>=12.2.0",
         "markdown-it-py",
         "mdit-py-plugins",
+        "opentelemetry-api>=1.41.0,<2",
+        "opentelemetry-exporter-otlp-proto-http>=1.41.0,<2",
+        "opentelemetry-instrumentation-aiohttp-client>=0.62b0,<1",
+        "opentelemetry-sdk>=1.41.0,<2",
     ],
     # ВАЖНОЕ ИЗМЕНЕНИЕ ЗДЕСЬ:
     package_data={

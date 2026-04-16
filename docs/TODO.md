@@ -44,8 +44,8 @@ Last updated: 2026-04-10
 - [ ] **PWA Upgrade:** Add a Service Worker to `main_site_frontend` for instant offline loading and mobile app installation.
 
 ### P3 - Observability & DevEx
-- [ ] Add panel on site /stats page with proxy diagnostics summary (e.g. latency per server table).
-- [ ] Integrate OpenTelemetry for distributed tracing across Bot, FastAPI, and Celery workers.
+- [x] Add panel on site /stats page with proxy diagnostics summary (e.g. latency per server table).
+- [x] Integrate OpenTelemetry for distributed tracing across Bot, FastAPI, and Celery workers.
 - [x] Enhance OpenAPI (`/docs`) with full schemas, auth instructions, and custom branding.
 - [ ] Add a `Makefile` for streamlined local development and testing workflows.
 - [ ] Add CI matrix run for Python 3.11 and 3.12.

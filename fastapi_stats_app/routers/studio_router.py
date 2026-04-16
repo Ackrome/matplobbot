@@ -14,6 +14,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared_lib.celery_app import dispatch_traced_task
 from shared_lib.database import get_db_session_dependency
 from shared_lib.egress import get_telegram_proxy_url
 from shared_lib.models import Project, ProjectFile
@@ -118,13 +119,19 @@ async def compile_document(req: CompileRequest, current_user: dict = Depends(get
     """
     try:
         if req.type == "latex":
-            task = compile_full_latex_task.delay(req.content)
+            task = dispatch_traced_task(compile_full_latex_task, req.content)
         elif req.type == "markdown":
             # Используем существующий рендерер Markdown -> PDF
-            task = render_pdf_task.delay(req.content, "Document", current_user["username"], "Today")
+            task = dispatch_traced_task(
+                render_pdf_task,
+                req.content,
+                "Document",
+                current_user["username"],
+                "Today",
+            )
         elif req.type == "mermaid":
             # Используем существующий рендерер Mermaid -> PNG
-            task = render_mermaid.delay(req.content)
+            task = dispatch_traced_task(render_mermaid, req.content)
         else:
             raise HTTPException(status_code=400, detail="Unknown document type")
 
@@ -313,7 +320,7 @@ async def compile_project(
 
     try:
         # Передаем build_cache в Celery
-        task = compile_project_task.delay(payload, main_file_path, build_cache_b64)
+        task = dispatch_traced_task(compile_project_task, payload, main_file_path, build_cache_b64)
         res = await asyncio.to_thread(task.get, timeout=55)
 
         # Если воркер вернул новый кэш - сохраняем его в БД
@@ -519,7 +526,7 @@ async def send_project_to_telegram(
         payload.append(file_data)
 
     # Запускаем сборку
-    task = compile_project_task.delay(payload, main_file_path, build_cache_b64)
+    task = dispatch_traced_task(compile_project_task, payload, main_file_path, build_cache_b64)
     res = await asyncio.to_thread(task.get, timeout=55)
 
     if res.get("status") == "error" or not res.get("pdf"):

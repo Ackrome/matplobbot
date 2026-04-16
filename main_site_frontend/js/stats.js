@@ -27,6 +27,7 @@ const state = {
     leaderboard: [],
     activity: [],
     totalActions: 0,
+    proxyDiagnostics: null,
     ws: null,
     wsConnected: false,
     wsBackoffMs: 1000,
@@ -55,6 +56,7 @@ const elements = {
     retryActivityBtn: document.getElementById("retryActivityBtn"),
     retryAllBtn: document.getElementById("retryAllBtn"),
     retryAllBtnMobile: document.getElementById("retryAllBtnMobile"),
+    mobileActionDiagnostics: document.getElementById("mobileActionDiagnostics"),
     leaderboardMeta: document.getElementById("leaderboardMeta"),
     leaderboardPrev: document.getElementById("leaderboardPrev"),
     leaderboardNext: document.getElementById("leaderboardNext"),
@@ -85,6 +87,14 @@ const elements = {
     diagWsReconnects: document.getElementById("diagWsReconnects"),
     diagLastSyncSource: document.getElementById("diagLastSyncSource"),
     diagLastError: document.getElementById("diagLastError"),
+    proxyDiagnosticsStatus: document.getElementById("proxyDiagnosticsStatus"),
+    proxyDiagnosticsFetchedAt: document.getElementById("proxyDiagnosticsFetchedAt"),
+    proxyTelegramSelected: document.getElementById("proxyTelegramSelected"),
+    proxyOpenaiSelected: document.getElementById("proxyOpenaiSelected"),
+    proxyBuildInventory: document.getElementById("proxyBuildInventory"),
+    proxyDiagnosticsSource: document.getElementById("proxyDiagnosticsSource"),
+    proxyDiagnosticsTableBody: document.getElementById("proxyDiagnosticsTableBody"),
+    proxyDiagnosticsError: document.getElementById("proxyDiagnosticsError"),
 };
 
 function parseStateFromUrl() {
@@ -149,6 +159,187 @@ function formatDateTime(value) {
 function formatLatency(ms) {
     if (typeof ms !== "number") return "-";
     return `${Math.round(ms)} ms`;
+}
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+}
+
+function formatProxySourceLabel(value) {
+    if (!value) return "-";
+    try {
+        const url = new URL(value);
+        return `${url.host}${url.pathname}`;
+    } catch {
+        return value;
+    }
+}
+
+function normalizeProxyCandidate(candidate, selectedName) {
+    if (!candidate || typeof candidate !== "object") {
+        return null;
+    }
+
+    const name = String(candidate.name || "").trim();
+    if (!name) return null;
+
+    return {
+        name,
+        alive: typeof candidate.alive === "boolean" ? candidate.alive : null,
+        delay: typeof candidate.delay === "number" ? candidate.delay : null,
+        selected: Boolean(candidate.selected) || name === selectedName,
+    };
+}
+
+function normalizeProxyGroup(group, fallbackGroup) {
+    const selectedName = typeof group?.selected === "string" && group.selected.trim()
+        ? group.selected.trim()
+        : null;
+    const topCandidates = Array.isArray(group?.top_candidates)
+        ? group.top_candidates
+            .map((candidate) => normalizeProxyCandidate(candidate, selectedName))
+            .filter(Boolean)
+        : [];
+
+    return {
+        group: typeof group?.group === "string" && group.group.trim() ? group.group.trim() : fallbackGroup,
+        selected: selectedName,
+        candidate_count: Number.isInteger(group?.candidate_count) ? group.candidate_count : topCandidates.length,
+        top_candidates: topCandidates,
+    };
+}
+
+function normalizeProxyDiagnostics(payload) {
+    return {
+        available: Boolean(payload?.available),
+        source_url: typeof payload?.source_url === "string" ? payload.source_url : "",
+        fetched_at: typeof payload?.fetched_at === "string" ? payload.fetched_at : "",
+        error: typeof payload?.error === "string" ? payload.error : "",
+        last_build: {
+            merged_entries: typeof payload?.last_build?.merged_entries === "number" ? payload.last_build.merged_entries : null,
+            outline_entries: typeof payload?.last_build?.outline_entries === "number" ? payload.last_build.outline_entries : null,
+            subscription_entries: typeof payload?.last_build?.subscription_entries === "number" ? payload.last_build.subscription_entries : null,
+        },
+        telegram: normalizeProxyGroup(payload?.telegram, "TELEGRAM-AUTO"),
+        openai: normalizeProxyGroup(payload?.openai, "OPENAI-AUTO"),
+    };
+}
+
+function setProxyDiagnosticsStatus(message, kind = "info") {
+    if (!elements.proxyDiagnosticsStatus) return;
+
+    elements.proxyDiagnosticsStatus.classList.remove(
+        "text-slate-500",
+        "text-red-600",
+        "text-emerald-600",
+        "text-amber-600"
+    );
+
+    if (kind === "error") {
+        elements.proxyDiagnosticsStatus.classList.add("text-red-600");
+    } else if (kind === "ok") {
+        elements.proxyDiagnosticsStatus.classList.add("text-emerald-600");
+    } else if (kind === "warning") {
+        elements.proxyDiagnosticsStatus.classList.add("text-amber-600");
+    } else {
+        elements.proxyDiagnosticsStatus.classList.add("text-slate-500");
+    }
+
+    elements.proxyDiagnosticsStatus.textContent = message;
+}
+
+function renderProxyDiagnostics() {
+    const payload = state.proxyDiagnostics;
+
+    if (!payload) {
+        setProxyDiagnosticsStatus("Proxy summary has not been requested yet.", "info");
+        return;
+    }
+
+    if (elements.proxyDiagnosticsFetchedAt) {
+        elements.proxyDiagnosticsFetchedAt.textContent = payload.fetched_at
+            ? formatDateTime(payload.fetched_at)
+            : "-";
+    }
+    if (elements.proxyTelegramSelected) {
+        elements.proxyTelegramSelected.textContent = payload.telegram.selected || "No active node";
+    }
+    if (elements.proxyOpenaiSelected) {
+        elements.proxyOpenaiSelected.textContent = payload.openai.selected || "No active node";
+    }
+    if (elements.proxyBuildInventory) {
+        const merged = payload.last_build.merged_entries ?? "-";
+        const outline = payload.last_build.outline_entries ?? "-";
+        const subscription = payload.last_build.subscription_entries ?? "-";
+        elements.proxyBuildInventory.textContent = `${merged} merged / ${outline} outline / ${subscription} subscription`;
+    }
+    if (elements.proxyDiagnosticsSource) {
+        elements.proxyDiagnosticsSource.textContent = formatProxySourceLabel(payload.source_url);
+    }
+
+    if (elements.proxyDiagnosticsError) {
+        const errorMessage = payload.error || "";
+        elements.proxyDiagnosticsError.textContent = errorMessage;
+        elements.proxyDiagnosticsError.classList.toggle("hidden", !errorMessage);
+    }
+
+    const rows = [
+        ...(payload.telegram.top_candidates || []).map((candidate) => ({ route: "Telegram", ...candidate })),
+        ...(payload.openai.top_candidates || []).map((candidate) => ({ route: "OpenAI", ...candidate })),
+    ];
+
+    if (elements.proxyDiagnosticsTableBody) {
+        if (rows.length === 0) {
+            elements.proxyDiagnosticsTableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="px-4 py-4 text-sm text-slate-500">
+                        ${payload.available ? "Proxy summary is available, but there are no ranked candidates yet." : "Proxy summary is unavailable right now."}
+                    </td>
+                </tr>
+            `;
+        } else {
+            elements.proxyDiagnosticsTableBody.innerHTML = rows
+                .map((row) => {
+                    const delayLabel = row.delay === null ? "-" : `${Math.round(row.delay)} ms`;
+                    const aliveLabel = row.alive === true ? "Yes" : row.alive === false ? "No" : "Unknown";
+                    const aliveClass = row.alive === true
+                        ? "text-emerald-700"
+                        : row.alive === false
+                            ? "text-red-700"
+                            : "text-slate-500";
+                    const selectedLabel = row.selected ? "Current" : "-";
+                    const rowClass = row.selected ? "bg-blue-50/60" : "";
+
+                    return `
+                        <tr class="border-b border-slate-100 last:border-b-0 ${rowClass}">
+                            <td class="px-4 py-3 font-medium text-slate-700">${escapeHtml(row.route)}</td>
+                            <td class="px-4 py-3 text-slate-800">${escapeHtml(row.name)}</td>
+                            <td class="px-4 py-3 text-slate-600">${escapeHtml(delayLabel)}</td>
+                            <td class="px-4 py-3 ${aliveClass}">${escapeHtml(aliveLabel)}</td>
+                            <td class="px-4 py-3 ${row.selected ? "font-semibold text-blue-700" : "text-slate-500"}">${escapeHtml(selectedLabel)}</td>
+                        </tr>
+                    `;
+                })
+                .join("");
+        }
+    }
+
+    if (!payload.available) {
+        setProxyDiagnosticsStatus("Proxy summary unavailable", payload.error ? "warning" : "info");
+        return;
+    }
+
+    const routeCount = rows.length;
+    const sourceLabel = formatProxySourceLabel(payload.source_url);
+    setProxyDiagnosticsStatus(
+        `${routeCount} proxy candidate row${routeCount === 1 ? "" : "s"} loaded from ${sourceLabel}.`,
+        "ok"
+    );
 }
 
 function showToast(type, message) {
@@ -629,6 +820,7 @@ function renderAll() {
     renderLeaderboard();
     renderActivityChart();
     updateDiagnostics();
+    renderProxyDiagnostics();
 }
 
 function setRetryButtonsVisible(visible) {
@@ -687,6 +879,32 @@ async function fetchWithAuth(endpoint) {
     return body;
 }
 
+function registerBackgroundFailure(errorMessage) {
+    state.failedRequests += 1;
+    state.lastError = errorMessage;
+    updateDiagnostics();
+}
+
+async function refreshProxyDiagnostics({ silent = false } = {}) {
+    if (!silent) {
+        setProxyDiagnosticsStatus("Loading proxy summary...", "info");
+    }
+
+    try {
+        const payload = await fetchWithAuth("/stats/proxy_diagnostics");
+        state.proxyDiagnostics = normalizeProxyDiagnostics(payload);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Proxy diagnostics request failed";
+        registerBackgroundFailure(message);
+        state.proxyDiagnostics = normalizeProxyDiagnostics({
+            available: false,
+            error: message,
+        });
+    }
+
+    renderProxyDiagnostics();
+}
+
 function registerFailure(errorMessage) {
     state.failedRequests += 1;
     state.lastError = errorMessage;
@@ -694,6 +912,8 @@ function registerFailure(errorMessage) {
 }
 
 async function refreshFromRest({ silent = false } = {}) {
+    void refreshProxyDiagnostics({ silent });
+
     if (!silent) {
         setLoading(true);
         setBlockStatus(elements.leaderboardStatus, "Loading...", "info");
@@ -978,6 +1198,10 @@ function wireEvents() {
     elements.toggleDiagnosticsBtn?.addEventListener("click", () => {
         elements.diagnosticsPanel?.classList.toggle("hidden");
     });
+
+    elements.mobileActionDiagnostics?.addEventListener("click", () => {
+        elements.diagnosticsPanel?.classList.toggle("hidden");
+    });
 }
 
 function applyInitialControls() {
@@ -998,13 +1222,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     setConnectionState("connecting", "Connecting...");
     setBlockStatus(elements.activityStatus, "Loading...", "info");
     setBlockStatus(elements.leaderboardStatus, "Loading...", "info");
+    renderProxyDiagnostics();
 
     await refreshFromRest({ silent: false });
     connectWebSocket();
 
     window.setInterval(() => {
-        if (!state.wsConnected) {
-            refreshFromRest({ silent: true });
+        if (state.wsConnected) {
+            void refreshProxyDiagnostics({ silent: true });
+            return;
         }
+        refreshFromRest({ silent: true });
     }, 60000);
 });

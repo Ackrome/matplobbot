@@ -20,6 +20,10 @@ matplotlib>=3.9.2,<4
 matplobblib==0.3.21
 matplobbot-shared==0.1.272
 mdit-py-plugins>=0.5.0,<1
+opentelemetry-api>=1.41.0,<2
+opentelemetry-exporter-otlp-proto-http>=1.41.0,<2
+opentelemetry-instrumentation-aiohttp-client>=0.62b0,<1
+opentelemetry-sdk>=1.41.0,<2
 Pillow>=12.2.0,<13
 pysocks>=1.7.1,<2
 python-dotenv>=1.0.1,<2

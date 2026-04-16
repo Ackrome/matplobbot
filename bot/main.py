@@ -22,11 +22,13 @@ from shared_lib.services.university_api import create_ruz_api_client
 from shared_lib.telegram_bot_session import TelegramBotSession
 from shared_lib.telegram_http import normalize_proxy_url
 from shared_lib.telegram_polling import run_polling_with_retry
+from shared_lib.telemetry import configure_service_telemetry
 
 from .handlers import setup_handlers
 from .logger import UserLoggingMiddleware
 from .middleware import GroupMentionCommandMiddleware
 from .services.search_utils import index_matplobblib_library
+from .tracing import BotTracingMiddleware
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 TELEGRAM_PROXY_URL = get_telegram_proxy_url()
@@ -36,6 +38,7 @@ configure_process_http_proxy_env(
     get_global_http_proxy_url(),
     no_proxy_hosts=("ruz.fa.ru",),
 )
+configure_service_telemetry("matplobbot-bot")
 
 
 def get_cmd_desc(lang: str, key: str) -> str:
@@ -144,6 +147,7 @@ async def run_bot_once(ruz_api_client_instance) -> None:
 
     bot = Bot(BOT_TOKEN, session=bot_session)
     dp = Dispatcher()
+    dp.update.outer_middleware(BotTracingMiddleware())
     dp.update.outer_middleware(GroupMentionCommandMiddleware())
     dp.update.middleware(UserLoggingMiddleware())
     setup_handlers(dp, bot=bot, ruz_api_client=ruz_api_client_instance)

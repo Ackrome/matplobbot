@@ -36,6 +36,7 @@ from shared_lib.schemas import (
     ExportActionsResponse,
     HealthStatusResponse,
     LeaderboardEntry,
+    ProxyDiagnosticsResponse,
     SendMessageRequest,
     UserProfileResponse,
 )
@@ -55,6 +56,18 @@ SORT_ORDER_ALLOWED = ("asc", "desc")
 ADMIN_SEND_MESSAGE_RATE_LIMIT_PER_MINUTE = int(os.getenv("ADMIN_SEND_MESSAGE_RATE_LIMIT", "12"))
 ADMIN_SEND_MESSAGE_WINDOW_SECONDS = 60
 DEFAULT_EXPORT_TIMEZONE = "UTC"
+PROXY_SUMMARY_TIMEOUT_SECONDS = float(os.getenv("PROXY_SUMMARY_TIMEOUT_SECONDS", "3"))
+PROXY_SUMMARY_URL_CANDIDATES = tuple(
+    dict.fromkeys(
+        candidate
+        for candidate in (
+            (os.getenv("PROXY_SUMMARY_URL") or "").strip(),
+            "http://proxy:8080/summary",
+            "http://127.0.0.1:8080/summary",
+        )
+        if candidate
+    )
+)
 LEGACY_ACTION_USERS_ALIAS_ENABLED = os.getenv(
     "ENABLE_LEGACY_ACTION_USERS_ALIAS", "true"
 ).strip().lower() not in {"0", "false", "no", "off"}
@@ -319,6 +332,110 @@ def _build_weekly_pdf_bytes(html_content: str) -> bytes:
     except Exception as error:  # pragma: no cover - rendering failure
         logger.error("Failed to render weekly stats PDF: %s", error, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to render weekly PDF report") from error
+
+
+def _empty_proxy_group(group_name: str) -> dict[str, Any]:
+    return {
+        "group": group_name,
+        "selected": None,
+        "candidate_count": 0,
+        "top_candidates": [],
+    }
+
+
+def _normalize_proxy_group(payload: Any, default_group_name: str) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return _empty_proxy_group(default_group_name)
+
+    selected_name = payload.get("selected")
+    top_candidates = []
+    for item in payload.get("top_candidates") or []:
+        if not isinstance(item, dict):
+            continue
+        candidate_name = str(item.get("name") or "").strip()
+        if not candidate_name:
+            continue
+        delay_value = item.get("delay")
+        normalized_delay = float(delay_value) if isinstance(delay_value, (int, float)) else None
+        top_candidates.append(
+            {
+                "name": candidate_name,
+                "alive": item.get("alive") if isinstance(item.get("alive"), bool) else None,
+                "delay": normalized_delay,
+                "selected": candidate_name == selected_name,
+            }
+        )
+
+    candidate_count = payload.get("candidate_count")
+    normalized_candidate_count = candidate_count if isinstance(candidate_count, int) else 0
+    return {
+        "group": str(payload.get("group") or default_group_name),
+        "selected": str(selected_name) if selected_name else None,
+        "candidate_count": max(0, normalized_candidate_count),
+        "top_candidates": top_candidates,
+    }
+
+
+def _build_proxy_diagnostics_response(
+    payload: dict[str, Any] | None,
+    *,
+    source_url: str | None,
+    error: str | None = None,
+) -> dict[str, Any]:
+    state = payload.get("state") if isinstance(payload, dict) else {}
+    if not isinstance(state, dict):
+        state = {}
+
+    last_build = state.get("last_build") if isinstance(state.get("last_build"), dict) else {}
+    fetched_at = datetime.now(UTC).isoformat()
+    return {
+        "available": isinstance(payload, dict),
+        "source_url": source_url,
+        "fetched_at": fetched_at,
+        "error": error,
+        "last_build": {
+            "merged_entries": last_build.get("merged_entries"),
+            "outline_entries": last_build.get("outline_entries"),
+            "subscription_entries": last_build.get("subscription_entries"),
+        },
+        "telegram": _normalize_proxy_group(
+            payload.get("telegram") if isinstance(payload, dict) else None,
+            "TELEGRAM-AUTO",
+        ),
+        "openai": _normalize_proxy_group(
+            payload.get("openai") if isinstance(payload, dict) else None,
+            "OPENAI-AUTO",
+        ),
+    }
+
+
+async def _fetch_proxy_summary_payload() -> tuple[dict[str, Any] | None, str | None, str | None]:
+    if not PROXY_SUMMARY_URL_CANDIDATES:
+        return None, None, "Proxy summary URL is not configured."
+
+    timeout = aiohttp.ClientTimeout(total=PROXY_SUMMARY_TIMEOUT_SECONDS)
+    errors: list[str] = []
+    async with aiohttp.ClientSession(timeout=timeout, trust_env=False) as session:
+        for candidate_url in PROXY_SUMMARY_URL_CANDIDATES:
+            try:
+                async with session.get(candidate_url) as response:
+                    if response.status != 200:
+                        body = (await response.text()).strip()
+                        errors.append(
+                            f"{candidate_url} returned HTTP {response.status}"
+                            + (f": {body[:160]}" if body else "")
+                        )
+                        continue
+
+                    payload = await response.json(content_type=None)
+                    if not isinstance(payload, dict):
+                        errors.append(f"{candidate_url} returned a non-object JSON payload")
+                        continue
+                    return payload, candidate_url, None
+            except Exception as exc:
+                errors.append(f"{candidate_url}: {exc}")
+
+    return None, None, " | ".join(errors[:3]) if errors else "Proxy summary request failed."
 
 
 @router.get(
@@ -810,3 +927,17 @@ async def get_activity(current_user: dict = Depends(require_admin)):
     except Exception as e:
         logger.error(f"Database error fetching activity: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Database Error")
+
+
+@router.get(
+    "/proxy_diagnostics",
+    response_model=ProxyDiagnosticsResponse,
+    summary="Get proxy diagnostics summary",
+    description=(
+        "Returns the latest proxy cleaner summary normalized for the admin stats dashboard, "
+        "including selected Telegram/OpenAI nodes and latency-ranked candidates."
+    ),
+)
+async def get_proxy_diagnostics(current_user: dict = Depends(require_admin)):
+    payload, source_url, error = await _fetch_proxy_summary_payload()
+    return _build_proxy_diagnostics_response(payload, source_url=source_url, error=error)

@@ -2,7 +2,6 @@
 const API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : "/api";
 const STORAGE_KEY = "mpb_user_preferences";
 const CALENDAR_SECTION_COLLAPSED_KEY = "mpb_calendar_sync_collapsed";
-
 const FIXED_TIMES =[
     { start: '08:30', end: '10:00' },
     { start: '10:10', end: '11:40' },
@@ -13,48 +12,39 @@ const FIXED_TIMES =[
     { start: '18:55', end: '20:25' },
     { start: '20:30', end: '22:00' }
 ];
-
 let fullSchedule =[];
 let loadedBounds = { start: null, end: null };
 let sourceUpdatedAt = null;
 let currentEntity = { type: null, id: null, name: null };
-
 let allAvailableModules =[];
 let selectedModules = new Set();
 let isOfflineMode = false;
 let currentWeekStart = getMonday(new Date());
 let cachedOfflineEntities = [];
-let latestSearchResults = [];
+let latestSearchResults =[];
 let scheduleAuthUser = null;
 let calendarSubscriptionState = createDefaultCalendarSubscriptionState();
 let isCalendarSubscriptionCollapsed = loadCalendarSectionCollapsed();
-
 const groupInput = document.getElementById('groupSearch');
 const resultsBox = document.getElementById('searchResults');
 const searchContainer = document.getElementById('searchContainer');
-
 function getUiLanguage() {
     const source = window.mpbI18n?.getLanguage?.() || document.documentElement.lang || 'ru';
     return String(source).toLowerCase().startsWith('ru') ? 'ru' : 'en';
 }
-
 function getUiLocale() {
     return getUiLanguage() === 'ru' ? 'ru-RU' : 'en-US';
 }
-
 function t(key, fallback = '', params = {}) {
     return window.mpbI18n?.t?.(key, fallback, params) || fallback || key;
 }
-
 function formatUiDate(date, options) {
     return new Intl.DateTimeFormat(getUiLocale(), options).format(date);
 }
-
 function formatUiDateCapitalized(date, options) {
     const value = formatUiDate(date, options);
     return value ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
 }
-
 function escapeHtml(value) {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -63,13 +53,11 @@ function escapeHtml(value) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 }
-
 function escapeJsString(value) {
     return String(value ?? '')
         .replace(/\\/g, '\\\\')
         .replace(/'/g, "\\'");
 }
-
 function createDefaultCalendarSubscriptionState() {
     return {
         loading: false,
@@ -80,7 +68,6 @@ function createDefaultCalendarSubscriptionState() {
         justReset: false
     };
 }
-
 function loadCalendarSectionCollapsed() {
     try {
         return localStorage.getItem(CALENDAR_SECTION_COLLAPSED_KEY) === 'true';
@@ -88,19 +75,16 @@ function loadCalendarSectionCollapsed() {
         return false;
     }
 }
-
 function setCalendarSectionCollapsed(nextValue) {
     isCalendarSubscriptionCollapsed = Boolean(nextValue);
     try {
         localStorage.setItem(CALENDAR_SECTION_COLLAPSED_KEY, isCalendarSubscriptionCollapsed ? 'true' : 'false');
     } catch (error) {}
 }
-
 function toggleCalendarSubscriptionSection() {
     setCalendarSectionCollapsed(!isCalendarSubscriptionCollapsed);
     renderCalendarSubscription();
 }
-
 window.addEventListener('mpb-auth-ready', (event) => {
     scheduleAuthUser = event.detail?.user || null;
     if (!scheduleAuthUser) {
@@ -108,14 +92,11 @@ window.addEventListener('mpb-auth-ready', (event) => {
         renderCalendarSubscription();
         return;
     }
-
     refreshCalendarSubscription();
 });
-
-
 document.addEventListener('DOMContentLoaded', async () => {
     await initOfflineHistory();
-    await loadInitialPreferences(); // Загружаем настройки из API (если залогинен) или LocalStorage
+    await loadInitialPreferences(); 
     window.mpbI18n?.registerTranslator?.(() => {
         renderOfflineHistory();
         if (!resultsBox.classList.contains('hidden')) {
@@ -128,23 +109,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderCalendarSubscription();
     });
 });
-
 function renderOfflineHistory(list = cachedOfflineEntities) {
     const container = document.getElementById('cachedEntitiesList');
     if (!container) return;
-
     if (!Array.isArray(list) || list.length === 0) {
         container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400 italic">${escapeHtml(t('schedule.history.empty', 'History is empty'))}</div>`;
         return;
     }
-
     container.innerHTML = list.map(item => {
         const itemType = escapeJsString(item.type);
         const itemId = escapeJsString(item.id);
         const itemLabel = escapeJsString(item.label);
         const labelText = escapeHtml(item.label);
         const savedText = escapeHtml(t('schedule.history.saved', 'Saved offline'));
-
         return `
             <button onclick="loadSchedule('${itemType}', '${itemId}', '${itemLabel}'); closeOfflinePanel();"
                     class="group w-full text-left px-4 py-3 bg-white hover:bg-blue-50 rounded-xl transition-all flex items-center justify-between border border-transparent hover:border-blue-100">
@@ -157,7 +134,6 @@ function renderOfflineHistory(list = cachedOfflineEntities) {
         `;
     }).join('');
 }
-
 async function initOfflineHistory() {
     try {
         const res = await fetch(`${API_BASE}/schedule/cached_list`);
@@ -169,21 +145,14 @@ async function initOfflineHistory() {
         console.warn("Не удалось загрузить список кэша:", e);
     }
 }
-
-// === НОВАЯ ЛОГИКА СИНХРОНИЗАЦИИ НАСТРОЕК ===
-
 async function loadInitialPreferences() {
     const token = localStorage.getItem('jwt_token');
     let remotePrefs = null;
     let localPrefs = null;
-
-    // Читаем из localStorage
     try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) localPrefs = JSON.parse(saved);
     } catch (e) {}
-
-    // Читаем из API, если есть токен
     if (token) {
         try {
             const res = await fetch(`${API_BASE}/auth/me`, {
@@ -197,23 +166,14 @@ async function loadInitialPreferences() {
             console.error("Ошибка загрузки настроек с сервера", e);
         }
     }
-
-    // Решаем, что применять
     let prefsToApply = null;
-
     if (remotePrefs && Object.keys(remotePrefs).length > 0) {
-        // Если в облаке есть данные, они приоритетнее
         prefsToApply = remotePrefs;
-        // Заодно обновляем локальный сторадж, чтобы работал быстро в следующий раз
         localStorage.setItem(STORAGE_KEY, JSON.stringify(prefsToApply));
     } else if (localPrefs) {
-        // Если облако пустое (новый аккаунт), но локально что-то есть - берем локальное
         prefsToApply = localPrefs;
-        // И сразу пушим это в облако, чтобы сохранить
         if (token) pushPreferencesToAPI(prefsToApply, token);
     }
-
-    // Применяем настройки к интерфейсу
     if (prefsToApply) {
         if (prefsToApply.useShortNames !== undefined) {
             document.getElementById('useShortNames').checked = prefsToApply.useShortNames;
@@ -221,7 +181,6 @@ async function loadInitialPreferences() {
         if (prefsToApply.showFullLecturerName !== undefined) {
             document.getElementById('showFullLecturerName').checked = prefsToApply.showFullLecturerName;
         }
-
         if (prefsToApply.entity && prefsToApply.entity.id) {
             if (prefsToApply.modules && prefsToApply.modules.length > 0) {
                 selectedModules = new Set(prefsToApply.modules);
@@ -230,25 +189,19 @@ async function loadInitialPreferences() {
         }
     }
 }
-
 async function savePreferences() {
     const prefs = {
         entity: currentEntity,
-        modules: Array.from(selectedModules), // Конвертируем Set в Array для JSON
+        modules: Array.from(selectedModules),
         useShortNames: document.getElementById('useShortNames').checked,
         showFullLecturerName: document.getElementById('showFullLecturerName').checked
     };
-
-    // Всегда сохраняем локально
     localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-
-    // Если есть токен, пушим в облако
     const token = localStorage.getItem('jwt_token');
     if (token) {
         pushPreferencesToAPI(prefs, token);
     }
 }
-
 async function pushPreferencesToAPI(prefs, token) {
     try {
         await fetch(`${API_BASE}/auth/preferences`, {
@@ -264,327 +217,23 @@ async function pushPreferencesToAPI(prefs, token) {
     }
 }
 
-// === ОСТАЛЬНОЙ КОД БЕЗ ИЗМЕНЕНИЙ ===
-
+// Заглушка для внешнего calendar_sync.js, чтобы не сломать если он загрузится позже
 function renderCalendarSubscription() {
-    const container = document.getElementById('calendarSubscriptionSection');
-    if (!container) return;
-
-    if (!scheduleAuthUser) {
-        container.classList.add('hidden');
-        container.innerHTML = '';
-        return;
+    if (window._renderCalendarSubscriptionImpl) {
+        window._renderCalendarSubscriptionImpl();
     }
-
-    container.classList.remove('hidden');
-
-    const title = escapeHtml(t('schedule.calendar.title', 'Calendar subscription'));
-    const description = escapeHtml(
-        t(
-            'schedule.calendar.description',
-            'Connect your personal ICS feed to Apple Calendar, Google Calendar, or any other calendar app.'
-        )
-    );
-    const settingsTitle = escapeHtml(t('schedule.calendar.settingsTitle', 'What this sync includes'));
-    const toggleText = escapeHtml(
-        t(
-            isCalendarSubscriptionCollapsed ? 'schedule.calendar.expand' : 'schedule.calendar.collapse',
-            isCalendarSubscriptionCollapsed ? 'Expand' : 'Collapse'
-        )
-    );
-    const statusBadge = calendarSubscriptionState.enabled
-        ? escapeHtml(t('schedule.calendar.statusReady', 'Ready'))
-        : escapeHtml(t('schedule.calendar.statusSetup', 'Setup'));
-    const statusBadgeClass = calendarSubscriptionState.enabled
-        ? 'border-emerald-200 bg-emerald-100 text-emerald-700'
-        : 'border-amber-200 bg-amber-100 text-amber-700';
-    const toggleIconClass = isCalendarSubscriptionCollapsed ? '' : 'rotate-180';
-
-    let stateHtml = '';
-
-    if (calendarSubscriptionState.loading) {
-        stateHtml = `
-            <div class="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm font-medium text-slate-500">
-                ${escapeHtml(t('schedule.calendar.loading', 'Loading your personal subscription link...'))}
-            </div>
-        `;
-    } else if (calendarSubscriptionState.hasError) {
-        stateHtml = `
-            <div class="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
-                ${escapeHtml(t('schedule.calendar.error', 'Failed to load the calendar subscription.'))}
-            </div>
-            <button type="button"
-                    onclick="refreshCalendarSubscription()"
-                    class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-blue-200 hover:text-blue-600">
-                ${escapeHtml(t('schedule.action.retry', 'Retry'))}
-            </button>
-        `;
-    } else if (!calendarSubscriptionState.enabled) {
-        stateHtml = `
-            <div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                ${escapeHtml(t('schedule.calendar.unavailable', 'Calendar subscription is available for Telegram-linked accounts with bot schedule subscriptions.'))}
-            </div>
-        `;
-    } else {
-        const resetNotice = calendarSubscriptionState.justReset
-            ? `
-                <div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                    ${escapeHtml(t('schedule.calendar.resetDone', 'The subscription link was updated. The previous link is now disabled.'))}
-                </div>
-            `
-            : '';
-
-        stateHtml = `
-            ${resetNotice}
-            <div class="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3">
-                <div class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
-                    ${escapeHtml(t('schedule.calendar.urlLabel', 'Subscription URL'))}
-                </div>
-                <code class="mt-2 block break-all text-xs font-medium text-slate-700">${escapeHtml(calendarSubscriptionState.httpUrl)}</code>
-            </div>
-            <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                <button type="button"
-                        onclick="copyCalendarSubscriptionLink(event)"
-                        class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-blue-200 hover:text-blue-600">
-                    ${escapeHtml(t('schedule.calendar.copy', 'Copy link'))}
-                </button>
-                <a href="${escapeHtml(calendarSubscriptionState.webcalUrl)}"
-                   class="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700">
-                    ${escapeHtml(t('schedule.calendar.apple', 'Open on iOS / Mac'))}
-                </a>
-                <button type="button"
-                        onclick="resetCalendarSubscription()"
-                        class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-200">
-                    ${escapeHtml(t('schedule.calendar.reset', 'Reset link'))}
-                </button>
-            </div>
-        `;
-    }
-
-    const settingsHtml = `
-        <div class="rounded-2xl border border-slate-200 bg-white/80 p-4">
-            <div class="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
-                ${settingsTitle}
-            </div>
-            <div class="mt-3 grid gap-3 md:grid-cols-2">
-                <div class="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
-                        ${escapeHtml(t('schedule.calendar.setting.source.label', 'Source'))}
-                    </div>
-                    <div class="mt-1 text-sm font-semibold text-slate-700">
-                        ${escapeHtml(t('schedule.calendar.setting.source.value', 'Your active Telegram schedule subscriptions'))}
-                    </div>
-                </div>
-                <div class="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
-                        ${escapeHtml(t('schedule.calendar.setting.scope.label', 'Scope'))}
-                    </div>
-                    <div class="mt-1 text-sm font-semibold text-slate-700">
-                        ${escapeHtml(t('schedule.calendar.setting.scope.value', 'Lessons, lecturers, rooms, and active personal schedule filters'))}
-                    </div>
-                </div>
-                <div class="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
-                        ${escapeHtml(t('schedule.calendar.setting.window.label', 'Time window'))}
-                    </div>
-                    <div class="mt-1 text-sm font-semibold text-slate-700">
-                        ${escapeHtml(t('schedule.calendar.setting.window.value', 'Recent 14 days plus the next 90 days of schedule'))}
-                    </div>
-                </div>
-                <div class="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                    <div class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
-                        ${escapeHtml(t('schedule.calendar.setting.access.label', 'Access'))}
-                    </div>
-                    <div class="mt-1 text-sm font-semibold text-slate-700">
-                        ${escapeHtml(t('schedule.calendar.setting.access.value', 'Private secret link. Reset it any time to revoke the previous URL.'))}
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-
-    const instructionsHtml = `
-        <p class="text-xs leading-6 text-slate-500">
-            ${escapeHtml(t('schedule.calendar.instructions', 'Use the iOS / Mac button for Apple Calendar. For Google Calendar, copy the HTTPS URL and add it from URL in the web version.'))}
-        </p>
-    `;
-
-    const panelBodyHtml = isCalendarSubscriptionCollapsed
-        ? ''
-        : `
-            <div class="mt-4 flex flex-col gap-3 border-t border-emerald-100 pt-4">
-                <p class="max-w-3xl text-sm leading-6 text-slate-600">${description}</p>
-                ${settingsHtml}
-                <div class="flex flex-col gap-3">
-                    ${stateHtml}
-                    ${instructionsHtml}
-                </div>
-            </div>
-        `;
-
-    container.innerHTML = `
-        <div class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 p-4 shadow-sm md:p-6">
-            <div class="text-[11px] font-black uppercase tracking-[0.25em] text-emerald-500">
-                ${escapeHtml(t('schedule.calendar.eyebrow', 'Sync'))}
-            </div>
-            <button type="button"
-                    onclick="toggleCalendarSubscriptionSection()"
-                    class="mt-2 flex w-full items-start justify-between gap-4 text-left">
-                <div class="min-w-0">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <h2 class="text-lg font-black tracking-tight text-slate-900 md:text-xl">${title}</h2>
-                        <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${statusBadgeClass}">
-                            ${statusBadge}
-                        </span>
-                    </div>
-                    <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                        ${escapeHtml(t('schedule.calendar.summary', 'Personal calendar feed for your active schedule subscriptions and filters.'))}
-                    </p>
-                </div>
-                <span class="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm">
-                    ${toggleText}
-                    <svg class="h-4 w-4 transition-transform ${toggleIconClass}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                    </svg>
-                </span>
-            </button>
-            ${panelBodyHtml}
-        </div>
-    `;
-}
-
-async function refreshCalendarSubscription() {
-    if (!scheduleAuthUser) {
-        calendarSubscriptionState = createDefaultCalendarSubscriptionState();
-        renderCalendarSubscription();
-        return;
-    }
-
-    const token = localStorage.getItem('jwt_token');
-    if (!token) {
-        scheduleAuthUser = null;
-        calendarSubscriptionState = createDefaultCalendarSubscriptionState();
-        renderCalendarSubscription();
-        return;
-    }
-
-    calendarSubscriptionState = {
-        ...calendarSubscriptionState,
-        loading: true,
-        hasError: false,
-        justReset: false
-    };
-    renderCalendarSubscription();
-
-    try {
-        const response = await fetch(`${API_BASE}/cal/subscription`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (response.status === 401) {
-            scheduleAuthUser = null;
-            calendarSubscriptionState = createDefaultCalendarSubscriptionState();
-            renderCalendarSubscription();
-            return;
-        }
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-        calendarSubscriptionState = {
-            loading: false,
-            enabled: Boolean(data.enabled && data.http_url && data.webcal_url),
-            httpUrl: data.http_url || '',
-            webcalUrl: data.webcal_url || '',
-            hasError: false,
-            justReset: false
-        };
-    } catch (error) {
-        console.error('Failed to load calendar subscription', error);
-        calendarSubscriptionState = {
-            ...createDefaultCalendarSubscriptionState(),
-            hasError: true
-        };
-    }
-
-    renderCalendarSubscription();
-}
-
-function copyCalendarSubscriptionLink(event) {
-    if (!calendarSubscriptionState.httpUrl) return;
-    copyToClipboard(calendarSubscriptionState.httpUrl, event);
-}
-
-async function resetCalendarSubscription() {
-    if (!scheduleAuthUser) return;
-
-    const token = localStorage.getItem('jwt_token');
-    if (!token) {
-        scheduleAuthUser = null;
-        calendarSubscriptionState = createDefaultCalendarSubscriptionState();
-        renderCalendarSubscription();
-        return;
-    }
-
-    calendarSubscriptionState = {
-        ...calendarSubscriptionState,
-        loading: true,
-        hasError: false,
-        justReset: false
-    };
-    renderCalendarSubscription();
-
-    try {
-        const response = await fetch(`${API_BASE}/cal/subscription/reset`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (response.status === 401) {
-            scheduleAuthUser = null;
-            calendarSubscriptionState = createDefaultCalendarSubscriptionState();
-            renderCalendarSubscription();
-            return;
-        }
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-        calendarSubscriptionState = {
-            loading: false,
-            enabled: Boolean(data.enabled && data.http_url && data.webcal_url),
-            httpUrl: data.http_url || '',
-            webcalUrl: data.webcal_url || '',
-            hasError: false,
-            justReset: true
-        };
-    } catch (error) {
-        console.error('Failed to reset calendar subscription', error);
-        calendarSubscriptionState = {
-            ...createDefaultCalendarSubscriptionState(),
-            hasError: true
-        };
-    }
-
-    renderCalendarSubscription();
 }
 
 function parseDate(dateStr) {
     const [y, m, d] = dateStr.replace(/\./g, '-').split('-');
     return new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
 }
-
 function getISODateStr(d) {
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
 }
-
 function getMonday(d) {
     const date = new Date(d);
     const day = date.getDay();
@@ -593,16 +242,12 @@ function getMonday(d) {
     date.setHours(0, 0, 0, 0);
     return date;
 }
-
 async function changeWeek(offset) {
     currentWeekStart.setDate(currentWeekStart.getDate() + offset * 7);
-
     const weekEnd = new Date(currentWeekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
-
     const loadedStart = parseDate(loadedBounds.start);
     const loadedEnd = parseDate(loadedBounds.end);
-
     if (currentWeekStart < loadedStart || weekEnd > loadedEnd) {
         const targetDateStr = getISODateStr(currentWeekStart);
         await loadSchedule(currentEntity.type, currentEntity.id, currentEntity.name, targetDateStr);
@@ -610,74 +255,64 @@ async function changeWeek(offset) {
         filterAndRender();
     }
 }
-
 async function setTodayWeek() {
     currentWeekStart = getMonday(new Date());
     await changeWeek(0);
 }
-
 function copyToClipboard(text, event) {
     navigator.clipboard.writeText(text).then(() => {
         const el = event.currentTarget;
         const originalHtml = el.innerHTML;
-        el.innerHTML = `<span class="text-green-500 font-bold">${escapeHtml(t('schedule.copy.done', 'Copied!'))}</span>`;
+        el.innerHTML = `<span class="text-green-500 font-bold">${escapeHtml(t('schedule.copy.done', 'Скопировано!'))}</span>`;
         setTimeout(() => el.innerHTML = originalHtml, 1500);
     });
 }
-
 groupInput.addEventListener('input', debounce(async (e) => {
     const query = e.target.value.trim();
     if (query.length < 2) {
-        latestSearchResults = [];
+        latestSearchResults =[];
         resultsBox.classList.add('hidden');
         return;
     }
-
     try {
         const res = await fetch(`${API_BASE}/schedule/search?term=${encodeURIComponent(query)}&type=all`);
         if (!res.ok) throw new Error("API Error");
         const data = await res.json();
         renderSearchResults(data);
     } catch (err) {
-        resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-red-500 text-center font-medium">${escapeHtml(t('schedule.search.error', 'Search failed or the server is unavailable.'))}</div>`;
+        resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-red-500 text-center font-medium">${escapeHtml(t('schedule.search.error', 'Ошибка поиска или сервер недоступен.'))}</div>`;
         resultsBox.classList.remove('hidden');
     }
 }, 300));
-
 function getSearchResultTypeMeta(type) {
     const normalizedType = String(type || 'group').toLowerCase();
-
     if (normalizedType === 'person') {
         return {
-            label: t('schedule.search.type.person', 'Lecturer'),
+            label: t('schedule.search.type.person', 'Преподаватель'),
             badgeClass: 'bg-sky-100 text-sky-700'
         };
     }
-
     if (normalizedType === 'auditorium') {
         return {
-            label: t('schedule.search.type.auditorium', 'Auditorium'),
+            label: t('schedule.search.type.auditorium', 'Аудитория'),
             badgeClass: 'bg-emerald-100 text-emerald-700'
         };
     }
-
     return {
-        label: t('schedule.search.type.group', 'Group'),
+        label: t('schedule.search.type.group', 'Группа'),
         badgeClass: 'bg-violet-100 text-violet-700'
     };
 }
-
 function renderSearchResults(results) {
-    const normalizedResults = Array.isArray(results) ? results : [];
+    const normalizedResults = Array.isArray(results) ? results :[];
     latestSearchResults = normalizedResults;
-
     if (normalizedResults.length === 0) {
-        resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-slate-500 text-center">${escapeHtml(t('schedule.search.empty', 'Nothing found'))}</div>`;
+        resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-slate-500 text-center">${escapeHtml(t('schedule.search.empty', 'Ничего не найдено'))}</div>`;
     } else {
         resultsBox.innerHTML = normalizedResults.map(item => {
             const typeMeta = getSearchResultTypeMeta(item.type);
             const offlineBadge = item.is_offline
-                ? `<span class="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-600">${escapeHtml(t('schedule.search.cacheBadge', 'CACHE'))}</span>`
+                ? `<span class="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-600">${escapeHtml(t('schedule.search.cacheBadge', 'КЭШ'))}</span>`
                 : '';
             const itemType = escapeJsString(item.type || 'group');
             const itemId = escapeJsString(item.id);
@@ -698,55 +333,41 @@ function renderSearchResults(results) {
     }
     resultsBox.classList.remove('hidden');
 }
-
 async function loadSchedule(type, id, name, targetDate = null) {
     resultsBox.classList.add('hidden');
     groupInput.value = name;
     currentEntity = { type, id, name };
-
     document.getElementById('defaultState').classList.add('hidden');
     document.getElementById('scheduleControls').classList.remove('hidden');
-
     document.getElementById('desktopSchedule').innerHTML = `<div class="p-8"><div class="skeleton h-64 w-full rounded-3xl"></div></div>`;
     document.getElementById('mobileSchedule').innerHTML = `<div class="skeleton h-64 w-full rounded-3xl"></div>`;
     sourceUpdatedAt = null;
-
     let url = `${API_BASE}/schedule/data/${type}/${id}`;
     if (targetDate) url += `?base_date=${targetDate}`;
-
     savePreferences();
-
     try {
         const res = await fetch(url);
         const data = await res.json();
-
         fullSchedule = data.schedule || [];
         allAvailableModules = data.available_modules ||[];
         loadedBounds = data.loaded_bounds || {start: "2000-01-01", end: "2099-01-01"};
         sourceUpdatedAt = data.source_updated_at || null;
-
         if (!targetDate && selectedModules.size === 0) {
             selectedModules = new Set(allAvailableModules);
         }
-
         if (!targetDate) currentWeekStart = getMonday(new Date());
-
         isOfflineMode = data.is_offline || false;
-
         renderModuleFilters();
         filterAndRender();
-
     } catch (err) {
-        const errorText = escapeHtml(t('schedule.error.load', 'Failed to load schedule.'));
+        const errorText = escapeHtml(t('schedule.error.load', 'Ошибка загрузки.'));
         document.getElementById('desktopSchedule').innerHTML = `<div class="p-10 text-center text-red-500 font-bold">${errorText}</div>`;
         document.getElementById('mobileSchedule').innerHTML = `<div class="p-10 text-center text-red-500 font-bold">${errorText}</div>`;
     }
 }
-
 function renderModuleFilters() {
     const container = document.getElementById('moduleContainer');
     const section = document.getElementById('moduleFilterSection');
-
     if (allAvailableModules.length === 0) {
         section.classList.add('hidden');
         return;
@@ -754,7 +375,6 @@ function renderModuleFilters() {
     section.classList.remove('hidden');
     const selected = allAvailableModules.filter((mod) => selectedModules.has(mod));
     const available = allAvailableModules.filter((mod) => !selectedModules.has(mod));
-
     function renderModuleChip(mod, isSelected) {
         return `
             <button onclick="toggleModule('${escapeJsString(mod)}')"
@@ -767,10 +387,8 @@ function renderModuleFilters() {
             </button>
         `;
     }
-
     function renderModuleGroup(labelKey, fallback, items, toneClass) {
         if (items.length === 0) return '';
-
         return `
             <section class="rounded-2xl border ${toneClass} p-3">
                 <div class="mb-3 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
@@ -783,15 +401,13 @@ function renderModuleFilters() {
             </section>
         `;
     }
-
     container.innerHTML = `
         <div class="space-y-3">
-            ${renderModuleGroup('schedule.filters.selected', 'Selected', selected, 'border-slate-200 bg-slate-50/80')}
-            ${renderModuleGroup('schedule.filters.available', 'Available', available, 'border-blue-100 bg-blue-50/40')}
+            ${renderModuleGroup('schedule.filters.selected', 'Активные', selected, 'border-slate-200 bg-slate-50/80')}
+            ${renderModuleGroup('schedule.filters.available', 'Доступные', available, 'border-blue-100 bg-blue-50/40')}
         </div>
     `;
 }
-
 function toggleModule(mod) {
     if (selectedModules.has(mod)) selectedModules.delete(mod);
     else selectedModules.add(mod);
@@ -799,54 +415,42 @@ function toggleModule(mod) {
     filterAndRender();
     savePreferences();
 }
-
 function selectAllModules() {
     selectedModules = new Set(allAvailableModules);
     renderModuleFilters();
     filterAndRender();
     savePreferences();
 }
-
 function clearAllModules() {
     selectedModules.clear();
     renderModuleFilters();
     filterAndRender();
     savePreferences();
 }
-
 function filterAndRender() {
     if (isOfflineMode) document.getElementById('offlineWarning').classList.remove('hidden');
     else document.getElementById('offlineWarning').classList.add('hidden');
-
-    document.getElementById('weekNav').classList.remove('hidden');
-
     const weekEnd = new Date(currentWeekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
-
     document.getElementById('weekRangeDisplay').innerText =
         `${formatUiDate(currentWeekStart, {day:'numeric', month:'short'})} - ${formatUiDate(weekEnd, {day:'numeric', month:'short'})}`;
-
     const filteredLessons = fullSchedule.filter(lesson => {
         if (lesson.module && !selectedModules.has(lesson.module)) return false;
         const lessonDate = parseDate(lesson.date);
         if (lessonDate < currentWeekStart || lessonDate > weekEnd) return false;
         return true;
     });
-
     renderDesktopGrid(filteredLessons);
     renderMobileFeed(filteredLessons);
 }
-
 function renderDesktopGrid(lessons) {
     const container = document.getElementById('desktopSchedule');
-
     const weekDates =[];
     for(let i=0; i<7; i++) {
         const d = new Date(currentWeekStart);
         d.setDate(d.getDate() + i);
         weekDates.push(d);
     }
-
     const gridData = {};
     lessons.forEach(l => {
         const normDate = getISODateStr(parseDate(l.date));
@@ -854,17 +458,14 @@ function renderDesktopGrid(lessons) {
         if (!gridData[normDate][l.beginLesson]) gridData[normDate][l.beginLesson] =[];
         gridData[normDate][l.beginLesson].push(l);
     });
-
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
     let html = `
     <div class="overflow-hidden relative">
         <table class="w-full table-fixed border-collapse text-left">
             <thead class="bg-slate-50/50 border-b border-slate-100">
                 <tr>
-                    <th class="w-16 sm:w-20 p-3 text-center text-xs font-bold text-slate-400 border-r border-slate-200">${escapeHtml(t('schedule.table.time', 'Time'))}</th>`;
-
+                    <th class="w-16 sm:w-20 p-3 text-center text-xs font-bold text-slate-400 border-r border-slate-200">${escapeHtml(t('schedule.table.time', 'Время'))}</th>`;
     weekDates.forEach(d => {
         const isToday = isSameDay(d, now);
         html += `<th class="p-3 border-r border-slate-200 last:border-r-0 ${isToday ? 'bg-blue-50/70' : ''} relative">
@@ -876,28 +477,25 @@ function renderDesktopGrid(lessons) {
         </th>`;
     });
     html += `</tr></thead><tbody class="divide-y divide-slate-100 relative">`;
-
     FIXED_TIMES.forEach(timeSlot => {
         const timeStr = timeSlot.start;
-
         const [hStart, mStart] = timeSlot.start.split(':').map(Number);
         const[hEnd, mEnd] = timeSlot.end.split(':').map(Number);
         const slotStartMins = hStart * 60 + mStart;
         const slotEndMins = hEnd * 60 + mEnd;
         const isCurrentSlot = (currentMinutes >= slotStartMins && currentMinutes <= slotEndMins);
-
+        
         html += `<tr>
             <td class="p-2 border-r border-slate-100 align-top text-center bg-slate-50/30 relative">
                 <div class="text-xs font-black ${isCurrentSlot ? 'text-red-500' : 'text-slate-500'}">${timeSlot.start}</div>
                 <div class="text-[10px] font-medium text-slate-400">${timeSlot.end}</div>
+                ${isCurrentSlot ? '<div class="absolute top-1/2 right-[-5px] w-2 h-2 rounded-full bg-red-500 z-20 transform -translate-y-1/2 shadow-[0_0_8px_rgba(239,68,68,0.8)]"></div>' : ''}
             </td>`;
-
         weekDates.forEach(d => {
             const dateStr = getISODateStr(d);
             const slotLessons = gridData[dateStr]?.[timeStr] ||[];
             const isToday = isSameDay(d, now);
-
-            html += `<td class="p-1.5 border-r border-slate-100 last:border-r-0 align-top ${isToday ? 'bg-blue-50/10' : ''} hover:bg-slate-50 transition-colors relative">
+            html += `<td class="p-1.5 border-r border-slate-100 last:border-r-0 align-top ${isToday ? 'bg-blue-50/30' : ''} hover:bg-slate-50 transition-colors relative">
                 ${isToday && isCurrentSlot ? '<div class="absolute top-1/2 left-0 w-full h-[2px] bg-red-400 z-10 pointer-events-none opacity-50"></div>' : ''}
                 <div class="flex flex-col gap-1.5 h-full">
                     ${slotLessons.map(l => renderCard(l, true)).join('')}
@@ -909,30 +507,25 @@ function renderDesktopGrid(lessons) {
     html += `</tbody></table></div>`;
     container.innerHTML = html;
 }
-
 function renderMobileFeed(lessons) {
     const container = document.getElementById('mobileSchedule');
     if (lessons.length === 0) {
-        container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm">${escapeHtml(t('schedule.state.emptyWeek', 'No classes this week.'))}</div>`;
+        container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm">${escapeHtml(t('schedule.state.emptyWeek', 'Нет занятий на этой неделе.'))}</div>`;
         return;
     }
-
     const byDate = {};
     lessons.forEach(l => {
         const normDate = getISODateStr(parseDate(l.date));
         if(!byDate[normDate]) byDate[normDate] = [];
         byDate[normDate].push(l);
     });
-
     const sortedDates = Object.keys(byDate).sort();
     let html = '';
-
     sortedDates.forEach(dateStr => {
         const d = parseDate(dateStr);
         const isToday = isSameDay(d, new Date());
         const dayTitle = formatUiDateCapitalized(d, {weekday: 'long'});
         const dayDate = formatUiDate(d, {day: 'numeric', month: 'long'});
-
         html += `
         <section class="schedule-day-section relative">
             <div class="schedule-day-header ${isToday ? 'schedule-day-header--today' : ''}">
@@ -940,9 +533,8 @@ function renderMobileFeed(lessons) {
                     <div class="schedule-day-header-label">${escapeHtml(dayDate)}</div>
                     <div class="schedule-day-header-title">${escapeHtml(dayTitle)}</div>
                 </div>
-                ${isToday ? `<span class="schedule-day-pill">${escapeHtml(t('schedule.day.today', 'Today'))}</span>` : ''}
+                ${isToday ? `<span class="schedule-day-pill">${escapeHtml(t('schedule.day.today', 'Сегодня'))}</span>` : ''}
             </div>
-
             <div class="schedule-day-lessons">
                 ${byDate[dateStr].sort((a,b) => a.beginLesson.localeCompare(b.beginLesson)).map(l => renderCard(l, false)).join('')}
             </div>
@@ -950,22 +542,31 @@ function renderMobileFeed(lessons) {
     });
     container.innerHTML = html;
 }
-
+function getShortKind(kind) {
+    if (!kind) return '';
+    const k = kind.toLowerCase();
+    if (k.includes('лекц') || k.includes('lecture')) return 'Лекция';
+    if (k.includes('практ') || k.includes('семин') || k.includes('seminar')) return 'Семинар';
+    if (k.includes('экзам') || k.includes('зачет') || k.includes('аттест') || k.includes('exam')) return 'Экзамен';
+    if (k.includes('лаборат')) return 'Лабораторная';
+    if (k.includes('консульт')) return 'Консультация';
+    return kind;
+}
 function renderCard(l, isDesktop) {
     const color = getBadgeColor(l.kindOfWork);
     const useShort = document.getElementById('useShortNames').checked;
     const showFullLecturerName = document.getElementById('showFullLecturerName').checked;
     const discName = useShort ? l.discipline_short : l.discipline_full;
-    const safeKind = escapeHtml(l.kindOfWork || '');
+    const safeKind = escapeHtml(getShortKind(l.kindOfWork));
     const safeModule = escapeHtml(l.module || '');
     const safeDiscipline = escapeHtml(discName || '');
     const safeAuditorium = escapeHtml(l.auditorium || '');
     const safeAuditoriumJs = escapeJsString(l.auditorium || '');
     const safeLecturer = escapeHtml(l.lecturer_title || '');
     const safeLecturerJs = escapeJsString(l.lecturer_title || '');
-    const roomTitle = escapeHtml(t('schedule.copy.room', 'Copy room'));
-    const teacherTitle = escapeHtml(t('schedule.copy.teacher', 'Copy lecturer'));
-
+    const roomTitle = escapeHtml(t('schedule.copy.room', 'Копировать аудиторию'));
+    const teacherTitle = escapeHtml(t('schedule.copy.teacher', 'Копировать преподавателя'));
+    
     if (isDesktop) {
         const teacherTokens = String(l.lecturer_title || '').split(' ').filter(Boolean);
         const teacherShort = teacherTokens.length > 2
@@ -973,11 +574,10 @@ function renderCard(l, isDesktop) {
             : l.lecturer_title;
         const teacherLabel = showFullLecturerName ? l.lecturer_title : teacherShort;
         const safeTeacherLabel = escapeHtml(teacherLabel || '');
-
         return `
         <div class="p-2.5 sm:p-3 rounded-2xl border ${color.border} ${color.bg} shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md flex flex-col h-full min-h-[110px]">
             <div class="flex justify-between items-start gap-1 mb-1.5">
-                <div class="text-[9px] font-black uppercase tracking-wider ${color.text} truncate" title="${safeKind}">
+                <div class="text-[10px] font-black uppercase tracking-wider ${color.text} truncate" title="${safeKind}">
                     ${safeKind}
                 </div>
                 ${l.module ? `
@@ -985,19 +585,17 @@ function renderCard(l, isDesktop) {
                         ${safeModule}
                     </span>` : ''}
             </div>
-
             <div class="font-bold text-slate-800 text-[13px] leading-snug line-clamp-3 mb-2 flex-grow" title="${safeDiscipline}">
                 ${safeDiscipline}
             </div>
-
             <div class="flex flex-col gap-1">
-                <div class="flex items-center gap-1 text-[10px] font-medium text-slate-600 hover:text-blue-600 cursor-pointer transition-colors"
+                <div class="flex items-center gap-1 text-[10px] font-medium text-slate-700 hover:text-blue-600 cursor-pointer transition-colors"
                      onclick="copyToClipboard('${safeAuditoriumJs}', event)" title="${roomTitle}">
                     <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     <span class="truncate">${safeAuditorium}</span>
                 </div>
                 ${teacherLabel ? `
-                <div class="flex items-center gap-1 text-[10px] font-medium text-slate-600 hover:text-blue-600 cursor-pointer transition-colors"
+                <div class="flex items-center gap-1 text-[10px] font-medium text-slate-700 hover:text-blue-600 cursor-pointer transition-colors"
                      onclick="copyToClipboard('${safeLecturerJs}', event)" title="${teacherTitle}">
                     <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
                     <span class="truncate">${safeTeacherLabel}</span>
@@ -1005,9 +603,7 @@ function renderCard(l, isDesktop) {
             </div>
         </div>`;
     }
-
     const mobileBadgeBg = color.bg.includes('/') ? color.bg.split('/')[0] : color.bg;
-
     return `
     <article class="schedule-feed-card">
         <div class="schedule-feed-card-head">
@@ -1015,11 +611,10 @@ function renderCard(l, isDesktop) {
                 <span class="schedule-feed-card-start">${escapeHtml(l.beginLesson || '')}</span>
                 <span class="schedule-feed-card-end">${escapeHtml(l.endLesson || '')}</span>
             </div>
-            <span class="schedule-feed-card-kind px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${color.text} ${mobileBadgeBg} border ${color.border}">
+            <span class="schedule-feed-card-kind px-2 py-0.5 rounded-md text-[10px] font-black tracking-wider ${color.text} ${mobileBadgeBg} border ${color.border}">
                 ${safeKind}
             </span>
         </div>
-
         <div class="schedule-feed-card-body">
             <div class="schedule-feed-card-title">${safeDiscipline}</div>
             ${l.module ? `
@@ -1027,7 +622,6 @@ function renderCard(l, isDesktop) {
                     ${safeModule}
                 </span>` : ''}
         </div>
-
         <div class="schedule-feed-card-meta">
             <div class="schedule-feed-card-meta-item cursor-pointer active:text-blue-600"
                  onclick="copyToClipboard('${safeAuditoriumJs}', event)"
@@ -1044,11 +638,9 @@ function renderCard(l, isDesktop) {
         </div>
     </article>`;
 }
-
 function getBadgeColor(kind) {
     if (!kind) return { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600' };
     const k = kind.toLowerCase();
-
     const isLecture = k.includes('\u043b\u0435\u043a\u0446') || k.includes('lecture');
     const isPractice =
         k.includes('практ') ||
@@ -1067,28 +659,23 @@ function getBadgeColor(kind) {
         k.includes('экзамен') ||
         k.includes('зачет') ||
         k.includes('аттест');
-
     if (isLecture) return { bg: 'bg-emerald-50/60', border: 'border-emerald-200', text: 'text-emerald-700' };
     if (isPractice) return { bg: 'bg-amber-50/60', border: 'border-amber-200', text: 'text-amber-700' };
     if (isExamLike) return { bg: 'bg-rose-50/60', border: 'border-rose-200', text: 'text-rose-700' };
     return { bg: 'bg-blue-50/60', border: 'border-blue-200', text: 'text-blue-700' };
 }
-
 function debounce(func, timeout = 300){
     let timer;
     return (...args) => { clearTimeout(timer); timer = setTimeout(() => { func.apply(this, args); }, timeout); };
 }
-
 function isSameDay(d1, d2) {
     return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 }
-
 function toggleOfflinePanel(event) {
     if (event) event.stopPropagation();
     const dropdown = document.getElementById('offlineDropdown');
     const arrow = document.getElementById('offlineArrow');
     const isHidden = dropdown.classList.contains('hidden');
-
     if (isHidden) {
         dropdown.classList.remove('hidden');
         setTimeout(() => {
@@ -1100,7 +687,6 @@ function toggleOfflinePanel(event) {
         closeOfflinePanel();
     }
 }
-
 function closeOfflinePanel() {
     const dropdown = document.getElementById('offlineDropdown');
     const arrow = document.getElementById('offlineArrow');
@@ -1109,7 +695,6 @@ function closeOfflinePanel() {
     arrow.classList.remove('rotate-180');
     setTimeout(() => dropdown.classList.add('hidden'), 200);
 }
-
 document.addEventListener('click', (e) => {
     if (!searchContainer.contains(e.target)) resultsBox.classList.add('hidden');
     const offlineContainer = document.getElementById('offlinePanelContainer');
@@ -1117,7 +702,202 @@ document.addEventListener('click', (e) => {
         closeOfflinePanel();
     }
 });
-
 function toggleFiltersMobile() {
     window.toggleScheduleFilters?.();
 }
+// Экспортируем функцию для UI Utils
+window._renderCalendarSubscriptionImpl = function() {
+    const container = document.getElementById('calendarSubscriptionSection');
+    if (!container) return;
+    if (!scheduleAuthUser) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+    }
+    container.classList.remove('hidden');
+    const selectedProfile = window.getSelectedCalendarProfile ? window.getSelectedCalendarProfile() : null;
+    const isProfileRevealed = selectedProfile && window.revealedCalendarProfileIds ? window.revealedCalendarProfileIds.has(selectedProfile.id) : false;
+    const syncReady = Boolean(calendarSubscriptionState.enabled);
+    const syncPaused = !calendarSubscriptionState.sync_enabled;
+    const title = escapeHtml(t('schedule.calendar.title', 'Подписка на календарь'));
+    const summary = syncReady
+        ? escapeHtml(t('schedule.calendar.summaryReady', 'Приватные iCal-ленты для ваших профилей синхронизации на сайте.'))
+        : syncPaused
+            ? escapeHtml(t('schedule.calendar.summaryPaused', 'Ссылки календаря на паузе.'))
+            : escapeHtml(t('schedule.calendar.summarySetup', 'Настройте приватные ленты расписания.'));
+    const badgeText = syncReady
+        ? escapeHtml(t('schedule.calendar.statusReady', 'Готово'))
+        : syncPaused
+            ? escapeHtml(t('schedule.calendar.statusPaused', 'На паузе'))
+            : escapeHtml(t('schedule.calendar.statusSetup', 'Настройка'));
+    const badgeClass = syncReady
+        ? 'border-emerald-200 bg-emerald-100 text-emerald-700'
+        : syncPaused
+            ? 'border-slate-200 bg-slate-200 text-slate-700'
+            : 'border-amber-200 bg-amber-100 text-amber-700';
+    const toggleText = escapeHtml(
+        t(
+            isCalendarSubscriptionCollapsed ? 'schedule.calendar.expand' : 'schedule.calendar.collapse',
+            isCalendarSubscriptionCollapsed ? 'Развернуть' : 'Свернуть'
+        )
+    );
+    const toggleIconClass = isCalendarSubscriptionCollapsed ? '' : 'rotate-180';
+    
+    if (calendarSubscriptionState.loading) {
+        container.innerHTML = `
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 md:p-5 shadow-sm">
+                <div class="flex items-center gap-4 text-left">
+                    <div class="flex items-center justify-center w-10 h-10 rounded-full bg-blue-50 text-blue-600 shrink-0">
+                        <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    </div>
+                    <div>
+                        <h2 class="text-base font-bold text-slate-900">${title}</h2>
+                        <p class="text-xs text-slate-500 mt-0.5">${escapeHtml(t('schedule.calendar.loading', 'Загружаем данные...'))}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    const eligibilityNotice = calendarSubscriptionState.hasError
+        ? `<div class="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600 mb-3">${escapeHtml(t('schedule.calendar.error', 'Ошибка загрузки подписки.'))}</div>`
+        : !calendarSubscriptionState.eligibility?.available
+            ? `<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700 mb-3">${escapeHtml(calendarSubscriptionState.eligibility?.detail || t('schedule.calendar.unavailable', 'Недоступно.'))}</div>`
+            : syncPaused
+                ? `<div class="rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm text-slate-700 mb-3">${escapeHtml(t('schedule.calendar.pausedNotice', 'Синхронизация на паузе.'))}</div>`
+                : calendarSubscriptionState.justReset
+                    ? `<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 mb-3">${escapeHtml(t('schedule.calendar.resetDone', 'Ссылка обновлена.'))}</div>`
+                    : '';
+
+    const profileButtons = (calendarSubscriptionState.profiles ||[]).map((profile) => `
+        <button type="button"
+                onclick="window.selectCalendarSubscriptionProfile('${escapeJsString(profile.id)}')"
+                class="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold transition-colors ${profile.selected ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-600'}">
+            <span>${escapeHtml(profile.name)}</span>
+            <span class="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] ${profile.selected ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-400'}">${escapeHtml(profile.kind === 'custom' ? t('schedule.calendar.profile.custom', 'Пресет') : t('schedule.calendar.profile.builtin', 'Базовый'))}</span>
+        </button>
+    `).join('');
+
+    const visibleLink = selectedProfile
+        ? (isProfileRevealed ? selectedProfile.links.http_url : selectedProfile.links.masked_http_url)
+        : '';
+    const modulesLabel = selectedProfile?.modules?.length
+        ? escapeHtml(selectedProfile.modules.join(', '))
+        : escapeHtml(t('schedule.calendar.meta.modulesAll', 'Все модули'));
+
+    const profileDetailsHtml = selectedProfile
+        ? `
+            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3 mb-4">
+                <div class="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
+                    <div class="text-[10px] font-black uppercase tracking-wider text-slate-400">${escapeHtml(t('schedule.calendar.urlLabel', 'URL подписки'))}</div>
+                    <code class="mt-1 block break-all text-xs font-medium text-slate-700">${escapeHtml(visibleLink || '')}</code>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
+                    <div class="text-[10px] font-black uppercase tracking-wider text-slate-400">${escapeHtml(t('schedule.calendar.meta.scope', 'Состав'))}</div>
+                    <div class="mt-1 text-sm font-bold text-slate-800">${escapeHtml(selectedProfile.scope_label || selectedProfile.name)}</div>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
+                    <div class="text-[10px] font-black uppercase tracking-wider text-slate-400">${escapeHtml(t('schedule.calendar.meta.modules', 'Модули'))}</div>
+                    <div class="mt-1 text-sm font-bold text-slate-800">${modulesLabel}</div>
+                </div>
+            </div>
+        `
+        : '';
+
+    const canUseLinks = Boolean(calendarSubscriptionState.sync_enabled && selectedProfile?.links?.http_url);
+    const actionButtonsHtml = selectedProfile ? `
+        <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap mb-4 border-t border-slate-100 pt-4">
+            <button type="button" ${canUseLinks ? '' : 'disabled'}
+                    onclick="window.copyCalendarSubscriptionLink(event)"
+                    class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold transition-colors ${canUseLinks ? 'text-slate-700 hover:border-blue-200 hover:text-blue-600' : 'cursor-not-allowed text-slate-400'}">
+                ${escapeHtml(t('schedule.calendar.copy', 'Копировать'))}
+            </button>
+            <button type="button"
+                    onclick="window.toggleCalendarProfileReveal('${escapeJsString(selectedProfile.id)}')"
+                    class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-blue-200 hover:text-blue-600">
+                ${escapeHtml(isProfileRevealed ? t('schedule.calendar.hide', 'Скрыть') : t('schedule.calendar.reveal', 'Показать'))}
+            </button>
+            <button type="button" ${canUseLinks ? '' : 'disabled'}
+                    onclick="window.openCalendarProfileLink('webcal')"
+                    class="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-600 px-4 py-2 text-sm font-bold text-white transition-colors ${canUseLinks ? 'hover:bg-blue-700' : 'cursor-not-allowed opacity-60'}">
+                ${escapeHtml(t('schedule.calendar.apple', 'Настроить (iOS / Mac)'))}
+            </button>
+            <button type="button"
+                    onclick="window.toggleCalendarSync(!calendarSubscriptionState.sync_enabled)"
+                    class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-200">
+                ${escapeHtml(calendarSubscriptionState.sync_enabled ? t('schedule.calendar.disable', 'Выключить') : t('schedule.calendar.enable', 'Включить'))}
+            </button>
+            <button type="button"
+                    onclick="window.resetCalendarSubscription()"
+                    class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-200">
+                ${escapeHtml(t('schedule.calendar.reset', 'Сбросить'))}
+            </button>
+        </div>
+    ` : '';
+
+    const currentViewCardHtml = `
+        <div class="rounded-2xl border border-blue-100 bg-blue-50/50 p-4 border-dashed mt-4">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div class="min-w-0">
+                    <div class="text-[10px] font-black uppercase tracking-wider text-blue-400">${escapeHtml(t('schedule.calendar.currentView.title', 'Пресет текущей страницы'))}</div>
+                    <div class="mt-1 text-sm font-bold text-slate-800">${window.getCalendarCurrentViewSummary ? window.getCalendarCurrentViewSummary() : ''}</div>
+                    <p class="mt-1 text-xs text-slate-500">${escapeHtml(t('schedule.calendar.currentView.description', 'Сохранить эту страницу как iCal-ленту.'))}</p>
+                </div>
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <select id="calendarCurrentViewMode" onchange="window.calendarCurrentViewMode=this.value" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 outline-none focus:border-blue-400">
+                        <option value="all" ${window.calendarCurrentViewMode === 'all' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.all', 'Все занятия'))}</option>
+                        <option value="exams_only" ${window.calendarCurrentViewMode === 'exams_only' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.exams', 'Только экзамены'))}</option>
+                    </select>
+                    <button type="button" ${currentEntity?.id ? '' : 'disabled'}
+                            onclick="window.createCalendarProfileFromCurrentView()"
+                            class="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold transition-colors ${currentEntity?.id ? 'text-blue-700 hover:bg-blue-100' : 'cursor-not-allowed text-slate-400'}">
+                        ${escapeHtml(t('schedule.calendar.currentView.save', 'Сохранить'))}
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const panelBodyHtml = isCalendarSubscriptionCollapsed ? '' : `
+        <div class="mt-4 flex flex-col border-t border-slate-100 pt-4 animate-fade-in-up">
+            ${eligibilityNotice}
+            <div class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-3">Ваши пресеты (Профили синхронизации)</div>
+            <div class="flex flex-wrap gap-2 mb-4">${profileButtons}</div>
+            ${profileDetailsHtml}
+            ${actionButtonsHtml}
+            ${currentViewCardHtml}
+        </div>
+    `;
+
+    container.innerHTML = `
+        <div class="rounded-2xl border border-slate-200 bg-white p-4 md:p-5 shadow-sm">
+            <button type="button" onclick="toggleCalendarSubscriptionSection()" class="flex w-full items-center justify-between gap-4 text-left group">
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center justify-center w-10 h-10 rounded-full bg-slate-50 group-hover:bg-blue-50 text-slate-400 group-hover:text-blue-600 shrink-0 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <div class="text-[10px] font-black uppercase tracking-wider text-emerald-500">СИНХРОНИЗАЦИЯ</div>
+                        </div>
+                        <div class="flex items-center gap-2 mt-0.5">
+                            <h2 class="text-lg font-black tracking-tight text-slate-900">${title}</h2>
+                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${statusBadgeClass}">
+                                ${statusBadge}
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1 hidden sm:block">${summary}</p>
+                    </div>
+                </div>
+                <span class="inline-flex shrink-0 items-center justify-center w-8 h-8 md:w-auto md:h-auto md:px-3 md:py-1.5 md:rounded-xl rounded-full border border-slate-200 bg-white text-xs font-bold text-slate-600 shadow-sm hover:bg-slate-50 transition-colors">
+                    <span class="hidden md:inline mr-2">${toggleText}</span>
+                    <svg class="h-4 w-4 transition-transform ${toggleIconClass}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </span>
+            </button>
+            ${panelBodyHtml}
+        </div>
+    `;
+};

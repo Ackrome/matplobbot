@@ -128,14 +128,14 @@ class TestStudioRouterAPI(unittest.TestCase):
 
         with (
             patch.object(studio_router, "BOT_TOKEN", "test-token"),
-            patch.object(studio_router, "compile_project_task") as mocked_compile_task,
+            patch.object(studio_router, "dispatch_traced_task") as mocked_dispatch_task,
             patch.object(
                 studio_router.asyncio,
                 "to_thread",
                 new=AsyncMock(return_value={"status": "error"}),
             ),
         ):
-            mocked_compile_task.delay.return_value = SimpleNamespace(get=Mock())
+            mocked_dispatch_task.return_value = SimpleNamespace(get=Mock())
             response = self.client.post("/api/studio/projects/1/send_telegram")
 
         self.assertEqual(response.status_code, 400)
@@ -158,7 +158,7 @@ class TestStudioRouterAPI(unittest.TestCase):
 
         with (
             patch.object(studio_router, "BOT_TOKEN", "test-token"),
-            patch.object(studio_router, "compile_project_task") as mocked_compile_task,
+            patch.object(studio_router, "dispatch_traced_task") as mocked_dispatch_task,
             patch.object(
                 studio_router.asyncio,
                 "to_thread",
@@ -168,7 +168,7 @@ class TestStudioRouterAPI(unittest.TestCase):
             ),
             patch.object(studio_router.aiohttp, "ClientSession", return_value=fake_session),
         ):
-            mocked_compile_task.delay.return_value = SimpleNamespace(get=Mock())
+            mocked_dispatch_task.return_value = SimpleNamespace(get=Mock())
             response = self.client.post("/api/studio/projects/1/send_telegram")
 
         self.assertEqual(response.status_code, 500)

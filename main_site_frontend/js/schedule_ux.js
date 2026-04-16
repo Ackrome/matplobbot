@@ -1,29 +1,23 @@
 ﻿(function scheduleUxEnhancements() {
     if (typeof loadSchedule === "undefined" || typeof filterAndRender === "undefined") return;
-
     const UI_PREFS_KEY = "mpb_schedule_ui_prefs";
     const uiState = {
         viewMode: "auto",
         filtersCollapsed: window.innerWidth < 768,
     };
-
     function getUiLanguage() {
         const source = window.mpbI18n?.getLanguage?.() || document.documentElement.lang || "ru";
         return String(source).toLowerCase().startsWith("ru") ? "ru" : "en";
     }
-
     function getUiLocale() {
         return getUiLanguage() === "ru" ? "ru-RU" : "en-US";
     }
-
     function t(key, fallback = "", params = {}) {
         return window.mpbI18n?.t?.(key, fallback, params) || fallback || key;
     }
-
     function formatUiDate(date, options) {
         return new Intl.DateTimeFormat(getUiLocale(), options).format(date);
     }
-
     function formatLoadedBound(value) {
         if (!value) return "-";
         const parsed = parseDate(value);
@@ -31,7 +25,6 @@
             ? value
             : formatUiDate(parsed, { day: "numeric", month: "short", year: "numeric" });
     }
-
     function loadUiPrefs() {
         try {
             const payload = JSON.parse(localStorage.getItem(UI_PREFS_KEY) || "{}");
@@ -54,7 +47,6 @@
             uiState.filtersCollapsed = window.innerWidth < 768;
         }
     }
-
     function saveUiPrefs() {
         localStorage.setItem(
             UI_PREFS_KEY,
@@ -66,7 +58,6 @@
             })
         );
     }
-
     function injectEnhancementStyles() {
         const style = document.createElement("style");
         style.textContent = `
@@ -112,56 +103,18 @@
         `;
         document.head.appendChild(style);
     }
-
-    function ensureContextBar() {
-        const controls = document.getElementById("scheduleControls");
-        if (!controls || document.getElementById("scheduleContextBar")) return;
-
-        const contextBar = document.createElement("div");
-        contextBar.id = "scheduleContextBar";
-        contextBar.className = "border-b border-slate-100 bg-white/95 px-3 py-3 shadow-[0_12px_32px_-24px_rgba(15,23,42,0.25)] md:px-4";
-        contextBar.innerHTML = `
-            <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <div class="text-xs md:text-sm text-slate-600">
-                    <span class="font-bold text-slate-800" id="contextEntity">-</span>
-                    <span class="mx-2 text-slate-300">|</span>
-                    <span id="contextWeek">-</span>
-                    <span class="mx-2 text-slate-300">|</span>
-                    <span id="contextRange">-</span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button type="button" class="schedule-touch-btn rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100" id="scheduleResetContextBtn"></button>
-                </div>
-            </div>
-            <div class="mt-2 flex flex-wrap gap-2">
-                <button type="button" class="schedule-touch-btn rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100" id="jumpTodayBtn"></button>
-                <button type="button" class="schedule-touch-btn rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100" id="jumpTomorrowBtn"></button>
-                <button type="button" class="schedule-touch-btn rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100" id="jumpThisWeekBtn"></button>
-                <button type="button" class="schedule-touch-btn rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100" id="jumpNextWeekBtn"></button>
-                <div class="ml-auto flex items-center rounded-xl border border-slate-300 bg-white p-1 text-xs">
-                    <button type="button" id="viewAutoBtn" class="rounded-lg px-2 py-1 font-semibold text-slate-700"></button>
-                    <button type="button" id="viewTableBtn" class="rounded-lg px-2 py-1 font-semibold text-slate-700"></button>
-                    <button type="button" id="viewCardsBtn" class="rounded-lg px-2 py-1 font-semibold text-slate-700"></button>
-                </div>
-            </div>
-        `;
-
-        controls.prepend(contextBar);
-    }
-
+    
     function applyFilterVisibility() {
         const section = document.getElementById("moduleFilterSection");
         const content = document.getElementById("filterContent");
         const arrow = document.getElementById("filterArrow");
         const button = document.getElementById("filterToggleBtn");
         if (!content || !arrow || !button) return;
-
         const collapsed = uiState.filtersCollapsed;
-        content.classList.toggle("hidden", collapsed);
+        section.classList.toggle("hidden", collapsed);
         arrow.classList.toggle("rotate-180", !collapsed);
         button.setAttribute("aria-expanded", String(!collapsed));
     }
-
     function toggleFilterSection(forceCollapsed) {
         uiState.filtersCollapsed = typeof forceCollapsed === "boolean"
             ? forceCollapsed
@@ -169,19 +122,12 @@
         applyFilterVisibility();
         saveUiPrefs();
     }
-
     function syncContextBarLabels() {
         const labels = {
-            scheduleResetContextBtn: ["schedule.context.reset", "Reset"],
-            jumpTodayBtn: ["schedule.action.today", "Today"],
-            jumpTomorrowBtn: ["schedule.action.tomorrow", "Tomorrow"],
-            jumpThisWeekBtn: ["schedule.action.thisWeek", "This week"],
-            jumpNextWeekBtn: ["schedule.action.nextWeek", "Next week"],
-            viewAutoBtn: ["schedule.view.auto", "Auto"],
-            viewTableBtn: ["schedule.view.table", "Table"],
-            viewCardsBtn: ["schedule.view.cards", "Cards"],
+            viewAutoBtn: ["schedule.view.auto", "Авто"],
+            viewTableBtn:["schedule.view.table", "Таблица"],
+            viewCardsBtn:["schedule.view.cards", "Карточки"],
         };
-
         Object.entries(labels).forEach(([id, [key, fallback]]) => {
             const element = document.getElementById(id);
             if (element) {
@@ -189,25 +135,21 @@
             }
         });
     }
-
     function setViewMode(mode) {
         uiState.viewMode = mode;
         const desktop = document.getElementById("desktopSchedule");
         const mobile = document.getElementById("mobileSchedule");
         if (!desktop || !mobile) return;
-
         const auto = mode === "auto";
         const table = mode === "table";
         const cards = mode === "cards";
         const showDesktop = table || (auto && window.innerWidth >= 1024);
         const showCardsFeed = cards || (auto && window.innerWidth < 1024);
-
         desktop.style.display = showDesktop ? "block" : "none";
         mobile.style.display = showCardsFeed ? "flex" : "none";
         desktop.classList.toggle("hidden", !showDesktop);
         mobile.classList.toggle("hidden", !showCardsFeed);
         mobile.classList.toggle("schedule-cards-desktop", cards && window.innerWidth >= 1024);
-
         const isActive = (id, active) => {
             const btn = document.getElementById(id);
             if (!btn) return;
@@ -215,74 +157,69 @@
             btn.classList.toggle("text-white", active);
             btn.classList.toggle("text-slate-700", !active);
         };
-
         isActive("viewAutoBtn", auto);
         isActive("viewTableBtn", table);
         isActive("viewCardsBtn", cards);
         saveUiPrefs();
     }
-
     function updateContextBar() {
         const entityEl = document.getElementById("contextEntity");
-        const weekEl = document.getElementById("contextWeek");
         const rangeEl = document.getElementById("contextRange");
-        if (!entityEl || !weekEl || !rangeEl) return;
-
-        const weekEnd = new Date(currentWeekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-
-        entityEl.textContent = currentEntity?.name || t("schedule.context.none", "No group selected");
-        weekEl.textContent = `${formatUiDate(currentWeekStart, { day: "numeric", month: "short", year: "numeric" })} - ${formatUiDate(weekEnd, { day: "numeric", month: "short", year: "numeric" })}`;
-        const loadedRangeText = t("schedule.context.loadedRange", "Loaded {start} - {end}", {
+        const parsedEl = document.getElementById("contextParsed");
+        
+        if (entityEl) {
+            entityEl.textContent = currentEntity?.name || t("schedule.context.none", "Группа не выбрана");
+        }
+        
+        const loadedRangeText = t("schedule.context.loadedRange", "Загружено {start} - {end}", {
             start: formatLoadedBound(loadedBounds.start),
             end: formatLoadedBound(loadedBounds.end),
         });
+        if (rangeEl) rangeEl.textContent = loadedRangeText;
+
         const parsedDate = sourceUpdatedAt ? new Date(sourceUpdatedAt) : null;
         const parsedValue = parsedDate && !Number.isNaN(parsedDate.getTime())
             ? formatUiDate(parsedDate, {
                 day: "numeric",
                 month: "short",
-                year: "numeric",
                 hour: "2-digit",
                 minute: "2-digit",
             })
-            : t("schedule.context.parsedUnknown", "Parsed time unknown");
-        const parsedText = t("schedule.context.parsedAt", "Parsed: {value}", {
-            value: parsedValue,
-        });
-        rangeEl.textContent = `${loadedRangeText} | ${parsedText}`;
+            : t("schedule.context.parsedUnknown", "Время обновления неизвестно");
+        
+        if (parsedEl) {
+            parsedEl.textContent = t("schedule.context.parsedAt", "Обновлено в вузе: {value}", {
+                value: parsedValue,
+            });
+        }
     }
-
     function enhanceDesktopTableOverflow() {
         const tableWrap = document.querySelector("#desktopSchedule .overflow-hidden.relative");
         if (!tableWrap) return;
         tableWrap.classList.remove("overflow-hidden");
         tableWrap.classList.add("overflow-x-auto");
     }
-
     function renderEmptyStateWithCta(container, text) {
         container.innerHTML = `
             <div class="schedule-empty-card">
                 <p class="text-sm font-semibold text-slate-700">${text}</p>
                 <div class="schedule-empty-actions">
-                    <button type="button" data-schedule-action="retry">${t("schedule.action.retry", "Retry")}</button>
-                    <button type="button" data-schedule-action="clear">${t("schedule.action.clearFilters", "Clear filters")}</button>
-                    <button type="button" data-schedule-action="reset">${t("schedule.action.changeGroup", "Change group")}</button>
+                    <button type="button" data-schedule-action="retry">${t("schedule.action.retry", "Повторить")}</button>
+                    <button type="button" data-schedule-action="clear">${t("schedule.action.clearFilters", "Сбросить фильтры")}</button>
+                    <button type="button" data-schedule-action="reset">${t("schedule.action.changeGroup", "Сменить группу")}</button>
                 </div>
             </div>
         `;
     }
-
     const rawRenderMobileFeed = renderMobileFeed;
     renderMobileFeed = function patchedMobileFeed(lessons) {
         rawRenderMobileFeed(lessons);
         const container = document.getElementById("mobileSchedule");
         if (!container) return;
         if (!Array.isArray(lessons) || lessons.length === 0) {
-            renderEmptyStateWithCta(container, t("schedule.state.emptyPeriod", "No classes for this period."));
+            renderEmptyStateWithCta(container, t("schedule.state.emptyPeriod", "Нет занятий за выбранный период."));
         }
     };
-
     const rawRenderDesktopGrid = renderDesktopGrid;
     renderDesktopGrid = function patchedDesktopGrid(lessons) {
         rawRenderDesktopGrid(lessons);
@@ -290,10 +227,9 @@
         const container = document.getElementById("desktopSchedule");
         if (!container) return;
         if (!Array.isArray(lessons) || lessons.length === 0) {
-            renderEmptyStateWithCta(container, t("schedule.state.emptyPeriod", "No classes for this period."));
+            renderEmptyStateWithCta(container, t("schedule.state.emptyPeriod", "Нет занятий за выбранный период."));
         }
     };
-
     const rawFilterAndRender = filterAndRender;
     filterAndRender = function patchedFilterAndRender(...args) {
         const content = document.getElementById("scheduleGridContent");
@@ -305,12 +241,10 @@
         setViewMode(uiState.viewMode);
         saveUiPrefs();
     };
-
     function bindGlobalActions() {
         document.addEventListener("click", (event) => {
             const target = event.target;
             if (!(target instanceof HTMLElement)) return;
-
             const action = target.getAttribute("data-schedule-action");
             if (!action) return;
             if (action === "retry" && currentEntity?.id) {
@@ -328,39 +262,13 @@
             }
         });
     }
-
     function bindToolbar() {
         document.getElementById("filterToggleBtn")?.addEventListener("click", () => toggleFilterSection());
-        document.getElementById("jumpTodayBtn")?.addEventListener("click", () => setTodayWeek());
-        document.getElementById("jumpTomorrowBtn")?.addEventListener("click", async () => {
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            currentWeekStart = getMonday(tomorrow);
-            await changeWeek(0);
-        });
-        document.getElementById("jumpThisWeekBtn")?.addEventListener("click", async () => {
-            currentWeekStart = getMonday(new Date());
-            await changeWeek(0);
-        });
-        document.getElementById("jumpNextWeekBtn")?.addEventListener("click", async () => {
-            const nextWeek = new Date();
-            nextWeek.setDate(nextWeek.getDate() + 7);
-            currentWeekStart = getMonday(nextWeek);
-            await changeWeek(0);
-        });
-        document.getElementById("scheduleResetContextBtn")?.addEventListener("click", () => {
-            selectedModules = new Set(allAvailableModules);
-            currentWeekStart = getMonday(new Date());
-            renderModuleFilters();
-            filterAndRender();
-            savePreferences();
-        });
         document.getElementById("viewAutoBtn")?.addEventListener("click", () => setViewMode("auto"));
         document.getElementById("viewTableBtn")?.addEventListener("click", () => setViewMode("table"));
         document.getElementById("viewCardsBtn")?.addEventListener("click", () => setViewMode("cards"));
         window.addEventListener("resize", () => setViewMode(uiState.viewMode));
     }
-
     const rawLoadSchedule = loadSchedule;
     loadSchedule = async function patchedLoadSchedule(...args) {
         await rawLoadSchedule(...args);
@@ -369,11 +277,9 @@
         setViewMode(uiState.viewMode);
         saveUiPrefs();
     };
-
     document.addEventListener("DOMContentLoaded", () => {
         loadUiPrefs();
         injectEnhancementStyles();
-        ensureContextBar();
         syncContextBarLabels();
         bindToolbar();
         bindGlobalActions();

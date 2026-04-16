@@ -57,6 +57,7 @@ from .routers import (
 from .routers import (
     calendar_router_v2 as calendar_router,
 )
+from .telemetry import configure_fastapi_telemetry
 
 
 @asynccontextmanager
@@ -85,6 +86,7 @@ app = FastAPI(
     redoc_url=None,
 )
 app.add_middleware(CorrelationIdMiddleware)
+configure_fastapi_telemetry(app)
 
 # Настройка CORS для фронтенда
 app.add_middleware(
