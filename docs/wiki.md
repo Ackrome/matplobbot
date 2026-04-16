@@ -388,11 +388,13 @@ Files:
 
 What it does:
 
-- Shows eligibility based on Telegram linkage and active bot subscriptions.
+- Shows eligibility based on Telegram linkage. Bot subscriptions are no longer required for website-owned iCal profiles.
 - Manages profile-based iCal feeds:
 - built-in `All classes`
 - built-in `Exams only`
 - custom presets from current schedule page
+- Treats custom website profiles as independent calendar sources. Built-in feeds include both active Telegram subscriptions and saved website profiles.
+- Warms the semester schedule cache when a website profile is saved, then the background scheduler keeps these web-only sources refreshed.
 - Supports:
 - copy/reveal/hide URL
 - Apple/Google/Outlook guidance
@@ -405,10 +407,11 @@ What it does:
 How to use:
 
 1. Sign in and open `/schedule`.
-2. Expand `Calendar subscription`.
-3. Select profile and copy or subscribe.
-4. Use `Save current view` to create custom profile.
-5. Use `Reset link` if URL must be revoked.
+2. Link the website account to Telegram to generate the private secret link.
+3. Expand `Calendar subscription`.
+4. Open any group, lecturer, or room schedule and use `Save current view` to create a website-only iCal profile.
+5. Select a built-in or custom profile and copy/subscribe to its URL.
+6. Use `Reset link` if URL must be revoked.
 
 ### Stats Dashboard
 

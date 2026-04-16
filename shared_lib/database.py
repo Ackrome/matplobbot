@@ -820,18 +820,64 @@ async def get_all_active_subscriptions() -> list:
 
 async def get_unique_active_subscription_entities() -> list:
     async with get_session() as session:
-        stmt = (
-            select(
-                UserScheduleSubscription.entity_type,
-                UserScheduleSubscription.entity_id,
-                UserScheduleSubscription.entity_name,
+        stmt = text(
+            """
+            WITH web_profiles AS (
+                SELECT profile.value AS profile
+                FROM web_accounts AS wa
+                CROSS JOIN LATERAL jsonb_array_elements(
+                    CASE
+                        WHEN jsonb_typeof(
+                            COALESCE(
+                                CAST(wa.preferences AS jsonb)
+                                    -> 'calendar_sync'
+                                    -> 'custom_profiles',
+                                CAST('[]' AS jsonb)
+                            )
+                        ) = 'array'
+                        THEN COALESCE(
+                            CAST(wa.preferences AS jsonb)
+                                -> 'calendar_sync'
+                                -> 'custom_profiles',
+                            CAST('[]' AS jsonb)
+                        )
+                        ELSE CAST('[]' AS jsonb)
+                    END
+                ) AS profile(value)
+                WHERE CAST(wa.preferences AS jsonb) ? 'calendar_sync'
+            ),
+            combined_sources AS (
+                SELECT
+                    entity_type,
+                    entity_id,
+                    entity_name
+                FROM user_schedule_subscriptions
+                WHERE is_active IS TRUE
+
+                UNION
+
+                SELECT
+                    profile ->> 'entity_type' AS entity_type,
+                    profile ->> 'entity_id' AS entity_id,
+                    profile ->> 'entity_name' AS entity_name
+                FROM web_profiles
             )
-            .where(UserScheduleSubscription.is_active == True)
-            .distinct()
+            SELECT DISTINCT
+                entity_type,
+                entity_id,
+                entity_name
+            FROM combined_sources
+            WHERE NULLIF(entity_type, '') IS NOT NULL
+              AND NULLIF(entity_id, '') IS NOT NULL
+              AND NULLIF(entity_name, '') IS NOT NULL
+            """
         )
 
         result = await session.execute(stmt)
-        return [{"entity_type": r[0], "entity_id": r[1], "entity_name": r[2]} for r in result.all()]
+        return [
+            {"entity_type": r.entity_type, "entity_id": r.entity_id, "entity_name": r.entity_name}
+            for r in result.all()
+        ]
 
 
 async def update_subscription_hash(subscription_id: int, new_hash: str):

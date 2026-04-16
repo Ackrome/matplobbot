@@ -763,7 +763,7 @@ window._renderCalendarSubscriptionImpl = function() {
     const eligibilityNotice = calendarSubscriptionState.hasError
         ? `<div class="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600 mb-3">${escapeHtml(t('schedule.calendar.error', 'Ошибка загрузки подписки.'))}</div>`
         : !calendarSubscriptionState.eligibility?.available
-            ? `<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700 mb-3">${escapeHtml(calendarSubscriptionState.eligibility?.detail || t('schedule.calendar.unavailable', 'Недоступно.'))}</div>`
+            ? `<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700 mb-3">${escapeHtml(calendarSubscriptionState.eligibility?.detail || t('schedule.calendar.unavailable', 'Подписка на календарь доступна после привязки Telegram-аккаунта.'))}</div>`
             : syncPaused
                 ? `<div class="rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm text-slate-700 mb-3">${escapeHtml(t('schedule.calendar.pausedNotice', 'Синхронизация на паузе.'))}</div>`
                 : calendarSubscriptionState.justReset

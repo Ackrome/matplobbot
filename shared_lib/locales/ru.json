@@ -324,6 +324,8 @@
     "myschedule_text_too_long_caption": "Текст расписания слишком длинный для одного сообщения.",
     "myschedule_summary_for_date": "Сводка на {date_str}",
     "myschedule_week_summary_header": "Сводка: {start_date} - {end_date}",
+    "schedule.calendar.unavailable": "Подписка на календарь доступна после привязки Telegram-аккаунта.",
+    "schedule.calendar.setting.source.value": "Telegram-подписки и веб-профили",
     "cal_link_header": "🔗 <b>Ваша персональная ссылка на расписание</b>",
     "cal_link_instructions": "<b>Как добавить, чтобы оно обновлялось само:</b>\n• <b>iOS (iPhone/Mac):</b> Нажмите кнопку ниже. Если не сработает, то Настройки -> Календарь -> Учетные записи -> Добавить -> Другое -> Календарь по подписке.\n• <b>Google Calendar:</b> Откройте <u>веб-версию (на ПК)</u>, нажмите «+» рядом с «Другие календари» -> «Добавить по URL» и вставьте ссылку выше.\n\n<i>Расписание выгружается на 3 месяца вперед и обновляется автоматически.</i>",
     "cal_link_ios_button": "📱 Добавить на iOS / Mac",

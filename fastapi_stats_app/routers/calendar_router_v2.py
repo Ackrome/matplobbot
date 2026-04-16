@@ -4,8 +4,10 @@ import re
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from email.utils import format_datetime, parsedate_to_datetime
+from typing import Any
 from urllib.parse import quote
 
+import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,7 +31,10 @@ from shared_lib.services.schedule_service import (
     generate_profile_ical_from_aggregated_schedule,
     get_aggregated_schedule,
     get_calendar_aggregated_schedule,
+    get_schedule_with_cache_fallback,
+    get_semester_bounds,
 )
+from shared_lib.services.university_api import create_ruz_api_client
 
 from ..auth import get_current_user
 from ..config import PUBLIC_API_URL
@@ -50,7 +55,7 @@ BUILT_IN_PROFILES = (
         "kind": "built_in",
         "lesson_mode": "all",
         "can_delete": False,
-        "scope_label": "All active Telegram schedule subscriptions",
+        "scope_label": "All Telegram subscriptions and website calendar profiles",
     },
     {
         "id": "exams",
@@ -58,7 +63,7 @@ BUILT_IN_PROFILES = (
         "kind": "built_in",
         "lesson_mode": "exams_only",
         "can_delete": False,
-        "scope_label": "Exams and pass/fail assessments from all active subscriptions",
+        "scope_label": "Exams and pass/fail assessments from Telegram and website profiles",
     },
 )
 CALENDAR_FEED_RESPONSE = {
@@ -241,18 +246,16 @@ def _build_eligibility(telegram_id: int | None, active_subs: list[dict]) -> dict
 
     if not has_telegram_link:
         reasons.append("telegram_link_required")
-    if has_telegram_link and not has_active_subscriptions:
-        reasons.append("active_schedule_subscription_required")
 
     if not has_telegram_link:
         detail = "Link this website account to Telegram to unlock private iCal feeds."
     elif not has_active_subscriptions:
-        detail = "Create at least one active schedule subscription in the bot to populate the website feed."
+        detail = "Ваш календарь готов к настройке."
     else:
         detail = "Your feed is ready to sync with external calendar apps."
 
     return {
-        "available": has_telegram_link and has_active_subscriptions,
+        "available": has_telegram_link,
         "has_telegram_link": has_telegram_link,
         "has_active_subscriptions": has_active_subscriptions,
         "reasons": reasons,
@@ -280,6 +283,54 @@ def _find_profile_definition(sync_state: dict, profile_id: str) -> dict | None:
         if profile["id"] == profile_id:
             return profile
     return None
+
+
+def _custom_profile_to_calendar_source(profile: dict[str, Any]) -> dict[str, str] | None:
+    profile_id = profile.get("id")
+    entity_type = profile.get("entity_type")
+    entity_id = profile.get("entity_id")
+    entity_name = profile.get("entity_name") or profile.get("name")
+    if not profile_id or not entity_type or entity_id is None or not entity_name:
+        return None
+
+    return {
+        "id": str(profile_id),
+        "entity_type": str(entity_type),
+        "entity_id": str(entity_id),
+        "entity_name": str(entity_name),
+    }
+
+
+def _get_custom_profile_sources(sync_state: dict[str, Any]) -> list[dict[str, str]]:
+    sources: list[dict[str, str]] = []
+    for profile in sync_state.get("custom_profiles", []):
+        if not isinstance(profile, dict):
+            continue
+        source = _custom_profile_to_calendar_source(profile)
+        if source:
+            sources.append(source)
+    return sources
+
+
+def _build_calendar_source_list(
+    active_subs: list[dict[str, Any]],
+    sync_state: dict[str, Any],
+) -> list[dict[str, Any]]:
+    custom_sources: list[dict[str, Any]] = [
+        dict(source) for source in _get_custom_profile_sources(sync_state)
+    ]
+    return [dict(subscription) for subscription in active_subs] + custom_sources
+
+
+def _get_sources_for_profile(
+    active_subs: list[dict[str, Any]],
+    sync_state: dict[str, Any],
+    profile: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if profile.get("kind") == "custom":
+        source = _custom_profile_to_calendar_source(profile)
+        return [source] if source else []
+    return _build_calendar_source_list(active_subs, sync_state)
 
 
 def _profile_scope_label(profile: dict) -> str:
@@ -480,9 +531,12 @@ async def _build_calendar_subscription_response(
 
     base_schedule = []
     source_update_map: dict[tuple[str, str], datetime] = {}
-    if active_subs:
-        base_schedule = await get_calendar_aggregated_schedule(active_subs, start_date, end_date)
-        source_update_map = await _get_source_update_map(db, active_subs)
+    calendar_sources = _build_calendar_source_list(active_subs, sync_state)
+    if calendar_sources:
+        base_schedule = await get_calendar_aggregated_schedule(
+            calendar_sources, start_date, end_date
+        )
+        source_update_map = await _get_source_update_map(db, calendar_sources)
 
     profiles = []
     selected_profile_id = sync_state.get("selected_profile_id", DEFAULT_PROFILE_ID)
@@ -548,7 +602,63 @@ def _validate_calendar_sync_user(current_user: dict) -> int:
             status_code=400,
             detail="Calendar subscription is unavailable for this account",
         )
-    return telegram_id
+    return int(telegram_id)
+
+
+def _get_shared_http_session(request: Request) -> aiohttp.ClientSession | None:
+    http_session = getattr(request.app.state, "shared_http_session", None)
+    if isinstance(http_session, aiohttp.ClientSession) and not http_session.closed:
+        return http_session
+    return None
+
+
+async def _warm_calendar_profile_cache(
+    request: Request,
+    entity_type: str,
+    entity_id: str,
+) -> None:
+    start_date, end_date = get_semester_bounds()
+
+    async def _warm_with_session(http_session: aiohttp.ClientSession) -> None:
+        client = create_ruz_api_client(http_session)
+        await get_schedule_with_cache_fallback(
+            client,
+            entity_type,
+            str(entity_id),
+            start_date,
+            end_date,
+        )
+
+    try:
+        http_session = _get_shared_http_session(request)
+        if http_session:
+            await _warm_with_session(http_session)
+            return
+
+        logger.warning(
+            "Shared HTTP session unavailable for calendar profile cache warmup; "
+            "using a temporary session for %s:%s",
+            entity_type,
+            entity_id,
+        )
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=30),
+            trust_env=False,
+        ) as temporary_session:
+            await _warm_with_session(temporary_session)
+    except ConnectionError as exc:
+        logger.warning(
+            "Calendar profile cache warmup did not populate %s:%s: %s",
+            entity_type,
+            entity_id,
+            exc,
+        )
+    except Exception:
+        logger.exception(
+            "Unexpected calendar profile cache warmup failure for %s:%s",
+            entity_type,
+            entity_id,
+        )
 
 
 def _build_custom_profile_name(payload: CalendarSubscriptionProfileCreateRequest) -> str:
@@ -653,22 +763,9 @@ async def create_calendar_subscription_profile(
     db: AsyncSession = Depends(get_db_session_dependency),
     current_user: dict = Depends(get_current_user),
 ):
-    telegram_id = _validate_calendar_sync_user(current_user)
+    _validate_calendar_sync_user(current_user)
     account = await _get_account_for_current_user(current_user, db)
     sync_state = _normalize_calendar_sync_state(current_user.get("preferences"))
-
-    all_subs, _ = await get_user_subscriptions(telegram_id, page=0, page_size=100)
-    active_subs = [subscription for subscription in all_subs if subscription["is_active"]]
-    has_matching_subscription = any(
-        subscription["entity_type"] == payload.entity_type
-        and str(subscription["entity_id"]) == str(payload.entity_id)
-        for subscription in active_subs
-    )
-    if not has_matching_subscription:
-        raise HTTPException(
-            status_code=400,
-            detail="The current page is not part of your active Telegram subscriptions",
-        )
 
     normalized_modules = sorted({module.strip() for module in payload.modules if module.strip()})
     existing_profile = next(
@@ -708,6 +805,7 @@ async def create_calendar_subscription_profile(
         sync_state["selected_profile_id"] = profile_id
 
     await _save_calendar_sync_state(account, db, sync_state)
+    await _warm_calendar_profile_cache(request, payload.entity_type, str(payload.entity_id))
     current_user["preferences"] = (
         account.preferences if account else current_user.get("preferences", {})
     )
@@ -794,8 +892,9 @@ async def _render_public_calendar_feed(
     today = date.today()
     start_date = today - timedelta(days=CALENDAR_WINDOW_PAST_DAYS)
     end_date = today + timedelta(days=CALENDAR_WINDOW_FUTURE_DAYS)
-    base_schedule = await get_calendar_aggregated_schedule(active_subs, start_date, end_date)
-    source_update_map = await _get_source_update_map(db, active_subs)
+    calendar_sources = _get_sources_for_profile(active_subs, sync_state, profile)
+    base_schedule = await get_calendar_aggregated_schedule(calendar_sources, start_date, end_date)
+    source_update_map = await _get_source_update_map(db, calendar_sources)
     filtered_schedule = _filter_schedule_for_profile(base_schedule, profile)
     health = _build_profile_health(profile, filtered_schedule, source_update_map, sync_state)
 

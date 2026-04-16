@@ -19,6 +19,8 @@ try:
         lambda *args, **kwargs: b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n"
     )
     fake_schedule_service.get_calendar_aggregated_schedule = AsyncMock(return_value=[])
+    fake_schedule_service.get_schedule_with_cache_fallback = AsyncMock(return_value=([], False))
+    fake_schedule_service.get_semester_bounds = lambda: ("2026-02-01", "2026-07-15")
 
     with patch.dict(
         sys.modules,
@@ -241,15 +243,7 @@ class TestCalendarAPI(unittest.TestCase):
     def test_create_custom_profile_selects_profile(self):
         account = types.SimpleNamespace(preferences={})
         self._override_user(10002, preferences={}, db_obj=account)
-        active_subscriptions = [
-            {
-                "id": 21,
-                "is_active": True,
-                "entity_type": "group",
-                "entity_id": "group-1",
-                "entity_name": "Group 1",
-            }
-        ]
+        aggregate_mock = AsyncMock(return_value=[])
 
         with (
             patch.object(
@@ -260,7 +254,7 @@ class TestCalendarAPI(unittest.TestCase):
             patch.object(
                 calendar_router,
                 "get_user_subscriptions",
-                AsyncMock(return_value=(active_subscriptions, 1)),
+                AsyncMock(return_value=([], 0)),
             ),
             patch.object(
                 calendar_router,
@@ -270,7 +264,7 @@ class TestCalendarAPI(unittest.TestCase):
             patch.object(
                 calendar_router,
                 "get_calendar_aggregated_schedule",
-                AsyncMock(return_value=[]),
+                aggregate_mock,
             ),
             patch.object(
                 calendar_router,
@@ -300,6 +294,20 @@ class TestCalendarAPI(unittest.TestCase):
         self.assertEqual(custom_profile["lesson_mode"], "exams_only")
         self.assertEqual(custom_profile["modules"], ["Core"])
         self.assertTrue(custom_profile["selected"])
+        self.assertTrue(payload["enabled"])
+        aggregate_mock.assert_awaited()
+        aggregate_sources = aggregate_mock.await_args.args[0]
+        self.assertEqual(
+            aggregate_sources,
+            [
+                {
+                    "id": payload["selected_profile_id"],
+                    "entity_type": "group",
+                    "entity_id": "group-1",
+                    "entity_name": "Group 1",
+                }
+            ],
+        )
 
     def test_public_feed_returns_cache_headers(self):
         active_subscriptions = [
@@ -356,6 +364,126 @@ class TestCalendarAPI(unittest.TestCase):
         self.assertIn("ETag", response.headers)
         self.assertEqual(response.headers["Cache-Control"], "private, max-age=0, must-revalidate")
         self.assertIn("inline; filename=", response.headers["Content-Disposition"])
+
+    def test_public_custom_feed_uses_custom_profile_source_without_bot_subscription(self):
+        sync_state = calendar_router._default_calendar_sync_state()
+        custom_profile = {
+            "id": "custom-web",
+            "name": "Group 2",
+            "kind": "custom",
+            "lesson_mode": "all",
+            "entity_type": "group",
+            "entity_id": "group-2",
+            "entity_name": "Group 2",
+            "modules": [],
+            "can_delete": True,
+        }
+        sync_state["custom_profiles"].append(custom_profile)
+        aggregate_mock = AsyncMock(return_value=[])
+
+        with (
+            patch.object(
+                calendar_router,
+                "_resolve_public_calendar_context",
+                AsyncMock(return_value=(12345, None, sync_state, [], custom_profile)),
+            ),
+            patch.object(
+                calendar_router,
+                "get_calendar_aggregated_schedule",
+                aggregate_mock,
+            ),
+            patch.object(
+                calendar_router,
+                "_get_source_update_map",
+                AsyncMock(return_value={}),
+            ),
+            patch.object(
+                calendar_router,
+                "generate_profile_ical_from_aggregated_schedule",
+                lambda *args, **kwargs: b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n",
+            ),
+        ):
+            response = self.client.get("/api/cal/secret123/profiles/custom-web.ics")
+
+        self.assertEqual(response.status_code, 200)
+        aggregate_mock.assert_awaited_once()
+        self.assertEqual(
+            aggregate_mock.await_args.args[0],
+            [
+                {
+                    "id": "custom-web",
+                    "entity_type": "group",
+                    "entity_id": "group-2",
+                    "entity_name": "Group 2",
+                }
+            ],
+        )
+
+    def test_public_builtin_feed_combines_bot_and_custom_sources(self):
+        active_subscriptions = [
+            {
+                "id": 77,
+                "is_active": True,
+                "entity_type": "group",
+                "entity_id": "group-1",
+                "entity_name": "Group 1",
+            }
+        ]
+        sync_state = calendar_router._default_calendar_sync_state()
+        sync_state["custom_profiles"].append(
+            {
+                "id": "custom-web",
+                "name": "Group 2",
+                "kind": "custom",
+                "lesson_mode": "all",
+                "entity_type": "group",
+                "entity_id": "group-2",
+                "entity_name": "Group 2",
+                "modules": [],
+                "can_delete": True,
+            }
+        )
+        profile = dict(calendar_router.BUILT_IN_PROFILES[0])
+        aggregate_mock = AsyncMock(return_value=[])
+
+        with (
+            patch.object(
+                calendar_router,
+                "_resolve_public_calendar_context",
+                AsyncMock(return_value=(12345, None, sync_state, active_subscriptions, profile)),
+            ),
+            patch.object(
+                calendar_router,
+                "get_calendar_aggregated_schedule",
+                aggregate_mock,
+            ),
+            patch.object(
+                calendar_router,
+                "_get_source_update_map",
+                AsyncMock(return_value={}),
+            ),
+            patch.object(
+                calendar_router,
+                "generate_profile_ical_from_aggregated_schedule",
+                lambda *args, **kwargs: b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n",
+            ),
+        ):
+            response = self.client.get("/api/cal/secret123.ics")
+
+        self.assertEqual(response.status_code, 200)
+        aggregate_mock.assert_awaited_once()
+        self.assertEqual(
+            aggregate_mock.await_args.args[0],
+            [
+                active_subscriptions[0],
+                {
+                    "id": "custom-web",
+                    "entity_type": "group",
+                    "entity_id": "group-2",
+                    "entity_name": "Group 2",
+                },
+            ],
+        )
 
     def test_public_telegram_filtered_feed_uses_aggregated_schedule(self):
         active_subscriptions = [

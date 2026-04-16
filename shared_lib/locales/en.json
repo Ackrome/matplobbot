@@ -346,6 +346,8 @@
     "myschedule_text_too_long_caption": "Schedule text is too long for one message. Sent as a file.",
     "myschedule_summary_for_date": "Summary for {date_str}",
     "myschedule_week_summary_header": "Summary: {start_date} - {end_date}",
+    "schedule.calendar.unavailable": "Calendar subscription requires a linked Telegram account.",
+    "schedule.calendar.setting.source.value": "Telegram subscriptions and web profiles",
     "cal_link_header": "🔗 <b>Your personal schedule link</b>",
     "cal_link_instructions": "<b>How to add for auto-updates:</b>\n• <b>iOS (iPhone/Mac):</b> Click the button below. If it fails, go to Settings -> Calendar -> Accounts -> Add -> Other -> Add Subscribed Calendar.\n• <b>Google Calendar:</b> Use the <u>web version (on PC)</u>, click '+' next to 'Other calendars' -> 'From URL' and paste the link above.\n\n<i>The schedule covers 3 months ahead and updates automatically.</i>",
     "cal_link_ios_button": "📱 Add to iOS / Mac",
