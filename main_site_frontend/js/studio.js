@@ -26,6 +26,12 @@ let currentBlobUrl = null; // Ссылка на скомпилированный
 let projectsList =[];
 let currentProjectType = 'latex';
 
+window.addEventListener('mpb-theme-change', (e) => {
+    if (editor && window.monaco?.editor) {
+        monaco.editor.setTheme(e.detail.isDark ? 'vs-dark' : 'vs-light');
+    }
+});
+
 const TEMPLATES = {
     latex: `\\documentclass[12pt, a4paper]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage[T2A]{fontenc}\n\\usepackage[russian]{babel}\n\\usepackage{amsmath, amssymb, graphicx}\n\n\\begin{document}\n\\section{Введение}\nПривет, LaTeX! Формула: \\[ E = mc^2 \\]\n\\end{document}`,
     markdown: `# Live Markdown\nMath formulas work instantly: $$E = mc^2$$\n\nEdit this text!`,
@@ -143,7 +149,7 @@ require(['vs/editor/editor.main'], function() {
     editor = monaco.editor.create(document.getElementById('monaco-container'), {
         value: TEMPLATES.latex,
         language: 'latex',
-        theme: 'vs-light',
+        theme: document.documentElement.classList.contains('dark') ? 'vs-dark' : 'vs-light',
         automaticLayout: true,
         wordWrap: 'on',
         minimap: { enabled: false },
@@ -204,8 +210,8 @@ function switchMode(mode) {
     const btnTg = document.getElementById('btn-send-tg');
 
     if (mode === 'quick') {
-        btnQ.className = "px-3 py-1.5 text-sm font-medium rounded-md bg-white shadow-sm text-blue-700 transition-all";
-        btnP.className = "px-3 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all";
+        btnQ.className = "px-3 py-1.5 text-sm font-medium rounded-md bg-white shadow-sm text-blue-700 transition-all dark:bg-slate-700 dark:text-blue-200";
+        btnP.className = "px-3 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all dark:text-slate-400 dark:hover:text-slate-200";
         typeSelect.classList.remove('hidden');
 
         btnZip.classList.add('hidden');
@@ -215,8 +221,8 @@ function switchMode(mode) {
         currentFileId = null;
         setLanguage(typeSelect.value);
     } else {
-        btnP.className = "px-3 py-1.5 text-sm font-medium rounded-md bg-white shadow-sm text-blue-700 transition-all";
-        btnQ.className = "px-3 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all";
+        btnP.className = "px-3 py-1.5 text-sm font-medium rounded-md bg-white shadow-sm text-blue-700 transition-all dark:bg-slate-700 dark:text-blue-200";
+        btnQ.className = "px-3 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all dark:text-slate-400 dark:hover:text-slate-200";
         typeSelect.classList.add('hidden');
 
         btnZip.classList.remove('hidden');
@@ -490,7 +496,7 @@ function renderFileList() {
 
     projectFiles.forEach(f => {
         const div = document.createElement('div');
-        div.className = `file-item group px-3 py-1.5 text-sm text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors flex items-center justify-between border-l-[3px] border-transparent`;
+        div.className = `file-item group px-3 py-1.5 text-sm text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors flex items-center justify-between border-l-[3px] border-transparent dark:text-slate-300 dark:hover:bg-slate-700`;
         if (f.id === currentFileId) div.classList.add('active');
 
         let icon = f.is_binary ? '[BIN]' : (f.path.endsWith('.tex') ? '[TEX]' : '[FILE]');

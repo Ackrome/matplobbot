@@ -12,7 +12,18 @@
     <link rel="icon" sizes="192x192" href="/android-chrome-192x192.png">
     <link rel="icon" sizes="512x512" href="/android-chrome-512x512.png">
     <link rel="manifest" href="/site.webmanifest">
+    <script>
+        window.tailwind = window.tailwind || {};
+        window.tailwind.config = { darkMode: 'class' };
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -22,9 +33,11 @@
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .skeleton { background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%); background-size: 200% 100%; animation: loading 1.5s infinite; }
+        html.dark .skeleton { background: linear-gradient(90deg, #0f172a 25%, #1e293b 50%, #0f172a 75%); background-size: 200% 100%; }
         @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
         /* Стили универсальной шапки */
         .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255, 255, 255, 0.3); }
+        html.dark .glass { background: rgba(15, 23, 42, 0.8); border-bottom: 1px solid rgba(30, 41, 59, 0.8); }
         .nav-hidden { transform: translateY(-100%); opacity: 0; }
         .nav-visible { transform: translateY(0); opacity: 1; }
         .mpb-switch {
@@ -67,18 +80,18 @@
         }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900">
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
     <!-- UNIVERSAL HEADER -->
     <nav class="glass fixed top-0 w-full z-50 transition-all duration-300 nav-visible" id="navbar">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-20">
                 <a href="/" class="flex-shrink-0 flex items-center space-x-2 group">
                     <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-500/30 group-hover:scale-105 transition-transform">IT</div>
-                    <span class="text-lg font-bold text-slate-800">Ivan Tishchenko</span>
+                    <span class="text-lg font-bold text-slate-800 dark:text-slate-100">Ivan Tishchenko</span>
                 </a>
                 <div class="hidden md:flex space-x-8 items-center" id="desktop-nav-links">
-                    <a href="/#projects" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Проекты</a>
-                    <a href="/schedule" class="text-slate-600 font-medium hover:text-blue-600 transition-colors">Расписание</a>
+                    <a href="/#projects" class="text-slate-600 font-medium hover:text-blue-600 transition-colors dark:text-slate-300 dark:hover:text-blue-300">Проекты</a>
+                    <a href="/schedule" class="text-slate-600 font-medium hover:text-blue-600 transition-colors dark:text-slate-300 dark:hover:text-blue-300">Расписание</a>
                     <div id="desktop-auth-container" class="flex items-center gap-4">
                         <a href="/login" class="group relative px-6 py-2.5 bg-slate-900 text-white rounded-full font-medium overflow-hidden shadow-lg shadow-slate-900/20 hover:shadow-slate-900/40 transition-all">
                             <span class="relative z-10 flex items-center gap-2">Авторизация</span>
@@ -87,16 +100,16 @@
                     </div>
                 </div>
                 <div class="md:hidden flex items-center">
-                    <button id="mobile-menu-button" data-i18n-aria-label="nav.menu" class="text-slate-600 hover:text-blue-600 focus:outline-none p-2 rounded-lg hover:bg-slate-100 transition-colors">
+                    <button id="mobile-menu-button" data-i18n-aria-label="nav.menu" class="text-slate-600 hover:text-blue-600 focus:outline-none p-2 rounded-lg hover:bg-slate-100 transition-colors dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300">
                         <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
                     </button>
                 </div>
             </div>
         </div>
-        <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-slate-100 absolute w-full shadow-xl">
+        <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-slate-100 absolute w-full shadow-xl dark:border-slate-800 dark:bg-slate-900">
             <div class="px-4 pt-2 pb-6 space-y-1" id="mobile-nav-links">
-                <a href="/#projects" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Проекты</a>
-                <a href="/schedule" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">Расписание</a>
+                <a href="/#projects" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300">Проекты</a>
+                <a href="/schedule" class="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-colors dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300">Расписание</a>
                 <div id="mobile-auth-container">
                     <a href="/login" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">Авторизация</a>
                 </div>
@@ -109,22 +122,22 @@
         <div class="w-full">
             <div class="flex flex-col md:flex-row justify-between items-center mb-4 md:mb-6 gap-3 relative z-40 w-full px-1">
                 <div class="flex items-center justify-between w-full md:w-auto gap-3">
-                    <h1 data-i18n="schedule.heading" class="text-2xl md:text-4xl font-black text-slate-900 tracking-tight">Расписание</h1>
+                    <h1 data-i18n="schedule.heading" class="text-2xl md:text-4xl font-black text-slate-900 tracking-tight dark:text-slate-100">Расписание</h1>
                     <div class="relative" id="offlinePanelContainer">
                         <button onclick="toggleOfflinePanel(event)"
-                            class="group flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-blue-400 transition-all">
+                            class="group flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-blue-400 transition-all dark:border-slate-700 dark:bg-slate-800">
                             <div class="relative flex h-2 w-2">
                                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                                 <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                             </div>
-                            <span data-i18n="schedule.offline.available" class="text-xs md:text-sm font-bold text-slate-600">Доступно оффлайн</span>
+                            <span data-i18n="schedule.offline.available" class="text-xs md:text-sm font-bold text-slate-600 dark:text-slate-300">Доступно оффлайн</span>
                             <svg id="offlineArrow" class="w-4 h-4 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                             </svg>
                         </button>
                         <div id="offlineDropdown"
-                            class="absolute right-0 md:left-0 mt-2 w-64 md:w-72 bg-white border border-slate-100 rounded-2xl shadow-2xl overflow-hidden hidden opacity-0 translate-y-2 transition-all duration-200 z-50">
-                            <div class="p-3 border-b border-slate-50 bg-slate-50/50">
+                            class="absolute right-0 md:left-0 mt-2 w-64 md:w-72 bg-white border border-slate-100 rounded-2xl shadow-2xl overflow-hidden hidden opacity-0 translate-y-2 transition-all duration-200 z-50 dark:border-slate-700 dark:bg-slate-800">
+                            <div class="p-3 border-b border-slate-50 bg-slate-50/50 dark:border-slate-700 dark:bg-slate-900/50">
                                 <h3 data-i18n="schedule.offline.available" class="font-black text-[10px] text-slate-400 uppercase tracking-wider text-center">Доступно оффлайн</h3>
                             </div>
                             <div id="cachedEntitiesList" class="p-1.5 flex flex-col gap-1 max-h-80 overflow-y-auto custom-scrollbar"></div>
@@ -133,25 +146,25 @@
                 </div>
                 <div class="relative w-full md:w-96" id="searchContainer">
                     <input type="text" id="groupSearch" data-search-input data-i18n-placeholder="schedule.search.placeholder" autocomplete="off"
-                        class="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-slate-700 text-sm md:text-base"
+                        class="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-slate-700 text-sm md:text-base dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
                         placeholder="Найти группу или ФИО...">
                     <div class="absolute left-3.5 top-3 text-slate-400">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                     </div>
-                    <div id="searchResults" class="absolute w-full mt-2 bg-white border border-slate-100 rounded-xl shadow-2xl overflow-hidden hidden max-h-80 overflow-y-auto custom-scrollbar z-50"></div>
+                    <div id="searchResults" class="absolute w-full mt-2 bg-white border border-slate-100 rounded-xl shadow-2xl overflow-hidden hidden max-h-80 overflow-y-auto custom-scrollbar z-50 dark:border-slate-700 dark:bg-slate-800"></div>
                 </div>
             </div>
             <section id="calendarSubscriptionSection" class="hidden mb-4 md:mb-6"></section>
 
             <!-- ГЛАВНЫЙ БЛОК РАСПИСАНИЯ -->
-            <div id="mainScheduleBlock" class="bg-white rounded-3xl md:rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col w-full min-h-[500px]">
+            <div id="mainScheduleBlock" class="bg-white rounded-3xl md:rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col w-full min-h-[500px] dark:border-slate-700 dark:bg-slate-800">
 
-                <div id="scheduleControls" class="hidden flex flex-col bg-white">
+                <div id="scheduleControls" class="hidden flex flex-col bg-white dark:bg-slate-800">
                     <!-- Верхний ряд: Название + Meta (Icon) + Вид -->
-                    <div class="flex items-center justify-between p-4 md:px-6 md:py-4 border-b border-slate-100">
+                    <div class="flex items-center justify-between p-4 md:px-6 md:py-4 border-b border-slate-100 dark:border-slate-700">
                         <div class="flex items-center gap-3">
-                            <span class="font-black text-slate-800 text-xl md:text-2xl" id="contextEntity">-</span>
-                            <div class="relative group cursor-help flex items-center justify-center w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors">
+                            <span class="font-black text-slate-800 text-xl md:text-2xl dark:text-slate-100" id="contextEntity">-</span>
+                            <div class="relative group cursor-help flex items-center justify-center w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                 <!-- Tooltip -->
                                 <div class="absolute left-0 top-full mt-2 w-64 p-3 bg-slate-800 text-white text-xs rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
@@ -160,7 +173,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="hidden md:flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1 text-xs">
+                        <div class="hidden md:flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1 text-xs dark:border-slate-700 dark:bg-slate-900">
                             <button type="button" id="viewAutoBtn" class="rounded-lg px-3 py-1.5 font-bold text-slate-700 transition-colors">Авто</button>
                             <button type="button" id="viewTableBtn" class="rounded-lg px-3 py-1.5 font-bold text-slate-700 transition-colors">Таблица</button>
                             <button type="button" id="viewCardsBtn" class="rounded-lg px-3 py-1.5 font-bold text-slate-700 transition-colors">Карточки</button>
@@ -168,19 +181,19 @@
                     </div>
 
                     <!-- Нижний ряд: Навигация + Фильтры -->
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 md:px-6 md:py-4 gap-4 border-b border-slate-100 bg-slate-50/30">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 md:px-6 md:py-4 gap-4 border-b border-slate-100 bg-slate-50/30 dark:border-slate-700 dark:bg-slate-900/40">
                         <div class="flex items-center gap-2">
-                            <button onclick="changeWeek(-1)" class="p-2.5 bg-white hover:bg-slate-50 rounded-xl text-slate-600 shadow-sm border border-slate-200 transition-colors">
+                            <button onclick="changeWeek(-1)" class="p-2.5 bg-white hover:bg-slate-50 rounded-xl text-slate-600 shadow-sm border border-slate-200 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
                             </button>
-                            <div class="text-sm font-bold text-slate-800 text-center min-w-[130px] md:min-w-[160px]" id="weekRangeDisplay"></div>
-                            <button onclick="changeWeek(1)" class="p-2.5 bg-white hover:bg-slate-50 rounded-xl text-slate-600 shadow-sm border border-slate-200 transition-colors">
+                            <div class="text-sm font-bold text-slate-800 text-center min-w-[130px] md:min-w-[160px] dark:text-slate-100" id="weekRangeDisplay"></div>
+                            <button onclick="changeWeek(1)" class="p-2.5 bg-white hover:bg-slate-50 rounded-xl text-slate-600 shadow-sm border border-slate-200 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                             </button>
-                            <button onclick="setTodayWeek()" data-i18n="schedule.today" class="ml-2 px-4 py-2.5 text-sm font-bold bg-white hover:bg-blue-50 text-blue-600 transition-colors rounded-xl border border-blue-100 shadow-sm hidden sm:block">Сегодня</button>
+                            <button onclick="setTodayWeek()" data-i18n="schedule.today" class="ml-2 px-4 py-2.5 text-sm font-bold bg-white hover:bg-blue-50 text-blue-600 transition-colors rounded-xl border border-blue-100 shadow-sm hidden sm:block dark:border-blue-900/60 dark:bg-slate-800 dark:text-blue-300 dark:hover:bg-slate-700">Сегодня</button>
                         </div>
 
-                        <button type="button" id="filterToggleBtn" class="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-sm transition-colors w-full sm:w-auto">
+                        <button type="button" id="filterToggleBtn" class="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-sm transition-colors w-full sm:w-auto dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
                             <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
                             <span data-i18n="schedule.filters.desktop">Фильтры и модули</span>
                             <svg id="filterArrow" class="w-4 h-4 text-slate-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -188,7 +201,7 @@
                     </div>
 
                     <!-- Панель фильтров -->
-                    <div id="moduleFilterSection" class="p-4 md:px-6 md:py-5 bg-slate-50 border-b border-slate-100 hidden shadow-inner">
+                    <div id="moduleFilterSection" class="p-4 md:px-6 md:py-5 bg-slate-50 border-b border-slate-100 hidden shadow-inner dark:border-slate-700 dark:bg-slate-900">
                         <div id="filterContent" class="space-y-4">
                             <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                                 <div class="flex flex-wrap items-center gap-5">
@@ -198,7 +211,7 @@
                                             <span class="mpb-switch-track"></span>
                                             <span class="mpb-switch-thumb"></span>
                                         </span>
-                                        <span data-i18n="schedule.filters.shortNames" class="ml-2 text-sm font-semibold text-slate-600 group-hover:text-slate-900 transition-colors">Короткие названия</span>
+                                        <span data-i18n="schedule.filters.shortNames" class="ml-2 text-sm font-semibold text-slate-600 group-hover:text-slate-900 transition-colors dark:text-slate-300 dark:group-hover:text-slate-100">Короткие названия</span>
                                     </label>
                                     <label class="flex items-center cursor-pointer group select-none">
                                         <span class="mpb-switch">
@@ -206,12 +219,12 @@
                                             <span class="mpb-switch-track"></span>
                                             <span class="mpb-switch-thumb"></span>
                                         </span>
-                                        <span data-i18n="schedule.filters.fullLecturer" class="ml-2 text-sm font-semibold text-slate-600 group-hover:text-slate-900 transition-colors">ФИО полностью</span>
+                                        <span data-i18n="schedule.filters.fullLecturer" class="ml-2 text-sm font-semibold text-slate-600 group-hover:text-slate-900 transition-colors dark:text-slate-300 dark:group-hover:text-slate-100">ФИО полностью</span>
                                     </label>
                                 </div>
                                 <div class="flex gap-2">
                                     <button onclick="selectAllModules()" data-i18n="schedule.filters.all" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors uppercase">Всё</button>
-                                    <button onclick="clearAllModules()" data-i18n="schedule.filters.clear" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors uppercase">Сброс</button>
+                                    <button onclick="clearAllModules()" data-i18n="schedule.filters.clear" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors uppercase dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">Сброс</button>
                                 </div>
                             </div>
                             <div id="moduleContainer" class="flex flex-wrap gap-2"></div>
@@ -219,7 +232,7 @@
                     </div>
                 </div>
 
-                <div id="scheduleGridContent" class="relative bg-white flex-grow">
+                <div id="scheduleGridContent" class="relative bg-white flex-grow dark:bg-slate-800">
                     <div id="offlineWarning" class="hidden m-3 p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-2 text-amber-800 fade-in">
                         <svg class="w-4 h-4 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                         <span data-i18n="schedule.offline.warning" class="text-xs md:text-sm font-medium">ВУЗ недоступен. Загружена сохраненная копия.</span>
@@ -228,20 +241,19 @@
                     <div id="mobileSchedule" class="block lg:hidden flex flex-col gap-0 schedule-cards-feed"></div>
 
                     <div id="defaultState" class="text-center py-24 px-4">
-                        <div class="w-16 h-16 bg-slate-50 text-slate-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <div class="w-16 h-16 bg-slate-50 text-slate-200 rounded-full flex items-center justify-center mx-auto mb-4 dark:bg-slate-900 dark:text-slate-600">
                             <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                         </div>
                         <h3 data-i18n="schedule.state.default" class="text-base font-bold text-slate-400 tracking-tight">Выберите расписание</h3>
                     </div>
                 </div>
-            </div>
-        </div>
+            </div>        </div>
     </main>
 
     <script src="/js/runtime_config.js?v=1"></script>
     <script src="/js/ui_utils.js?v=1"></script>
-    <script src="/js/navbar.js?v=19"></script>
-    <script src="/js/schedule.js?v=20"></script>
+    <script src="/js/navbar.js?v=20"></script>
+    <script src="/js/schedule.js?v=21"></script>
     <script src="/js/calendar_sync.js?v=3"></script>
     <script src="/js/schedule_ux.js?v=6"></script>
 </body>

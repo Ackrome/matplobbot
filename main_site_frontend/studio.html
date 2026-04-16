@@ -3,7 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <title>Document Studio | Matplobbot</title>
+    <script>
+        window.tailwind = window.tailwind || {};
+        window.tailwind.config = { darkMode: 'class' };
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- 1. LOAD ALL LIBRARIES BEFORE MONACO LOADER -->
@@ -22,20 +33,25 @@
         body { font-family: 'Inter', sans-serif; overflow: hidden; }
         .split { display: flex; flex-direction: row; height: calc(100vh - 64px); }
         .gutter { background-color: #f1f5f9; cursor: col-resize; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;}
+        html.dark .gutter { background-color: #0f172a; border-left-color: #334155; border-right-color: #334155; }
         .file-item.active { background-color: #e0e7ff; border-left: 3px solid #4f46e5; font-weight: 600;}
+        html.dark .file-item.active { background-color: #1e3a8a; color: #dbeafe; }
         .nav-hidden { transform: translateY(-100%); opacity: 0; }
         .nav-visible { transform: translateY(0); opacity: 1; }
 
         /* Стили для Live Preview Markdown */
         #live-preview-content { font-family: 'Inter', sans-serif; line-height: 1.6; padding: 2rem; max-width: 800px; margin: 0 auto; background: white; min-height: 100%; box-shadow: 0 0 15px rgba(0,0,0,0.05); }
+        html.dark #live-preview-content { background: #0f172a; color: #e2e8f0; box-shadow: 0 0 15px rgba(0,0,0,0.35); }
         #live-preview-content h1, #live-preview-content h2 { border-bottom: 1px solid #eee; padding-bottom: 0.3em; margin-top: 1em; }
+        html.dark #live-preview-content h1, html.dark #live-preview-content h2 { border-bottom-color: #334155; }
         #live-preview-content pre { background: #f8fafc; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; }
+        html.dark #live-preview-content pre { background: #020617; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900 h-full flex flex-col">
+<body class="bg-slate-50 text-slate-900 h-full flex flex-col dark:bg-slate-900 dark:text-slate-100">
 
     <!-- Navbar -->
-    <header id="navbar" class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0 z-30 transition-all duration-300 nav-visible">
+    <header id="navbar" class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0 z-30 transition-all duration-300 nav-visible dark:border-slate-700 dark:bg-slate-900">
 
 
 
@@ -43,12 +59,12 @@
             <a href="/" class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md">IT</a>
             <div id="desktop-nav-links" class="hidden 2xl:flex items-center gap-2"></div>
 
-            <div class="bg-slate-100 p-1 rounded-lg flex gap-1 items-center">
-                <button id="mode-quick" class="px-3 py-1.5 text-sm font-medium rounded-md bg-white shadow-sm text-blue-700 transition-all">Quick Snippet</button>
-                <button id="mode-project" class="px-3 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all">Project</button>
+            <div class="bg-slate-100 p-1 rounded-lg flex gap-1 items-center dark:bg-slate-800">
+                <button id="mode-quick" class="px-3 py-1.5 text-sm font-medium rounded-md bg-white shadow-sm text-blue-700 transition-all dark:bg-slate-700 dark:text-blue-300">Quick Snippet</button>
+                <button id="mode-project" class="px-3 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all dark:text-slate-400 dark:hover:text-slate-100">Project</button>
             </div>
 
-            <select id="doc-type" class="bg-slate-50 border border-slate-200 text-sm rounded-lg focus:ring-blue-500 p-2 outline-none">
+            <select id="doc-type" class="bg-slate-50 border border-slate-200 text-sm rounded-lg focus:ring-blue-500 p-2 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
                 <option value="latex">LaTeX</option>
                 <option value="markdown">Markdown</option>
                 <option value="mermaid">Mermaid</option>
@@ -56,17 +72,17 @@
         </div>
 
         <div class="flex items-center gap-2">
-            <button id="mobile-menu-button" class="2xl:hidden p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" aria-label="Toggle menu">
+            <button id="mobile-menu-button" class="2xl:hidden p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-blue-300" aria-label="Toggle menu">
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>
             </button>
             <!-- Экспорт -->
-            <button id="btn-send-tg" onclick="sendToTelegram()" class="hidden p-2 text-slate-500 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Отправить мне в Telegram">
+            <button id="btn-send-tg" onclick="sendToTelegram()" class="hidden p-2 text-slate-500 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-blue-300" title="Отправить мне в Telegram">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
             </button>
-            <button id="btn-download-pdf" onclick="downloadPDF()" class="hidden p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Скачать PDF">
+            <button id="btn-download-pdf" onclick="downloadPDF()" class="hidden p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors dark:text-slate-400 dark:hover:bg-red-950/40 dark:hover:text-red-300" title="Скачать PDF">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
             </button>
-            <button id="btn-download-zip" onclick="downloadZIP()" class="hidden p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors mr-2" title="Скачать ZIP архив">
+            <button id="btn-download-zip" onclick="downloadZIP()" class="hidden p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors mr-2 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-blue-300" title="Скачать ZIP архив">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
             </button>
 
@@ -77,36 +93,36 @@
             </button>
         </div>
     </header>
-    <div id="mobile-menu" class="hidden 2xl:hidden border-b border-slate-200 bg-white shadow-sm z-20">
+    <div id="mobile-menu" class="hidden 2xl:hidden border-b border-slate-200 bg-white shadow-sm z-20 dark:border-slate-700 dark:bg-slate-900">
         <div id="mobile-nav-links" class="px-3 py-3 space-y-1"></div>
     </div>
         <!-- MOBILE TABS (Видны только на мобилках) -->
-        <div id="mobile-tabs" class="md:hidden flex bg-white border-b border-slate-200 shrink-0 shadow-sm z-20 relative">
+        <div id="mobile-tabs" class="md:hidden flex bg-white border-b border-slate-200 shrink-0 shadow-sm z-20 relative dark:border-slate-700 dark:bg-slate-900">
             <button id="tab-btn-sidebar" onclick="switchMobileTab('sidebar-pane')" class="flex-1 py-3 text-xs font-bold text-blue-600 border-b-2 border-blue-600 transition-colors">Файлы</button>
             <button id="tab-btn-editor" onclick="switchMobileTab('editor-pane')" class="flex-1 py-3 text-xs font-bold text-slate-500 border-b-2 border-transparent transition-colors">Код</button>
             <button id="tab-btn-viewer" onclick="switchMobileTab('viewer-pane')" class="flex-1 py-3 text-xs font-bold text-slate-500 border-b-2 border-transparent transition-colors">Preview</button>
         </div>
 
     <!-- Workspace Split -->
-    <div id="split-container" class="split w-full bg-slate-100 relative">
+    <div id="split-container" class="split w-full bg-slate-100 relative dark:bg-slate-950">
 
         <!-- Loader -->
-        <div id="loader-overlay" class="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-50 hidden flex-col items-center justify-center">
+        <div id="loader-overlay" class="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-50 hidden flex-col items-center justify-center dark:bg-slate-950/70">
             <div class="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
-            <div class="text-sm font-bold text-slate-600">Ожидание сервера...</div>
+            <div class="text-sm font-bold text-slate-600 dark:text-slate-300">Ожидание сервера...</div>
         </div>
 
         <!-- Pane 1: Sidebar (Project Mode) -->
-        <div id="sidebar-pane" class="h-full bg-slate-50 flex flex-col border-r border-slate-200 shrink-0 hidden">
-            <div class="p-3 border-b border-slate-200">
+        <div id="sidebar-pane" class="h-full bg-slate-50 flex flex-col border-r border-slate-200 shrink-0 hidden dark:border-slate-700 dark:bg-slate-900">
+            <div class="p-3 border-b border-slate-200 dark:border-slate-700">
                 <div class="flex justify-between items-center mb-2">
                     <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Проекты</span>
                     <button onclick="createNewProject()" class="text-blue-600 hover:text-blue-800">+</button>
                 </div>
-                <select id="project-selector" class="w-full text-sm border border-slate-200 rounded-md p-1.5 outline-none bg-white" onchange="openProject(this.value)"></select>
+                <select id="project-selector" class="w-full text-sm border border-slate-200 rounded-md p-1.5 outline-none bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" onchange="openProject(this.value)"></select>
             </div>
-            <div class="p-3 border-b border-slate-200 bg-slate-100 flex justify-between items-center">
-                <span class="text-xs font-bold text-slate-500 uppercase">Файлы</span>
+            <div class="p-3 border-b border-slate-200 bg-slate-100 flex justify-between items-center dark:border-slate-700 dark:bg-slate-800">
+                <span class="text-xs font-bold text-slate-500 uppercase dark:text-slate-400">Файлы</span>
                 <label class="cursor-pointer text-blue-600 font-bold text-xs" title="Загрузить">
                     Upload <input type="file" id="file-uploader" class="hidden" onchange="uploadAsset(event)" multiple>
                 </label>
@@ -115,7 +131,7 @@
         </div>
 
         <!-- Pane 2: Editor -->
-        <div id="editor-pane" class="h-full bg-white relative flex flex-col">
+        <div id="editor-pane" class="h-full bg-white relative flex flex-col dark:bg-slate-900">
             <div id="monaco-container" class="flex-grow relative"></div>
 
             <!-- Статус бар -->
@@ -131,7 +147,7 @@
             </div>
 
             <!-- Error Panel -->
-            <div id="error-panel" class="absolute bottom-7 w-full bg-red-50 border-t border-red-200 text-red-800 text-xs p-3 hidden max-h-48 overflow-y-auto font-mono z-20 shadow-[0_-10px_15px_rgba(0,0,0,0.05)]">
+            <div id="error-panel" class="absolute bottom-7 w-full bg-red-50 border-t border-red-200 text-red-800 text-xs p-3 hidden max-h-48 overflow-y-auto font-mono z-20 shadow-[0_-10px_15px_rgba(0,0,0,0.05)] dark:border-red-900/70 dark:bg-red-950 dark:text-red-200">
                 <div class="font-bold mb-1 flex justify-between">
                     <span>Errors:</span>
                     <button onclick="document.getElementById('error-panel').classList.add('hidden')" class="hover:text-red-500">x</button>
@@ -141,14 +157,14 @@
         </div>
 
         <!-- Pane 3: Viewer -->
-        <div id="viewer-pane" class="h-full bg-slate-200 flex items-center justify-center overflow-y-auto relative">
+        <div id="viewer-pane" class="h-full bg-slate-200 flex items-center justify-center overflow-y-auto relative dark:bg-slate-950">
             <iframe id="pdf-viewer" class="w-full h-full border-none hidden absolute inset-0"></iframe>
 
             <div id="live-preview" class="w-full h-full hidden overflow-y-auto absolute inset-0">
                 <div id="live-preview-content"></div>
             </div>
 
-            <div id="empty-state" class="text-slate-400 flex flex-col items-center">
+            <div id="empty-state" class="text-slate-400 flex flex-col items-center dark:text-slate-500">
                 <svg class="w-12 h-12 mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                 <p class="font-medium text-sm">Preview</p>
             </div>
@@ -156,20 +172,20 @@
     </div>
  <!-- CREATE PROJECT MODAL (INSERT HERE) -->
     <div id="create-project-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] hidden flex items-center justify-center transition-opacity">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 transform transition-all">
-            <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 transform transition-all dark:bg-slate-800 dark:text-slate-100">
+            <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2 dark:text-slate-100">
                 <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                 Создать проект
             </h2>
 
             <div class="mb-4">
-                <label class="block text-sm font-medium text-slate-600 mb-1">Название проекта</label>
-                <input type="text" id="new-project-name" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-colors" placeholder="Например: Курсовая работа">
+                <label class="block text-sm font-medium text-slate-600 mb-1 dark:text-slate-300">Название проекта</label>
+                <input type="text" id="new-project-name" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-colors dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:bg-slate-900" placeholder="Например: Курсовая работа">
             </div>
 
             <div class="mb-4">
-                <label class="block text-sm font-medium text-slate-600 mb-1">Тип проекта</label>
-                <select id="new-project-type" onchange="updateTemplateOptions()" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none cursor-pointer">
+                <label class="block text-sm font-medium text-slate-600 mb-1 dark:text-slate-300">Тип проекта</label>
+                <select id="new-project-type" onchange="updateTemplateOptions()" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none cursor-pointer dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-900">
                     <option value="latex">LaTeX Document</option>
                     <option value="markdown">Markdown</option>
                     <option value="mermaid">Mermaid Diagram</option>
@@ -177,8 +193,8 @@
             </div>
 
             <div class="mb-8" id="template-container">
-                <label class="block text-sm font-medium text-slate-600 mb-1">Шаблон</label>
-                <select id="new-project-template" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none cursor-pointer">
+                <label class="block text-sm font-medium text-slate-600 mb-1 dark:text-slate-300">Шаблон</label>
+                <select id="new-project-template" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none cursor-pointer dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:bg-slate-900">
                     <option value="latex_blank">Пустой документ (Article)</option>
                     <option value="latex_beamer">Презентация (Beamer)</option>
                     <option value="latex_report">Отчет (ГОСТ / extreport)</option>
@@ -186,7 +202,7 @@
             </div>
 
             <div class="flex justify-end gap-3">
-                <button onclick="closeCreateProjectModal()" class="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Отмена</button>
+                <button onclick="closeCreateProjectModal()" class="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors dark:text-slate-300 dark:hover:bg-slate-700">Отмена</button>
                 <button onclick="submitNewProject()" class="px-5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md transition-all active:scale-95">Создать</button>
             </div>
         </div>
@@ -195,7 +211,7 @@
     <!-- Загрузка нашего скрипта -->
     <script src="/js/runtime_config.js?v=1"></script>
     <script src="/js/ui_utils.js?v=1"></script>
-    <script src="/js/navbar.js?v=19"></script>
-    <script src="/js/studio.js?v=9"></script>
+    <script src="/js/navbar.js?v=20"></script>
+    <script src="/js/studio.js?v=10"></script>
 </body>
 </html>

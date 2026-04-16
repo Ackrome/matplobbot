@@ -27,6 +27,7 @@ This page is a full feature map of the project: bot, website, API, scheduler, wo
 | --- | --- | --- |
 | [Auth and account sessions](#auth-and-account-sessions) | `/login` + navbar auth actions | Sign in via Telegram or password, persist user profile |
 | [Shared navbar and i18n](#shared-navbar-and-i18n) | `main_site_frontend/js/navbar.js` | Cross-page navigation, EN/RU translations, command palette |
+| [Global dark theme](#global-dark-theme) | public website navbar + `<head>` theme init | Site-wide light/dark mode, persisted per browser |
 | [Schedule page](#schedule-page) | `/schedule` | Unified schedule search, filters, calendar nav, offline awareness |
 | [Calendar sync panel](#calendar-sync-panel) | Schedule page calendar section | Manage private iCal feeds and website sync profiles |
 | [Stats dashboard](#stats-dashboard) | `/stats` (admin) | Live and REST analytics, degradations, drill-downs |
@@ -345,13 +346,43 @@ What it does:
 - Shared top nav across pages.
 - EN/RU translation dictionary and runtime text updates.
 - Command palette and keyboard shortcuts.
+- Sun/moon theme toggle that persists the selected light/dark theme.
 - Admin-only nav item for stats page.
 
 How to use:
 
 1. Use language switch in navbar.
-2. Open palette/shortcuts from navbar controls.
-3. Use account menu for logout and profile actions.
+2. Use the sun/moon button to toggle the global theme.
+3. Open palette/shortcuts from navbar controls.
+4. Use account menu for logout and profile actions.
+
+### Global Dark Theme
+
+Files:
+
+- `main_site_frontend/index.html`
+- `main_site_frontend/schedule.html`
+- `main_site_frontend/studio.html`
+- `main_site_frontend/login.html`
+- `main_site_frontend/register.html`
+- `main_site_frontend/js/navbar.js`
+- `main_site_frontend/js/studio.js`
+
+What it does:
+
+- Initializes the preferred theme in `<head>` before page rendering to avoid a light-theme flash.
+- Uses Tailwind `darkMode: 'class'` and toggles `html.dark`.
+- Persists explicit user choice in `localStorage.theme`.
+- Falls back to the operating system color scheme when no explicit choice exists.
+- Updates shared navbar controls, public pages, schedule rendering, auth pages, Studio chrome, and Monaco editor.
+- Emits `mpb-theme-change` so page-level components can react immediately.
+
+How to use:
+
+1. Open any public site page.
+2. Click the sun/moon button next to the language switch.
+3. Or open the command palette and run `Toggle theme` / `Переключить тему`.
+4. Reload the page; the selected theme is applied before the body renders.
 
 ### Schedule Page
 
@@ -449,13 +480,15 @@ What it does:
 - Project mode for multi-file workspaces.
 - Supports create/edit/rename/delete files, upload assets, compile, export ZIP.
 - Supports sending compiled project PDF directly to linked Telegram account.
+- Follows the global website theme and switches Monaco between `vs-light` and `vs-dark`.
 
 How to use:
 
 1. Open `/studio`.
 2. Pick quick mode or create project.
 3. Edit content, compile, inspect result.
-4. Optionally export ZIP or send compiled PDF to Telegram.
+4. Toggle the site theme from the navbar or command palette when needed.
+5. Optionally export ZIP or send compiled PDF to Telegram.
 
 ### Runtime API Base And Popup UX
 

@@ -19,6 +19,7 @@ const I18N = {
         "palette.empty": "No commands found",
         "palette.openHelp": "Open shortcut help",
         "palette.toggleLang": "Toggle UI language",
+        "palette.toggleTheme": "Toggle theme",
         "palette.refresh": "Refresh current page",
         "help.title": "Keyboard Shortcuts",
         "help.palette": "Open command palette",
@@ -297,6 +298,10 @@ Object.assign(I18N.ru, {
     "schedule.calendar.confirmDelete": "Удалить пресет?"
 });
 
+Object.assign(I18N.ru, {
+    "palette.toggleTheme": "Переключить тему"
+});
+
 const NAV_ITEMS =[
     { href: "/", key: "nav.home" },
     { href: "/#projects", key: "nav.projects" },
@@ -319,6 +324,18 @@ function getStoredLanguage() {
     if (saved === "ru" || saved === "en") return saved;
     const htmlLang = (document.documentElement.lang || "").toLowerCase();
     return htmlLang.startsWith("ru") ? "ru" : "en";
+}
+function isDarkTheme() {
+    return document.documentElement.classList.contains("dark");
+}
+function setTheme(isDark) {
+    document.documentElement.classList.toggle("dark", isDark);
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+    window.dispatchEvent(new CustomEvent("mpb-theme-change", { detail: { isDark } }));
+    renderNavbar();
+}
+function toggleTheme() {
+    setTheme(!isDarkTheme());
 }
 function translate(key, fallback = "", params = {}) {
     const source = I18N[navState.lang] || I18N.en;
@@ -402,7 +419,7 @@ function getAvatarHtml(sizeClass = "w-6 h-6", textClass = "text-xs") {
     const username = (navState.user?.username || "?").trim();
     const initial = username.length > 0 ? username[0].toUpperCase() : "?";
     if (navState.user?.avatar_url) {
-        return `<img src="${escapeHtml(navState.user.avatar_url)}" class="${sizeClass} rounded-full object-cover shrink-0 border border-slate-200" alt="${escapeHtml(username)}">`;
+        return `<img src="${escapeHtml(navState.user.avatar_url)}" class="${sizeClass} rounded-full object-cover shrink-0 border border-slate-200 dark:border-slate-700" alt="${escapeHtml(username)}">`;
     }
     return `<div class="${sizeClass} rounded-full bg-blue-600 text-white flex items-center justify-center ${textClass} font-bold shrink-0">${escapeHtml(initial)}</div>`;
 }
@@ -416,9 +433,9 @@ function renderDesktopAuth() {
         `;
     }
     return `
-        <a href="${getProfileLink()}" class="flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors max-w-[220px]">
+        <a href="${getProfileLink()}" class="flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors max-w-[220px] dark:border-slate-700 dark:hover:bg-slate-800 dark:hover:border-blue-500">
             ${getAvatarHtml("w-6 h-6", "text-xs")}
-            <span class="text-sm font-bold text-slate-700 truncate">${escapeHtml(navState.user.username || "")}</span>
+            <span class="text-sm font-bold text-slate-700 truncate dark:text-slate-200">${escapeHtml(navState.user.username || "")}</span>
         </a>
         <button type="button" data-logout-btn class="text-sm font-medium text-slate-400 hover:text-red-500 transition-colors">${translate("nav.logout")}</button>
     `;
@@ -432,15 +449,15 @@ function renderMobileAuth() {
         `;
     }
     return `
-        <div class="mt-4 pt-4 border-t border-slate-100">
-            <a href="${getProfileLink()}" class="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-slate-50 transition-colors">
+        <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <a href="${getProfileLink()}" class="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-slate-50 transition-colors dark:hover:bg-slate-800">
                 ${getAvatarHtml("w-8 h-8", "text-sm")}
                 <div class="overflow-hidden">
-                    <div class="text-sm font-bold text-slate-900 truncate">${escapeHtml(navState.user.username || "")}</div>
-                    <div class="text-xs text-slate-500">${translate("nav.profile")}</div>
+                    <div class="text-sm font-bold text-slate-900 truncate dark:text-slate-100">${escapeHtml(navState.user.username || "")}</div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">${translate("nav.profile")}</div>
                 </div>
             </a>
-            <button type="button" data-logout-btn class="w-full text-left mt-2 px-3 py-3 rounded-lg text-red-500 font-medium hover:bg-red-50 transition-colors">
+            <button type="button" data-logout-btn class="w-full text-left mt-2 px-3 py-3 rounded-lg text-red-500 font-medium hover:bg-red-50 transition-colors dark:text-red-300 dark:hover:bg-red-950/40">
                 ${translate("nav.logoutAccount")}
             </button>
         </div>
@@ -448,13 +465,28 @@ function renderMobileAuth() {
 }
 function renderLanguageToggle(isMobile = false) {
     const base = isMobile
-        ? "mt-3 w-full flex items-center gap-2 rounded-xl bg-slate-100 p-1"
-        : "hidden lg:flex items-center gap-1 rounded-full bg-slate-100 p-1";
+        ? "mt-3 w-full flex items-center gap-2 rounded-xl bg-slate-100 p-1 dark:bg-slate-800"
+        : "hidden lg:flex items-center gap-1 rounded-full bg-slate-100 p-1 dark:bg-slate-800";
     return `
         <div class="${base}">
-            <button type="button" data-lang="en" aria-pressed="${navState.lang === "en"}" class="js-lang-switch px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${navState.lang === "en" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}">${translate("lang.en")}</button>
-            <button type="button" data-lang="ru" aria-pressed="${navState.lang === "ru"}" class="js-lang-switch px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${navState.lang === "ru" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}">${translate("lang.ru")}</button>
+            <button type="button" data-lang="en" aria-pressed="${navState.lang === "en"}" class="js-lang-switch px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${navState.lang === "en" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-slate-100" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}">${translate("lang.en")}</button>
+            <button type="button" data-lang="ru" aria-pressed="${navState.lang === "ru"}" class="js-lang-switch px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${navState.lang === "ru" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-slate-100" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"}">${translate("lang.ru")}</button>
         </div>
+    `;
+}
+function renderThemeToggle(isMobile = false) {
+    const isDark = isDarkTheme();
+    const buttonId = isMobile ? "theme-toggle-btn-mobile" : "theme-toggle-btn";
+    const base = isMobile
+        ? "mt-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-blue-300"
+        : "hidden lg:inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-blue-300";
+    const icon = isDark
+        ? `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1111.2 3a6.5 6.5 0 009.8 9.8z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+        : `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.36-6.36l-1.42 1.42M7.06 16.94l-1.42 1.42m12.72 0l-1.42-1.42M7.06 7.06L5.64 5.64M16 12a4 4 0 11-8 0 4 4 0 018 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    return `
+        <button id="${buttonId}" type="button" data-theme-toggle aria-label="${translate("palette.toggleTheme")}" title="${translate("palette.toggleTheme")}" class="${base}">
+            ${icon}
+        </button>
     `;
 }
 function renderNavbar() {
@@ -466,8 +498,8 @@ function renderNavbar() {
             .map((item) => {
                 const active = isActiveNavItem(item);
                 const classes = active
-                    ? "text-blue-700 bg-blue-50 border border-blue-200"
-                    : "text-slate-600 hover:text-blue-600 hover:bg-blue-50 border border-transparent";
+                    ? "text-blue-700 bg-blue-50 border border-blue-200 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
+                    : "text-slate-600 hover:text-blue-600 hover:bg-blue-50 border border-transparent dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300";
                 return `<a href="${item.href}" class="px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${classes}">${translate(item.key)}</a>`;
             })
             .join("");
@@ -475,6 +507,7 @@ function renderNavbar() {
             ${linksHtml}
             <div id="desktop-auth-container" class="flex items-center gap-3">${renderDesktopAuth()}</div>
             ${renderLanguageToggle(false)}
+            ${renderThemeToggle(false)}
         `;
     }
     if (mobileRoot) {
@@ -482,14 +515,17 @@ function renderNavbar() {
             .map((item) => {
                 const active = isActiveNavItem(item);
                 const classes = active
-                    ? "text-blue-700 bg-blue-50 border border-blue-200"
-                    : "text-slate-700 hover:text-blue-600 hover:bg-blue-50 border border-transparent";
+                    ? "text-blue-700 bg-blue-50 border border-blue-200 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
+                    : "text-slate-700 hover:text-blue-600 hover:bg-blue-50 border border-transparent dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300";
                 return `<a href="${item.href}" class="block px-3 py-3 rounded-lg text-base font-medium transition-colors ${classes}">${translate(item.key)}</a>`;
             })
             .join("");
         mobileRoot.innerHTML = `
             ${mobileLinksHtml}
-            ${renderLanguageToggle(true)}
+            <div class="grid grid-cols-[1fr_auto] gap-3">
+                ${renderLanguageToggle(true)}
+                ${renderThemeToggle(true)}
+            </div>
             <div id="mobile-auth-container">${renderMobileAuth()}</div>
         `;
     }
@@ -618,6 +654,11 @@ function getCommandPaletteCommands() {
             run: () => setLanguage(navState.lang === "ru" ? "en" : "ru")
         },
         {
+            id: "toggle-theme",
+            label: translate("palette.toggleTheme"),
+            run: toggleTheme
+        },
+        {
             id: "open-help",
             label: translate("palette.openHelp"),
             run: () => toggleShortcutHelp(true)
@@ -637,29 +678,29 @@ function ensureOverlays() {
     const overlays = document.createElement("div");
     overlays.innerHTML = `
         <div id="mpbCommandPalette" class="hidden fixed inset-0 z-[120] bg-slate-900/50 backdrop-blur-sm px-4">
-            <div class="mx-auto mt-20 w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                <div class="border-b border-slate-100 p-4">
-                    <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500" data-i18n="palette.title"></p>
-                    <input id="mpbCommandInput" type="text" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" data-i18n-placeholder="palette.placeholder" placeholder="">
+            <div class="mx-auto mt-20 w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800">
+                <div class="border-b border-slate-100 p-4 dark:border-slate-700">
+                    <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400" data-i18n="palette.title"></p>
+                    <input id="mpbCommandInput" type="text" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100" data-i18n-placeholder="palette.placeholder" placeholder="">
                 </div>
                 <div id="mpbCommandList" class="max-h-[22rem] overflow-y-auto p-2"></div>
             </div>
         </div>
         <div id="mpbShortcutHelp" class="hidden fixed inset-0 z-[120] bg-slate-900/50 backdrop-blur-sm px-4">
-            <div class="mx-auto mt-24 w-full max-w-xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-                    <h2 class="text-lg font-bold text-slate-900" data-i18n="help.title"></h2>
-                    <button type="button" data-close-help class="rounded-lg px-3 py-1 text-sm text-slate-500 hover:bg-slate-100">Esc</button>
+            <div class="mx-auto mt-24 w-full max-w-xl rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800">
+                <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-700">
+                    <h2 class="text-lg font-bold text-slate-900 dark:text-slate-100" data-i18n="help.title"></h2>
+                    <button type="button" data-close-help class="rounded-lg px-3 py-1 text-sm text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700">Esc</button>
                 </div>
-                <div class="space-y-3 px-5 py-4 text-sm text-slate-700">
-                    <div class="flex items-center justify-between"><span data-i18n="help.palette"></span><kbd class="rounded bg-slate-100 px-2 py-1 text-xs">Ctrl/Cmd + K</kbd></div>
-                    <div class="flex items-center justify-between"><span data-i18n="help.focusSearch"></span><kbd class="rounded bg-slate-100 px-2 py-1 text-xs">/</kbd></div>
-                    <div class="flex items-center justify-between"><span data-i18n="help.refresh"></span><kbd class="rounded bg-slate-100 px-2 py-1 text-xs">R</kbd></div>
-                    <div class="flex items-center justify-between"><span data-i18n="help.nextPage"></span><kbd class="rounded bg-slate-100 px-2 py-1 text-xs">N</kbd></div>
-                    <div class="flex items-center justify-between"><span data-i18n="help.prevPage"></span><kbd class="rounded bg-slate-100 px-2 py-1 text-xs">P</kbd></div>
-                    <div class="flex items-center justify-between"><span data-i18n="help.open"></span><kbd class="rounded bg-slate-100 px-2 py-1 text-xs">?</kbd></div>
-                    <div class="flex items-center justify-between"><span data-i18n="help.close"></span><kbd class="rounded bg-slate-100 px-2 py-1 text-xs">Esc</kbd></div>
-                    <p class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500" data-i18n="help.hint"></p>
+                <div class="space-y-3 px-5 py-4 text-sm text-slate-700 dark:text-slate-300">
+                    <div class="flex items-center justify-between"><span data-i18n="help.palette"></span><kbd class="rounded bg-slate-100 px-2 py-1 text-xs dark:bg-slate-700 dark:text-slate-200">Ctrl/Cmd + K</kbd></div>
+                    <div class="flex items-center justify-between"><span data-i18n="help.focusSearch"></span><kbd class="rounded bg-slate-100 px-2 py-1 text-xs dark:bg-slate-700 dark:text-slate-200">/</kbd></div>
+                    <div class="flex items-center justify-between"><span data-i18n="help.refresh"></span><kbd class="rounded bg-slate-100 px-2 py-1 text-xs dark:bg-slate-700 dark:text-slate-200">R</kbd></div>
+                    <div class="flex items-center justify-between"><span data-i18n="help.nextPage"></span><kbd class="rounded bg-slate-100 px-2 py-1 text-xs dark:bg-slate-700 dark:text-slate-200">N</kbd></div>
+                    <div class="flex items-center justify-between"><span data-i18n="help.prevPage"></span><kbd class="rounded bg-slate-100 px-2 py-1 text-xs dark:bg-slate-700 dark:text-slate-200">P</kbd></div>
+                    <div class="flex items-center justify-between"><span data-i18n="help.open"></span><kbd class="rounded bg-slate-100 px-2 py-1 text-xs dark:bg-slate-700 dark:text-slate-200">?</kbd></div>
+                    <div class="flex items-center justify-between"><span data-i18n="help.close"></span><kbd class="rounded bg-slate-100 px-2 py-1 text-xs dark:bg-slate-700 dark:text-slate-200">Esc</kbd></div>
+                    <p class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400" data-i18n="help.hint"></p>
                 </div>
             </div>
         </div>
@@ -679,14 +720,14 @@ function renderCommandList() {
     const commands = getVisibleCommands();
     navState.selectedCommandIndex = Math.min(navState.selectedCommandIndex, Math.max(commands.length - 1, 0));
     if (commands.length === 0) {
-        list.innerHTML = `<div class="rounded-xl px-3 py-3 text-sm text-slate-500">${translate("palette.empty")}</div>`;
+        list.innerHTML = `<div class="rounded-xl px-3 py-3 text-sm text-slate-500 dark:text-slate-400">${translate("palette.empty")}</div>`;
         return;
     }
     list.innerHTML = commands
         .map((command, index) => {
             const selected = index === navState.selectedCommandIndex;
             return `
-                <button type="button" data-command-id="${command.id}" class="w-full rounded-xl px-3 py-2 text-left text-sm transition-colors ${selected ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-100"}">
+                <button type="button" data-command-id="${command.id}" class="w-full rounded-xl px-3 py-2 text-left text-sm transition-colors ${selected ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200" : "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"}">
                     ${escapeHtml(command.label)}
                 </button>
             `;
@@ -746,6 +787,10 @@ function registerGlobalHandlers() {
         if (langButton instanceof HTMLElement) {
             const lang = langButton.getAttribute("data-lang");
             if (lang) setLanguage(lang);
+            return;
+        }
+        if (target.closest("[data-theme-toggle]")) {
+            toggleTheme();
             return;
         }
         if (target.closest("[data-logout-btn]")) {

@@ -105,12 +105,12 @@ function renderOfflineHistory(list = cachedOfflineEntities) {
         const savedText = escapeHtml(t('schedule.history.saved', 'Сохранено оффлайн'));
         return `
             <button onclick="loadSchedule('${itemType}', '${itemId}', '${itemLabel}'); closeOfflinePanel();"
-                    class="group w-full text-left px-4 py-3 bg-white hover:bg-blue-50 rounded-xl transition-all flex items-center justify-between border border-transparent hover:border-blue-100">
+                    class="group w-full text-left px-4 py-3 bg-white hover:bg-blue-50 rounded-xl transition-all flex items-center justify-between border border-transparent hover:border-blue-100 dark:bg-slate-800 dark:hover:bg-slate-700 dark:hover:border-slate-600">
                 <div>
-                    <div class="text-xs font-black text-slate-700 group-hover:text-blue-700">${labelText}</div>
+                    <div class="text-xs font-black text-slate-700 group-hover:text-blue-700 dark:text-slate-200 dark:group-hover:text-blue-300">${labelText}</div>
                     <div class="text-[9px] text-slate-400 uppercase tracking-tighter mt-0.5">${savedText}</div>
                 </div>
-                <svg class="w-3 h-3 text-slate-300 group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <svg class="w-3 h-3 text-slate-300 group-hover:text-blue-400 dark:text-slate-500 dark:group-hover:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
         `;
     }).join('');
@@ -289,7 +289,7 @@ function renderSearchResults(results) {
     const normalizedResults = Array.isArray(results) ? results :[];
     latestSearchResults = normalizedResults;
     if (normalizedResults.length === 0) {
-        resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-slate-500 text-center">${escapeHtml(t('schedule.search.empty', 'Ничего не найдено'))}</div>`;
+        resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-slate-500 text-center dark:text-slate-400">${escapeHtml(t('schedule.search.empty', 'Ничего не найдено'))}</div>`;
     } else {
         resultsBox.innerHTML = normalizedResults.map(item => {
             const typeMeta = getSearchResultTypeMeta(item.type);
@@ -302,9 +302,9 @@ function renderSearchResults(results) {
             const labelText = escapeHtml(item.label);
             const descriptionText = escapeHtml(item.description || typeMeta.label);
             return `
-            <div class="px-6 py-3 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-none"
+            <div class="px-6 py-3 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-none dark:border-slate-700 dark:hover:bg-slate-700"
                  onclick="loadSchedule('${itemType}', '${itemId}', '${itemLabel}')">
-                <div class="font-bold text-slate-800 flex items-center flex-wrap gap-2">
+                <div class="font-bold text-slate-800 flex items-center flex-wrap gap-2 dark:text-slate-100">
                     <span>${labelText}</span>
                     <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${typeMeta.badgeClass}">${escapeHtml(typeMeta.label)}</span>
                     ${offlineBadge}
@@ -369,7 +369,7 @@ function renderModuleFilters() {
                 class="inline-flex max-w-full items-center gap-2 rounded-xl border px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-200
                 ${isSelected
                     ? 'bg-slate-900 border-slate-900 text-white shadow-lg shadow-slate-900/15'
-                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-blue-200 hover:text-slate-700'}">
+                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-blue-200 hover:text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:border-blue-700 dark:hover:text-slate-200'}">
                 ${isSelected ? '<span class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/15 text-[10px]">ON</span>' : ''}
                 <span class="truncate">${escapeHtml(mod)}</span>
             </button>
@@ -382,7 +382,7 @@ function renderModuleFilters() {
             <section class="rounded-2xl border ${toneClass} p-3">
                 <div class="mb-3 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
                     <span>${escapeHtml(t(labelKey, fallback))}</span>
-                    <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500 shadow-sm">${items.length}</span>
+                    <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500 shadow-sm dark:bg-slate-800 dark:text-slate-400">${items.length}</span>
                 </div>
                 <div class="flex flex-wrap gap-2">
                     ${items.map((mod) => renderModuleChip(mod, labelKey === 'schedule.filters.selected')).join('')}
@@ -393,8 +393,8 @@ function renderModuleFilters() {
 
     container.innerHTML = `
         <div class="space-y-3">
-            ${renderModuleGroup('schedule.filters.selected', 'Активные', selected, 'border-slate-200 bg-slate-50/80')}
-            ${renderModuleGroup('schedule.filters.available', 'Доступные', available, 'border-blue-100 bg-blue-50/40')}
+            ${renderModuleGroup('schedule.filters.selected', 'Активные', selected, 'border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/80')}
+            ${renderModuleGroup('schedule.filters.available', 'Доступные', available, 'border-blue-100 bg-blue-50/40 dark:border-blue-900/60 dark:bg-blue-950/20')}
         </div>
     `;
 }
@@ -466,16 +466,16 @@ function renderDesktopGrid(lessons) {
     let html = `
     <div class="overflow-hidden relative">
         <table class="w-full table-fixed border-collapse text-left">
-            <thead class="bg-slate-50/50 border-b border-slate-100">
+            <thead class="bg-slate-50/50 border-b border-slate-100 dark:border-slate-700 dark:bg-slate-800/70">
                 <tr>
-                    <th class="w-16 sm:w-20 p-3 text-center text-xs font-bold text-slate-400 border-r border-slate-200">${escapeHtml(t('schedule.table.time', 'Время'))}</th>`;
+                    <th class="w-16 sm:w-20 p-3 text-center text-xs font-bold text-slate-400 border-r border-slate-200 dark:border-slate-700">${escapeHtml(t('schedule.table.time', 'Время'))}</th>`;
     weekDates.forEach(d => {
         const isToday = isSameDay(d, now);
-        html += `<th class="p-3 border-r border-slate-200 last:border-r-0 ${isToday ? 'bg-blue-50/70' : ''} relative">
+        html += `<th class="p-3 border-r border-slate-200 last:border-r-0 dark:border-slate-700 ${isToday ? 'bg-blue-50/70 dark:bg-blue-950/30' : ''} relative">
             ${isToday ? '<div class="absolute top-0 left-0 w-full h-1 bg-blue-500"></div>' : ''}
             <div class="flex flex-col items-center gap-0.5">
-                <span class="text-xs uppercase tracking-widest font-bold ${isToday ? 'text-blue-600' : 'text-slate-500'}">${escapeHtml(formatUiDate(d, {weekday: 'short'}))}</span>
-                <span class="text-xl font-black ${isToday ? 'text-blue-700' : 'text-slate-800'}">${d.getDate()}</span>
+                <span class="text-xs uppercase tracking-widest font-bold ${isToday ? 'text-blue-600 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">${escapeHtml(formatUiDate(d, {weekday: 'short'}))}</span>
+                <span class="text-xl font-black ${isToday ? 'text-blue-700 dark:text-blue-200' : 'text-slate-800 dark:text-slate-100'}">${d.getDate()}</span>
             </div>
         </th>`;
     });
@@ -490,8 +490,8 @@ function renderDesktopGrid(lessons) {
         const isCurrentSlot = (currentMinutes >= slotStartMins && currentMinutes <= slotEndMins);
 
         html += `<tr>
-            <td class="p-2 border-r border-slate-100 align-top text-center bg-slate-50/30 relative">
-                <div class="text-xs font-black ${isCurrentSlot ? 'text-red-500' : 'text-slate-500'}">${timeSlot.start}</div>
+            <td class="p-2 border-r border-slate-100 align-top text-center bg-slate-50/30 relative dark:border-slate-700 dark:bg-slate-800/40">
+                <div class="text-xs font-black ${isCurrentSlot ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}">${timeSlot.start}</div>
                 <div class="text-[10px] font-medium text-slate-400">${timeSlot.end}</div>
                 ${isCurrentSlot ? '<div class="absolute top-1/2 right-[-5px] w-2 h-2 rounded-full bg-red-500 z-20 transform -translate-y-1/2 shadow-[0_0_8px_rgba(239,68,68,0.8)]"></div>' : ''}
             </td>`;
@@ -499,7 +499,7 @@ function renderDesktopGrid(lessons) {
             const dateStr = getISODateStr(d);
             const slotLessons = gridData[dateStr]?.[timeStr] ||[];
             const isToday = isSameDay(d, now);
-            html += `<td class="p-1.5 border-r border-slate-100 last:border-r-0 align-top ${isToday ? 'bg-blue-50/30' : ''} hover:bg-slate-50 transition-colors relative">
+            html += `<td class="p-1.5 border-r border-slate-100 last:border-r-0 align-top dark:border-slate-700 ${isToday ? 'bg-blue-50/30 dark:bg-blue-950/20' : ''} hover:bg-slate-50 transition-colors relative dark:hover:bg-slate-800">
                 ${isToday && isCurrentSlot ? '<div class="absolute top-1/2 left-0 w-full h-[2px] bg-red-400 z-10 pointer-events-none opacity-50"></div>' : ''}
                 <div class="flex flex-col gap-1.5 h-full">
                     ${slotLessons.map(l => renderCard(l, true)).join('')}
@@ -588,21 +588,21 @@ function renderCard(l, isDesktop) {
                     ${safeKind}
                 </div>
                 ${l.module ? `
-                    <span class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-white text-slate-600 truncate max-w-[60px] border border-slate-100 shadow-sm" title="${safeModule}">
+                    <span class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-white text-slate-600 truncate max-w-[60px] border border-slate-100 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" title="${safeModule}">
                         ${safeModule}
                     </span>` : ''}
             </div>
-            <div class="font-bold text-slate-800 text-[13px] leading-snug line-clamp-3 mb-2 flex-grow" title="${safeDiscipline}">
+            <div class="font-bold text-slate-800 text-[13px] leading-snug line-clamp-3 mb-2 flex-grow dark:text-slate-100" title="${safeDiscipline}">
                 ${safeDiscipline}
             </div>
             <div class="flex flex-col gap-1">
-                <div class="flex items-center gap-1 text-[10px] font-medium text-slate-700 hover:text-blue-600 cursor-pointer transition-colors"
+                <div class="flex items-center gap-1 text-[10px] font-medium text-slate-700 hover:text-blue-600 cursor-pointer transition-colors dark:text-slate-300 dark:hover:text-blue-300"
                      onclick="copyToClipboard('${safeAuditoriumJs}', event)" title="${roomTitle}">
                     <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     <span class="truncate">${safeAuditorium}</span>
                 </div>
                 ${teacherLabel ? `
-                <div class="flex items-center gap-1 text-[10px] font-medium text-slate-700 hover:text-blue-600 cursor-pointer transition-colors"
+                <div class="flex items-center gap-1 text-[10px] font-medium text-slate-700 hover:text-blue-600 cursor-pointer transition-colors dark:text-slate-300 dark:hover:text-blue-300"
                      onclick="copyToClipboard('${safeLecturerJs}', event)" title="${teacherTitle}">
                     <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
                     <span class="truncate">${safeTeacherLabel}</span>
@@ -625,7 +625,7 @@ function renderCard(l, isDesktop) {
         <div class="schedule-feed-card-body">
             <div class="schedule-feed-card-title">${safeDiscipline}</div>
             ${l.module ? `
-                <span class="schedule-feed-card-module inline-flex w-fit max-w-full rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-500">
+                <span class="schedule-feed-card-module inline-flex w-fit max-w-full rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
                     ${safeModule}
                 </span>` : ''}
         </div>
@@ -647,7 +647,7 @@ function renderCard(l, isDesktop) {
 }
 
 function getBadgeColor(kind) {
-    if (!kind) return { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600' };
+    if (!kind) return { bg: 'bg-slate-50 dark:bg-slate-800', border: 'border-slate-200 dark:border-slate-700', text: 'text-slate-600 dark:text-slate-400' };
     const k = kind.toLowerCase();
     const isLecture = k.includes('\u043b\u0435\u043a\u0446') || k.includes('lecture');
     const isPractice =
@@ -663,10 +663,10 @@ function getBadgeColor(kind) {
         k.includes('credit') ||
         k.includes('test');
 
-    if (isLecture) return { bg: 'bg-emerald-50/60', border: 'border-emerald-200', text: 'text-emerald-700' };
-    if (isPractice) return { bg: 'bg-amber-50/60', border: 'border-amber-200', text: 'text-amber-700' };
-    if (isExamLike) return { bg: 'bg-rose-50/60', border: 'border-rose-200', text: 'text-rose-700' };
-    return { bg: 'bg-blue-50/60', border: 'border-blue-200', text: 'text-blue-700' };
+    if (isLecture) return { bg: 'bg-emerald-50/60 dark:bg-emerald-950/30', border: 'border-emerald-200 dark:border-emerald-900/70', text: 'text-emerald-700 dark:text-emerald-300' };
+    if (isPractice) return { bg: 'bg-amber-50/60 dark:bg-amber-950/30', border: 'border-amber-200 dark:border-amber-900/70', text: 'text-amber-700 dark:text-amber-300' };
+    if (isExamLike) return { bg: 'bg-rose-50/60 dark:bg-rose-950/30', border: 'border-rose-200 dark:border-rose-900/70', text: 'text-rose-700 dark:text-rose-300' };
+    return { bg: 'bg-blue-50/60 dark:bg-blue-950/30', border: 'border-blue-200 dark:border-blue-900/70', text: 'text-blue-700 dark:text-blue-300' };
 }
 
 function debounce(func, timeout = 300){
