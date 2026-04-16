@@ -65,42 +65,42 @@
         html.dark,
         html[data-theme="dark"] {
             color-scheme: dark;
-            --schedule-page-bg: #111c35;
-            --schedule-text: #f8fafc;
-            --schedule-muted: #cbd5e1;
-            --schedule-panel: #192844;
-            --schedule-panel-soft: #203453;
-            --schedule-panel-border: #405778;
-            --schedule-grid-bg: #314762;
-            --schedule-grid-head: #2a3e5b;
-            --schedule-grid-time: #283b57;
-            --schedule-grid-cell: #314762;
-            --schedule-grid-hover: #3a526f;
-            --schedule-grid-today: #354e7b;
-            --schedule-grid-today-strong: #42d4f4;
-            --schedule-grid-border: rgba(226, 232, 240, 0.42);
-            --schedule-grid-text: #f8fafc;
-            --schedule-grid-muted: #dbe6f6;
+            --schedule-page-bg: #0b1120;
+            --schedule-text: #e5edf7;
+            --schedule-muted: #94a3b8;
+            --schedule-panel: #0f172a;
+            --schedule-panel-soft: #111c2f;
+            --schedule-panel-border: rgba(148, 163, 184, 0.22);
+            --schedule-grid-bg: #111827;
+            --schedule-grid-head: #152238;
+            --schedule-grid-time: #101827;
+            --schedule-grid-cell: #142033;
+            --schedule-grid-hover: #1b2a42;
+            --schedule-grid-today: #1d2f4f;
+            --schedule-grid-today-strong: #38bdf8;
+            --schedule-grid-border: rgba(148, 163, 184, 0.28);
+            --schedule-grid-text: #e5edf7;
+            --schedule-grid-muted: #9db1ca;
             --schedule-card-shadow: none;
-            --schedule-active-control-bg: #243653;
+            --schedule-active-control-bg: #22304a;
             --schedule-active-control-text: #ffffff;
-            --lesson-lecture-bg: #214f5a;
-            --lesson-lecture-border: #1e8c78;
-            --lesson-lecture-text: #7cf4d2;
-            --lesson-seminar-bg: #4b424f;
-            --lesson-seminar-border: #9a563f;
+            --lesson-lecture-bg: #12383d;
+            --lesson-lecture-border: #0f766e;
+            --lesson-lecture-text: #5eead4;
+            --lesson-seminar-bg: #312a36;
+            --lesson-seminar-border: #7c3f36;
             --lesson-seminar-text: #fde047;
-            --lesson-exam-bg: #543d4a;
-            --lesson-exam-border: #b4535e;
-            --lesson-exam-text: #fecdd3;
-            --lesson-default-bg: #2f4c6b;
-            --lesson-default-border: #5b86c8;
+            --lesson-exam-bg: #361f2b;
+            --lesson-exam-border: #9f1239;
+            --lesson-exam-text: #fda4af;
+            --lesson-default-bg: #1c2a3f;
+            --lesson-default-border: #475569;
             --lesson-default-text: #bfdbfe;
         }
         body { font-family: 'Inter', sans-serif; }
-        body.schedule-page {
-            background: var(--schedule-page-bg);
-            color: var(--schedule-text);
+        html[data-theme] body.schedule-page {
+            background: var(--schedule-page-bg) !important;
+            color: var(--schedule-text) !important;
             transition: background-color .2s ease, color .2s ease;
         }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 8px; }
@@ -114,20 +114,20 @@
         /* Стили универсальной шапки */
         .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255, 255, 255, 0.3); }
         html.dark .glass { background: rgba(15, 23, 42, 0.8); border-bottom: 1px solid rgba(30, 41, 59, 0.8); }
-        .schedule-shell {
-            background: var(--schedule-panel);
-            border-color: var(--schedule-panel-border);
-            color: var(--schedule-text);
+        html[data-theme] .schedule-shell {
+            background: var(--schedule-panel) !important;
+            border-color: var(--schedule-panel-border) !important;
+            color: var(--schedule-text) !important;
         }
-        .schedule-control-panel {
-            background: var(--schedule-panel);
+        html[data-theme] .schedule-control-panel {
+            background: var(--schedule-panel) !important;
         }
-        .schedule-control-band {
-            background: var(--schedule-panel-soft);
-            border-color: var(--schedule-panel-border);
+        html[data-theme] .schedule-control-band {
+            background: var(--schedule-panel-soft) !important;
+            border-color: var(--schedule-panel-border) !important;
         }
-        .schedule-grid-surface {
-            background: var(--schedule-grid-bg);
+        html[data-theme] .schedule-grid-surface {
+            background: var(--schedule-grid-bg) !important;
         }
         .schedule-table-wrap {
             background: var(--schedule-grid-bg);
@@ -442,7 +442,7 @@
 
     <script src="/js/runtime_config.js?v=1"></script>
     <script src="/js/ui_utils.js?v=1"></script>
-    <script src="/js/navbar.js?v=21"></script>
+    <script src="/js/navbar.js?v=22"></script>
     <script src="/js/schedule.js?v=22"></script>
     <script src="/js/calendar_sync.js?v=4"></script>
     <script src="/js/schedule_ux.js?v=7"></script>

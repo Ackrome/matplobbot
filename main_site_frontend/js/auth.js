@@ -63,6 +63,7 @@ window.handleTelegramLogin = async function handleTelegramLogin(telegramUser) {
         if (response.ok) {
             const data = await response.json();
             localStorage.setItem("jwt_token", data.access_token);
+            window.dispatchEvent(new CustomEvent("mpb-auth-token-changed"));
             window.location.href = "/schedule";
             return;
         }
@@ -117,6 +118,7 @@ if (loginForm) {
             if (response.ok) {
                 const data = await response.json();
                 localStorage.setItem("jwt_token", data.access_token);
+                window.dispatchEvent(new CustomEvent("mpb-auth-token-changed"));
                 window.location.href = "/stats";
                 return;
             }
@@ -172,6 +174,7 @@ if (registerForm) {
                 if (loginResponse.ok) {
                     const data = await loginResponse.json();
                     localStorage.setItem("jwt_token", data.access_token);
+                    window.dispatchEvent(new CustomEvent("mpb-auth-token-changed"));
                     setTimeout(() => {
                         window.location.href = "/stats";
                     }, 1000);

@@ -375,6 +375,7 @@ What it does:
 - Persists explicit user choice in `localStorage.theme`.
 - Falls back to the operating system color scheme when no explicit choice exists.
 - Updates shared navbar controls, public pages, schedule rendering, auth pages, Studio chrome, and Monaco editor.
+- Updates the current page immediately without rerendering authenticated navbar state.
 - Emits `mpb-theme-change` so page-level components can react immediately.
 
 How to use:
@@ -382,7 +383,7 @@ How to use:
 1. Open any public site page.
 2. Click the sun/moon button next to the language switch.
 3. Or open the command palette and run `Toggle theme` / `Переключить тему`.
-4. Reload the page; the selected theme is applied before the body renders.
+4. The theme changes immediately; on the next reload the selected theme is applied before the body renders.
 
 ### Schedule Page
 

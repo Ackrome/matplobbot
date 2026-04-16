@@ -328,12 +328,25 @@ function getStoredLanguage() {
 function isDarkTheme() {
     return document.documentElement.classList.contains("dark");
 }
+function getThemeIcon(isDark = isDarkTheme()) {
+    return isDark
+        ? `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1111.2 3a6.5 6.5 0 009.8 9.8z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+        : `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.36-6.36l-1.42 1.42M7.06 16.94l-1.42 1.42m12.72 0l-1.42-1.42M7.06 7.06L5.64 5.64M16 12a4 4 0 11-8 0 4 4 0 018 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+function refreshThemeToggleButtons() {
+    const icon = getThemeIcon();
+    document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+        button.innerHTML = icon;
+        button.setAttribute("aria-label", translate("palette.toggleTheme"));
+        button.setAttribute("title", translate("palette.toggleTheme"));
+    });
+}
 function setTheme(isDark) {
     document.documentElement.classList.toggle("dark", isDark);
     document.documentElement.dataset.theme = isDark ? "dark" : "light";
     localStorage.setItem("theme", isDark ? "dark" : "light");
+    refreshThemeToggleButtons();
     window.dispatchEvent(new CustomEvent("mpb-theme-change", { detail: { isDark } }));
-    renderNavbar();
 }
 function toggleTheme() {
     setTheme(!isDarkTheme());
@@ -476,17 +489,13 @@ function renderLanguageToggle(isMobile = false) {
     `;
 }
 function renderThemeToggle(isMobile = false) {
-    const isDark = isDarkTheme();
     const buttonId = isMobile ? "theme-toggle-btn-mobile" : "theme-toggle-btn";
     const base = isMobile
         ? "mt-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-blue-300"
         : "hidden lg:inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-blue-300";
-    const icon = isDark
-        ? `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1111.2 3a6.5 6.5 0 009.8 9.8z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-        : `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.36-6.36l-1.42 1.42M7.06 16.94l-1.42 1.42m12.72 0l-1.42-1.42M7.06 7.06L5.64 5.64M16 12a4 4 0 11-8 0 4 4 0 018 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     return `
         <button id="${buttonId}" type="button" data-theme-toggle aria-label="${translate("palette.toggleTheme")}" title="${translate("palette.toggleTheme")}" class="${base}">
-            ${icon}
+            ${getThemeIcon()}
         </button>
     `;
 }
@@ -783,7 +792,7 @@ function focusPrimarySearch() {
 function registerGlobalHandlers() {
     document.body.addEventListener("click", (event) => {
         const target = event.target;
-        if (!(target instanceof HTMLElement)) return;
+        if (!(target instanceof Element)) return;
         const langButton = target.closest(".js-lang-switch");
         if (langButton instanceof HTMLElement) {
             const lang = langButton.getAttribute("data-lang");
@@ -922,6 +931,7 @@ function exposePublicI18nApi() {
         unregisterTranslator: (fn) => pageTranslators.delete(fn),
     };
 }
+window.mpbRefreshAuth = checkAuthAndRenderNavbar;
 document.addEventListener("DOMContentLoaded", () => {
     navState.lang = getStoredLanguage();
     document.documentElement.lang = navState.lang;
@@ -936,4 +946,10 @@ document.addEventListener("DOMContentLoaded", () => {
     runPageTranslators();
     window.addEventListener("hashchange", renderNavbar);
     window.addEventListener("popstate", renderNavbar);
+    window.addEventListener("storage", (event) => {
+        if (event.key === "jwt_token") {
+            checkAuthAndRenderNavbar();
+        }
+    });
+    window.addEventListener("mpb-auth-token-changed", checkAuthAndRenderNavbar);
 });
