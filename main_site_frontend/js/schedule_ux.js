@@ -103,7 +103,7 @@
         `;
         document.head.appendChild(style);
     }
-    
+
     function applyFilterVisibility() {
         const section = document.getElementById("moduleFilterSection");
         const content = document.getElementById("filterContent");
@@ -166,11 +166,11 @@
         const entityEl = document.getElementById("contextEntity");
         const rangeEl = document.getElementById("contextRange");
         const parsedEl = document.getElementById("contextParsed");
-        
+
         if (entityEl) {
             entityEl.textContent = currentEntity?.name || t("schedule.context.none", "Группа не выбрана");
         }
-        
+
         const loadedRangeText = t("schedule.context.loadedRange", "Загружено {start} - {end}", {
             start: formatLoadedBound(loadedBounds.start),
             end: formatLoadedBound(loadedBounds.end),
@@ -186,7 +186,7 @@
                 minute: "2-digit",
             })
             : t("schedule.context.parsedUnknown", "Время обновления неизвестно");
-        
+
         if (parsedEl) {
             parsedEl.textContent = t("schedule.context.parsedAt", "Обновлено в вузе: {value}", {
                 value: parsedValue,

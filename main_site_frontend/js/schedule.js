@@ -96,7 +96,7 @@ window.addEventListener('mpb-auth-ready', (event) => {
 });
 document.addEventListener('DOMContentLoaded', async () => {
     await initOfflineHistory();
-    await loadInitialPreferences(); 
+    await loadInitialPreferences();
     window.mpbI18n?.registerTranslator?.(() => {
         renderOfflineHistory();
         if (!resultsBox.classList.contains('hidden')) {
@@ -484,7 +484,7 @@ function renderDesktopGrid(lessons) {
         const slotStartMins = hStart * 60 + mStart;
         const slotEndMins = hEnd * 60 + mEnd;
         const isCurrentSlot = (currentMinutes >= slotStartMins && currentMinutes <= slotEndMins);
-        
+
         html += `<tr>
             <td class="p-2 border-r border-slate-100 align-top text-center bg-slate-50/30 relative">
                 <div class="text-xs font-black ${isCurrentSlot ? 'text-red-500' : 'text-slate-500'}">${timeSlot.start}</div>
@@ -566,7 +566,7 @@ function renderCard(l, isDesktop) {
     const safeLecturerJs = escapeJsString(l.lecturer_title || '');
     const roomTitle = escapeHtml(t('schedule.copy.room', 'Копировать аудиторию'));
     const teacherTitle = escapeHtml(t('schedule.copy.teacher', 'Копировать преподавателя'));
-    
+
     if (isDesktop) {
         const teacherTokens = String(l.lecturer_title || '').split(' ').filter(Boolean);
         const teacherShort = teacherTokens.length > 2
@@ -742,7 +742,7 @@ window._renderCalendarSubscriptionImpl = function() {
         )
     );
     const toggleIconClass = isCalendarSubscriptionCollapsed ? '' : 'rotate-180';
-    
+
     if (calendarSubscriptionState.loading) {
         container.innerHTML = `
             <div class="rounded-2xl border border-slate-200 bg-white p-4 md:p-5 shadow-sm">
