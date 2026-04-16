@@ -371,7 +371,7 @@ Files:
 What it does:
 
 - Initializes the preferred theme in `<head>` before page rendering to avoid a light-theme flash.
-- Uses Tailwind `darkMode: 'class'` and toggles `html.dark`.
+- Uses Tailwind `darkMode: 'class'`, toggles `html.dark`, and sets `html[data-theme]` for CSS-variable driven surfaces.
 - Persists explicit user choice in `localStorage.theme`.
 - Falls back to the operating system color scheme when no explicit choice exists.
 - Updates shared navbar controls, public pages, schedule rendering, auth pages, Studio chrome, and Monaco editor.

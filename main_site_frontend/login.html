@@ -19,7 +19,9 @@
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        const isDarkTheme = localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = isDarkTheme ? 'dark' : 'light';
+        if (isDarkTheme) {
             document.documentElement.classList.add('dark');
         } else {
             document.documentElement.classList.remove('dark');
@@ -131,7 +133,7 @@
     </script>
     <script src="/js/runtime_config.js?v=1"></script>
     <script src="/js/ui_utils.js?v=1"></script>
-    <script src="/js/navbar.js?v=20"></script>
+    <script src="/js/navbar.js?v=21"></script>
     <script src="/js/auth.js?v=5"></script>
 </body>
 </html>

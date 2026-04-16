@@ -330,6 +330,7 @@ function isDarkTheme() {
 }
 function setTheme(isDark) {
     document.documentElement.classList.toggle("dark", isDark);
+    document.documentElement.dataset.theme = isDark ? "dark" : "light";
     localStorage.setItem("theme", isDark ? "dark" : "light");
     window.dispatchEvent(new CustomEvent("mpb-theme-change", { detail: { isDark } }));
     renderNavbar();

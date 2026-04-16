@@ -464,22 +464,22 @@ function renderDesktopGrid(lessons) {
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
     let html = `
-    <div class="overflow-hidden relative">
-        <table class="w-full table-fixed border-collapse text-left">
-            <thead class="bg-slate-50/50 border-b border-slate-100 dark:border-slate-700 dark:bg-slate-800/70">
+    <div class="schedule-table-wrap overflow-hidden relative">
+        <table class="schedule-desktop-table w-full table-fixed border-collapse text-left">
+            <thead class="schedule-table-head">
                 <tr>
-                    <th class="w-16 sm:w-20 p-3 text-center text-xs font-bold text-slate-400 border-r border-slate-200 dark:border-slate-700">${escapeHtml(t('schedule.table.time', 'Время'))}</th>`;
+                    <th class="w-16 sm:w-20 p-3 text-center text-xs font-bold border-r">${escapeHtml(t('schedule.table.time', 'Время'))}</th>`;
     weekDates.forEach(d => {
         const isToday = isSameDay(d, now);
-        html += `<th class="p-3 border-r border-slate-200 last:border-r-0 dark:border-slate-700 ${isToday ? 'bg-blue-50/70 dark:bg-blue-950/30' : ''} relative">
-            ${isToday ? '<div class="absolute top-0 left-0 w-full h-1 bg-blue-500"></div>' : ''}
+        html += `<th class="schedule-day-head p-3 border-r last:border-r-0 ${isToday ? 'is-today' : ''} relative">
+            ${isToday ? '<div class="schedule-today-marker absolute top-0 left-0 w-full h-1"></div>' : ''}
             <div class="flex flex-col items-center gap-0.5">
-                <span class="text-xs uppercase tracking-widest font-bold ${isToday ? 'text-blue-600 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">${escapeHtml(formatUiDate(d, {weekday: 'short'}))}</span>
-                <span class="text-xl font-black ${isToday ? 'text-blue-700 dark:text-blue-200' : 'text-slate-800 dark:text-slate-100'}">${d.getDate()}</span>
+                <span class="schedule-day-label text-xs uppercase tracking-widest font-bold">${escapeHtml(formatUiDate(d, {weekday: 'short'}))}</span>
+                <span class="schedule-day-number text-xl font-black">${d.getDate()}</span>
             </div>
         </th>`;
     });
-    html += `</tr></thead><tbody class="divide-y divide-slate-100 relative">`;
+    html += `</tr></thead><tbody class="schedule-table-body relative">`;
 
     FIXED_TIMES.forEach(timeSlot => {
         const timeStr = timeSlot.start;
@@ -489,17 +489,17 @@ function renderDesktopGrid(lessons) {
         const slotEndMins = hEnd * 60 + mEnd;
         const isCurrentSlot = (currentMinutes >= slotStartMins && currentMinutes <= slotEndMins);
 
-        html += `<tr>
-            <td class="p-2 border-r border-slate-100 align-top text-center bg-slate-50/30 relative dark:border-slate-700 dark:bg-slate-800/40">
-                <div class="text-xs font-black ${isCurrentSlot ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}">${timeSlot.start}</div>
-                <div class="text-[10px] font-medium text-slate-400">${timeSlot.end}</div>
+        html += `<tr class="border-t">
+            <td class="schedule-time-cell p-2 border-r align-top text-center relative">
+                <div class="schedule-time-start text-xs font-black ${isCurrentSlot ? 'text-red-500' : ''}">${timeSlot.start}</div>
+                <div class="schedule-time-end text-[10px] font-medium">${timeSlot.end}</div>
                 ${isCurrentSlot ? '<div class="absolute top-1/2 right-[-5px] w-2 h-2 rounded-full bg-red-500 z-20 transform -translate-y-1/2 shadow-[0_0_8px_rgba(239,68,68,0.8)]"></div>' : ''}
             </td>`;
         weekDates.forEach(d => {
             const dateStr = getISODateStr(d);
             const slotLessons = gridData[dateStr]?.[timeStr] ||[];
             const isToday = isSameDay(d, now);
-            html += `<td class="p-1.5 border-r border-slate-100 last:border-r-0 align-top dark:border-slate-700 ${isToday ? 'bg-blue-50/30 dark:bg-blue-950/20' : ''} hover:bg-slate-50 transition-colors relative dark:hover:bg-slate-800">
+            html += `<td class="schedule-slot-cell p-1.5 border-r last:border-r-0 align-top ${isToday ? 'is-today' : ''} transition-colors relative">
                 ${isToday && isCurrentSlot ? '<div class="absolute top-1/2 left-0 w-full h-[2px] bg-red-400 z-10 pointer-events-none opacity-50"></div>' : ''}
                 <div class="flex flex-col gap-1.5 h-full">
                     ${slotLessons.map(l => renderCard(l, true)).join('')}
@@ -582,27 +582,27 @@ function renderCard(l, isDesktop) {
         const teacherLabel = showFullLecturerName ? l.lecturer_title : teacherShort;
         const safeTeacherLabel = escapeHtml(teacherLabel || '');
         return `
-        <div class="p-2.5 sm:p-3 rounded-2xl border ${color.border} ${color.bg} shadow-sm transition-transform hover:-translate-y-0.5 hover:shadow-md flex flex-col h-full min-h-[110px]">
+        <div class="lesson-card ${color.bg} p-2.5 sm:p-3 rounded-2xl border transition-transform hover:-translate-y-0.5 hover:shadow-md flex flex-col h-full min-h-[110px]">
             <div class="flex justify-between items-start gap-1 mb-1.5">
-                <div class="text-[10px] font-black uppercase tracking-wider ${color.text} truncate" title="${safeKind}">
+                <div class="lesson-kind text-[10px] font-black uppercase tracking-wider truncate" title="${safeKind}">
                     ${safeKind}
                 </div>
                 ${l.module ? `
-                    <span class="px-1.5 py-0.5 rounded text-[8px] font-bold bg-white text-slate-600 truncate max-w-[60px] border border-slate-100 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" title="${safeModule}">
+                    <span class="lesson-module px-1.5 py-0.5 rounded text-[8px] font-bold truncate max-w-[60px] border shadow-sm" title="${safeModule}">
                         ${safeModule}
                     </span>` : ''}
             </div>
-            <div class="font-bold text-slate-800 text-[13px] leading-snug line-clamp-3 mb-2 flex-grow dark:text-slate-100" title="${safeDiscipline}">
+            <div class="lesson-title font-bold text-[13px] leading-snug line-clamp-3 mb-2 flex-grow" title="${safeDiscipline}">
                 ${safeDiscipline}
             </div>
             <div class="flex flex-col gap-1">
-                <div class="flex items-center gap-1 text-[10px] font-medium text-slate-700 hover:text-blue-600 cursor-pointer transition-colors dark:text-slate-300 dark:hover:text-blue-300"
+                <div class="lesson-meta flex items-center gap-1 text-[10px] font-medium hover:text-blue-600 cursor-pointer transition-colors"
                      onclick="copyToClipboard('${safeAuditoriumJs}', event)" title="${roomTitle}">
                     <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     <span class="truncate">${safeAuditorium}</span>
                 </div>
                 ${teacherLabel ? `
-                <div class="flex items-center gap-1 text-[10px] font-medium text-slate-700 hover:text-blue-600 cursor-pointer transition-colors dark:text-slate-300 dark:hover:text-blue-300"
+                <div class="lesson-meta flex items-center gap-1 text-[10px] font-medium hover:text-blue-600 cursor-pointer transition-colors"
                      onclick="copyToClipboard('${safeLecturerJs}', event)" title="${teacherTitle}">
                     <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
                     <span class="truncate">${safeTeacherLabel}</span>
@@ -610,7 +610,6 @@ function renderCard(l, isDesktop) {
             </div>
         </div>`;
     }
-    const mobileBadgeBg = color.bg.includes('/') ? color.bg.split('/')[0] : color.bg;
     return `
     <article class="schedule-feed-card">
         <div class="schedule-feed-card-head">
@@ -618,14 +617,14 @@ function renderCard(l, isDesktop) {
                 <span class="schedule-feed-card-start">${escapeHtml(l.beginLesson || '')}</span>
                 <span class="schedule-feed-card-end">${escapeHtml(l.endLesson || '')}</span>
             </div>
-            <span class="schedule-feed-card-kind px-2 py-0.5 rounded-md text-[10px] font-black tracking-wider ${color.text} ${mobileBadgeBg} border ${color.border}">
+            <span class="schedule-feed-card-kind lesson-card ${color.bg} lesson-kind px-2 py-0.5 rounded-md text-[10px] font-black tracking-wider border">
                 ${safeKind}
             </span>
         </div>
         <div class="schedule-feed-card-body">
             <div class="schedule-feed-card-title">${safeDiscipline}</div>
             ${l.module ? `
-                <span class="schedule-feed-card-module inline-flex w-fit max-w-full rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+                <span class="schedule-feed-card-module lesson-module inline-flex w-fit max-w-full rounded-md border px-2 py-1 text-[10px] font-bold">
                     ${safeModule}
                 </span>` : ''}
         </div>
@@ -647,7 +646,7 @@ function renderCard(l, isDesktop) {
 }
 
 function getBadgeColor(kind) {
-    if (!kind) return { bg: 'bg-slate-50 dark:bg-slate-800', border: 'border-slate-200 dark:border-slate-700', text: 'text-slate-600 dark:text-slate-400' };
+    if (!kind) return { bg: '', border: '', text: 'lesson-kind' };
     const k = kind.toLowerCase();
     const isLecture = k.includes('\u043b\u0435\u043a\u0446') || k.includes('lecture');
     const isPractice =
@@ -663,10 +662,10 @@ function getBadgeColor(kind) {
         k.includes('credit') ||
         k.includes('test');
 
-    if (isLecture) return { bg: 'bg-emerald-50/60 dark:bg-emerald-950/30', border: 'border-emerald-200 dark:border-emerald-900/70', text: 'text-emerald-700 dark:text-emerald-300' };
-    if (isPractice) return { bg: 'bg-amber-50/60 dark:bg-amber-950/30', border: 'border-amber-200 dark:border-amber-900/70', text: 'text-amber-700 dark:text-amber-300' };
-    if (isExamLike) return { bg: 'bg-rose-50/60 dark:bg-rose-950/30', border: 'border-rose-200 dark:border-rose-900/70', text: 'text-rose-700 dark:text-rose-300' };
-    return { bg: 'bg-blue-50/60 dark:bg-blue-950/30', border: 'border-blue-200 dark:border-blue-900/70', text: 'text-blue-700 dark:text-blue-300' };
+    if (isLecture) return { bg: 'lesson-card--lecture', border: '', text: 'lesson-kind' };
+    if (isPractice) return { bg: 'lesson-card--seminar', border: '', text: 'lesson-kind' };
+    if (isExamLike) return { bg: 'lesson-card--exam', border: '', text: 'lesson-kind' };
+    return { bg: '', border: '', text: 'lesson-kind' };
 }
 
 function debounce(func, timeout = 300){

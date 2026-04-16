@@ -18,7 +18,9 @@
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        const isDarkTheme = localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = isDarkTheme ? 'dark' : 'light';
+        if (isDarkTheme) {
             document.documentElement.classList.add('dark');
         } else {
             document.documentElement.classList.remove('dark');
@@ -26,7 +28,81 @@
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
     <style>
+        :root {
+            color-scheme: light;
+            --schedule-page-bg: #f8fafc;
+            --schedule-text: #0f172a;
+            --schedule-muted: #64748b;
+            --schedule-panel: #ffffff;
+            --schedule-panel-soft: #f8fafc;
+            --schedule-panel-border: #e2e8f0;
+            --schedule-grid-bg: #ffffff;
+            --schedule-grid-head: #f1f5f9;
+            --schedule-grid-time: #f8fafc;
+            --schedule-grid-cell: #ffffff;
+            --schedule-grid-hover: #f8fafc;
+            --schedule-grid-today: #eff6ff;
+            --schedule-grid-today-strong: #dbeafe;
+            --schedule-grid-border: #e2e8f0;
+            --schedule-grid-text: #0f172a;
+            --schedule-grid-muted: #64748b;
+            --schedule-card-shadow: 0 16px 32px -28px rgba(15, 23, 42, 0.45);
+            --schedule-active-control-bg: #0f172a;
+            --schedule-active-control-text: #ffffff;
+            --lesson-lecture-bg: #ecfdf5;
+            --lesson-lecture-border: #86efac;
+            --lesson-lecture-text: #047857;
+            --lesson-seminar-bg: #fffbeb;
+            --lesson-seminar-border: #fcd34d;
+            --lesson-seminar-text: #b45309;
+            --lesson-exam-bg: #fff1f2;
+            --lesson-exam-border: #fda4af;
+            --lesson-exam-text: #be123c;
+            --lesson-default-bg: #eff6ff;
+            --lesson-default-border: #93c5fd;
+            --lesson-default-text: #1d4ed8;
+        }
+        html.dark,
+        html[data-theme="dark"] {
+            color-scheme: dark;
+            --schedule-page-bg: #111c35;
+            --schedule-text: #f8fafc;
+            --schedule-muted: #cbd5e1;
+            --schedule-panel: #192844;
+            --schedule-panel-soft: #203453;
+            --schedule-panel-border: #405778;
+            --schedule-grid-bg: #314762;
+            --schedule-grid-head: #2a3e5b;
+            --schedule-grid-time: #283b57;
+            --schedule-grid-cell: #314762;
+            --schedule-grid-hover: #3a526f;
+            --schedule-grid-today: #354e7b;
+            --schedule-grid-today-strong: #42d4f4;
+            --schedule-grid-border: rgba(226, 232, 240, 0.42);
+            --schedule-grid-text: #f8fafc;
+            --schedule-grid-muted: #dbe6f6;
+            --schedule-card-shadow: none;
+            --schedule-active-control-bg: #243653;
+            --schedule-active-control-text: #ffffff;
+            --lesson-lecture-bg: #214f5a;
+            --lesson-lecture-border: #1e8c78;
+            --lesson-lecture-text: #7cf4d2;
+            --lesson-seminar-bg: #4b424f;
+            --lesson-seminar-border: #9a563f;
+            --lesson-seminar-text: #fde047;
+            --lesson-exam-bg: #543d4a;
+            --lesson-exam-border: #b4535e;
+            --lesson-exam-text: #fecdd3;
+            --lesson-default-bg: #2f4c6b;
+            --lesson-default-border: #5b86c8;
+            --lesson-default-text: #bfdbfe;
+        }
         body { font-family: 'Inter', sans-serif; }
+        body.schedule-page {
+            background: var(--schedule-page-bg);
+            color: var(--schedule-text);
+            transition: background-color .2s ease, color .2s ease;
+        }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
@@ -38,6 +114,120 @@
         /* Стили универсальной шапки */
         .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255, 255, 255, 0.3); }
         html.dark .glass { background: rgba(15, 23, 42, 0.8); border-bottom: 1px solid rgba(30, 41, 59, 0.8); }
+        .schedule-shell {
+            background: var(--schedule-panel);
+            border-color: var(--schedule-panel-border);
+            color: var(--schedule-text);
+        }
+        .schedule-control-panel {
+            background: var(--schedule-panel);
+        }
+        .schedule-control-band {
+            background: var(--schedule-panel-soft);
+            border-color: var(--schedule-panel-border);
+        }
+        .schedule-grid-surface {
+            background: var(--schedule-grid-bg);
+        }
+        .schedule-table-wrap {
+            background: var(--schedule-grid-bg);
+            color: var(--schedule-grid-text);
+        }
+        .schedule-desktop-table {
+            background: var(--schedule-grid-bg);
+            color: var(--schedule-grid-text);
+        }
+        .schedule-table-head {
+            background: var(--schedule-grid-head);
+            border-bottom: 1px solid var(--schedule-grid-border);
+        }
+        .schedule-table-head th,
+        .schedule-table-body tr,
+        .schedule-time-cell,
+        .schedule-slot-cell {
+            border-color: var(--schedule-grid-border);
+        }
+        .schedule-table-body tr {
+            border-top: 1px solid var(--schedule-grid-border);
+        }
+        .schedule-day-head {
+            background: var(--schedule-grid-head);
+        }
+        .schedule-day-head.is-today {
+            background: var(--schedule-grid-today);
+        }
+        .schedule-today-marker {
+            background: var(--schedule-grid-today-strong);
+        }
+        .schedule-time-cell {
+            background: var(--schedule-grid-time);
+        }
+        .schedule-time-start,
+        .schedule-day-number {
+            color: var(--schedule-grid-text);
+        }
+        .schedule-time-end,
+        .schedule-day-label {
+            color: var(--schedule-grid-muted);
+        }
+        .schedule-slot-cell {
+            background: var(--schedule-grid-cell);
+        }
+        .schedule-slot-cell.is-today {
+            background: var(--schedule-grid-today);
+        }
+        .schedule-slot-cell:hover {
+            background: var(--schedule-grid-hover);
+        }
+        .lesson-card {
+            background: var(--lesson-default-bg);
+            border-color: var(--lesson-default-border);
+            color: var(--schedule-grid-text);
+            box-shadow: var(--schedule-card-shadow);
+        }
+        .lesson-card--lecture {
+            background: var(--lesson-lecture-bg);
+            border-color: var(--lesson-lecture-border);
+        }
+        .lesson-card--seminar {
+            background: var(--lesson-seminar-bg);
+            border-color: var(--lesson-seminar-border);
+        }
+        .lesson-card--exam {
+            background: var(--lesson-exam-bg);
+            border-color: var(--lesson-exam-border);
+        }
+        .lesson-kind {
+            color: var(--lesson-default-text);
+        }
+        .lesson-card--lecture .lesson-kind {
+            color: var(--lesson-lecture-text);
+        }
+        .lesson-card--seminar .lesson-kind {
+            color: var(--lesson-seminar-text);
+        }
+        .lesson-card--exam .lesson-kind {
+            color: var(--lesson-exam-text);
+        }
+        .lesson-title,
+        .lesson-meta {
+            color: var(--schedule-grid-text);
+        }
+        .lesson-module {
+            background: color-mix(in srgb, var(--schedule-panel) 82%, transparent);
+            border-color: var(--schedule-panel-border);
+            color: var(--schedule-muted);
+        }
+        .schedule-feed-card-kind.lesson-card {
+            box-shadow: none;
+        }
+        .schedule-view-active {
+            background: var(--schedule-active-control-bg);
+            color: var(--schedule-active-control-text);
+        }
+        .schedule-view-idle {
+            color: var(--schedule-muted);
+        }
         .nav-hidden { transform: translateY(-100%); opacity: 0; }
         .nav-visible { transform: translateY(0); opacity: 1; }
         .mpb-switch {
@@ -80,7 +270,7 @@
         }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
+<body class="schedule-page bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
     <!-- UNIVERSAL HEADER -->
     <nav class="glass fixed top-0 w-full z-50 transition-all duration-300 nav-visible" id="navbar">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -157,9 +347,9 @@
             <section id="calendarSubscriptionSection" class="hidden mb-4 md:mb-6"></section>
 
             <!-- ГЛАВНЫЙ БЛОК РАСПИСАНИЯ -->
-            <div id="mainScheduleBlock" class="bg-white rounded-3xl md:rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col w-full min-h-[500px] dark:border-slate-700 dark:bg-slate-800">
+            <div id="mainScheduleBlock" class="schedule-shell bg-white rounded-3xl md:rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col w-full min-h-[500px] dark:border-slate-700 dark:bg-slate-800">
 
-                <div id="scheduleControls" class="hidden flex flex-col bg-white dark:bg-slate-800">
+                <div id="scheduleControls" class="schedule-control-panel hidden flex flex-col bg-white dark:bg-slate-800">
                     <!-- Верхний ряд: Название + Meta (Icon) + Вид -->
                     <div class="flex items-center justify-between p-4 md:px-6 md:py-4 border-b border-slate-100 dark:border-slate-700">
                         <div class="flex items-center gap-3">
@@ -181,7 +371,7 @@
                     </div>
 
                     <!-- Нижний ряд: Навигация + Фильтры -->
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 md:px-6 md:py-4 gap-4 border-b border-slate-100 bg-slate-50/30 dark:border-slate-700 dark:bg-slate-900/40">
+                    <div class="schedule-control-band flex flex-col sm:flex-row sm:items-center justify-between p-4 md:px-6 md:py-4 gap-4 border-b border-slate-100 bg-slate-50/30 dark:border-slate-700 dark:bg-slate-900/40">
                         <div class="flex items-center gap-2">
                             <button onclick="changeWeek(-1)" class="p-2.5 bg-white hover:bg-slate-50 rounded-xl text-slate-600 shadow-sm border border-slate-200 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
@@ -201,7 +391,7 @@
                     </div>
 
                     <!-- Панель фильтров -->
-                    <div id="moduleFilterSection" class="p-4 md:px-6 md:py-5 bg-slate-50 border-b border-slate-100 hidden shadow-inner dark:border-slate-700 dark:bg-slate-900">
+                    <div id="moduleFilterSection" class="schedule-control-band p-4 md:px-6 md:py-5 bg-slate-50 border-b border-slate-100 hidden shadow-inner dark:border-slate-700 dark:bg-slate-900">
                         <div id="filterContent" class="space-y-4">
                             <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                                 <div class="flex flex-wrap items-center gap-5">
@@ -232,7 +422,7 @@
                     </div>
                 </div>
 
-                <div id="scheduleGridContent" class="relative bg-white flex-grow dark:bg-slate-800">
+                <div id="scheduleGridContent" class="schedule-grid-surface relative bg-white flex-grow dark:bg-slate-800">
                     <div id="offlineWarning" class="hidden m-3 p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-2 text-amber-800 fade-in">
                         <svg class="w-4 h-4 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                         <span data-i18n="schedule.offline.warning" class="text-xs md:text-sm font-medium">ВУЗ недоступен. Загружена сохраненная копия.</span>
@@ -252,9 +442,9 @@
 
     <script src="/js/runtime_config.js?v=1"></script>
     <script src="/js/ui_utils.js?v=1"></script>
-    <script src="/js/navbar.js?v=20"></script>
-    <script src="/js/schedule.js?v=21"></script>
-    <script src="/js/calendar_sync.js?v=3"></script>
-    <script src="/js/schedule_ux.js?v=6"></script>
+    <script src="/js/navbar.js?v=21"></script>
+    <script src="/js/schedule.js?v=22"></script>
+    <script src="/js/calendar_sync.js?v=4"></script>
+    <script src="/js/schedule_ux.js?v=7"></script>
 </body>
 </html>
