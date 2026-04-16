@@ -11,9 +11,6 @@ TELEGRAM_PROXY_URL = get_telegram_proxy_url()
 # The DATABASE_URL is now the single source of truth, read from the environment.
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-LOG_DIR = "/app/logs"
-SCHEDULER_LOG_FILE = "scheduler.log"
-
 admin_ids_str = os.getenv("ADMIN_USER_IDS", "")
 if not admin_ids_str:
     logging.warning(

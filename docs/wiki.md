@@ -44,13 +44,14 @@ This page is a full feature map of the project: bot, website, API, scheduler, wo
 | [Stats API](#stats-api) | `/api/stats/*` | Health, profiles, exports, admin messaging, dashboards |
 | [Studio API](#studio-api) | `/api/studio/*` | Project CRUD, compile, assets, zip export, Telegram delivery |
 | [Calendar API](#calendar-api) | `/api/cal/*` | Authorized calendar config + public iCal feeds |
-| [WebSocket API](#websocket-api) | `/ws/*` | Live stats, live log stream, user-specific update stream |
+| [WebSocket API](#websocket-api) | `/ws/*` | Live stats, bot-log deprecation notice, user-specific update stream |
 
 ### Background, Data, and Ops
 
 | Feature | Entry point | Purpose |
 | --- | --- | --- |
 | [Scheduler jobs](#scheduler-jobs) | `scheduler_app/main.py` | Notifications, cache refresh, diffs, cleanup, summaries |
+| [Container logging and disk limits](#container-logging-and-disk-limits) | `docker-compose*.yml` | Console-only app logs with Docker log rotation |
 | [Celery worker tasks](#celery-worker-tasks) | `shared_lib/tasks.py` | Rendering and compile pipelines |
 | [Cache and fallback model](#cache-and-fallback-model) | Redis + `cached_schedules` | Keep schedule UX available during upstream outages |
 | [CI, deploy, and wiki sync](#ci-deploy-and-wiki-sync) | GitHub Actions + Jenkins + `deploy.sh` | Validation, publish/build, production deploy, docs sync |
@@ -727,13 +728,14 @@ Endpoints:
 Feature details:
 
 - Stats stream sends full live analytics payload when changed.
-- Bot log stream replays last lines then tails live file updates.
+- Bot log file streaming is disabled because services no longer write `.log` files.
 - User-specific stream is restricted to admins or matching Telegram user.
 
 How to use:
 
 1. Connect with authenticated websocket session/token.
 2. Subscribe to needed stream and handle reconnects on disconnect.
+3. For service logs, use `docker compose logs -f <service>` instead of `/ws/bot_log`.
 
 ## Background, Data, and Operations
 
@@ -751,7 +753,6 @@ Configured jobs:
 - `update_schedule_cache` (cron at 04:00 and 16:00): warm cache refresh.
 - `prune_inactive_subscriptions` (cron at 03:00): cleanup inactive subscriptions.
 - `send_admin_summary` (cron, every minute): checks summary schedule and sends due summaries.
-- `cleanup_old_log_files` (cron at 04:00): removes old log files.
 
 Other scheduler features:
 
@@ -759,7 +760,32 @@ Other scheduler features:
 - Telegram calls can use `TELEGRAM_PROXY_URL` with `PROXY_URL` as a backward-compatible fallback.
 - Scheduler Telegram delivery uses the same normalized proxy selection as the bot, so the local mixed `proxy` listener is used as `http://proxy:20170` when applicable.
 - RUZ calls are forced direct and bypass proxy.
-- Correlation IDs in scheduler logs.
+- Correlation IDs in scheduler stdout logs.
+
+### Container Logging And Disk Limits
+
+Source:
+
+- `bot/logger.py`
+- `fastapi_stats_app/main.py`
+- `scheduler_app/main.py`
+- `docker-compose.yml`
+- `docker-compose.prod.yml`
+
+What it does:
+
+- Bot, FastAPI, and scheduler logging is console-only through `logging.StreamHandler()`.
+- The shared `bot_logs` Docker volume and `/app/logs` mounts are removed.
+- Long-running containers use Docker `json-file` log rotation with `max-size=10m` and `max-file=3`.
+- Per-container Docker logs are capped at roughly 30 MB for `mpb-telegram-bot`, `mpb-fastapi-stats`, `mpb-worker`, `mpb-scheduler`, `postgres`, and `redis`.
+- The `/ws/bot_log` endpoint no longer tails a file and returns an informational message instead.
+
+How to use:
+
+1. Read live logs with `docker compose logs -f mpb-telegram-bot` or another service name.
+2. Use `docker compose -f docker-compose.prod.yml logs --tail=200 mpb-fastapi-stats` on production deployments.
+3. After deploying this change, remove the old named log volume only after confirming no previous stack still needs it, for example `docker volume rm matplobbot_bot_logs`.
+4. Keep the `logging` block on every long-running service that writes useful stdout/stderr output.
 
 ### Bot Startup Reliability
 
@@ -805,7 +831,7 @@ How to use:
 3. Optionally keep `GLOBAL_HTTP_PROXY_URL` or legacy `PROXY_URL` for other non-RUZ outbound traffic that still needs a process-level proxy.
 4. Do not route `RUZ` through proxy; the app now forces direct aiohttp sessions for `ruz.fa.ru`.
 5. Optionally set `BOT_POLLING_RETRY_DELAY_SECONDS` to tune the retry backoff.
-6. Watch bot logs for `Bot polling failed with a retryable network error` when diagnosing Telegram reachability problems.
+6. Watch `docker compose logs -f mpb-telegram-bot` for `Bot polling failed with a retryable network error` when diagnosing Telegram reachability problems.
 7. If the proxy container has many nodes, keep its health-check target aligned with the real destination (`api.telegram.org`) so Mihomo does not prefer nodes that only pass generic web probes.
 8. Rebuild the `proxy` container when `proxy/Dockerfile.proxy` or `proxy/proxy_config.yaml` changes, because the production stack builds that service locally instead of pulling it from GHCR.
 9. If your provider ships Xray-style JSON configs, keep the converter in `proxy/proxy_cleaner.py` aligned with the subscription format so Reality and chained dialer settings survive the translation into Mihomo YAML.

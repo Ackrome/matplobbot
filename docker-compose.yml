@@ -4,6 +4,11 @@ services:
   redis:
     image: redis:7-alpine # Using a specific version is good practice
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "6379:6379"
     volumes:
@@ -17,6 +22,11 @@ services:
   postgres:
     image: postgres:15-alpine
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file: ./.env
     ports:
       - "5432:5432"
@@ -34,13 +44,17 @@ services:
       dockerfile: Dockerfile.bot
     restart: unless-stopped
     stop_grace_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file: ./.env # env_file is sufficient
     environment:
       - REDIS_URL=redis://redis:6379/0
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - bot_logs:/app/logs        # Именованный volume для логов бота
       - ./examples:/app/examples    # Volume для файлов-примеров
     depends_on:
       mpb-worker:
@@ -58,6 +72,11 @@ services:
       dockerfile: scheduler_app/Dockerfile
     restart: unless-stopped
     stop_grace_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "9584:9584"
     env_file: ./.env # env_file is sufficient
@@ -65,8 +84,6 @@ services:
       - TZ=Europe/Moscow
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    volumes:
-      - bot_logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
@@ -82,11 +99,14 @@ services:
       dockerfile: fastapi_stats_app/Dockerfile # Путь к Dockerfile для FastAPI приложения
     restart: unless-stopped
     stop_grace_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "9583:9583"
     env_file: ./.env
-    volumes:
-      - bot_logs:/app/logs        # Используем тот же volume для доступа к логам бота
     depends_on:
       mpb-telegram-bot:
         condition: service_started # API can start once the bot container starts
@@ -103,11 +123,14 @@ services:
       context: .
       dockerfile: Dockerfile.worker
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file: ./.env
     environment:
       - REDIS_URL=redis://redis:6379/0
-    volumes:
-      - bot_logs:/app/logs
     depends_on:
       redis:
         condition: service_healthy
@@ -144,7 +167,6 @@ services:
     command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
 
 volumes:
-  bot_logs:
   redis_data:
   postgres_data:
   caddy_data:

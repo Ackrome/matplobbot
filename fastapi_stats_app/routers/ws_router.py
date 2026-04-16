@@ -3,10 +3,8 @@ import asyncio
 import datetime
 import json
 import logging
-import os
 from typing import Any
 
-import aiofiles
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, WebSocketException, status
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -24,7 +22,6 @@ from shared_lib.database import (
 from shared_lib.redis_client import redis_client
 
 from ..auth import get_ws_user
-from ..config import BOT_LOG_FILE_NAME, LOG_DIR
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -192,47 +189,11 @@ async def websocket_total_actions_endpoint(websocket: WebSocket, user: dict = De
 
 
 async def stream_log_file_to_websocket(websocket: WebSocket, manager: ConnectionManager):
-    bot_log_full_path = os.path.join(LOG_DIR, BOT_LOG_FILE_NAME)
-
-    try:
-        if os.path.exists(bot_log_full_path):
-            async with aiofiles.open(bot_log_full_path, encoding="utf-8", errors="ignore") as f:
-                lines = await f.readlines()
-                for line in lines[-50:]:
-                    if not await manager.send_personal_text(line.strip(), websocket):
-                        return
-
-                if not await manager.send_personal_text(
-                    "--- LIVE LOG STREAM STARTED ---", websocket
-                ):
-                    return
-        else:
-            if not await manager.send_personal_text(
-                f"Waiting for log file: {bot_log_full_path}...", websocket
-            ):
-                return
-
-        while not os.path.exists(bot_log_full_path):
-            await asyncio.sleep(2)
-            if websocket.client_state != WebSocketState.CONNECTED:
-                return
-
-        async with aiofiles.open(bot_log_full_path, encoding="utf-8", errors="ignore") as f:
-            await f.seek(0, os.SEEK_END)
-
-            while websocket.client_state == WebSocketState.CONNECTED:
-                line = await f.readline()
-                if line:
-                    success = await manager.send_personal_text(line.strip(), websocket)
-                    if not success:
-                        break
-                else:
-                    await asyncio.sleep(0.5)
-
-    except Exception as e:
-        if 'Cannot call "send"' not in str(e):
-            logger.error(f"Log Stream Error: {e}")
-            await manager.send_personal_text(f"Error reading log: {str(e)}", websocket)
+    await manager.send_personal_text(
+        "File-based bot log streaming is disabled. Use `docker compose logs -f "
+        "mpb-telegram-bot` or the Docker logging driver output instead.",
+        websocket,
+    )
 
 
 @router.websocket("/ws/bot_log")
@@ -241,9 +202,10 @@ async def websocket_bot_log_endpoint(websocket: WebSocket, user: dict = Depends(
     try:
         await stream_log_file_to_websocket(websocket, log_manager)
     except WebSocketDisconnect:
-        await log_manager.disconnect(websocket)
+        pass
     except Exception as e:
         logger.error(f"Bot Log WS Error: {e}")
+    finally:
         await log_manager.disconnect(websocket)
 
 

@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 
 import aiohttp
 import aiohttp.web
@@ -10,11 +9,10 @@ from dotenv import load_dotenv
 # Load environment variables from .env before importing config modules that read os.getenv().
 load_dotenv()
 
-from scheduler_app.config import BOT_TOKEN, LOG_DIR, SCHEDULER_LOG_FILE, TELEGRAM_PROXY_URL
+from scheduler_app.config import BOT_TOKEN, TELEGRAM_PROXY_URL
 from scheduler_app.http_client import build_telegram_http_client_config
 from scheduler_app.jobs import (
     check_for_schedule_updates,
-    cleanup_old_log_files,
     prune_inactive_subscriptions,
     send_admin_summary,
     send_daily_schedules,
@@ -25,15 +23,11 @@ from shared_lib.request_context import configure_correlation_logging
 from shared_lib.services.university_api import create_ruz_api_client
 
 # --- Logging Setup ---
-os.makedirs(LOG_DIR, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - [cid=%(correlation_id)s] - %(name)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
-    handlers=[
-        logging.FileHandler(os.path.join(LOG_DIR, SCHEDULER_LOG_FILE), encoding="utf-8"),
-        logging.StreamHandler(),
-    ],
+    handlers=[logging.StreamHandler()],
 )
 configure_correlation_logging()
 aps_logger = logging.getLogger("apscheduler")
@@ -116,14 +110,6 @@ async def main():
                     "telegram_request_kwargs": telegram_request_kwargs,
                 },
             )
-            scheduler.add_job(
-                cleanup_old_log_files,
-                trigger="cron",
-                hour=4,
-                minute=0,
-                kwargs={"days_to_keep": 30},
-            )
-
             async def health_check(request):
                 try:
                     async with get_session() as db_session:

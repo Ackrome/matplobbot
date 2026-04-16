@@ -3,11 +3,6 @@ import os
 # --- PostgreSQL Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# --- Logging Configuration ---
-LOG_DIR = "/app/logs"
-BOT_LOG_FILE_NAME = "bot.log"
-FASTAPI_LOG_FILE_NAME = "fastapi_app.log"
-
 # --- Admin Panel Auth ---
 STATS_USER = os.getenv("STATS_USER", "admin")
 STATS_PASS = os.getenv("STATS_PASS", "admin")

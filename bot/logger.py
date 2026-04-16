@@ -1,5 +1,4 @@
 import logging
-import os
 import time
 
 from aiogram import BaseMiddleware
@@ -9,20 +8,12 @@ from shared_lib.request_context import configure_correlation_logging
 
 from .database import log_user_action
 
-LOG_DIR = "/app/logs"
-LOG_FILE = os.path.join(LOG_DIR, "bot.log")
-
-os.makedirs(LOG_DIR, exist_ok=True)
-
 logging.getLogger("aiogram.event").setLevel(logging.WARNING)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - [cid=%(correlation_id)s] - %(name)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
-    handlers=[
-        logging.FileHandler(LOG_FILE, encoding="utf-8"),
-        logging.StreamHandler(),
-    ],
+    handlers=[logging.StreamHandler()],
 )
 configure_correlation_logging()
 

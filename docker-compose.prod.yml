@@ -5,6 +5,11 @@ services:
   redis: # Added redis service for production consistency
     image: redis:7-alpine
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     # The port is exposed to the host, but other services will connect via the internal Docker network.
     # If you don't need to access Redis from outside the Docker host, you can remove the 'ports' section.
     # ports:
@@ -20,6 +25,11 @@ services:
   postgres:
     image: postgres:15-alpine
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file: ./.env
     ports:
       - "5432:5432"
@@ -35,9 +45,12 @@ services:
     image: ghcr.io/ackrome/matplobbot-bot:${BOT_TAG:-latest}
     restart: unless-stopped
     stop_grace_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file: ./.env
-    volumes:
-      - bot_logs:/app/logs # Logs are persisted in a named volume
     depends_on:
       mpb-worker:
         condition: service_started
@@ -55,13 +68,16 @@ services:
     image: ghcr.io/ackrome/matplobbot-scheduler:${SCHEDULER_TAG:-latest}
     restart: unless-stopped
     stop_grace_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "9584:9584"
     env_file: ./.env
     environment:
       - TZ=Europe/Moscow
-    volumes:
-      - bot_logs:/app/logs
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -87,13 +103,16 @@ services:
   mpb-worker:
     image: ghcr.io/ackrome/matplobbot-worker:${WORKER_TAG:-latest} # <--- Use tag from ENV
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     # command is baked into Dockerfile.worker, but can be overridden if needed
     # command: celery -A shared_lib.celery_app worker --loglevel=info --concurrency=2
     env_file: ./.env
     environment:
       - REDIS_URL=redis://redis:6379/0
-    volumes:
-      - bot_logs:/app/logs
     depends_on:
       redis:
         condition: service_healthy
@@ -102,11 +121,14 @@ services:
     image: ghcr.io/ackrome/matplobbot-api:${API_TAG:-latest}
     restart: unless-stopped
     stop_grace_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file: ./.env
     ports:
       - "127.0.0.1:9583:9583"
-    volumes:
-      - bot_logs:/app/logs # All services write to the same log volume
     depends_on:
       mpb-telegram-bot:
         condition: service_started
@@ -159,7 +181,6 @@ services:
       retries: 3
 
 volumes:
-  bot_logs:
   redis_data:
   postgres_data:
   caddy_data:

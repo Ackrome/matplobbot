@@ -12,8 +12,8 @@ import tempfile
 # We rely on it being in the PATH, which is configured in the Dockerfile.
 MMDC_PATH = shutil.which("mmdc") or "mmdc"
 PUPPETEER_CONFIG = "/app/bot/puppeteer-config.json"
-# A file to log the paths of generated temporary files for later cleanup.
-CLEANUP_LOG_FILE = "/tmp/pandoc_cleanup.log"
+# A manifest of generated temporary files for later cleanup by the parent process.
+CLEANUP_MANIFEST_FILE = "/tmp/pandoc_cleanup_paths.txt"
 
 generated_files = []
 
@@ -96,13 +96,12 @@ def main():
         if generated_files:
             try:
                 # --- START: Improvement ---
-                # Ensure the directory for the log file exists to prevent errors.
-                log_dir = os.path.dirname(CLEANUP_LOG_FILE)
-                if not os.path.exists(log_dir):
-                    os.makedirs(log_dir)
+                manifest_dir = os.path.dirname(CLEANUP_MANIFEST_FILE)
+                if not os.path.exists(manifest_dir):
+                    os.makedirs(manifest_dir)
                 # --- END: Improvement ---
 
-                with open(CLEANUP_LOG_FILE, "a", encoding="utf-8") as f:
+                with open(CLEANUP_MANIFEST_FILE, "a", encoding="utf-8") as f:
                     for path in generated_files:
                         f.write(path + "\n")
             except Exception as e:

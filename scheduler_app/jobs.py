@@ -3,7 +3,6 @@ import collections
 import hashlib
 import json
 import logging
-import os
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -29,7 +28,7 @@ from shared_lib.services.schedule_service import diff_schedules, format_schedule
 # We need to import these from the bot's services.
 from shared_lib.services.university_api import RuzAPIClient, RuzAPIError
 
-from .config import BOT_TOKEN, LOG_DIR
+from .config import BOT_TOKEN
 
 logger = logging.getLogger(__name__)
 
@@ -464,35 +463,6 @@ async def prune_inactive_subscriptions():
             logger.info(f"Successfully pruned {deleted_count} old, inactive subscriptions.")
     except Exception as e:
         logger.error(f"Critical error in prune_inactive_subscriptions job: {e}", exc_info=True)
-
-
-async def cleanup_old_log_files(days_to_keep: int = 30):
-    """
-    Periodically cleans up old log files.
-    """
-    logger.info(f"Starting job to clean up log files older than {days_to_keep} days...")
-    try:
-        now = datetime.now()
-        cutoff = now - timedelta(days=days_to_keep)
-
-        if not os.path.exists(LOG_DIR):
-            return
-
-        deleted_count = 0
-        for filename in os.listdir(LOG_DIR):
-            file_path = os.path.join(LOG_DIR, filename)
-            if os.path.isfile(file_path) and filename.endswith(".log"):
-                try:
-                    file_mod_time = datetime.fromtimestamp(os.path.getmtime(file_path))
-                    if file_mod_time < cutoff:
-                        os.remove(file_path)
-                        logger.info(f"Deleted old log file: {file_path}")
-                        deleted_count += 1
-                except Exception as e:
-                    logger.error(f"Error processing log file {file_path}: {e}")
-        logger.info(f"Log cleanup finished. Deleted {deleted_count} old log files.")
-    except Exception as e:
-        logger.error(f"Critical error in cleanup_old_log_files job: {e}", exc_info=True)
 
 
 async def send_admin_summary(

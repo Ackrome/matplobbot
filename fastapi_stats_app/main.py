@@ -1,5 +1,4 @@
 import logging
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path  # Добавляем импорт pathlib
 
@@ -7,10 +6,6 @@ import aiohttp
 from dotenv import load_dotenv  # Добавьте импорт
 from fastapi.middleware.cors import CORSMiddleware
 
-from fastapi_stats_app.config import (  # Import logging constants
-    FASTAPI_LOG_FILE_NAME,
-    LOG_DIR,
-)
 from shared_lib.egress import configure_process_http_proxy_env, get_global_http_proxy_url
 from shared_lib.request_context import configure_correlation_logging
 
@@ -20,18 +15,14 @@ configure_process_http_proxy_env(
     get_global_http_proxy_url(),
     no_proxy_hosts=("ruz.fa.ru",),
 )
-# Определяем пути для логгирования FastAPI приложения
-LOG_FILE_FASTAPI = os.path.join(LOG_DIR, FASTAPI_LOG_FILE_NAME)  # Use constants from config
-
 # Настройка логгирования для FastAPI приложения
 # Reuse the same logging format as in bot/logger.py
 # --- ВАЖНО: Эта конфигурация должна быть выполнена ДО импорта других модулей приложения ---
-os.makedirs(LOG_DIR, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - [cid=%(correlation_id)s] - %(name)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
-    handlers=[logging.FileHandler(LOG_FILE_FASTAPI, encoding="utf-8"), logging.StreamHandler()],
+    handlers=[logging.StreamHandler()],
 )
 configure_correlation_logging()
 logger = logging.getLogger(__name__)  # Получаем логгер после базовой конфигурации
