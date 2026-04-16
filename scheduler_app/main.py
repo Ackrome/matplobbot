@@ -110,6 +110,7 @@ async def main():
                     "telegram_request_kwargs": telegram_request_kwargs,
                 },
             )
+
             async def health_check(request):
                 try:
                     async with get_session() as db_session:
