@@ -12,20 +12,8 @@
     <link rel="icon" sizes="192x192" href="/android-chrome-192x192.png">
     <link rel="icon" sizes="512x512" href="/android-chrome-512x512.png">
     <link rel="manifest" href="/site.webmanifest">
-    <script>
-        window.tailwind = window.tailwind || {};
-        window.tailwind.config = { darkMode: 'class' };
-    </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        const isDarkTheme = localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
-        document.documentElement.dataset.theme = isDarkTheme ? 'dark' : 'light';
-        if (isDarkTheme) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
-    </script>
+    <script src="/js/theme_bootstrap.js?v=1"></script>
+    <link rel="stylesheet" href="/css/tailwind.css?v=1">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -442,7 +430,7 @@
 
     <script src="/js/runtime_config.js?v=1"></script>
     <script src="/js/ui_utils.js?v=1"></script>
-    <script src="/js/navbar.js?v=22"></script>
+    <script src="/js/navbar.js?v=23"></script>
     <script src="/js/schedule.js?v=22"></script>
     <script src="/js/calendar_sync.js?v=4"></script>
     <script src="/js/schedule_ux.js?v=7"></script>

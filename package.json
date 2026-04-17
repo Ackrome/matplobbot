@@ -1,0 +1,12 @@
+{
+  "name": "matplobbot-frontend-build",
+  "private": true,
+  "scripts": {
+    "build:tailwind": "npm run build:tailwind:site && npm run build:tailwind:api",
+    "build:tailwind:site": "tailwindcss -c tailwind.config.js -i tailwind.input.css -o main_site_frontend/css/tailwind.css --minify",
+    "build:tailwind:api": "tailwindcss -c tailwind.config.js -i tailwind.input.css -o fastapi_stats_app/static/css/tailwind.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.17"
+  }
+}

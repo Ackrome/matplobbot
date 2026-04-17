@@ -28,6 +28,7 @@ This page is a full feature map of the project: bot, website, API, scheduler, wo
 | [Auth and account sessions](#auth-and-account-sessions) | `/login` + navbar auth actions | Sign in via Telegram or password, persist user profile |
 | [Shared navbar and i18n](#shared-navbar-and-i18n) | `main_site_frontend/js/navbar.js` | Cross-page navigation, EN/RU translations, command palette |
 | [Global dark theme](#global-dark-theme) | public website navbar + `<head>` theme init | Site-wide light/dark mode, persisted per browser |
+| [Frontend Tailwind build](#frontend-tailwind-build) | `npm run build:tailwind` | Production CSS generation for static and FastAPI pages |
 | [Schedule page](#schedule-page) | `/schedule` | Unified schedule search, filters, calendar nav, offline awareness |
 | [Calendar sync panel](#calendar-sync-panel) | Schedule page calendar section | Manage private iCal feeds and website sync profiles |
 | [Stats dashboard](#stats-dashboard) | `/stats` (admin) | Live and REST analytics, degradations, drill-downs |
@@ -366,6 +367,7 @@ Files:
 - `main_site_frontend/studio.html`
 - `main_site_frontend/login.html`
 - `main_site_frontend/register.html`
+- `main_site_frontend/js/theme_bootstrap.js`
 - `main_site_frontend/js/navbar.js`
 - `main_site_frontend/js/studio.js`
 
@@ -385,6 +387,30 @@ How to use:
 2. Click the sun/moon button next to the language switch.
 3. Or open the command palette and run `Toggle theme` / `Переключить тему`.
 4. The theme changes immediately; on the next reload the selected theme is applied before the body renders.
+
+### Frontend Tailwind Build
+
+Files:
+
+- `package.json`
+- `tailwind.config.js`
+- `tailwind.input.css`
+- `main_site_frontend/css/tailwind.css`
+- `fastapi_stats_app/static/css/tailwind.css`
+
+What it does:
+
+- Builds production Tailwind CSS locally instead of loading `cdn.tailwindcss.com` in the browser.
+- Scans static website HTML/JS and FastAPI dashboard templates/JS for utility classes.
+- Emits one stylesheet for the nginx-served site and one stylesheet for FastAPI static templates.
+- Keeps class-based dark mode enabled for both frontends.
+
+How to use:
+
+1. Run `npm install` after cloning or when dependencies change.
+2. Run `npm run build:tailwind` after changing frontend HTML or JS that uses Tailwind utilities.
+3. Serve the static site normally; pages load `/css/tailwind.css`.
+4. Serve the FastAPI app normally; templates load `/static/css/tailwind.css`.
 
 ### Schedule Page
 

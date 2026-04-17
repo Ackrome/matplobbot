@@ -13,6 +13,7 @@ dockerfile.txt
 .repomix
 repomix-output.xml
 .venv
+node_modules/
 docker-compose.test.yml
 Caddyfile.test
 main_site_frontend/test.default.conf

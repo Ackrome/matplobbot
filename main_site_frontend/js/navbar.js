@@ -1,4 +1,5 @@
-﻿const NAV_API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : "/api";
+﻿(() => {
+const NAV_API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : "/api";
 const UI_LANG_KEY = "mpb_ui_lang";
 const I18N = {
     en: {
@@ -953,3 +954,4 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     window.addEventListener("mpb-auth-token-changed", checkAuthAndRenderNavbar);
 });
+})();
