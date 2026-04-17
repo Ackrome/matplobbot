@@ -38,9 +38,9 @@ Last updated: 2026-04-10
 - [ ] **Rate Limiting:** Add Redis-based rate limiting to heavy endpoints (e.g., PDF rendering, API searches) to prevent abuse.
 
 ### P2 - Killer Features & Integrations (The "Cool" Factor)
-- [ ] **Telegram Mini App (TMA):** Integrate `/schedule` and `/studio` as seamless Web Apps inside Telegram.
+- [x] **Telegram Mini App (TMA):** Integrate `/schedule` and `/studio` as seamless Web Apps inside Telegram.
 - [ ] **Smart OCR:** Accept photos of formulas/boards, convert to LaTeX (via API), and open in Document Studio.
-- [ ] **PWA Upgrade:** Add a Service Worker to `main_site_frontend` for instant offline loading and mobile app installation.
+- [x] **PWA Upgrade:** Add a Service Worker to `main_site_frontend` for instant offline loading and mobile app installation.
 
 ### P3 - Observability & DevEx
 - [x] Add panel on site /stats page with proxy diagnostics summary (e.g. latency per server table).

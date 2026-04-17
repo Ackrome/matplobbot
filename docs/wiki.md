@@ -29,6 +29,8 @@ This page is a full feature map of the project: bot, website, API, scheduler, wo
 | [Shared navbar and i18n](#shared-navbar-and-i18n) | `main_site_frontend/js/navbar.js` | Cross-page navigation, EN/RU translations, command palette |
 | [Global dark theme](#global-dark-theme) | public website navbar + `<head>` theme init | Site-wide light/dark mode, persisted per browser |
 | [Frontend Tailwind build](#frontend-tailwind-build) | `npm run build:tailwind` | Production CSS generation for static and FastAPI pages |
+| [Telegram Mini Apps](#telegram-mini-apps) | Bot Web App buttons + `/schedule`, `/studio` | Launch schedule and Studio inside Telegram with signed auth |
+| [PWA install and offline shell](#pwa-install-and-offline-shell) | `site.webmanifest`, `service-worker.js` | Installable frontend with cached app shell |
 | [Schedule page](#schedule-page) | `/schedule` | Unified schedule search, filters, calendar nav, offline awareness |
 | [Calendar sync panel](#calendar-sync-panel) | Schedule page calendar section | Manage private iCal feeds and website sync profiles |
 | [Stats dashboard](#stats-dashboard) | `/stats` (admin) | Live and REST analytics, degradations, drill-downs |
@@ -324,6 +326,7 @@ What it does:
 
 - Supports password login/register.
 - Supports Telegram auth handoff.
+- Supports Telegram Mini App `initData` auth exchange for in-Telegram launches.
 - Stores bearer token client-side for API calls.
 - Loads `/api/auth/me` for profile and role-aware UI.
 - Applies shared EN/RU i18n toggle to auth page texts (titles, labels, hints, placeholders, buttons).
@@ -336,6 +339,62 @@ How to use:
 3. Use the navbar `EN/RU` switch to change auth page language.
 4. Sign in with Telegram or username/password.
 5. After login, navigate to schedule/studio/stats by role.
+
+### Telegram Mini Apps
+
+Files:
+
+- `bot/config.py`
+- `bot/keyboards.py`
+- `bot/handlers/base.py`
+- `main_site_frontend/schedule.html`
+- `main_site_frontend/studio.html`
+- `main_site_frontend/js/telegram_webapp.js`
+- `fastapi_stats_app/auth.py`
+- `fastapi_stats_app/routers/auth_router.py`
+
+What it does:
+
+- Adds Telegram Web App launch buttons for `/schedule?tg=1` and `/studio?tg=1` to the bot's private reply/help keyboards.
+- Adds `/studio` as a bot command that opens a Web App launch prompt.
+- Uses `PUBLIC_SITE_URL` as the public HTTPS base URL for Telegram Web App buttons.
+- Adapts `/schedule` and `/studio` to Telegram viewport, safe-area, color scheme, and theme parameters.
+- Exchanges signed Telegram Mini App `initData` at `/api/auth/telegram/webapp`, rejects stale signatures by `auth_date`, and stores the returned website JWT.
+- Replaces any stale local website JWT inside Telegram with a fresh Mini App token on launch.
+- Lets Studio wait for Mini App auth before redirecting to `/login`.
+
+How to use:
+
+1. Set `PUBLIC_SITE_URL` to the public website origin, for example `https://ivantishchenko.ru`.
+2. Start or restart the bot so the reply keyboard and `/studio` command are refreshed.
+3. In a private Telegram chat, tap `Open Schedule` or `Open Studio`.
+4. Use `/schedule?tg=1` or `/studio?tg=1` for direct Mini App testing from Telegram.
+5. Keep `BOT_TOKEN` configured in FastAPI; Mini App signed auth is rejected without it.
+6. Optionally tune `TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS` if the default 24-hour `auth_date` window is too strict for your deployment.
+
+### PWA Install And Offline Shell
+
+Files:
+
+- `main_site_frontend/site.webmanifest`
+- `main_site_frontend/service-worker.js`
+- `main_site_frontend/offline.html`
+- `main_site_frontend/js/navbar.js`
+
+What it does:
+
+- Makes the static frontend installable with app name, icons, theme colors, start URL, and shortcuts for Schedule and Studio.
+- Registers a service worker from shared `navbar.js` on pages that load the common frontend shell.
+- Pre-caches the main static pages, shared scripts/styles, icons, Schedule assets, Studio assets, and offline fallback.
+- Uses network-first navigation so fresh pages win, then cached pages/offline fallback are used when the network is unavailable.
+- Avoids intercepting same-origin `/api/*` requests so authenticated API calls are not cached by the service worker.
+
+How to use:
+
+1. Open the public site over HTTPS.
+2. Use the browser install prompt or mobile `Add to Home Screen`.
+3. After the first successful online load, reopen `/schedule` or `/studio` from the installed app.
+4. If the network is unavailable, cached shell pages load and uncached navigations fall back to `/offline.html`.
 
 ### Shared Navbar And I18n
 
@@ -584,6 +643,7 @@ Endpoints:
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `POST /api/auth/telegram`
+- `POST /api/auth/telegram/webapp`
 - `GET /api/auth/me`
 - `POST /api/auth/logout`
 - `PUT /api/auth/preferences`
@@ -591,8 +651,9 @@ Endpoints:
 How to use:
 
 1. Authenticate with login or Telegram endpoint.
-2. Pass bearer token to protected endpoints.
-3. Store/update user preferences through `/preferences`.
+2. For Telegram Mini Apps, send raw `window.Telegram.WebApp.initData` as `{ "init_data": "..." }` to `/telegram/webapp`.
+3. Pass bearer token to protected endpoints.
+4. Store/update user preferences through `/preferences`.
 
 ### Schedule API
 

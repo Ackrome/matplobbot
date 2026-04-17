@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import os
+import time
 import unittest
 from datetime import datetime, timedelta
 from types import SimpleNamespace
@@ -44,9 +45,9 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
         db.add = Mock()
         return db
 
-    def _build_webapp_init_data(self, user_data):
+    def _build_webapp_init_data(self, user_data, *, auth_date=None):
         params = {
-            "auth_date": "1710000000",
+            "auth_date": str(auth_date if auth_date is not None else int(time.time())),
             "query_id": "test-query",
             "user": json.dumps(user_data, separators=(",", ":")),
         }
@@ -140,6 +141,16 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
         tampered = init_data.replace("Ivan", "Eve")
 
         parsed = fastapi_auth.parse_verified_telegram_webapp_init_data(tampered)
+
+        self.assertIsNone(parsed)
+
+    def test_telegram_webapp_init_data_verifier_rejects_stale_payload(self):
+        init_data = self._build_webapp_init_data(
+            {"id": 12345, "first_name": "Ivan"},
+            auth_date=int((datetime.utcnow() - timedelta(days=2)).timestamp()),
+        )
+
+        parsed = fastapi_auth.parse_verified_telegram_webapp_init_data(init_data)
 
         self.assertIsNone(parsed)
 

@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import os
+import time
 from datetime import datetime, timedelta
 from urllib.parse import parse_qsl
 
@@ -30,6 +31,9 @@ SECRET_KEY = _get_jwt_secret_key()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30  # 30 days
+TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS = int(
+    os.getenv("TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS", str(60 * 60 * 24))
+)
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login", auto_error=False)
@@ -107,6 +111,22 @@ def parse_verified_telegram_webapp_init_data(init_data: str) -> dict | None:
     if not hmac.compare_digest(expected_hash, received_hash):
         return None
 
+    raw_auth_date = parsed_data.get("auth_date")
+    try:
+        auth_date = int(raw_auth_date) if raw_auth_date is not None else None
+    except (TypeError, ValueError):
+        return None
+
+    if auth_date is None:
+        return None
+
+    now = int(time.time())
+    if TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS > 0:
+        is_too_old = now - auth_date > TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS
+        is_from_future = auth_date - now > 60
+        if is_too_old or is_from_future:
+            return None
+
     raw_user = parsed_data.get("user")
     if not raw_user:
         return None
@@ -119,7 +139,7 @@ def parse_verified_telegram_webapp_init_data(init_data: str) -> dict | None:
     if not user_data.get("id") or not user_data.get("first_name"):
         return None
 
-    user_data["auth_date"] = parsed_data.get("auth_date")
+    user_data["auth_date"] = auth_date
     return user_data
 
 

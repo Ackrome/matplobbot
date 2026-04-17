@@ -30,7 +30,7 @@
     }
 
     async function exchangeInitData() {
-        if (!isTelegramLaunch || !webApp?.initData || localStorage.getItem("jwt_token")) return null;
+        if (!isTelegramLaunch || !webApp?.initData) return null;
 
         const response = await fetch(`${apiBase}/auth/telegram/webapp`, {
             method: "POST",
