@@ -4,10 +4,12 @@ import importlib
 import importlib.metadata
 import json
 import logging
+import shlex
 import sys
 
 import matplobblib
 from aiogram import Bot, Router
+from aiogram.exceptions import TelegramRetryAfter
 from aiogram.filters import Command, Filter
 from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -16,10 +18,28 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from shared_lib import database
 from shared_lib.i18n import translator
 from shared_lib.redis_client import redis_client
+from shared_lib.services.broadcast_service import (
+    DEFAULT_BROADCAST_ACTIVE_DAYS,
+    DEFAULT_BROADCAST_RATE_PER_SECOND,
+    broadcast_chunks_to_users,
+    format_broadcast_plan,
+    format_broadcast_result,
+    load_broadcast_text,
+    normalize_broadcast_rate,
+    split_telegram_message,
+)
 
 from .. import github_service
 from .. import keyboards as kb
-from ..config import *
+from ..config import ADMIN_USER_IDS
+
+BROADCAST_USAGE = (
+    "Usage:\n"
+    "/broadcast_release [--execute] [--active-days N] [--rate N] [--limit N] "
+    "[--user-id ID] [--file PATH]\n\n"
+    "Without --execute the command only previews the broadcast plan. "
+    "Default sources are docs/announcement.md when present and the current changelog."
+)
 
 
 class AdminPermissionError(Exception):
@@ -75,8 +95,75 @@ class AdminManager:
         self.router.message(Command("send_admin_summary"), AdminFilter())(
             self.send_admin_summary_command
         )
+        self.router.message(Command("broadcast_release"), AdminFilter())(
+            self.broadcast_release_command
+        )
         self.router.message(Command("set_module"), AdminFilter())(self.set_module_command)
         self.router.message(Command("set_module"), AdminFilter())(self.set_module_command)
+
+    def _parse_broadcast_command_args(self, text: str | None) -> tuple[dict | None, str | None]:
+        try:
+            tokens = shlex.split(text or "")
+        except ValueError as exc:
+            return None, f"Could not parse command options: {exc}"
+
+        args = tokens[1:]
+        options = {
+            "execute": False,
+            "active_days": DEFAULT_BROADCAST_ACTIVE_DAYS,
+            "rate": DEFAULT_BROADCAST_RATE_PER_SECOND,
+            "limit": None,
+            "user_ids": [],
+            "files": [],
+        }
+
+        index = 0
+        while index < len(args):
+            token = args[index]
+            key = token
+            value = None
+            if token.startswith("--") and "=" in token:
+                key, value = token.split("=", 1)
+
+            if key == "--execute":
+                options["execute"] = True
+                index += 1
+                continue
+
+            if key not in {"--active-days", "--rate", "--limit", "--user-id", "--file"}:
+                return None, f"Unknown option: {token}\n\n{BROADCAST_USAGE}"
+
+            if value is None:
+                index += 1
+                if index >= len(args):
+                    return None, f"Missing value for {key}\n\n{BROADCAST_USAGE}"
+                value = args[index]
+
+            try:
+                if key == "--active-days":
+                    options["active_days"] = max(1, int(value))
+                elif key == "--rate":
+                    options["rate"] = normalize_broadcast_rate(value)
+                elif key == "--limit":
+                    options["limit"] = max(1, int(value))
+                elif key == "--user-id":
+                    options["user_ids"].append(int(value))
+                elif key == "--file":
+                    options["files"].append(value)
+            except ValueError:
+                return None, f"Invalid value for {key}: {value}\n\n{BROADCAST_USAGE}"
+
+            index += 1
+
+        return options, None
+
+    async def _send_broadcast_message(self, bot: Bot, user_id: int, text: str):
+        try:
+            await bot.send_message(user_id, text)
+        except TelegramRetryAfter as exc:
+            retry_after = float(getattr(exc, "retry_after", 1) or 1)
+            await asyncio.sleep(retry_after + 1)
+            await bot.send_message(user_id, text)
 
     async def _update_library_async(self, library_name: str, lang: str):
         try:
@@ -250,6 +337,62 @@ class AdminManager:
         # Send the main summary text
         await message.answer("\n".join(summary_parts), parse_mode="Markdown")
 
+    async def broadcast_release_command(self, message: Message, bot: Bot):
+        options, error = self._parse_broadcast_command_args(message.text)
+        if error or not options:
+            await message.answer(error or BROADCAST_USAGE)
+            return
+
+        try:
+            broadcast_text, files = load_broadcast_text(options["files"] or None)
+            chunks = split_telegram_message(broadcast_text)
+        except Exception as exc:
+            await message.answer(f"Could not prepare broadcast sources: {exc}")
+            return
+
+        if options["user_ids"]:
+            target_user_ids = options["user_ids"]
+            if options["limit"]:
+                target_user_ids = target_user_ids[: options["limit"]]
+        else:
+            target_user_ids = await database.get_active_broadcast_user_ids(
+                options["active_days"],
+                include_schedule_subscribers=True,
+                limit=options["limit"],
+            )
+
+        plan = format_broadcast_plan(
+            user_count=len(target_user_ids),
+            chunks=chunks,
+            files=files,
+            active_days=options["active_days"],
+            rate_per_second=options["rate"],
+            dry_run=not options["execute"],
+            include_schedule_subscribers=True,
+        )
+
+        if not options["execute"]:
+            await message.answer(f"{plan}\n\nDry run only. Add --execute to send.")
+            return
+
+        if not target_user_ids:
+            await message.answer(f"{plan}\n\nNo target users found.")
+            return
+
+        if not chunks:
+            await message.answer(f"{plan}\n\nBroadcast text is empty.")
+            return
+
+        await message.answer(f"{plan}\n\nSending now.")
+        result = await broadcast_chunks_to_users(
+            target_user_ids,
+            chunks,
+            lambda user_id, chunk: self._send_broadcast_message(bot, user_id, chunk),
+            rate_per_second=options["rate"],
+            dry_run=False,
+        )
+        await message.answer(format_broadcast_result(result))
+
     async def set_module_command(self, message: Message):
         """
         Связывает дисциплину с модулем.
@@ -266,5 +409,5 @@ class AdminManager:
             await message.answer(
                 f"✅ Связь создана:\n`{discipline}` -> `{module}`\n\nТеперь эта дисциплина будет считаться частью этого модуля при фильтрации."
             )
-        except:
+        except Exception:
             await message.answer("Ошибка. Формат: `/set_module Дисциплина | Модуль`")

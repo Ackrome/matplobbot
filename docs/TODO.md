@@ -1,6 +1,6 @@
 ﻿# TODO
 
-Last updated: 2026-04-10
+Last updated: 2026-04-17
 
 ## Active Backlog (In-Repo)
 
@@ -24,7 +24,7 @@ Last updated: 2026-04-10
 - [ ] Enforce strict Rate Limiting (e.g., Token Bucket via Redis) on CPU-intensive endpoints (/api/studio/compile) and bot render commands to prevent OOM/DDoS.
 - [ ] Hardcap user inputs: set maximum payload sizes, max execution time for Pandoc/LaTeX, and memory limits inside Celery tasks.
 - [ ] Configure Log Rotation (via Docker logging driver or Python's TimedRotatingFileHandler) with size limits and retention policies to prevent disk exhaustion.
-- [ ] Create a safe broadcast script/admin command to send the announcements and changelog to all active users with proper rate-limiting (max ~30 msgs/sec for Telegram).
+- [x] Create a safe broadcast script/admin command to send the announcements and changelog to all active users with proper rate-limiting (max ~30 msgs/sec for Telegram).
 
 ### P1 - Reliability, Security, and Delivery
 - [ ] Publish minimal Terms of Service and Privacy Policy on the website and add a /privacy command to the bot.

@@ -19,7 +19,7 @@ This page is a full feature map of the project: bot, website, API, scheduler, wo
 | [Settings center](#settings-center) | `/settings` | Personal/group settings, subscriptions, short names, privacy |
 | [Rendering tools](#rendering-tools) | `/latex`, `/mermaid` | Render formulas and diagrams |
 | [Short-name suggestions](#short-name-suggestions) | `/offershorter` | User suggestion flow with admin moderation |
-| [Admin commands](#admin-commands) | `/update`, `/clear_cache`, `/send_admin_summary`, `/set_module` | Maintenance and moderation operations |
+| [Admin commands](#admin-commands) | `/update`, `/clear_cache`, `/send_admin_summary`, `/set_module`, `/broadcast_release` | Maintenance and moderation operations |
 
 ### Website Features
 
@@ -300,17 +300,54 @@ Commands:
 - `/clear_cache`
 - `/send_admin_summary`
 - `/set_module`
+- `/broadcast_release`
 
 What they do:
 
 - Trigger maintenance/cache/index operations.
 - Trigger summary delivery.
 - Map discipline to module name with `/set_module Discipline | Module`.
+- Send release announcements/changelog to active users with a hard Telegram rate cap.
 
 How to use:
 
 1. Run command from admin account/chat role.
 2. Follow command-specific format prompts.
+
+### Release Broadcasts
+
+Entry points:
+
+- Admin bot command: `/broadcast_release`
+- CLI script: `scripts/broadcast_announcement.py`
+
+What it does:
+
+- Builds a plain-text Telegram broadcast from Markdown sources.
+- Defaults to `docs/announcement.md` or `docs/ANNOUNCEMENT.md` when present, plus the current changelog (`docs/changelog-from-0.7.1.md`, falling back to `docs/CHANGELOG.md`).
+- Targets active users: users with recent actions in the configured window and users with active schedule subscriptions.
+- Splits long content into Telegram-safe chunks and sends sequentially with a rate cap of 30 messages per second.
+- Defaults to dry-run mode; sending requires an explicit `--execute`.
+- Continues after blocked/deleted users and reports failed user IDs/chunks to the admin or CLI output.
+
+How to use the admin command:
+
+1. Run `/broadcast_release` to preview recipients, chunk count, sources, and total Telegram messages.
+2. Optionally narrow the rollout:
+   `/broadcast_release --user-id 123456 --file docs/announcement.md`
+3. Send for real only after reviewing the dry run:
+   `/broadcast_release --execute --active-days 180 --rate 25`
+4. For staged delivery, add `--limit 100`; for test delivery, repeat `--user-id`.
+
+How to use the script:
+
+1. Dry-run from the repo root:
+   `python scripts/broadcast_announcement.py --print-preview`
+2. Test one Telegram account:
+   `python scripts/broadcast_announcement.py --user-id 123456 --execute`
+3. Send to active users:
+   `python scripts/broadcast_announcement.py --execute --active-days 180 --rate 25`
+4. Add custom sources with repeated `--file` flags; the script requires `BOT_TOKEN` only when `--execute` is used.
 
 ## Website Features
 

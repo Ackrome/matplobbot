@@ -41,7 +41,7 @@ BASE_COMMANDS = [
     "/mermaid",
     "🌐 Language / Язык",
 ]
-ADMIN_COMMANDS = ["/update", "/clear_cache"]
+ADMIN_COMMANDS = ["/update", "/clear_cache", "/broadcast_release"]
 WEB_APP_BUTTONS = (
     ("webapp_open_schedule", "/schedule?tg=1"),
     ("webapp_open_studio", "/studio?tg=1"),

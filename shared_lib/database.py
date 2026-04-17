@@ -4,7 +4,7 @@ import logging
 import os
 import uuid
 
-from sqlalchemy import and_, delete, func, insert, select, text, update
+from sqlalchemy import and_, delete, func, insert, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -759,7 +759,7 @@ async def delete_old_inactive_subscriptions(days_inactive: int = 30):
     async with get_session() as session:
         stmt = delete(UserScheduleSubscription).where(
             and_(
-                UserScheduleSubscription.is_active == False,
+                UserScheduleSubscription.is_active.is_(False),
                 UserScheduleSubscription.deactivated_at
                 < datetime.datetime.now() - datetime.timedelta(days=days_inactive),
             )
@@ -775,7 +775,7 @@ async def get_subscriptions_for_notification(notification_time: str) -> list:
         # We use PostgreSQL TO_CHAR on the Time column
         stmt = select(UserScheduleSubscription).where(
             and_(
-                UserScheduleSubscription.is_active == True,
+                UserScheduleSubscription.is_active.is_(True),
                 func.to_char(UserScheduleSubscription.notification_time, "HH24:MI")
                 == notification_time,
             )
@@ -800,7 +800,7 @@ async def get_subscriptions_for_notification(notification_time: str) -> list:
 
 async def get_all_active_subscriptions() -> list:
     async with get_session() as session:
-        stmt = select(UserScheduleSubscription).where(UserScheduleSubscription.is_active == True)
+        stmt = select(UserScheduleSubscription).where(UserScheduleSubscription.is_active.is_(True))
         result = await session.execute(stmt)
         subs = result.scalars().all()
         return [
@@ -902,7 +902,7 @@ async def batch_update_subscription_hashes(entity_type: str, entity_id: str, new
                 and_(
                     UserScheduleSubscription.entity_type == entity_type,
                     UserScheduleSubscription.entity_id == entity_id,
-                    UserScheduleSubscription.is_active == True,
+                    UserScheduleSubscription.is_active.is_(True),
                 )
             )
             .values(last_schedule_hash=new_hash)
@@ -1173,6 +1173,34 @@ async def get_new_users_per_day_from_db(session: AsyncSession):
     """)
     result = await session.execute(stmt)
     return [dict(row._mapping) for row in result]
+
+
+async def get_active_broadcast_user_ids(
+    active_days: int = 180,
+    *,
+    include_schedule_subscribers: bool = True,
+    limit: int | None = None,
+) -> list[int]:
+    """Return private Telegram user IDs that are eligible for release broadcasts."""
+    days = max(1, int(active_days))
+    cutoff = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=days)
+
+    recent_actions = select(UserAction.user_id).where(UserAction.timestamp >= cutoff)
+    criteria = [User.user_id.in_(recent_actions)]
+
+    if include_schedule_subscribers:
+        active_subscriptions = select(UserScheduleSubscription.user_id).where(
+            UserScheduleSubscription.is_active.is_(True)
+        )
+        criteria.append(User.user_id.in_(active_subscriptions))
+
+    stmt = select(User.user_id).where(or_(*criteria)).order_by(User.user_id.asc())
+    if limit is not None and limit > 0:
+        stmt = stmt.limit(limit)
+
+    async with get_session() as session:
+        result = await session.execute(stmt)
+        return [int(user_id) for user_id in result.scalars().all()]
 
 
 async def get_user_profile_data_from_db(
