@@ -172,6 +172,15 @@ async def update_preferences(
     db: AsyncSession = Depends(get_db_session_dependency),
 ):
     db_obj = current_user["db_obj"]
+    if isinstance(db_obj, WebAccount):
+        result = await db.execute(
+            select(WebAccount)
+            .where(WebAccount.id == db_obj.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        db_obj = result.scalar_one_or_none() or db_obj
+
     merged_preferences = dict(db_obj.preferences or {})
     merged_preferences.update(prefs.preferences)
     db_obj.preferences = merged_preferences
@@ -179,4 +188,5 @@ async def update_preferences(
     await db.commit()
 
     current_user["preferences"] = merged_preferences
+    current_user["db_obj"] = db_obj
     return current_user

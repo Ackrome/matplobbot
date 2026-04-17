@@ -35,6 +35,7 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
         db.execute = AsyncMock(return_value=execute_result)
         db.commit = AsyncMock()
         db.flush = AsyncMock()
+        db.refresh = AsyncMock()
         db.add = Mock()
         return db
 
@@ -145,6 +146,57 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(account.preferences["modules"], ["Core"])
         self.assertTrue(account.preferences["useShortNames"])
         self.assertEqual(response.json()["preferences"], account.preferences)
+
+    def test_update_preferences_locks_latest_account_before_merging(self):
+        stale_account = auth_router.WebAccount(
+            id=1,
+            username="Test User",
+            role="user",
+            preferences={"useShortNames": False},
+        )
+        locked_account = auth_router.WebAccount(
+            id=1,
+            username="Test User",
+            role="user",
+            preferences={
+                "calendar_sync": {
+                    "enabled": True,
+                    "custom_profiles": [{"id": "custom-2", "name": "Group 2"}],
+                },
+                "useShortNames": False,
+            },
+        )
+        db = self._mock_db(account=locked_account)
+
+        self.app.dependency_overrides[auth_router.get_db_session_dependency] = lambda: db
+        self.app.dependency_overrides[auth_router.get_current_user] = lambda: {
+            "id": 1,
+            "username": "Test User",
+            "role": "user",
+            "preferences": {"useShortNames": False},
+            "db_obj": stale_account,
+        }
+
+        response = self.client.put(
+            "/api/auth/preferences",
+            json={
+                "preferences": {
+                    "entity": {"type": "group", "id": "group-2", "name": "Group 2"},
+                    "modules": ["Core"],
+                    "useShortNames": True,
+                }
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        db.execute.assert_awaited()
+        self.assertEqual(
+            locked_account.preferences["calendar_sync"]["custom_profiles"][0]["id"],
+            "custom-2",
+        )
+        self.assertEqual(locked_account.preferences["entity"]["id"], "group-2")
+        self.assertTrue(locked_account.preferences["useShortNames"])
+        self.assertEqual(response.json()["preferences"], locked_account.preferences)
 
     async def test_expired_jwt_is_rejected_by_get_current_user(self):
         expired_token = jwt.encode(

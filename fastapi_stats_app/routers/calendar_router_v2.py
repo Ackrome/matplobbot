@@ -227,9 +227,18 @@ def _serialize_calendar_sync_state(state: dict) -> dict:
 
 async def _save_calendar_sync_state(
     account: WebAccount | None, db: AsyncSession, state: dict
-) -> None:
+) -> WebAccount | None:
     if not account:
-        return
+        return None
+
+    if isinstance(account, WebAccount):
+        result = await db.execute(
+            select(WebAccount)
+            .where(WebAccount.id == account.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        account = result.scalar_one_or_none() or account
 
     preferences = dict(account.preferences or {})
     preferences[CALENDAR_SYNC_KEY] = _serialize_calendar_sync_state(state)
@@ -237,6 +246,7 @@ async def _save_calendar_sync_state(
     db.add(account)
     await db.commit()
     await db.refresh(account)
+    return account
 
 
 def _build_eligibility(telegram_id: int | None, active_subs: list[dict]) -> dict:
@@ -721,7 +731,7 @@ async def toggle_calendar_subscription(
     account = await _get_account_for_current_user(current_user, db)
     sync_state = _normalize_calendar_sync_state(current_user.get("preferences"))
     sync_state["enabled"] = bool(payload.enabled)
-    await _save_calendar_sync_state(account, db, sync_state)
+    account = await _save_calendar_sync_state(account, db, sync_state)
     current_user["preferences"] = (
         account.preferences if account else current_user.get("preferences", {})
     )
@@ -747,7 +757,7 @@ async def select_calendar_subscription_profile(
         raise HTTPException(status_code=404, detail="Calendar profile not found")
 
     sync_state["selected_profile_id"] = payload.profile_id
-    await _save_calendar_sync_state(account, db, sync_state)
+    account = await _save_calendar_sync_state(account, db, sync_state)
     current_user["preferences"] = (
         account.preferences if account else current_user.get("preferences", {})
     )
@@ -807,7 +817,7 @@ async def create_calendar_subscription_profile(
         )
         sync_state["selected_profile_id"] = profile_id
 
-    await _save_calendar_sync_state(account, db, sync_state)
+    account = await _save_calendar_sync_state(account, db, sync_state)
     await _warm_calendar_profile_cache(request, payload.entity_type, str(payload.entity_id))
     current_user["preferences"] = (
         account.preferences if account else current_user.get("preferences", {})
@@ -842,7 +852,7 @@ async def delete_calendar_subscription_profile(
     if sync_state.get("selected_profile_id") == profile_id:
         sync_state["selected_profile_id"] = DEFAULT_PROFILE_ID
 
-    await _save_calendar_sync_state(account, db, sync_state)
+    account = await _save_calendar_sync_state(account, db, sync_state)
     current_user["preferences"] = (
         account.preferences if account else current_user.get("preferences", {})
     )
