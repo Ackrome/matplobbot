@@ -250,7 +250,10 @@ def _build_eligibility(telegram_id: int | None, active_subs: list[dict]) -> dict
     if not has_telegram_link:
         detail = "Link this website account to Telegram to unlock private iCal feeds."
     elif not has_active_subscriptions:
-        detail = "Ваш календарь готов к настройке."
+        detail = (
+            "Your calendar is ready. Save a website calendar profile or add Telegram "
+            "schedule subscriptions."
+        )
     else:
         detail = "Your feed is ready to sync with external calendar apps."
 

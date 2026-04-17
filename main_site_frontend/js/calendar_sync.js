@@ -1,7 +1,9 @@
 ﻿const CALENDAR_PLATFORM_KEY = "mpb_calendar_sync_platform";
 const CALENDAR_REVEALED_PROFILES_KEY = "mpb_calendar_sync_revealed_profiles";
+const CALENDAR_PANEL_COLLAPSED_KEY = "mpb_calendar_sync_collapsed";
 let calendarPlatform = loadCalendarPlatform();
 let revealedCalendarProfileIds = loadRevealedCalendarProfileIds();
+let isCalendarPanelCollapsed = loadCalendarPanelCollapsed();
 window.calendarCurrentViewMode = 'all';
 
 function createDefaultCalendarSubscriptionState() {
@@ -60,6 +62,19 @@ function persistRevealedCalendarProfileIds() {
         );
     } catch (error) {}
 }
+function loadCalendarPanelCollapsed() {
+    try {
+        const saved = localStorage.getItem(CALENDAR_PANEL_COLLAPSED_KEY);
+        if (saved === 'false') return false;
+        if (saved === 'true') return true;
+    } catch (error) {}
+    return true;
+}
+function persistCalendarPanelCollapsed() {
+    try {
+        localStorage.setItem(CALENDAR_PANEL_COLLAPSED_KEY, String(isCalendarPanelCollapsed));
+    } catch (error) {}
+}
 
 function renderCalendarButton(labelKey, fallback, className, attributes = '') {
     return `
@@ -68,6 +83,12 @@ function renderCalendarButton(labelKey, fallback, className, attributes = '') {
             ${escapeHtml(t(labelKey, fallback))}
         </button>
     `;
+}
+
+window.toggleCalendarSubscriptionPanel = function() {
+    isCalendarPanelCollapsed = !isCalendarPanelCollapsed;
+    persistCalendarPanelCollapsed();
+    renderCalendarSubscription();
 }
 
 function renderCalendarSubscription() {
@@ -82,8 +103,8 @@ function renderCalendarSubscription() {
         ? (state.eligibility?.available ? 'schedule.calendar.statusReady' : 'schedule.calendar.statusSetup')
         : 'schedule.calendar.statusPaused';
     const statusFallback = state.sync_enabled
-        ? (state.eligibility?.available ? 'Готово' : 'Настройка')
-        : 'На паузе';
+        ? (state.eligibility?.available ? 'Ready' : 'Setup')
+        : 'Paused';
     const statusClass = isReady
         ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
         : 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300';
@@ -93,7 +114,7 @@ function renderCalendarSubscription() {
             <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
                 <div class="flex items-center gap-3 text-sm font-bold text-slate-600 dark:text-slate-300">
                     <span class="h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"></span>
-                    ${escapeHtml(t('schedule.calendar.loading', 'Загружаем данные...'))}
+                    ${escapeHtml(t('schedule.calendar.loading', 'Loading your personal subscription link...'))}
                 </div>
             </div>
         `;
@@ -105,10 +126,10 @@ function renderCalendarSubscription() {
             <div class="rounded-3xl border border-rose-200 bg-rose-50 p-5 shadow-sm dark:border-rose-900/60 dark:bg-rose-950/30">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <div class="text-sm font-black text-rose-700 dark:text-rose-300">${escapeHtml(t('schedule.calendar.error', 'Ошибка загрузки подписки.'))}</div>
-                        <div class="mt-1 text-xs text-rose-600/80 dark:text-rose-200/80">${escapeHtml(t('schedule.action.retry', 'Повторить'))}</div>
+                        <div class="text-sm font-black text-rose-700 dark:text-rose-300">${escapeHtml(t('schedule.calendar.error', 'Failed to load the calendar subscription.'))}</div>
+                        <div class="mt-1 text-xs text-rose-600/80 dark:text-rose-200/80">${escapeHtml(t('schedule.action.retry', 'Retry'))}</div>
                     </div>
-                    ${renderCalendarButton('schedule.action.retry', 'Повторить', 'bg-rose-600 text-white hover:bg-rose-700', 'onclick="refreshCalendarSubscription()"')}
+                    ${renderCalendarButton('schedule.action.retry', 'Retry', 'bg-rose-600 text-white hover:bg-rose-700', 'onclick="refreshCalendarSubscription()"')}
                 </div>
             </div>
         `;
@@ -125,8 +146,8 @@ function renderCalendarSubscription() {
     const profileButtons = profiles.map((profile) => {
         const active = profile.selected;
         const typeLabel = profile.kind === 'custom'
-            ? t('schedule.calendar.profile.custom', 'Пресет')
-            : t('schedule.calendar.profile.builtin', 'Базовый');
+            ? t('schedule.calendar.profile.custom', 'Preset')
+            : t('schedule.calendar.profile.builtin', 'Built-in');
         return `
             <button type="button" onclick="selectCalendarSubscriptionProfile('${escapeJsString(profile.id)}')"
                 class="min-w-0 rounded-2xl border px-3 py-2 text-left transition-colors ${active
@@ -143,16 +164,16 @@ function renderCalendarSubscription() {
             <div class="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 dark:border-blue-900/60 dark:bg-blue-950/20">
                 <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div class="min-w-0">
-                        <div class="text-xs font-black uppercase tracking-[0.18em] text-blue-500 dark:text-blue-300">${escapeHtml(t('schedule.calendar.currentView.title', 'Пресет текущей страницы'))}</div>
+                        <div class="text-xs font-black uppercase tracking-[0.18em] text-blue-500 dark:text-blue-300">${escapeHtml(t('schedule.calendar.currentView.title', 'Current page preset'))}</div>
                         <div class="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100">${window.getCalendarCurrentViewSummary()}</div>
                     </div>
                     <div class="flex shrink-0 items-center gap-2">
                         <select onchange="window.calendarCurrentViewMode=this.value; renderCalendarSubscription();"
                             class="rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none dark:border-blue-900/60 dark:bg-slate-900 dark:text-slate-100">
-                            <option value="all" ${window.calendarCurrentViewMode === 'all' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.all', 'Все занятия'))}</option>
-                            <option value="exams_only" ${window.calendarCurrentViewMode === 'exams_only' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.exams', 'Только экзамены'))}</option>
+                            <option value="all" ${window.calendarCurrentViewMode === 'all' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.all', 'All classes'))}</option>
+                            <option value="exams_only" ${window.calendarCurrentViewMode === 'exams_only' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.exams', 'Exams only'))}</option>
                         </select>
-                        ${renderCalendarButton('schedule.calendar.currentView.save', 'Сохранить', 'bg-blue-600 text-white hover:bg-blue-700 dark:hover:bg-blue-500', 'onclick="createCalendarProfileFromCurrentView()"')}
+                        ${renderCalendarButton('schedule.calendar.currentView.save', 'Save', 'bg-blue-600 text-white hover:bg-blue-700 dark:hover:bg-blue-500', 'onclick="createCalendarProfileFromCurrentView()"')}
                     </div>
                 </div>
             </div>
@@ -164,34 +185,34 @@ function renderCalendarSubscription() {
     const isRevealed = selectedProfile?.id && revealedCalendarProfileIds.has(selectedProfile.id);
     const shownUrl = isRevealed ? urlValue : maskedUrl;
     const health = selectedProfile?.health || {};
-    const unavailableMessage = state.eligibility?.detail || t('schedule.calendar.unavailable', 'Подписка на календарь доступна после привязки Telegram-аккаунта.');
+    const unavailableMessage = state.eligibility?.detail || t('schedule.calendar.unavailable', 'Calendar subscription requires a linked Telegram account.');
     const healthRows = selectedProfile ? [
-        [t('schedule.calendar.health.cached', 'Кэш'), getCalendarCacheStatusLabel(health.cache_status)],
-        [t('schedule.calendar.meta.scope', 'Состав'), escapeHtml(selectedProfile.scope_label || selectedProfile.entity_name || selectedProfile.name)],
-        [t('schedule.calendar.health.events', 'Событий'), escapeHtml(String(health.event_count ?? 0))],
-        [t('schedule.calendar.health.next', 'Ближайшее'), health.next_event_at ? formatCalendarDateTime(health.next_event_at, health.next_event_label || '') : escapeHtml('-')],
-        [t('schedule.calendar.health.updated', 'Кэш обновлен'), health.source_updated_at ? formatCalendarDateTime(health.source_updated_at, '') : escapeHtml('-')]
+        [t('schedule.calendar.health.cached', 'Cache'), getCalendarCacheStatusLabel(health.cache_status)],
+        [t('schedule.calendar.meta.scope', 'Scope'), escapeHtml(selectedProfile.scope_label || selectedProfile.entity_name || selectedProfile.name)],
+        [t('schedule.calendar.health.events', 'Events'), escapeHtml(String(health.event_count ?? 0))],
+        [t('schedule.calendar.health.next', 'Next'), health.next_event_at ? formatCalendarDateTime(health.next_event_at, health.next_event_label || '') : escapeHtml('-')],
+        [t('schedule.calendar.health.updated', 'Cache updated'), health.source_updated_at ? formatCalendarDateTime(health.source_updated_at, '') : escapeHtml('-')]
     ] : [];
 
     const urlPanel = state.eligibility?.available
         ? `
             <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/60">
-                <div class="mb-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">${escapeHtml(t('schedule.calendar.urlLabel', 'URL подписки'))}</div>
+                <div class="mb-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">${escapeHtml(t('schedule.calendar.urlLabel', 'Subscription URL'))}</div>
                 ${isReady ? `
                     <div class="flex flex-col gap-2 lg:flex-row">
                         <input readonly value="${escapeHtml(shownUrl)}"
                             class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-600 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                         <div class="flex flex-wrap gap-2">
-                            ${renderCalendarButton(isRevealed ? 'schedule.calendar.hide' : 'schedule.calendar.reveal', isRevealed ? 'Скрыть' : 'Показать', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="toggleCalendarProfileReveal('${escapeJsString(selectedProfile.id)}')"`) }
-                            ${renderCalendarButton('schedule.calendar.copy', 'Копировать', 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500', 'onclick="copyCalendarSubscriptionLink(event)"')}
+                            ${renderCalendarButton(isRevealed ? 'schedule.calendar.hide' : 'schedule.calendar.reveal', isRevealed ? 'Hide' : 'Show', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="toggleCalendarProfileReveal('${escapeJsString(selectedProfile.id)}')"`) }
+                            ${renderCalendarButton('schedule.calendar.copy', 'Copy link', 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500', 'onclick="copyCalendarSubscriptionLink(event)"')}
                             ${renderCalendarButton('schedule.calendar.apple', 'iOS / Mac', 'bg-blue-600 text-white hover:bg-blue-700 dark:hover:bg-blue-500', `onclick="openCalendarProfileLink('webcal')"`) }
                         </div>
                     </div>
                     <div class="mt-3 flex flex-wrap gap-2">
-                        ${renderCalendarButton('schedule.calendar.preview', 'Тест ленты', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="openCalendarProfileLink('preview')"`) }
-                        ${renderCalendarButton('schedule.calendar.download', 'Скачать ICS', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="openCalendarProfileLink('download')"`) }
-                        ${renderCalendarButton('schedule.calendar.reset', 'Сбросить', 'border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 dark:border-rose-900/70 dark:bg-slate-800 dark:text-rose-300 dark:hover:bg-rose-950/30', 'onclick="resetCalendarSubscription()"')}
-                        ${renderCalendarButton(state.sync_enabled ? 'schedule.calendar.disable' : 'schedule.calendar.enable', state.sync_enabled ? 'Выключить' : 'Включить', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="toggleCalendarSync(${state.sync_enabled ? 'false' : 'true'})"`)}
+                        ${renderCalendarButton('schedule.calendar.preview', 'Preview feed', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="openCalendarProfileLink('preview')"`) }
+                        ${renderCalendarButton('schedule.calendar.download', 'Download ICS', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="openCalendarProfileLink('download')"`) }
+                        ${renderCalendarButton('schedule.calendar.reset', 'Reset link', 'border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 dark:border-rose-900/70 dark:bg-slate-800 dark:text-rose-300 dark:hover:bg-rose-950/30', 'onclick="resetCalendarSubscription()"')}
+                        ${renderCalendarButton(state.sync_enabled ? 'schedule.calendar.disable' : 'schedule.calendar.enable', state.sync_enabled ? 'Disable' : 'Enable', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="toggleCalendarSync(${state.sync_enabled ? 'false' : 'true'})"`)}
                     </div>
                 ` : `
                     <div class="rounded-xl bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">${escapeHtml(unavailableMessage)}</div>
@@ -205,23 +226,15 @@ function renderCalendarSubscription() {
         `;
 
     const deleteButton = selectedProfile?.can_delete
-        ? renderCalendarButton('schedule.calendar.confirmDelete', 'Удалить пресет?', 'border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 dark:border-rose-900/70 dark:bg-slate-800 dark:text-rose-300 dark:hover:bg-rose-950/30', `onclick="deleteCalendarSubscriptionProfile('${escapeJsString(selectedProfile.id)}')"`)
+        ? renderCalendarButton('schedule.calendar.delete', 'Delete preset', 'border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 dark:border-rose-900/70 dark:bg-slate-800 dark:text-rose-300 dark:hover:bg-rose-950/30', `onclick="deleteCalendarSubscriptionProfile('${escapeJsString(selectedProfile.id)}')"`)
         : '';
-
-    container.innerHTML = `
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                    <div class="mb-1 text-xs font-black uppercase tracking-[0.2em] text-blue-500 dark:text-blue-300">${escapeHtml(t('schedule.calendar.eyebrow', 'Синхронизация'))}</div>
-                    <h2 class="text-xl font-black text-slate-900 dark:text-slate-100">${escapeHtml(t('schedule.calendar.title', 'Подписка на календарь'))}</h2>
-                    <p class="mt-1 max-w-3xl text-sm text-slate-600 dark:text-slate-300">${escapeHtml(t('schedule.calendar.description', 'Подключите персональную ICS-ленту к календарю.'))}</p>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="rounded-full px-3 py-1 text-xs font-black ${statusClass}">${escapeHtml(t(statusKey, statusFallback))}</span>
-                    ${deleteButton}
-                </div>
-            </div>
-            <div class="mt-5 space-y-4">
+    const toggleLabel = isCalendarPanelCollapsed
+        ? t('schedule.calendar.expand', 'Expand')
+        : t('schedule.calendar.collapse', 'Collapse');
+    const bodyHtml = isCalendarPanelCollapsed
+        ? ''
+        : `
+            <div id="calendarSubscriptionBody" class="mt-5 space-y-4">
                 ${profiles.length ? `<div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">${profileButtons}</div>` : ''}
                 ${currentViewSave}
                 ${urlPanel}
@@ -235,8 +248,34 @@ function renderCalendarSubscription() {
                         `).join('')}
                     </div>
                 ` : ''}
-                <p class="text-xs text-slate-500 dark:text-slate-400">${escapeHtml(t('schedule.calendar.instructions', 'Для Google Calendar скопируйте HTTPS-ссылку и добавьте ее по URL в веб-версии.'))}</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">${escapeHtml(t('schedule.calendar.instructions', 'Use the iOS / Mac button for Apple Calendar. For Google Calendar, copy the HTTPS URL and add it from URL in the web version.'))}</p>
             </div>
+        `;
+
+    container.innerHTML = `
+        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                    <div class="mb-1 text-xs font-black uppercase tracking-[0.2em] text-blue-500 dark:text-blue-300">${escapeHtml(t('schedule.calendar.eyebrow', 'Sync'))}</div>
+                    <h2 class="text-xl font-black text-slate-900 dark:text-slate-100">${escapeHtml(t('schedule.calendar.title', 'Calendar subscription'))}</h2>
+                    <p class="mt-1 max-w-3xl text-sm text-slate-600 dark:text-slate-300">${escapeHtml(t('schedule.calendar.description', 'Connect your personal ICS feed to Apple Calendar, Google Calendar, or any other calendar app.'))}</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="rounded-full px-3 py-1 text-xs font-black ${statusClass}">${escapeHtml(t(statusKey, statusFallback))}</span>
+                    ${isCalendarPanelCollapsed ? '' : deleteButton}
+                    <button type="button" onclick="toggleCalendarSubscriptionPanel()"
+                        aria-expanded="${String(!isCalendarPanelCollapsed)}"
+                        aria-controls="calendarSubscriptionBody"
+                        aria-label="${escapeHtml(toggleLabel)}"
+                        class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
+                        <span>${escapeHtml(toggleLabel)}</span>
+                        <svg class="h-3.5 w-3.5 transition-transform ${isCalendarPanelCollapsed ? '' : 'rotate-180'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            ${bodyHtml}
         </div>
     `;
 }
@@ -277,17 +316,17 @@ window.getCalendarCurrentViewModules = function() {
 
 window.getCalendarCurrentViewSummary = function() {
     if (!currentEntity?.id) {
-        return escapeHtml(t('schedule.calendar.currentView.empty', 'Откройте расписание, чтобы сохранить страницу как отдельную ленту.'));
+        return escapeHtml(t('schedule.calendar.currentView.empty', 'Open a schedule to save this page as a separate feed.'));
     }
     const modules = window.getCalendarCurrentViewModules();
     const modulesLabel = allAvailableModules.length === 0
-        ? escapeHtml(t('schedule.calendar.currentView.noModules', 'Нет фильтра по модулям'))
+        ? escapeHtml(t('schedule.calendar.currentView.noModules', 'No module filter'))
         : modules.length === allAvailableModules.length
-            ? escapeHtml(t('schedule.calendar.currentView.allModules', 'Все модули'))
+            ? escapeHtml(t('schedule.calendar.currentView.allModules', 'All modules'))
             : escapeHtml(
                 t(
                     'schedule.calendar.currentView.someModules',
-                    'Выбрано модулей: {count}',
+                    'Selected modules: {count}',
                     { count: modules.length }
                 )
             );
@@ -295,9 +334,9 @@ window.getCalendarCurrentViewSummary = function() {
 }
 
 function getCalendarCacheStatusLabel(status) {
-    if (status === 'cached') return escapeHtml(t('schedule.calendar.health.cached', 'Кэш готов'));
-    if (status === 'partial-cache') return escapeHtml(t('schedule.calendar.health.partial', 'Частичный кэш'));
-    return escapeHtml(t('schedule.calendar.health.empty', 'Нет закэшированных занятий'));
+    if (status === 'cached') return escapeHtml(t('schedule.calendar.health.cached', 'Cache ready'));
+    if (status === 'partial-cache') return escapeHtml(t('schedule.calendar.health.partial', 'Partial cache'));
+    return escapeHtml(t('schedule.calendar.health.empty', 'No cached classes'));
 }
 
 async function parseCalendarError(response) {
@@ -412,21 +451,21 @@ async function performCalendarMutation(url, options = {}, { justReset = false } 
         console.error('Calendar mutation failed', error);
         calendarSubscriptionState = { ...createDefaultCalendarSubscriptionState(), hasError: true };
         renderCalendarSubscription();
-        window.mpbPopup?.(error.message || t('schedule.calendar.error', 'Ошибка загрузки.'), { type: 'error' });
+        window.mpbPopup?.(error.message || t('schedule.calendar.error', 'Failed to load the calendar subscription.'), { type: 'error' });
         return null;
     }
 }
 
 window.resetCalendarSubscription = async function() {
-    if (!window.confirm(t('schedule.calendar.confirmReset', 'Сбросить приватную ссылку?'))) return;
+    if (!window.confirm(t('schedule.calendar.confirmReset', 'Reset the private link? The previous URL will stop working immediately.'))) return;
     await performCalendarMutation(`${API_BASE}/cal/subscription/reset`, { method: 'POST' }, { justReset: true });
 }
 
 window.toggleCalendarSync = async function(enabled) {
     const confirmKey = enabled ? 'schedule.calendar.confirmEnable' : 'schedule.calendar.confirmDisable';
     const fallback = enabled
-        ? 'Включить синхронизацию?'
-        : 'Выключить синхронизацию?';
+        ? 'Enable calendar sync again?'
+        : 'Disable calendar sync? External subscriptions will stop updating.';
     if (!window.confirm(t(confirmKey, fallback))) return;
     await performCalendarMutation(`${API_BASE}/cal/subscription/toggle`, {
         method: 'POST',
@@ -457,7 +496,7 @@ window.createCalendarProfileFromCurrentView = async function() {
 }
 
 window.deleteCalendarSubscriptionProfile = async function(profileId) {
-    if (!window.confirm(t('schedule.calendar.confirmDelete', 'Удалить пресет?'))) return;
+    if (!window.confirm(t('schedule.calendar.confirmDelete', 'Delete this preset?'))) return;
     await performCalendarMutation(`${API_BASE}/cal/subscription/profiles/${encodeURIComponent(profileId)}`, {
         method: 'DELETE'
     });

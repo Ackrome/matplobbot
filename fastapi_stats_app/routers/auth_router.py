@@ -172,9 +172,11 @@ async def update_preferences(
     db: AsyncSession = Depends(get_db_session_dependency),
 ):
     db_obj = current_user["db_obj"]
-    db_obj.preferences = prefs.preferences
+    merged_preferences = dict(db_obj.preferences or {})
+    merged_preferences.update(prefs.preferences)
+    db_obj.preferences = merged_preferences
     db.add(db_obj)
     await db.commit()
 
-    current_user["preferences"] = prefs.preferences
+    current_user["preferences"] = merged_preferences
     return current_user

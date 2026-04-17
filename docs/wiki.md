@@ -452,9 +452,11 @@ What it does:
 - built-in `All classes`
 - built-in `Exams only`
 - custom presets from current schedule page
+- Stores custom presets in the signed-in user's website preferences, so each account keeps its own presets across reloads and browser sessions.
 - Treats custom website profiles as independent calendar sources. Built-in feeds include both active Telegram subscriptions and saved website profiles.
 - Warms the semester schedule cache when a website profile is saved, then the background scheduler keeps these web-only sources refreshed.
 - Supports:
+- expand/collapse panel state
 - copy/reveal/hide URL
 - Apple/Google/Outlook guidance
 - preview and download

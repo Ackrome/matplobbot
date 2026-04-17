@@ -105,6 +105,47 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "success"})
 
+    def test_update_preferences_merges_existing_namespaces(self):
+        account = SimpleNamespace(
+            preferences={
+                "calendar_sync": {
+                    "enabled": True,
+                    "custom_profiles": [{"id": "custom-1", "name": "Group 1"}],
+                },
+                "useShortNames": False,
+            }
+        )
+        db = self._mock_db(account=account)
+        self.app.dependency_overrides[auth_router.get_db_session_dependency] = lambda: db
+        self.app.dependency_overrides[auth_router.get_current_user] = lambda: {
+            "id": 1,
+            "username": "Test User",
+            "role": "user",
+            "preferences": account.preferences,
+            "db_obj": account,
+        }
+
+        response = self.client.put(
+            "/api/auth/preferences",
+            json={
+                "preferences": {
+                    "entity": {"type": "group", "id": "group-1", "name": "Group 1"},
+                    "modules": ["Core"],
+                    "useShortNames": True,
+                }
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            account.preferences["calendar_sync"]["custom_profiles"][0]["id"],
+            "custom-1",
+        )
+        self.assertEqual(account.preferences["entity"]["id"], "group-1")
+        self.assertEqual(account.preferences["modules"], ["Core"])
+        self.assertTrue(account.preferences["useShortNames"])
+        self.assertEqual(response.json()["preferences"], account.preferences)
+
     async def test_expired_jwt_is_rejected_by_get_current_user(self):
         expired_token = jwt.encode(
             {

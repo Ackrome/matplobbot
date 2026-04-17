@@ -291,6 +291,10 @@ class TestCalendarAPI(unittest.TestCase):
             for profile in payload["profiles"]
             if profile["id"] == payload["selected_profile_id"]
         )
+        saved_sync = account.preferences["calendar_sync"]
+        self.assertEqual(saved_sync["selected_profile_id"], payload["selected_profile_id"])
+        self.assertEqual(saved_sync["custom_profiles"][0]["entity_id"], "group-1")
+        self.assertEqual(saved_sync["custom_profiles"][0]["modules"], ["Core"])
         self.assertEqual(custom_profile["lesson_mode"], "exams_only")
         self.assertEqual(custom_profile["modules"], ["Core"])
         self.assertTrue(custom_profile["selected"])
