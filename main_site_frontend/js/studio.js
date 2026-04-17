@@ -1,7 +1,28 @@
 ﻿// main_site_frontend/js/studio.js
 
 const API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : "/api";
-const token = localStorage.getItem('jwt_token');
+let token = localStorage.getItem('jwt_token');
+
+function refreshAuthToken() {
+    token = localStorage.getItem('jwt_token');
+    return token;
+}
+
+async function ensureStudioAuth() {
+    if (refreshAuthToken()) return true;
+    if (window.mpbTelegramWebApp?.isActive && window.mpbTelegramAuthReady) {
+        await window.mpbTelegramAuthReady;
+        if (refreshAuthToken()) return true;
+    }
+
+    window.mpbPopup?.("Пожалуйста, авторизуйтесь для доступа к Студии.");
+    setTimeout(() => {
+        window.location.href = '/login';
+    }, 250);
+    return false;
+}
+
+const studioAuthReady = ensureStudioAuth();
 // Настройка парсера Markdown для поддержки локальных картинок
 const renderer = new marked.Renderer();
 renderer.image = function(href, title, text) {
@@ -37,13 +58,6 @@ const TEMPLATES = {
     markdown: `# Live Markdown\nMath formulas work instantly: $$E = mc^2$$\n\nEdit this text!`,
     mermaid: `graph TD;\n    A[Start] --> B{Works?};\n    B -- Yes --> C[Great!];\n    B -- No --> D[Find bug];`,
 };
-
-if (!token) {
-    window.mpbPopup?.("Пожалуйста, авторизуйтесь для доступа к Студии.");
-    setTimeout(() => {
-        window.location.href = '/login';
-    }, 250);
-}
 
 // === 1. UI INITIALIZATION (SPLIT.JS & MOBILE) ===
 function setupSplit() {
@@ -198,7 +212,10 @@ function updateWordCount() {
 
 // === 3. MODE SWITCHING (QUICK / PROJECT) ===
 document.getElementById('mode-quick').onclick = () => switchMode('quick');
-document.getElementById('mode-project').onclick = () => switchMode('project');
+document.getElementById('mode-project').onclick = async () => {
+    if (!(await ensureStudioAuth())) return;
+    switchMode('project');
+};
 document.getElementById('doc-type').addEventListener('change', (e) => setLanguage(e.target.value));
 
 function switchMode(mode) {
@@ -293,6 +310,7 @@ async function updateLivePreview() {
 
 // === 5. SERVER-SIDE COMPILE AND ERRORS ===
 async function compileCurrent() {
+    if (!(await ensureStudioAuth())) return;
     if (currentMode === 'project') await saveCurrentFile();
 
     const overlay = document.getElementById('loader-overlay');
@@ -382,6 +400,7 @@ async function compileCurrent() {
 
 // === 6. PROJECT CRUD & FILE SYSTEM ===
 async function loadProjects() {
+    if (!(await ensureStudioAuth())) return;
     const res = await fetch(`${API_BASE}/studio/projects`, { headers: { 'Authorization': `Bearer ${token}` } });
     if (!res.ok) return;
 
@@ -441,6 +460,7 @@ window.updateTemplateOptions = function() {
 };
 
 async function submitNewProject() {
+    if (!(await ensureStudioAuth())) return;
     const name = document.getElementById('new-project-name').value.trim();
     const type = document.getElementById('new-project-type').value;
     const templateId = document.getElementById('new-project-template').value; // Берем ID шаблона
@@ -469,6 +489,7 @@ async function submitNewProject() {
 
 // --- OPEN PROJECT ---
 async function openProject(id) {
+    if (!(await ensureStudioAuth())) return;
     currentProjectId = id;
 
     // Определяем тип открытого проекта
@@ -564,6 +585,7 @@ async function openFile(id) {
 }
 
 async function saveCurrentFile() {
+    if (!(await ensureStudioAuth())) return;
     if (!currentFileId || !currentProjectId) return;
     const file = projectFiles.find(f => f.id === currentFileId);
 
@@ -585,6 +607,7 @@ async function saveCurrentFile() {
 }
 
 async function renameFile(fileId, oldPath) {
+    if (!(await ensureStudioAuth())) return;
     const newName = prompt(`Новое имя для файла ${oldPath}:`, oldPath);
     if (!newName || newName === oldPath) return;
 
@@ -598,6 +621,7 @@ async function renameFile(fileId, oldPath) {
 }
 
 async function deleteFile(fileId, path) {
+    if (!(await ensureStudioAuth())) return;
     if (!confirm(`Удалить файл ${path}? Это действие необратимо.`)) return;
 
     const res = await fetch(`${API_BASE}/studio/projects/${currentProjectId}/files/${fileId}`, {
@@ -647,6 +671,7 @@ async function uploadAsset(event) {
 }
 
 async function uploadSingleFile(file) {
+    if (!(await ensureStudioAuth())) return;
     setStatus("Uploading...", true);
     const formData = new FormData();
     formData.append('file', file);
@@ -682,14 +707,19 @@ function downloadZIP() {
     if (!currentProjectId) return;
 
     setStatus("Zipping...", true);
-    fetch(`${API_BASE}/studio/projects/${currentProjectId}/export/zip`, {
+    ensureStudioAuth().then((hasAuth) => {
+        if (!hasAuth) return null;
+        return fetch(`${API_BASE}/studio/projects/${currentProjectId}/export/zip`, {
         headers: { 'Authorization': `Bearer ${token}` }
+        });
     })
     .then(res => {
+        if (!res) return null;
         if(!res.ok) throw new Error("API Error");
         return res.blob();
     })
     .then(blob => {
+        if (!blob) return;
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = `Project_${currentProjectId}.zip`;
@@ -706,6 +736,7 @@ function downloadZIP() {
 
 // === 9. TELEGRAM INTEGRATION ===
 async function sendToTelegram() {
+    if (!(await ensureStudioAuth())) return;
     if (!currentProjectId) return;
 
     await saveCurrentFile(); // Обязательно сохраняем перед сборкой

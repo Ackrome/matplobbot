@@ -11,6 +11,7 @@ from shared_lib.schemas import (
     CurrentUserResponse,
     StatusResponse,
     TelegramAuthData,
+    TelegramWebAppAuthData,
     Token,
     WebAccountCreate,
     WebAccountPreferencesUpdate,
@@ -20,12 +21,63 @@ from ..auth import (
     create_access_token,
     get_current_user,
     get_password_hash,
+    parse_verified_telegram_webapp_init_data,
     verify_password,
     verify_telegram_authorization,
 )
 from ..config import ADMIN_USER_IDS
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+async def _issue_telegram_account_token(
+    *,
+    db: AsyncSession,
+    telegram_id: int,
+    first_name: str,
+    last_name: str | None = None,
+    username: str | None = None,
+    photo_url: str | None = None,
+) -> Token:
+    full_name = first_name
+    if last_name:
+        full_name += f" {last_name}"
+
+    stmt = (
+        pg_insert(User)
+        .values(
+            user_id=telegram_id,
+            username=username,
+            full_name=full_name,
+            avatar_pic_url=photo_url,
+        )
+        .on_conflict_do_update(
+            index_elements=["user_id"],
+            set_=dict(
+                username=username,
+                full_name=full_name,
+                avatar_pic_url=photo_url,
+            ),
+        )
+    )
+    await db.execute(stmt)
+
+    result = await db.execute(select(WebAccount).where(WebAccount.telegram_id == telegram_id))
+    account = result.scalar_one_or_none()
+
+    if not account:
+        role = "admin" if telegram_id in ADMIN_USER_IDS else "user"
+        account = WebAccount(role=role, preferences={}, telegram_id=telegram_id)
+        db.add(account)
+        await db.flush()
+    elif telegram_id in ADMIN_USER_IDS and account.role != "admin":
+        account.role = "admin"
+        db.add(account)
+
+    await db.commit()
+
+    access_token = create_access_token(data={"sub": str(account.id), "role": account.role})
+    return Token(access_token=access_token, token_type="bearer")
 
 
 @router.post(
@@ -98,45 +150,40 @@ async def telegram_login(
             detail="Invalid Telegram signature",
         )
 
-    full_name = tg_data.first_name
-    if tg_data.last_name:
-        full_name += f" {tg_data.last_name}"
-
-    stmt = (
-        pg_insert(User)
-        .values(
-            user_id=tg_data.id,
-            username=tg_data.username,
-            full_name=full_name,
-            avatar_pic_url=tg_data.photo_url,
-        )
-        .on_conflict_do_update(
-            index_elements=["user_id"],
-            set_=dict(
-                username=tg_data.username,
-                full_name=full_name,
-                avatar_pic_url=tg_data.photo_url,
-            ),
-        )
+    return await _issue_telegram_account_token(
+        db=db,
+        telegram_id=tg_data.id,
+        first_name=tg_data.first_name,
+        last_name=tg_data.last_name,
+        username=tg_data.username,
+        photo_url=tg_data.photo_url,
     )
-    await db.execute(stmt)
 
-    result = await db.execute(select(WebAccount).where(WebAccount.telegram_id == tg_data.id))
-    account = result.scalar_one_or_none()
 
-    if not account:
-        role = "admin" if tg_data.id in ADMIN_USER_IDS else "user"
-        account = WebAccount(role=role, preferences={}, telegram_id=tg_data.id)
-        db.add(account)
-        await db.flush()
-    elif tg_data.id in ADMIN_USER_IDS and account.role != "admin":
-        account.role = "admin"
-        db.add(account)
+@router.post(
+    "/telegram/webapp",
+    response_model=Token,
+    summary="Exchange Telegram Mini App initData for a bearer token",
+    description="Validates Telegram Mini App initData and returns a JWT for the linked website account.",
+)
+async def telegram_webapp_login(
+    tg_data: TelegramWebAppAuthData, db: AsyncSession = Depends(get_db_session_dependency)
+):
+    user_data = parse_verified_telegram_webapp_init_data(tg_data.init_data)
+    if not user_data:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid Telegram Mini App signature",
+        )
 
-    await db.commit()
-
-    access_token = create_access_token(data={"sub": str(account.id), "role": account.role})
-    return {"access_token": access_token, "token_type": "bearer"}
+    return await _issue_telegram_account_token(
+        db=db,
+        telegram_id=int(user_data["id"]),
+        first_name=str(user_data["first_name"]),
+        last_name=user_data.get("last_name"),
+        username=user_data.get("username"),
+        photo_url=user_data.get("photo_url"),
+    )
 
 
 @router.get(

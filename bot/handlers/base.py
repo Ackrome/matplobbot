@@ -111,6 +111,7 @@ class BaseManager:
         # Private chat handlers
         self.router.message(CommandStart(), F.chat.type == "private")(self.command_start_regular)
         self.router.message(Command("help"), F.chat.type == "private")(self.command_help_private)
+        self.router.message(Command("studio"), F.chat.type == "private")(self.command_studio_private)
         self.router.message(F.text == "🌐 Language / Язык", F.chat.type == "private")(
             self.command_cycle_language_reply
         )
@@ -382,6 +383,13 @@ class BaseManager:
         await message.answer(
             translator.gettext(lang, "help_menu_header"),
             reply_markup=await kb.get_help_inline_keyboard(message.from_user.id),
+        )
+
+    async def command_studio_private(self, message: Message):
+        lang = await translator.get_language(message.from_user.id, message.chat.id)
+        await message.answer(
+            translator.gettext(lang, "webapp_launch_prompt"),
+            reply_markup=kb.get_web_apps_inline_keyboard(lang),
         )
 
     async def command_start_group(self, message: Message):

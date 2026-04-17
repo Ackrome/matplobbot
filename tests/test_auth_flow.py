@@ -1,7 +1,11 @@
+import hashlib
+import hmac
+import json
 import os
 import unittest
 from datetime import datetime, timedelta
 from types import SimpleNamespace
+from urllib.parse import urlencode
 from unittest.mock import AsyncMock, Mock
 
 FASTAPI_AVAILABLE = True
@@ -11,6 +15,7 @@ try:
     from jose import jwt
 
     os.environ.setdefault("JWT_SECRET_KEY", "test-secret-for-unit-tests")
+    os.environ.setdefault("BOT_TOKEN", "123456:test-token")
 
     from fastapi_stats_app import auth as fastapi_auth  # noqa: E402
     from fastapi_stats_app.routers import auth_router  # noqa: E402
@@ -38,6 +43,25 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
         db.refresh = AsyncMock()
         db.add = Mock()
         return db
+
+    def _build_webapp_init_data(self, user_data):
+        params = {
+            "auth_date": "1710000000",
+            "query_id": "test-query",
+            "user": json.dumps(user_data, separators=(",", ":")),
+        }
+        data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(params.items()))
+        secret_key = hmac.new(
+            b"WebAppData",
+            os.environ["BOT_TOKEN"].encode("utf-8"),
+            hashlib.sha256,
+        ).digest()
+        params["hash"] = hmac.new(
+            secret_key,
+            data_check_string.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        return urlencode(params)
 
     def test_register_creates_non_admin_user(self):
         db = self._mock_db(account=None)
@@ -94,6 +118,30 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(response.status_code, 401)
+
+    def test_telegram_webapp_init_data_verifier_accepts_valid_payload(self):
+        init_data = self._build_webapp_init_data(
+            {
+                "id": 12345,
+                "first_name": "Ivan",
+                "last_name": "Petrov",
+                "username": "ivan",
+            }
+        )
+
+        parsed = fastapi_auth.parse_verified_telegram_webapp_init_data(init_data)
+
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed["id"], 12345)
+        self.assertEqual(parsed["first_name"], "Ivan")
+
+    def test_telegram_webapp_init_data_verifier_rejects_tampering(self):
+        init_data = self._build_webapp_init_data({"id": 12345, "first_name": "Ivan"})
+        tampered = init_data.replace("Ivan", "Eve")
+
+        parsed = fastapi_auth.parse_verified_telegram_webapp_init_data(tampered)
+
+        self.assertIsNone(parsed)
 
     def test_logout_returns_success_for_authenticated_user(self):
         self.app.dependency_overrides[auth_router.get_current_user] = lambda: {

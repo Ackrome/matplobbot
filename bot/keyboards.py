@@ -11,6 +11,7 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     KeyboardButton,
     ReplyKeyboardMarkup,
+    WebAppInfo,
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from cachetools import LRUCache
@@ -18,7 +19,7 @@ from cachetools import LRUCache
 from shared_lib.i18n import translator
 
 from . import database  # Import database to check for user repos
-from .config import ADMIN_USER_IDS
+from .config import ADMIN_USER_IDS, PUBLIC_SITE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ BASE_COMMANDS = [
     "/search_presets",
     "/schedule",
     "/myschedule",
+    "/studio",
     "/matp_all",
     "/matp_search",
     "/lec_search",
@@ -40,6 +42,10 @@ BASE_COMMANDS = [
     "🌐 Language / Язык",
 ]
 ADMIN_COMMANDS = ["/update", "/clear_cache"]
+WEB_APP_BUTTONS = (
+    ("webapp_open_schedule", "/schedule?tg=1"),
+    ("webapp_open_studio", "/studio?tg=1"),
+)
 
 # Cache for long code paths to use in callback_data
 code_path_cache = LRUCache(maxsize=1024)
@@ -92,11 +98,41 @@ def _get_user_commands(user_id: int) -> list[str]:
     return commands
 
 
+def _build_site_url(path: str) -> str:
+    return f"{PUBLIC_SITE_URL}{path if path.startswith('/') else '/' + path}"
+
+
+def _build_web_app_button_text(lang: str, key: str) -> str:
+    text = translator.gettext(lang, key)
+    return text if text != f"_{key}_" else key
+
+
+def get_web_apps_inline_keyboard(lang: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for text_key, path in WEB_APP_BUTTONS:
+        builder.row(
+            InlineKeyboardButton(
+                text=_build_web_app_button_text(lang, text_key),
+                web_app=WebAppInfo(url=_build_site_url(path)),
+            )
+        )
+    return builder.as_markup()
+
+
 # Function to get the main ReplyKeyboardMarkup (used for /start, after /code)
 async def get_main_reply_keyboard(user_id: int) -> ReplyKeyboardMarkup:
     current_commands = _get_user_commands(user_id)
-    keyboard_buttons = [[KeyboardButton(text=cmd)] for cmd in current_commands]
     lang = await translator.get_language(user_id)
+    keyboard_buttons = [
+        [
+            KeyboardButton(
+                text=_build_web_app_button_text(lang, text_key),
+                web_app=WebAppInfo(url=_build_site_url(path)),
+            )
+        ]
+        for text_key, path in WEB_APP_BUTTONS
+    ]
+    keyboard_buttons.extend([[KeyboardButton(text=cmd)] for cmd in current_commands])
     return ReplyKeyboardMarkup(
         keyboard=keyboard_buttons,
         resize_keyboard=True,
@@ -110,6 +146,18 @@ async def get_help_inline_keyboard(user_id: int) -> InlineKeyboardMarkup:
     lang = await translator.get_language(user_id)
 
     inline_keyboard_rows = [
+        [
+            InlineKeyboardButton(
+                text=_build_web_app_button_text(lang, "webapp_open_schedule"),
+                web_app=WebAppInfo(url=_build_site_url("/schedule?tg=1")),
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=_build_web_app_button_text(lang, "webapp_open_studio"),
+                web_app=WebAppInfo(url=_build_site_url("/studio?tg=1")),
+            )
+        ],
         [
             InlineKeyboardButton(
                 text=translator.gettext(lang, "help_btn_matp_all"),

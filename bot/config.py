@@ -36,3 +36,4 @@ with open(LATEX_PREAMBLE_PATH, encoding="utf-8") as f:
     LATEX_PREAMBLE = f.read()
 
 PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "http://localhost:9583")
+PUBLIC_SITE_URL = os.getenv("PUBLIC_SITE_URL", "http://localhost:8080").rstrip("/")

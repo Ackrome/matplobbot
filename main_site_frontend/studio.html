@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Document Studio | Matplobbot</title>
     <script src="/js/theme_bootstrap.js?v=1"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="stylesheet" href="/css/tailwind.css?v=1">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
@@ -36,6 +37,31 @@
         html.dark #live-preview-content h1, html.dark #live-preview-content h2 { border-bottom-color: #334155; }
         #live-preview-content pre { background: #f8fafc; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; }
         html.dark #live-preview-content pre { background: #020617; }
+        html.tg-webapp,
+        html.tg-webapp body {
+            height: 100dvh;
+            background: var(--tg-theme-bg-color, #0f172a) !important;
+            color: var(--tg-theme-text-color, #e2e8f0) !important;
+            overscroll-behavior: none;
+        }
+        html.tg-webapp #navbar {
+            height: 56px;
+            padding-left: max(0.75rem, env(safe-area-inset-left));
+            padding-right: max(0.75rem, env(safe-area-inset-right));
+            background: var(--tg-theme-secondary-bg-color, #0f172a);
+        }
+        html.tg-webapp #navbar > div:first-child > a,
+        html.tg-webapp #desktop-nav-links,
+        html.tg-webapp #mobile-menu-button {
+            display: none;
+        }
+        html.tg-webapp .split {
+            height: calc(100dvh - 56px - env(safe-area-inset-bottom));
+        }
+        html.tg-webapp #compile-btn {
+            padding-left: 0.85rem;
+            padding-right: 0.85rem;
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 h-full flex flex-col dark:bg-slate-900 dark:text-slate-100">
@@ -201,6 +227,7 @@
     <!-- Загрузка нашего скрипта -->
     <script src="/js/runtime_config.js?v=1"></script>
     <script src="/js/ui_utils.js?v=1"></script>
+    <script src="/js/telegram_webapp.js?v=1"></script>
     <script src="/js/navbar.js?v=23"></script>
     <script src="/js/studio.js?v=10"></script>
 </body>

@@ -161,6 +161,34 @@ function formatLatency(ms) {
     return `${Math.round(ms)} ms`;
 }
 
+function isDarkTheme() {
+    return document.documentElement.classList.contains("dark");
+}
+
+function getChartPalette() {
+    if (isDarkTheme()) {
+        return {
+            line: "#60a5fa",
+            fill: "rgba(96, 165, 250, 0.16)",
+            grid: "rgba(148, 163, 184, 0.18)",
+            tick: "#94a3b8",
+            tooltipBg: "#0f172a",
+            tooltipText: "#e2e8f0",
+            tooltipBorder: "rgba(71, 85, 105, 0.8)",
+        };
+    }
+
+    return {
+        line: "#2563eb",
+        fill: "rgba(37, 99, 235, 0.12)",
+        grid: "rgba(148, 163, 184, 0.2)",
+        tick: "#64748b",
+        tooltipBg: "#ffffff",
+        tooltipText: "#0f172a",
+        tooltipBorder: "rgba(226, 232, 240, 0.95)",
+    };
+}
+
 function escapeHtml(value) {
     return String(value ?? "")
         .replaceAll("&", "&amp;")
@@ -748,6 +776,8 @@ function renderActivityChart() {
         state.chart.destroy();
     }
 
+    const chartPalette = getChartPalette();
+
     state.chart = new Chart(elements.activityCanvas.getContext("2d"), {
         type: "line",
         data: {
@@ -756,8 +786,8 @@ function renderActivityChart() {
                 {
                     label: "Actions",
                     data: values,
-                    borderColor: "#2563eb",
-                    backgroundColor: "rgba(37, 99, 235, 0.12)",
+                    borderColor: chartPalette.line,
+                    backgroundColor: chartPalette.fill,
                     borderWidth: 2,
                     tension: 0.35,
                     fill: true,
@@ -776,6 +806,11 @@ function renderActivityChart() {
                 tooltip: {
                     mode: "index",
                     intersect: false,
+                    backgroundColor: chartPalette.tooltipBg,
+                    titleColor: chartPalette.tooltipText,
+                    bodyColor: chartPalette.tooltipText,
+                    borderColor: chartPalette.tooltipBorder,
+                    borderWidth: 1,
                 },
             },
             interaction: {
@@ -786,12 +821,18 @@ function renderActivityChart() {
                 y: {
                     beginAtZero: true,
                     grid: {
-                        color: "rgba(148, 163, 184, 0.2)",
+                        color: chartPalette.grid,
+                    },
+                    ticks: {
+                        color: chartPalette.tick,
                     },
                 },
                 x: {
                     grid: {
                         display: false,
+                    },
+                    ticks: {
+                        color: chartPalette.tick,
                     },
                 },
             },
@@ -1201,6 +1242,10 @@ function wireEvents() {
 
     elements.mobileActionDiagnostics?.addEventListener("click", () => {
         elements.diagnosticsPanel?.classList.toggle("hidden");
+    });
+
+    window.addEventListener("mpb-theme-change", () => {
+        renderActivityChart();
     });
 }
 

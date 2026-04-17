@@ -29,6 +29,139 @@
             border-bottom: 1px solid rgba(226, 232, 240, 0.9);
         }
 
+        html.dark {
+            color-scheme: dark;
+        }
+
+        html.dark body {
+            background: #020617;
+            color: #e2e8f0;
+        }
+
+        html.dark .glass {
+            background: rgba(15, 23, 42, 0.88);
+            border-bottom-color: rgba(51, 65, 85, 0.75);
+        }
+
+        html.dark .skeleton {
+            background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+            background-size: 200% 100%;
+        }
+
+        html.dark [class~="bg-white"],
+        html.dark [class~="bg-white/95"],
+        html.dark [class~="bg-gray-50"] {
+            background-color: #0f172a;
+        }
+
+        html.dark [class~="bg-slate-50"],
+        html.dark [class~="bg-slate-50/70"] {
+            background-color: rgba(30, 41, 59, 0.7);
+        }
+
+        html.dark [class~="bg-slate-100"],
+        html.dark [class~="bg-gray-100"] {
+            background-color: #1e293b;
+        }
+
+        html.dark [class~="bg-blue-50"],
+        html.dark [class~="bg-blue-100"],
+        html.dark [class~="bg-blue-50/60"] {
+            background-color: rgba(30, 64, 175, 0.28);
+        }
+
+        html.dark [class~="bg-red-50"] {
+            background-color: rgba(127, 29, 29, 0.28);
+        }
+
+        html.dark [class~="bg-amber-50"] {
+            background-color: rgba(120, 53, 15, 0.32);
+        }
+
+        html.dark [class~="border-slate-100"],
+        html.dark [class~="border-slate-200"],
+        html.dark [class~="border-slate-300"],
+        html.dark [class~="border-gray-200"],
+        html.dark [class~="border-gray-300"] {
+            border-color: rgba(71, 85, 105, 0.72);
+        }
+
+        html.dark [class~="border-red-200"] {
+            border-color: rgba(248, 113, 113, 0.38);
+        }
+
+        html.dark [class~="border-amber-200"] {
+            border-color: rgba(251, 191, 36, 0.38);
+        }
+
+        html.dark [class~="text-slate-900"],
+        html.dark [class~="text-slate-800"] {
+            color: #f8fafc;
+        }
+
+        html.dark [class~="text-slate-700"],
+        html.dark [class~="text-slate-600"],
+        html.dark [class~="text-gray-600"],
+        html.dark [class~="text-gray-700"] {
+            color: #cbd5e1;
+        }
+
+        html.dark [class~="text-slate-500"],
+        html.dark [class~="text-slate-400"],
+        html.dark [class~="text-gray-500"] {
+            color: #94a3b8;
+        }
+
+        html.dark [class~="text-blue-600"],
+        html.dark [class~="text-blue-700"] {
+            color: #60a5fa;
+        }
+
+        html.dark [class~="text-emerald-600"],
+        html.dark [class~="text-emerald-700"] {
+            color: #34d399;
+        }
+
+        html.dark [class~="text-red-600"],
+        html.dark [class~="text-red-700"] {
+            color: #f87171;
+        }
+
+        html.dark [class~="text-amber-600"],
+        html.dark [class~="text-amber-700"],
+        html.dark [class~="text-amber-800"] {
+            color: #fbbf24;
+        }
+
+        html.dark input,
+        html.dark select {
+            background-color: #0f172a;
+            border-color: #475569;
+            color: #e2e8f0;
+        }
+
+        html.dark input:disabled,
+        html.dark select:disabled,
+        html.dark button:disabled {
+            opacity: 0.6;
+        }
+
+        html.dark [class~="hover:bg-white"]:hover,
+        html.dark [class~="hover:bg-slate-50"]:hover,
+        html.dark [class~="hover:bg-slate-100"]:hover,
+        html.dark [class~="hover:bg-gray-100"]:hover {
+            background-color: #1e293b;
+        }
+
+        html.dark [class~="hover:bg-blue-50"]:hover {
+            background-color: rgba(30, 64, 175, 0.34);
+        }
+
+        html.dark [class~="hover:text-blue-600"]:hover,
+        html.dark [class~="hover:text-blue-700"]:hover {
+            color: #93c5fd;
+        }
+
         .nav-hidden {
             transform: translateY(-100%);
             opacity: 0;
@@ -69,6 +202,14 @@
 
         .table-sort-btn:hover {
             color: #0f172a;
+        }
+
+        html.dark .table-sort-btn {
+            color: #94a3b8;
+        }
+
+        html.dark .table-sort-btn:hover {
+            color: #f8fafc;
         }
 
         .table-sort-icon {
@@ -125,7 +266,7 @@
         }
     </script>
 </head>
-<body class="bg-slate-50 text-slate-900">
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
 
     <nav class="glass fixed top-0 w-full z-50 transition-all duration-300 nav-visible" id="navbar">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -438,7 +579,7 @@
     <script src="/js/runtime_config.js?v=1"></script>
     <script src="/js/ui_utils.js?v=1"></script>
     <script src="/js/navbar.js?v=23"></script>
-    <script src="/js/stats.js?v=15"></script>
+    <script src="/js/stats.js?v=16"></script>
     <script src="/js/stats_ux.js?v=1"></script>
 </body>
 </html>

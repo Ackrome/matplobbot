@@ -25,7 +25,6 @@ Last updated: 2026-04-10
 - [ ] Hardcap user inputs: set maximum payload sizes, max execution time for Pandoc/LaTeX, and memory limits inside Celery tasks.
 - [ ] Configure Log Rotation (via Docker logging driver or Python's TimedRotatingFileHandler) with size limits and retention policies to prevent disk exhaustion.
 - [ ] Create a safe broadcast script/admin command to send the announcements and changelog to all active users with proper rate-limiting (max ~30 msgs/sec for Telegram).
-- [ ] Add `/developer_info` command to bot, so it shows Ivan Tishchenko info
 
 ### P1 - Reliability, Security, and Delivery
 - [ ] Publish minimal Terms of Service and Privacy Policy on the website and add a /privacy command to the bot.
@@ -34,7 +33,7 @@ Last updated: 2026-04-10
 
 ### P2 - API, Dashboard & Architecture
 - [ ] Fix `/api/schedule/cached_list` duplicates by returning only latest row per (`entity_type`, `entity_id`) and add API test.
-- [ ] Add backend validation for `/api/schedule/search` term length (reject empty/1-char queries).
+- [x] Add backend validation for `/api/schedule/search` term length (reject empty/1-char queries).
 - [ ] Move CORS allowed origins to env-driven config (`fastapi_stats_app/config.py`).
 - [ ] **Rate Limiting:** Add Redis-based rate limiting to heavy endpoints (e.g., PDF rendering, API searches) to prevent abuse.
 
@@ -54,7 +53,7 @@ Last updated: 2026-04-10
 
 - [ ] Feature: OCR for math. Accept photos, convert to LaTeX code, and allow opening in Studio.
 - [ ] Integrate OpenTelemetry (Tracing + Metrics) with Jaeger/Grafana to trace requests across FastAPI, Bot, and Celery workers.
-- [ ] Upgrade frontend to full PWA: Add Service Worker for offline asset caching and "Install App" prompt.
+- [ ] Upgrade frotend to nfull PWA: Add Service Worker for offline asset caching and "Install App" prompt.
 - [ ] User Achievements/Badges system (e.g., "Late Night Coder", "LaTeX Master") displayed in /profile or /stats.
 - [ ] Enhance FastAPI OpenAPI docs: Add Markdown descriptions, response schemas, and ReDoc styling.
 
@@ -78,6 +77,7 @@ Last updated: 2026-04-10
   - partial: repository indexing can already be triggered and logs indexed file counts, but there is no surfaced status UI yet.
 - [ ] Add onboarding wizard for first-time users (`/start`) to configure language, schedule entity, and notifications.
   - partial: `/start` already has onboarding with language selection and a feature tour, but it does not yet collect schedule entity or notification preferences.
+- [ ] Add `/developer_info` command to bot, so it shows Ivan Tishchenko info
 
 
 ## some duplicates, idk. maybe use later

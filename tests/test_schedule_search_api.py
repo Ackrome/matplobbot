@@ -84,6 +84,27 @@ class TestScheduleSearchAPI(unittest.TestCase):
             ],
         )
 
+    def test_search_rejects_empty_one_character_and_whitespace_terms(self):
+        with patch.object(schedule_router, "create_ruz_api_client") as create_client:
+            for term in ("", "a", "  "):
+                with self.subTest(term=term):
+                    response = self.client.get("/api/schedule/search", params={"term": term})
+                    self.assertEqual(response.status_code, 422)
+
+        create_client.assert_not_called()
+
+    def test_search_strips_valid_term_before_querying_upstream(self):
+        fake_client = types.SimpleNamespace(search=AsyncMock(return_value=[]))
+
+        with patch.object(schedule_router, "create_ruz_api_client", return_value=fake_client):
+            response = self.client.get(
+                "/api/schedule/search",
+                params={"term": " ivan ", "type": "group"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        fake_client.search.assert_awaited_once_with("ivan", "group")
+
     def test_search_without_type_has_deterministic_order_for_equal_match_quality(self):
         fake_client = types.SimpleNamespace(
             search=AsyncMock(
@@ -275,6 +296,12 @@ class TestScheduleSearchAPI(unittest.TestCase):
         self.assertIn("lecturer", examples)
         self.assertIn("teacher", examples)
         self.assertIn("room", examples)
+        term_param = next(
+            (param for param in params if param.get("name") == "term"),
+            None,
+        )
+        self.assertIsNotNone(term_param)
+        self.assertEqual(term_param.get("schema", {}).get("minLength"), 2)
 
     def test_schedule_data_openapi_documents_response_shape(self):
         schema = self.app.openapi()

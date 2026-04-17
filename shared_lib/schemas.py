@@ -208,6 +208,10 @@ class TelegramAuthData(BaseModel):
     hash: str
 
 
+class TelegramWebAppAuthData(BaseModel):
+    init_data: str = Field(..., min_length=1)
+
+
 class CurrentUserResponse(BaseModel):
     id: int
     username: str

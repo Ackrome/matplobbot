@@ -1,8 +1,10 @@
 # fastapi_stats_app/auth.py
 import hashlib
 import hmac
+import json
 import os
 from datetime import datetime, timedelta
+from urllib.parse import parse_qsl
 
 from fastapi import Depends, HTTPException, WebSocket, WebSocketException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -80,6 +82,47 @@ def verify_telegram_authorization(data: dict) -> bool:
     ).hexdigest()
 
     return hmac.compare_digest(expected_hash, received_hash)
+
+
+def parse_verified_telegram_webapp_init_data(init_data: str) -> dict | None:
+    if not BOT_TOKEN:
+        return None
+
+    parsed_data = dict(parse_qsl(init_data, keep_blank_values=True))
+    received_hash = parsed_data.pop("hash", None)
+    if not received_hash:
+        return None
+
+    data_check_string = "\n".join(
+        f"{key}={value}" for key, value in sorted(parsed_data.items())
+    )
+    secret_key = hmac.new(
+        b"WebAppData",
+        BOT_TOKEN.encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    expected_hash = hmac.new(
+        secret_key,
+        data_check_string.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(expected_hash, received_hash):
+        return None
+
+    raw_user = parsed_data.get("user")
+    if not raw_user:
+        return None
+
+    try:
+        user_data = json.loads(raw_user)
+    except json.JSONDecodeError:
+        return None
+
+    if not user_data.get("id") or not user_data.get("first_name"):
+        return None
+
+    user_data["auth_date"] = parsed_data.get("auth_date")
+    return user_data
 
 
 async def get_current_user(

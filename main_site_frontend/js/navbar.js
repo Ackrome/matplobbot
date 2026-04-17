@@ -977,11 +977,20 @@ function exposePublicI18nApi() {
         unregisterTranslator: (fn) => pageTranslators.delete(fn),
     };
 }
+function registerServiceWorker() {
+    if (!("serviceWorker" in navigator) || window.location.protocol === "file:") return;
+    window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/service-worker.js").catch((error) => {
+            console.warn("Service worker registration failed", error);
+        });
+    });
+}
 window.mpbRefreshAuth = checkAuthAndRenderNavbar;
 document.addEventListener("DOMContentLoaded", () => {
     navState.lang = getStoredLanguage();
     document.documentElement.lang = navState.lang;
     exposePublicI18nApi();
+    registerServiceWorker();
     setupMobileMenu();
     setupNavbarScrollBehavior();
     setupHomeSectionSpy();

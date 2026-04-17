@@ -54,6 +54,7 @@ SEARCH_TYPE_QUERY_DESCRIPTION = (
     "Aliases: lecturer -> person, teacher -> person, room -> auditorium."
 )
 SEARCH_TYPE_QUERY_EXAMPLES = ["all", "group", "person", "auditorium", "lecturer", "teacher", "room"]
+SEARCH_TERM_MIN_LENGTH = 2
 
 
 def get_shared_http_session(request: Request) -> aiohttp.ClientSession:
@@ -69,6 +70,16 @@ def _normalize_search_type(search_type: str | None) -> str:
         raise HTTPException(
             status_code=400,
             detail="Unsupported schedule search type. Use all, group, person, or auditorium.",
+        )
+    return normalized
+
+
+def _normalize_search_term(term: str) -> str:
+    normalized = term.strip()
+    if len(normalized) < SEARCH_TERM_MIN_LENGTH:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Schedule search term must contain at least {SEARCH_TERM_MIN_LENGTH} characters.",
         )
     return normalized
 
@@ -174,7 +185,14 @@ def _merge_search_results(results_by_type: dict[str, list[dict]]) -> list[dict]:
     ),
 )
 async def search_entity(
-    term: str = Query(..., description="Search term used against schedule entities."),
+    term: str = Query(
+        ...,
+        min_length=SEARCH_TERM_MIN_LENGTH,
+        description=(
+            "Search term used against schedule entities. "
+            f"Must contain at least {SEARCH_TERM_MIN_LENGTH} non-whitespace characters."
+        ),
+    ),
     type: str = Query(
         "all",
         description=SEARCH_TYPE_QUERY_DESCRIPTION,
@@ -183,6 +201,7 @@ async def search_entity(
     db: AsyncSession = Depends(get_db_session_dependency),
     http_session: aiohttp.ClientSession = Depends(get_shared_http_session),
 ):
+    term = _normalize_search_term(term)
     search_type = _normalize_search_type(type)
     client = create_ruz_api_client(http_session)
 

@@ -613,6 +613,7 @@ Feature details:
 - `lecturer` -> `person`
 - `teacher` -> `person`
 - `room` -> `auditorium`
+- Search terms must contain at least 2 non-whitespace characters; shorter terms return `422`.
 - For mixed entity types with equal relevance, response ordering is deterministic: `group` -> `person` -> `auditorium`, then stable lexical tie-break by label/id.
 - Search automatically falls back to local cache if upstream RUZ fails.
 - Schedule data returns:
@@ -639,7 +640,7 @@ Frontend behavior guidance:
 
 How to use:
 
-1. Call `/search?term=...&type=all|group|person|auditorium`.
+1. Call `/search?term=...&type=all|group|person|auditorium` with a term of at least 2 non-whitespace characters.
 2. Use returned entity `type/id` with `/data/{type}/{id}`.
 3. Optionally pass `base_date=YYYY-MM-DD` to center the loaded window.
 
