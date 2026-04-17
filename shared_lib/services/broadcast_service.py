@@ -82,7 +82,9 @@ def resolve_default_broadcast_files(root: Path = REPO_ROOT) -> list[Path]:
     return files
 
 
-def resolve_broadcast_files(paths: Sequence[str | Path] | None, root: Path = REPO_ROOT) -> list[Path]:
+def resolve_broadcast_files(
+    paths: Sequence[str | Path] | None, root: Path = REPO_ROOT
+) -> list[Path]:
     if not paths:
         files = resolve_default_broadcast_files(root)
     else:
