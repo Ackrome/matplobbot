@@ -695,6 +695,12 @@ class ScheduleManager:
         entity_name = await self._resolve_entity_name(
             user_id, entity_type, original_entity_id, schedule_data
         )
+        source_updated_at = await get_cached_schedule_updated_at(entity_type, original_entity_id)
+        if source_updated_at:
+            schedule_data = [
+                {**lesson, "source_updated_at": source_updated_at.isoformat()}
+                for lesson in schedule_data
+            ]
 
         ical_string = generate_ical_from_schedule(schedule_data, entity_name)
         file_bytes = ical_string.encode("utf-8")

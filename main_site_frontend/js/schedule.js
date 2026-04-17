@@ -548,14 +548,66 @@ function renderMobileFeed(lessons) {
     container.innerHTML = html;
 }
 
+function normalizeLessonKind(kind) {
+    return String(kind || '')
+        .toLowerCase()
+        .replace(/\u0451/g, '\u0435')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function hasLessonKeyword(kind, keywords) {
+    return keywords.some(keyword => kind.includes(keyword));
+}
+
+function isLectureKind(kind) {
+    const k = normalizeLessonKind(kind);
+    return hasLessonKeyword(k, ['\u043b\u0435\u043a\u0446', 'lecture']);
+}
+
+function isPracticeKind(kind) {
+    const k = normalizeLessonKind(kind);
+    return hasLessonKeyword(k, [
+        '\u043f\u0440\u0430\u043a\u0442',
+        '\u0441\u0435\u043c\u0438\u043d',
+        'practice',
+        'seminar'
+    ]);
+}
+
+function isLabKind(kind) {
+    const k = normalizeLessonKind(kind);
+    return hasLessonKeyword(k, ['\u043b\u0430\u0431\u043e\u0440\u0430\u0442', 'laboratory', 'lab']);
+}
+
+function isExamLikeKind(kind) {
+    const k = normalizeLessonKind(kind);
+    return hasLessonKeyword(k, [
+        '\u044d\u043a\u0437\u0430\u043c',
+        '\u0437\u0430\u0447\u0435\u0442',
+        '\u0430\u0442\u0442\u0435\u0441\u0442',
+        'exam',
+        'credit',
+        'test'
+    ]);
+}
+
+function isConsultationKind(kind) {
+    const k = normalizeLessonKind(kind);
+    return hasLessonKeyword(k, ['\u043a\u043e\u043d\u0441\u0443\u043b\u044c\u0442', 'consult']);
+}
+
 function getShortKind(kind) {
     if (!kind) return '';
-    const k = kind.toLowerCase();
-    if (k.includes('лекц') || k.includes('lecture')) return 'Лекция';
-    if (k.includes('практ') || k.includes('семин') || k.includes('seminar')) return 'Семинар';
-    if (k.includes('экзам') || k.includes('зачет') || k.includes('аттест') || k.includes('exam')) return 'Экзамен';
-    if (k.includes('лаборат')) return 'Лабораторная';
-    if (k.includes('консульт')) return 'Консультация';
+    if (isExamLikeKind(kind)) {
+        return isPracticeKind(kind)
+            ? '\u0421\u0435\u043c\u0438\u043d\u0430\u0440+\u0437\u0430\u0447\u0435\u0442'
+            : '\u042d\u043a\u0437\u0430\u043c\u0435\u043d';
+    }
+    if (isLectureKind(kind)) return '\u041b\u0435\u043a\u0446\u0438\u044f';
+    if (isPracticeKind(kind)) return '\u0421\u0435\u043c\u0438\u043d\u0430\u0440';
+    if (isLabKind(kind)) return '\u041b\u0430\u0431\u043e\u0440\u0430\u0442\u043e\u0440\u043d\u0430\u044f';
+    if (isConsultationKind(kind)) return '\u041a\u043e\u043d\u0441\u0443\u043b\u044c\u0442\u0430\u0446\u0438\u044f';
     return kind;
 }
 
@@ -647,24 +699,9 @@ function renderCard(l, isDesktop) {
 
 function getBadgeColor(kind) {
     if (!kind) return { bg: '', border: '', text: 'lesson-kind' };
-    const k = kind.toLowerCase();
-    const isLecture = k.includes('\u043b\u0435\u043a\u0446') || k.includes('lecture');
-    const isPractice =
-        k.includes('практ') ||
-        k.includes('семин') ||
-        k.includes('practice') ||
-        k.includes('seminar');
-    const isExamLike =
-        k.includes('экзам') ||
-        k.includes('зачет') ||
-        k.includes('аттест') ||
-        k.includes('exam') ||
-        k.includes('credit') ||
-        k.includes('test');
-
-    if (isLecture) return { bg: 'lesson-card--lecture', border: '', text: 'lesson-kind' };
-    if (isPractice) return { bg: 'lesson-card--seminar', border: '', text: 'lesson-kind' };
-    if (isExamLike) return { bg: 'lesson-card--exam', border: '', text: 'lesson-kind' };
+    if (isExamLikeKind(kind)) return { bg: 'lesson-card--exam', border: '', text: 'lesson-kind' };
+    if (isLectureKind(kind)) return { bg: 'lesson-card--lecture', border: '', text: 'lesson-kind' };
+    if (isPracticeKind(kind) || isLabKind(kind)) return { bg: 'lesson-card--seminar', border: '', text: 'lesson-kind' };
     return { bg: '', border: '', text: 'lesson-kind' };
 }
 

@@ -446,6 +446,25 @@ async def _get_source_update_map(
     return source_update_map
 
 
+def _attach_source_updated_at(
+    schedule: list[dict],
+    source_update_map: dict[tuple[str, str], datetime],
+) -> list[dict]:
+    enriched_schedule = []
+    for lesson in schedule:
+        lesson_copy = dict(lesson)
+        source_type = lesson_copy.get("source_entity_type")
+        source_id = lesson_copy.get("source_entity_id")
+        if source_type and source_id is not None:
+            updated_at = source_update_map.get((source_type, str(source_id)))
+            if updated_at:
+                if updated_at.tzinfo is None:
+                    updated_at = updated_at.replace(tzinfo=UTC)
+                lesson_copy["source_updated_at"] = updated_at.astimezone(UTC).isoformat()
+        enriched_schedule.append(lesson_copy)
+    return enriched_schedule
+
+
 def _build_profile_health(
     profile: dict,
     filtered_schedule: list[dict],
@@ -908,7 +927,10 @@ async def _render_public_calendar_feed(
     calendar_sources = _get_sources_for_profile(active_subs, sync_state, profile)
     base_schedule = await get_calendar_aggregated_schedule(calendar_sources, start_date, end_date)
     source_update_map = await _get_source_update_map(db, calendar_sources)
-    filtered_schedule = _filter_schedule_for_profile(base_schedule, profile)
+    filtered_schedule = _attach_source_updated_at(
+        _filter_schedule_for_profile(base_schedule, profile),
+        source_update_map,
+    )
     health = _build_profile_health(profile, filtered_schedule, source_update_map, sync_state)
 
     ical_bytes = generate_profile_ical_from_aggregated_schedule(
@@ -973,6 +995,7 @@ async def _render_telegram_filtered_feed(
     request: Request,
     secret_token: str,
     download: bool,
+    db: AsyncSession,
 ) -> Response:
     clean_token = secret_token.replace(".ics", "")
     telegram_user_id = await get_user_id_by_calendar_secret(clean_token)
@@ -998,6 +1021,8 @@ async def _render_telegram_filtered_feed(
         end_date,
         filters,
     )
+    source_update_map = await _get_source_update_map(db, active_subs)
+    aggregated_schedule = _attach_source_updated_at(aggregated_schedule, source_update_map)
 
     ical_bytes = generate_profile_ical_from_aggregated_schedule(
         aggregated_schedule,
@@ -1074,8 +1099,7 @@ async def get_webcal_schedule_telegram_filtered(
     db: AsyncSession = Depends(get_db_session_dependency),
 ):
     try:
-        _ = db  # keep DB dependency lifecycle consistent with other public feed handlers
-        return await _render_telegram_filtered_feed(request, secret_token, download)
+        return await _render_telegram_filtered_feed(request, secret_token, download, db)
     except HTTPException:
         raise
     except Exception as error:

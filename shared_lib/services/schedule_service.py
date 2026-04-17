@@ -92,15 +92,70 @@ def _get_lesson_visuals(kind: str) -> tuple[str, str]:
     return LESSON_STYLES.get(kind, ("🟦", kind))
 
 
+def _normalize_lesson_kind(kind: str) -> str:
+    return (kind or "").lower().replace("\u0451", "\u0435")
+
+
+def _kind_contains_any(normalized_kind: str, keywords: tuple[str, ...]) -> bool:
+    return any(keyword in normalized_kind for keyword in keywords)
+
+
 def _get_simple_lesson_type(kind: str) -> str:
-    normalized_kind = (kind or "").lower()
-    if "лекци" in normalized_kind:
-        return "Lecture"
-    if "практич" in normalized_kind or "семинар" in normalized_kind or "лаборат" in normalized_kind:
-        return "Seminar"
-    if "экзам" in normalized_kind or "аттестация" in normalized_kind or "зачет" in normalized_kind:
+    normalized_kind = _normalize_lesson_kind(kind)
+    if _kind_contains_any(
+        normalized_kind,
+        (
+            "\u044d\u043a\u0437\u0430\u043c",
+            "\u0437\u0430\u0447\u0435\u0442",
+            "\u0430\u0442\u0442\u0435\u0441\u0442",
+            "exam",
+            "credit",
+            "test",
+        ),
+    ):
         return "Exam"
+    if _kind_contains_any(normalized_kind, ("\u043b\u0435\u043a\u0446", "lecture")):
+        return "Lecture"
+    if _kind_contains_any(
+        normalized_kind,
+        (
+            "\u043f\u0440\u0430\u043a\u0442",
+            "\u0441\u0435\u043c\u0438\u043d",
+            "\u043b\u0430\u0431\u043e\u0440\u0430\u0442",
+            "practice",
+            "seminar",
+            "laboratory",
+            "lab",
+        ),
+    ):
+        return "Seminar"
     return "Other"
+
+
+def _format_source_parse_time(value: Any, timezone_name: str = "Europe/Moscow") -> str:
+    if isinstance(value, datetime):
+        parsed_at = value
+    elif isinstance(value, str) and value.strip():
+        try:
+            parsed_at = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return "неизвестно"
+    else:
+        return "неизвестно"
+
+    if parsed_at.tzinfo is None:
+        parsed_at = parsed_at.replace(tzinfo=UTC)
+
+    return parsed_at.astimezone(ZoneInfo(timezone_name)).strftime("%H:%M %d.%m.%Y")
+
+
+def _append_source_parse_time(
+    description_lines: list[str],
+    lesson: dict[str, Any],
+    timezone_name: str = "Europe/Moscow",
+) -> None:
+    parsed_at = _format_source_parse_time(lesson.get("source_updated_at"), timezone_name)
+    description_lines.append(f"Последний парсинг расписания с сайта вуза: {parsed_at}")
 
 
 def _get_discipline_name(full_name: str, use_short_names: bool, short_names_map: dict) -> str:
@@ -451,6 +506,7 @@ def generate_ical_from_schedule(schedule_data: list[dict[str, Any]], entity_name
             description_parts = [f"Преподаватель: {lesson['lecturer_title'].replace('_',' ')}"]
             if "group" in lesson:
                 description_parts.append(f"Группа: {lesson['group']}")
+            _append_source_parse_time(description_parts, lesson)
             event.description = "\n".join(description_parts)
 
             if isinstance(cal.events, list):
@@ -544,7 +600,6 @@ def generate_ical_from_aggregated_schedule(schedule_data: list[dict[str, Any]]) 
 
     cal = Calendar()
     moscow_tz = ZoneInfo("Europe/Moscow")
-    now_dt = datetime.now(moscow_tz)
 
     if schedule_data:
         for lesson in schedule_data:
@@ -582,7 +637,7 @@ def generate_ical_from_aggregated_schedule(schedule_data: list[dict[str, Any]]) 
                 )
                 if "group" in lesson:
                     desc_lines.append(f"Группы: {lesson['group']}")
-                desc_lines.append(f"Обновлено: {now_dt.strftime('%H:%M %d.%m')}")
+                _append_source_parse_time(desc_lines, lesson)
 
                 # Экранируем переносы для библиотеки
                 event.description = "\n".join(desc_lines)
@@ -704,6 +759,7 @@ def generate_profile_ical_from_aggregated_schedule(
                 desc_lines.append(
                     f"Время: {lesson.get('date', '')} {lesson.get('beginLesson', '')}-{lesson.get('endLesson', '')}"
                 )
+                _append_source_parse_time(desc_lines, lesson, timezone_name)
                 event.description = "\n".join(desc_lines)
 
                 if isinstance(cal.events, list):
@@ -813,7 +869,10 @@ async def get_aggregated_schedule(
     # 1. Загружаем глобальный маппинг дисциплин (для гибридной фильтрации модулей)
     discipline_to_module = await get_discipline_modules_map()
 
-    from shared_lib.database import get_cached_schedule  # Импорт внутри во избежание циклов
+    from shared_lib.database import (
+        get_cached_schedule,
+        get_cached_schedule_updated_at,
+    )
 
     for sub in subscriptions:
         # --- Фильтр по Источнику ---
@@ -826,6 +885,11 @@ async def get_aggregated_schedule(
             continue
 
         # Получаем настройки модулей для ЭТОЙ подписки
+        source_updated_at = await get_cached_schedule_updated_at(
+            sub["entity_type"],
+            sub["entity_id"],
+        )
+        source_updated_at_iso = source_updated_at.isoformat() if source_updated_at else None
         selected_modules = await get_subscription_modules(sub["id"])
 
         for lesson in cached_data:
@@ -839,17 +903,7 @@ async def get_aggregated_schedule(
 
             # --- Фильтр по Типу занятия ---
             # Упрощаем типы для фильтрации: 'Lecture', 'Seminar', 'Exam', 'Other'
-            kind = lesson.get("kindOfWork", "")
-            simple_type = "Other"
-            if "Лекци" in kind:
-                simple_type = "Lecture"
-            elif "Практич" in kind or "Семинар" in kind or "Лаборат" in kind:
-                simple_type = "Seminar"
-            elif (
-                "экзамен" in kind.lower() or "аттестация" in kind.lower() or "зачет" in kind.lower()
-            ):
-                simple_type = "Exam"
-
+            simple_type = _get_simple_lesson_type(lesson.get("kindOfWork", ""))
             if simple_type in filter_config.get("excluded_types", []):
                 continue
 
@@ -875,6 +929,8 @@ async def get_aggregated_schedule(
             # Добавляем метку источника, чтобы в общем списке понимать, чья пара
             lesson_copy = lesson.copy()
             lesson_copy["source_entity"] = sub["entity_name"]
+            if source_updated_at_iso:
+                lesson_copy["source_updated_at"] = source_updated_at_iso
             aggregated_lessons.append(lesson_copy)
 
     # Сортируем по времени
@@ -896,12 +952,17 @@ async def get_calendar_aggregated_schedule(
     seen_lesson_keys: set[tuple[Any, ...]] = set()
     discipline_to_module = await get_discipline_modules_map()
 
-    from shared_lib.database import get_cached_schedule
+    from shared_lib.database import get_cached_schedule, get_cached_schedule_updated_at
 
     for sub in subscriptions:
         cached_data = await get_cached_schedule(sub["entity_type"], sub["entity_id"])
         if not cached_data:
             continue
+        source_updated_at = await get_cached_schedule_updated_at(
+            sub["entity_type"],
+            sub["entity_id"],
+        )
+        source_updated_at_iso = source_updated_at.isoformat() if source_updated_at else None
 
         for lesson in cached_data:
             try:
@@ -928,6 +989,8 @@ async def get_calendar_aggregated_schedule(
             lesson_copy["source_entity_id"] = str(sub["entity_id"])
             lesson_copy["module"] = mapped_module if mapped_module else explicit_module
             lesson_copy["simple_type"] = simple_type
+            if source_updated_at_iso:
+                lesson_copy["source_updated_at"] = source_updated_at_iso
 
             dedupe_key = (
                 lesson_copy.get("source_entity_type"),

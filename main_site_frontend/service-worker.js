@@ -1,4 +1,4 @@
-const CACHE_VERSION = "mpb-site-v2";
+const CACHE_VERSION = "mpb-site-v3";
 const CORE_CACHE = `${CACHE_VERSION}-core`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const OFFLINE_URL = "/offline.html";
@@ -23,7 +23,7 @@ const CORE_ASSETS = [
     "/js/navbar.js?v=23",
     "/js/theme_bootstrap.js?v=1",
     "/js/telegram_webapp.js?v=2",
-    "/js/schedule.js?v=22",
+    "/js/schedule.js?v=23",
     "/js/calendar_sync.js?v=5",
     "/js/schedule_ux.js?v=7",
     "/js/studio.js?v=10",

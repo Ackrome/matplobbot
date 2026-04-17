@@ -489,6 +489,7 @@ What it does:
 - full lecturer name
 - Includes copy-to-clipboard actions for room/lecturer.
 - Shows source update timestamp and offline/fallback states.
+- Highlights exam-like lessons, including `Семинар+зачет` and `Экзамены`, with the dedicated exam color instead of the regular seminar color.
 - Persists preference state locally and in account preferences when available.
 
 How to use:
@@ -523,6 +524,7 @@ What it does:
 - rotate secret
 - delete custom preset
 - Shows profile health (event count, next event, cache status, source updated, last access).
+- Adds the last university-site schedule parsing time to every generated iCal event description.
 
 How to use:
 
@@ -532,6 +534,7 @@ How to use:
 4. Open any group, lecturer, or room schedule and use `Save current view` to create a website-only iCal profile.
 5. Select a built-in or custom profile and copy/subscribe to its URL.
 6. Use `Reset link` if URL must be revoked.
+7. Open an event in your calendar app to see when Matplobbot last parsed that source from the university site.
 
 ### Stats Dashboard
 

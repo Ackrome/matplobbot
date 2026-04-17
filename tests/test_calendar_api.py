@@ -369,6 +369,78 @@ class TestCalendarAPI(unittest.TestCase):
         self.assertEqual(response.headers["Cache-Control"], "private, max-age=0, must-revalidate")
         self.assertIn("inline; filename=", response.headers["Content-Disposition"])
 
+    def test_public_feed_passes_source_updated_at_to_ical_generator(self):
+        active_subscriptions = [
+            {
+                "id": 99,
+                "is_active": True,
+                "entity_type": "group",
+                "entity_id": "group-1",
+                "entity_name": "Group 1",
+            }
+        ]
+        profile = dict(calendar_router.BUILT_IN_PROFILES[0])
+        sample_schedule = [
+            {
+                "date": "2026-04-07",
+                "beginLesson": "10:10",
+                "endLesson": "11:40",
+                "discipline": "Physics",
+                "kindOfWork": "Lecture",
+                "source_entity": "Group 1",
+                "source_entity_type": "group",
+                "source_entity_id": "group-1",
+                "simple_type": "Lecture",
+            }
+        ]
+        captured = {}
+
+        def fake_generator(schedule_data, *args, **kwargs):
+            captured["schedule"] = schedule_data
+            return b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n"
+
+        with (
+            patch.object(
+                calendar_router,
+                "_resolve_public_calendar_context",
+                AsyncMock(
+                    return_value=(
+                        12345,
+                        None,
+                        calendar_router._default_calendar_sync_state(),
+                        active_subscriptions,
+                        profile,
+                    )
+                ),
+            ),
+            patch.object(
+                calendar_router,
+                "get_calendar_aggregated_schedule",
+                AsyncMock(return_value=sample_schedule),
+            ),
+            patch.object(
+                calendar_router,
+                "_get_source_update_map",
+                AsyncMock(
+                    return_value={
+                        ("group", "group-1"): datetime(2026, 4, 6, 7, 30, tzinfo=UTC)
+                    }
+                ),
+            ),
+            patch.object(
+                calendar_router,
+                "generate_profile_ical_from_aggregated_schedule",
+                fake_generator,
+            ),
+        ):
+            response = self.client.get("/api/cal/secret123.ics")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            captured["schedule"][0]["source_updated_at"],
+            "2026-04-06T07:30:00+00:00",
+        )
+
     def test_public_custom_feed_uses_custom_profile_source_without_bot_subscription(self):
         sync_state = calendar_router._default_calendar_sync_state()
         custom_profile = {
@@ -521,6 +593,11 @@ class TestCalendarAPI(unittest.TestCase):
                 "get_aggregated_schedule",
                 AsyncMock(return_value=[]),
             ) as aggregated_mock,
+            patch.object(
+                calendar_router,
+                "_get_source_update_map",
+                AsyncMock(return_value={}),
+            ),
             patch.object(
                 calendar_router,
                 "generate_profile_ical_from_aggregated_schedule",
