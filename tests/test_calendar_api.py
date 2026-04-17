@@ -422,9 +422,7 @@ class TestCalendarAPI(unittest.TestCase):
                 calendar_router,
                 "_get_source_update_map",
                 AsyncMock(
-                    return_value={
-                        ("group", "group-1"): datetime(2026, 4, 6, 7, 30, tzinfo=UTC)
-                    }
+                    return_value={("group", "group-1"): datetime(2026, 4, 6, 7, 30, tzinfo=UTC)}
                 ),
             ),
             patch.object(
