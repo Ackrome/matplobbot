@@ -66,7 +66,9 @@ async def set_bot_commands(bot: Bot):
         types.BotCommand(
             command="myschedule", description=get_cmd_desc("ru", "help_btn_myschedule")
         ),
-        types.BotCommand(command="studio", description=translator.gettext("ru", "command_desc_studio")),
+        types.BotCommand(
+            command="studio", description=translator.gettext("ru", "command_desc_studio")
+        ),
         types.BotCommand(command="matp_all", description=get_cmd_desc("ru", "help_btn_matp_all")),
         types.BotCommand(
             command="matp_search", description=get_cmd_desc("ru", "help_btn_matp_search")
@@ -101,7 +103,9 @@ async def set_bot_commands(bot: Bot):
         types.BotCommand(
             command="myschedule", description=get_cmd_desc("en", "help_btn_myschedule")
         ),
-        types.BotCommand(command="studio", description=translator.gettext("en", "command_desc_studio")),
+        types.BotCommand(
+            command="studio", description=translator.gettext("en", "command_desc_studio")
+        ),
         types.BotCommand(command="matp_all", description=get_cmd_desc("en", "help_btn_matp_all")),
         types.BotCommand(
             command="matp_search", description=get_cmd_desc("en", "help_btn_matp_search")

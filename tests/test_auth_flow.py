@@ -5,8 +5,8 @@ import os
 import unittest
 from datetime import datetime, timedelta
 from types import SimpleNamespace
-from urllib.parse import urlencode
 from unittest.mock import AsyncMock, Mock
+from urllib.parse import urlencode
 
 FASTAPI_AVAILABLE = True
 try:

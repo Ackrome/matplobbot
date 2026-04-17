@@ -93,9 +93,7 @@ def parse_verified_telegram_webapp_init_data(init_data: str) -> dict | None:
     if not received_hash:
         return None
 
-    data_check_string = "\n".join(
-        f"{key}={value}" for key, value in sorted(parsed_data.items())
-    )
+    data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(parsed_data.items()))
     secret_key = hmac.new(
         b"WebAppData",
         BOT_TOKEN.encode("utf-8"),

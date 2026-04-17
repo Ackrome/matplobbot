@@ -111,7 +111,9 @@ class BaseManager:
         # Private chat handlers
         self.router.message(CommandStart(), F.chat.type == "private")(self.command_start_regular)
         self.router.message(Command("help"), F.chat.type == "private")(self.command_help_private)
-        self.router.message(Command("studio"), F.chat.type == "private")(self.command_studio_private)
+        self.router.message(Command("studio"), F.chat.type == "private")(
+            self.command_studio_private
+        )
         self.router.message(F.text == "🌐 Language / Язык", F.chat.type == "private")(
             self.command_cycle_language_reply
         )
