@@ -3,6 +3,7 @@ import hashlib
 import logging
 from datetime import date, datetime, timedelta
 from typing import Any
+from urllib.parse import urlsplit
 
 import matplobblib
 from aiogram.fsm.context import FSMContext
@@ -46,6 +47,7 @@ WEB_APP_BUTTONS = (
     ("webapp_open_schedule", "/schedule?tg=1"),
     ("webapp_open_studio", "/studio?tg=1"),
 )
+_WEB_APP_URL_WARNING_EMITTED = False
 
 # Cache for long code paths to use in callback_data
 code_path_cache = LRUCache(maxsize=1024)
@@ -102,18 +104,48 @@ def _build_site_url(path: str) -> str:
     return f"{PUBLIC_SITE_URL}{path if path.startswith('/') else '/' + path}"
 
 
+def _is_valid_telegram_web_app_url(url: str) -> bool:
+    parsed = urlsplit(url)
+    return parsed.scheme.lower() == "https" and bool(parsed.netloc)
+
+
+def _warn_web_app_buttons_disabled() -> None:
+    global _WEB_APP_URL_WARNING_EMITTED
+    if _WEB_APP_URL_WARNING_EMITTED:
+        return
+
+    logger.warning(
+        "Telegram Web App buttons are disabled because PUBLIC_SITE_URL=%r does not build "
+        "valid HTTPS Web App URLs. Set PUBLIC_SITE_URL to the public HTTPS website origin.",
+        PUBLIC_SITE_URL,
+    )
+    _WEB_APP_URL_WARNING_EMITTED = True
+
+
+def _get_web_app_button_specs() -> tuple[tuple[str, str], ...]:
+    specs = tuple((text_key, _build_site_url(path)) for text_key, path in WEB_APP_BUTTONS)
+    if not all(_is_valid_telegram_web_app_url(url) for _, url in specs):
+        _warn_web_app_buttons_disabled()
+        return ()
+    return specs
+
+
 def _build_web_app_button_text(lang: str, key: str) -> str:
     text = translator.gettext(lang, key)
     return text if text != f"_{key}_" else key
 
 
-def get_web_apps_inline_keyboard(lang: str) -> InlineKeyboardMarkup:
+def get_web_apps_inline_keyboard(lang: str) -> InlineKeyboardMarkup | None:
+    web_app_buttons = _get_web_app_button_specs()
+    if not web_app_buttons:
+        return None
+
     builder = InlineKeyboardBuilder()
-    for text_key, path in WEB_APP_BUTTONS:
+    for text_key, url in web_app_buttons:
         builder.row(
             InlineKeyboardButton(
                 text=_build_web_app_button_text(lang, text_key),
-                web_app=WebAppInfo(url=_build_site_url(path)),
+                web_app=WebAppInfo(url=url),
             )
         )
     return builder.as_markup()
@@ -127,10 +159,10 @@ async def get_main_reply_keyboard(user_id: int) -> ReplyKeyboardMarkup:
         [
             KeyboardButton(
                 text=_build_web_app_button_text(lang, text_key),
-                web_app=WebAppInfo(url=_build_site_url(path)),
+                web_app=WebAppInfo(url=url),
             )
         ]
-        for text_key, path in WEB_APP_BUTTONS
+        for text_key, url in _get_web_app_button_specs()
     ]
     keyboard_buttons.extend([[KeyboardButton(text=cmd)] for cmd in current_commands])
     return ReplyKeyboardMarkup(
@@ -148,92 +180,93 @@ async def get_help_inline_keyboard(user_id: int) -> InlineKeyboardMarkup:
     inline_keyboard_rows = [
         [
             InlineKeyboardButton(
-                text=_build_web_app_button_text(lang, "webapp_open_schedule"),
-                web_app=WebAppInfo(url=_build_site_url("/schedule?tg=1")),
+                text=_build_web_app_button_text(lang, text_key),
+                web_app=WebAppInfo(url=url),
             )
-        ],
-        [
-            InlineKeyboardButton(
-                text=_build_web_app_button_text(lang, "webapp_open_studio"),
-                web_app=WebAppInfo(url=_build_site_url("/studio?tg=1")),
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "help_btn_matp_all"),
-                callback_data="help_cmd_matp_all",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "help_btn_matp_search"),
-                callback_data="help_cmd_matp_search",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "help_btn_search"),
-                callback_data="help_cmd_search",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "help_btn_search_presets"),
-                callback_data="help_cmd_search_presets",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "help_btn_schedule"),
-                callback_data="help_cmd_schedule",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "help_btn_myschedule"),
-                callback_data="help_cmd_myschedule",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "help_btn_lec_search"),
-                callback_data="help_cmd_lec_search",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "help_btn_lec_all"), callback_data="help_cmd_lec_all"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "help_btn_favorites"),
-                callback_data="help_cmd_favorites",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "help_btn_settings"),
-                callback_data="help_cmd_settings",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "help_btn_latex"), callback_data="help_cmd_latex"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "help_btn_mermaid"), callback_data="help_cmd_mermaid"
-            )
-        ],  # <--- ДОБАВЛЕНА ЗАПЯТАЯ
-        [
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "help_btn_offershorter"),
-                callback_data="help_cmd_offershorter",
-            )
-        ],
+        ]
+        for text_key, url in _get_web_app_button_specs()
     ]
+    inline_keyboard_rows.extend(
+        [
+            [
+                InlineKeyboardButton(
+                    text=translator.gettext(lang, "help_btn_matp_all"),
+                    callback_data="help_cmd_matp_all",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=translator.gettext(lang, "help_btn_matp_search"),
+                    callback_data="help_cmd_matp_search",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=translator.gettext(lang, "help_btn_search"),
+                    callback_data="help_cmd_search",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=translator.gettext(lang, "help_btn_search_presets"),
+                    callback_data="help_cmd_search_presets",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=translator.gettext(lang, "help_btn_schedule"),
+                    callback_data="help_cmd_schedule",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=translator.gettext(lang, "help_btn_myschedule"),
+                    callback_data="help_cmd_myschedule",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=translator.gettext(lang, "help_btn_lec_search"),
+                    callback_data="help_cmd_lec_search",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=translator.gettext(lang, "help_btn_lec_all"),
+                    callback_data="help_cmd_lec_all",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=translator.gettext(lang, "help_btn_favorites"),
+                    callback_data="help_cmd_favorites",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=translator.gettext(lang, "help_btn_settings"),
+                    callback_data="help_cmd_settings",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=translator.gettext(lang, "help_btn_latex"), callback_data="help_cmd_latex"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=translator.gettext(lang, "help_btn_mermaid"),
+                    callback_data="help_cmd_mermaid",
+                )
+            ],  # <--- ДОБАВЛЕНА ЗАПЯТАЯ
+            [
+                InlineKeyboardButton(
+                    text=translator.gettext(lang, "help_btn_offershorter"),
+                    callback_data="help_cmd_offershorter",
+                )
+            ],
+        ]
+    )
     if user_id in ADMIN_USER_IDS:
         inline_keyboard_rows.append(
             [

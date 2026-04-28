@@ -24,3 +24,6 @@ graphify-out/
 .pycache_tmp_exec_20260410/**
 AGENTS.md
 .codex/**
+
+.ruff_cache/**
+.pycache_tmp_exec_20260410/**

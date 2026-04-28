@@ -395,6 +395,7 @@ What it does:
 - Adds Telegram Web App launch buttons for `/schedule?tg=1` and `/studio?tg=1` to the bot's private reply/help keyboards.
 - Adds `/studio` as a bot command that opens a Web App launch prompt.
 - Uses `PUBLIC_SITE_URL` as the public HTTPS base URL for Telegram Web App buttons.
+- Disables Telegram Web App buttons and logs a warning when `PUBLIC_SITE_URL` does not build HTTPS URLs, preventing Telegram `Bad Request: Only HTTPS links are allowed` errors.
 - Adapts `/schedule` and `/studio` to Telegram viewport, safe-area, color scheme, and theme parameters.
 - Exchanges signed Telegram Mini App `initData` at `/api/auth/telegram/webapp`, rejects stale signatures by `auth_date`, and stores the returned website JWT.
 - Replaces any stale local website JWT inside Telegram with a fresh Mini App token on launch.
@@ -408,6 +409,7 @@ How to use:
 4. Use `/schedule?tg=1` or `/studio?tg=1` for direct Mini App testing from Telegram.
 5. Keep `BOT_TOKEN` configured in FastAPI; Mini App signed auth is rejected without it.
 6. Optionally tune `TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS` if the default 24-hour `auth_date` window is too strict for your deployment.
+7. For local `http://localhost:8080` development, use a public HTTPS tunnel or domain before testing Mini App launch buttons in Telegram; otherwise the bot hides those buttons.
 
 ### PWA Install And Offline Shell
 
