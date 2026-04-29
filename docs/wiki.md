@@ -267,12 +267,14 @@ What it does:
 
 - Sends content to worker-backed render tasks.
 - Returns rendered output to chat.
+- Builds the worker base image on Node 22 and pins `@mermaid-js/mermaid-cli` for stable Mermaid rendering dependencies.
 
 How to use:
 
 1. Send `/latex` or `/mermaid`.
 2. Send expression/diagram text.
 3. Wait for compiled image output.
+4. After changing Mermaid CLI or Node versions, rebuild `matplobbot-base-worker` before rebuilding worker services.
 
 ### Short-Name Suggestions
 

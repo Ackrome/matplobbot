@@ -1,7 +1,8 @@
 # Dockerfile.base-worker
-FROM node:20-slim
+FROM node:22-slim
 
 ARG MIRROR_SITE=http://mirror.truenetwork.ru
+ARG MERMAID_CLI_VERSION=11.12.0
 ENV DEBIAN_FRONTEND=noninteractive \
     APT_OPTS="-y --no-install-recommends" \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
@@ -40,7 +41,7 @@ RUN echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/99retries && \
 
 # 2. Install Mermaid CLI
 RUN set -eux; \
-    npm install -g @mermaid-js/mermaid-cli --no-fund --no-update-notifier; \
+    npm install -g @mermaid-js/mermaid-cli@${MERMAID_CLI_VERSION} --no-fund --no-update-notifier; \
     mmdc --version || true
 
 # 3. Prepare Python Environment
