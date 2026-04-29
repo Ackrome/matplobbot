@@ -1032,12 +1032,14 @@ Source:
 
 - `requirements.in`
 - `requirements.txt`
+- `scheduler_app/requirements.txt`
 - `setup.py`
 
 What it does:
 
 - Pins `Pillow` to a non-vulnerable release range (`>=12.2.0,<13`) and locks `requirements.txt` to `12.2.0`.
-- Keeps CI `pip-audit --strict` green for the currently reported `GHSA-whj4-6x5x-4v2j` advisory.
+- Pins `python-dotenv` to a non-vulnerable release range (`>=1.2.2,<2`) and locks `requirements.txt` to `1.2.2`.
+- Keeps CI `pip-audit --strict` green for the currently reported `GHSA-whj4-6x5x-4v2j` and `GHSA-mf9w-mj56-hr94` advisories.
 
 How to use:
 
