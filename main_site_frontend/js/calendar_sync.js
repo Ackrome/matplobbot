@@ -8,6 +8,7 @@ const shouldFocusCalendarSyncPanel =
 let calendarPlatform = loadCalendarPlatform();
 let revealedCalendarProfileIds = loadRevealedCalendarProfileIds();
 let isCalendarPanelCollapsed = true;
+let hasUserToggledCalendarPanel = false;
 let hasFocusedCalendarSyncPanel = false;
 window.calendarCurrentViewMode = 'all';
 
@@ -99,12 +100,14 @@ function renderCalendarButton(labelKey, fallback, className, attributes = '') {
 }
 
 window.toggleCalendarSubscriptionPanel = function() {
+    hasUserToggledCalendarPanel = true;
     isCalendarPanelCollapsed = !isCalendarPanelCollapsed;
     persistCalendarPanelCollapsed();
     renderCalendarSubscription();
 }
 
 function renderTelegramCalendarAuthPlaceholder(container) {
+    if (!hasUserToggledCalendarPanel) isCalendarPanelCollapsed = true;
     const authState = window.mpbTelegramAuthState || {};
     const isPending = Boolean(authState.pending);
     const statusKey = isPending ? 'schedule.calendar.statusSetup' : 'schedule.calendar.statusUnavailable';

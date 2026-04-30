@@ -13,7 +13,7 @@
     window.mpbTelegramAuthState = {
         attempted: isTelegramLaunch,
         hasInitData: Boolean(webApp?.initData),
-        pending: Boolean(isTelegramLaunch && webApp?.initData),
+        pending: isTelegramLaunch,
         error: null,
     };
 
@@ -27,6 +27,19 @@
 
     function setCssVar(name, value) {
         if (value) document.documentElement.style.setProperty(name, value);
+    }
+
+    function delay(ms) {
+        return new Promise((resolve) => window.setTimeout(resolve, ms));
+    }
+
+    async function waitForInitData(timeoutMs = 3000) {
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < timeoutMs) {
+            if (webApp?.initData) return webApp.initData;
+            await delay(100);
+        }
+        return webApp?.initData || "";
     }
 
     function applyTelegramTheme() {
@@ -44,7 +57,14 @@
     }
 
     async function exchangeInitData() {
-        if (!isTelegramLaunch || !webApp?.initData) {
+        if (!isTelegramLaunch) {
+            markTelegramAuthSettled();
+            return null;
+        }
+
+        const initData = await waitForInitData();
+        window.mpbTelegramAuthState.hasInitData = Boolean(initData);
+        if (!initData) {
             if (isTelegramLaunch) markTelegramAuthSettled("missing-init-data");
             return null;
         }
@@ -52,7 +72,7 @@
         const response = await fetch(`${apiBase}/auth/telegram/webapp`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ init_data: webApp.initData }),
+            body: JSON.stringify({ init_data: initData }),
         });
         if (!response.ok) {
             throw new Error("Telegram Mini App auth failed");
