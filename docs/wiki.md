@@ -430,7 +430,7 @@ What it does:
 - Uses network-first navigation so fresh pages win, then cached pages/offline fallback are used when the network is unavailable.
 - Avoids intercepting same-origin `/api/*` requests so authenticated API calls are not cached by the service worker.
 
-How to use:
+How to use: (or not use)
 
 1. Open the public site over HTTPS.
 2. Use the browser install prompt or mobile `Add to Home Screen`.
