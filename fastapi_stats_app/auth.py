@@ -12,7 +12,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
+import time
 from shared_lib.database import get_db_session_dependency, get_session
 from shared_lib.models import User, WebAccount
 
@@ -129,7 +129,7 @@ def parse_verified_telegram_webapp_init_data(init_data: str) -> dict | None:
         # но расширяем лимит для токенов "из будущего" до 24 часов
         is_from_future = auth_date - now > 86400
         if is_too_old or is_from_future:
-            return NoneW
+            return None
     raw_user = parsed_data.get("user")
     if not raw_user:
         return None
