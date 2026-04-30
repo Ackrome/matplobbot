@@ -124,7 +124,7 @@ def parse_verified_telegram_webapp_init_data(init_data: str) -> dict | None:
     now = int(time.time())
     if TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS > 0:
         is_too_old = now - auth_date > TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS
-        # Оставляем проверку устаревания для тестов (is_too_old), 
+        # Оставляем проверку устаревания для тестов (is_too_old),
         # но расширяем лимит для токенов "из будущего" до 24 часов
         is_from_future = auth_date - now > 86400
         if is_too_old or is_from_future:
