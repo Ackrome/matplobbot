@@ -108,7 +108,7 @@ function renderTelegramCalendarAuthPlaceholder(container) {
     const authState = window.mpbTelegramAuthState || {};
     const isPending = Boolean(authState.pending);
     const statusKey = isPending ? 'schedule.calendar.statusSetup' : 'schedule.calendar.statusUnavailable';
-    const statusFallback = isPending ? 'Setup' : 'Unavailable';
+    const statusFallback = getUiLanguage() === 'ru' ? (isPending ? 'Настройка' : 'Недоступно') : (isPending ? 'Setup' : 'Unavailable');
     const statusClass = isPending
         ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
         : 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300';
@@ -116,8 +116,13 @@ function renderTelegramCalendarAuthPlaceholder(container) {
         ? t('schedule.calendar.expand', 'Expand')
         : t('schedule.calendar.collapse', 'Collapse');
     const detail = isPending
-        ? t('schedule.calendar.telegramAuthPending', 'Signing in through Telegram...')
-        : t('schedule.calendar.telegramAuthUnavailable', 'Calendar sync needs Telegram Mini App sign-in. Open this page from the bot Web App button.');
+        ? t('schedule.calendar.telegramAuthPending', getUiLanguage() === 'ru' ? 'Входим через Telegram...' : 'Signing in through Telegram...')
+        : t(
+            'schedule.calendar.telegramAuthUnavailable',
+            getUiLanguage() === 'ru'
+                ? 'Для синхронизации нужен вход через Telegram Mini App. Откройте страницу кнопкой Web App из бота.'
+                : 'Calendar sync needs Telegram Mini App sign-in. Open this page from the bot Web App button.'
+        );
     const bodyHtml = isCalendarPanelCollapsed
         ? ''
         : `

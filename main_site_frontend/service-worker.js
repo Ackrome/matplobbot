@@ -1,4 +1,4 @@
-const CACHE_VERSION = "mpb-site-v5";
+const CACHE_VERSION = "mpb-site-v6";
 const CORE_CACHE = `${CACHE_VERSION}-core`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const OFFLINE_URL = "/offline.html";
@@ -19,8 +19,7 @@ const CORE_ASSETS = [
     "/css/tailwind.css?v=1",
     "/js/runtime_config.js?v=1",
     "/js/ui_utils.js?v=1",
-    "/js/navbar.js?v=24",
-    "/js/navbar.js?v=23",
+    "/js/navbar.js?v=25",
     "/js/theme_bootstrap.js?v=1",
     "/js/telegram_webapp.js?v=3",
     "/js/schedule.js?v=23",
