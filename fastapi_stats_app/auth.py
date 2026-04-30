@@ -123,7 +123,7 @@ def parse_verified_telegram_webapp_init_data(init_data: str) -> dict | None:
     now = int(time.time())
     if TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS > 0:
         is_too_old = now - auth_date > TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS
-        is_from_future = auth_date - now > 60
+        is_from_future = auth_date - now > 3600
         if is_too_old or is_from_future:
             return None
 
