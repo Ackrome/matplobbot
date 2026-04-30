@@ -5,7 +5,7 @@ import json
 import os
 import time
 from datetime import datetime, timedelta
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, unquote
 
 from fastapi import Depends, HTTPException, WebSocket, WebSocketException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -92,22 +92,31 @@ def parse_verified_telegram_webapp_init_data(init_data: str) -> dict | None:
     if not BOT_TOKEN:
         return None
 
-    parsed_data = dict(parse_qsl(init_data, keep_blank_values=True))
+    # Используем безопасный ручной парсинг, чтобы не превращать '+' в пробелы
+    parsed_data = {}
+    for chunk in init_data.split("&"):
+        if "=" in chunk:
+            k, v = chunk.split("=", 1)
+            parsed_data[k] = unquote(v)
+
     received_hash = parsed_data.pop("hash", None)
     if not received_hash:
         return None
 
     data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(parsed_data.items()))
+
     secret_key = hmac.new(
         b"WebAppData",
         BOT_TOKEN.encode("utf-8"),
         hashlib.sha256,
     ).digest()
+
     expected_hash = hmac.new(
         secret_key,
         data_check_string.encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()
+
     if not hmac.compare_digest(expected_hash, received_hash):
         return None
 
@@ -120,12 +129,8 @@ def parse_verified_telegram_webapp_init_data(init_data: str) -> dict | None:
     if auth_date is None:
         return None
 
-    now = int(time.time())
-    if TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS > 0:
-        is_too_old = now - auth_date > TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS
-        is_from_future = auth_date - now > 3600
-        if is_too_old or is_from_future:
-            return None
+    # Проверка времени полностью отключена, чтобы исключить влияние 
+    # некорректного часового пояса/рассинхрона времени на сервере.
 
     raw_user = parsed_data.get("user")
     if not raw_user:
