@@ -45,6 +45,7 @@ BASE_COMMANDS = [
 ADMIN_COMMANDS = ["/update", "/clear_cache", "/broadcast_release"]
 WEB_APP_BUTTONS = (
     ("webapp_open_schedule", "/schedule?tg=1"),
+    ("webapp_open_calendar_sync", "/schedule?tg=1&calendar=1"),
     ("webapp_open_studio", "/studio?tg=1"),
 )
 _WEB_APP_URL_WARNING_EMITTED = False

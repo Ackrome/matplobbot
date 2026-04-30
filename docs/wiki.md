@@ -564,6 +564,7 @@ What it does:
 - enable/disable sync
 - rotate secret
 - delete custom preset
+- Telegram Mini App launch from the bot's `Calendar Sync` Web App button, which opens `/schedule?tg=1&calendar=1`, signs in with Telegram init data, expands the panel, and scrolls directly to sync management.
 - Shows profile health (event count, next event, cache status, source updated, last access).
 - Adds the last university-site schedule parsing time to every generated iCal event description.
 
@@ -575,7 +576,8 @@ How to use:
 4. Open any group, lecturer, or room schedule and use `Save current view` to create a website-only iCal profile.
 5. Select a built-in or custom profile and copy/subscribe to its URL.
 6. Use `Reset link` if URL must be revoked.
-7. Open an event in your calendar app to see when Matplobbot last parsed that source from the university site.
+7. In Telegram, tap the bot's `Calendar Sync` miniapp button to manage the same WebCal feed without manual website login.
+8. Open an event in your calendar app to see when Matplobbot last parsed that source from the university site.
 
 ### Stats Dashboard
 
@@ -1123,6 +1125,9 @@ Pipeline features:
 
 Jenkins + deploy features:
 
+- `Jenkinsfile.groovy` runs a pre-deploy quality gate before touching production.
+- The quality gate creates `.jenkins-venv`, installs project dependencies, checks critical FastAPI/test imports, runs `ruff check . --select E9,F63,F7,F82`, and runs `python -m unittest discover -s tests -v`.
+- The gate fails if unittest output shows dependency-driven skips/import errors such as missing FastAPI modules.
 - `Jenkinsfile.groovy` performs production deploy and smoke checks.
 - Deploy host fingerprint pinning via `APP_VM_SHA256` (with optional one-off override).
 - `deploy.sh` performs resilient service-by-service pull with lease-error recovery and retries.
@@ -1131,8 +1136,9 @@ Jenkins + deploy features:
 How to use:
 
 1. Push to `main` to run CI and image publishing.
-2. Jenkins deploy job pulls tagged images and runs smoke checks.
-3. Keep `WIKI_PUSH_TOKEN` configured for automatic wiki mirror updates.
+2. Start the Jenkins deploy job; it must pass the pre-deploy quality gate before deployment starts.
+3. Jenkins deploy job pulls tagged images and runs smoke checks.
+4. Keep `WIKI_PUSH_TOKEN` configured for automatic wiki mirror updates.
 
 ## Practical Notes
 

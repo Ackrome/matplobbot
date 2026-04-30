@@ -33,6 +33,7 @@ class _FakeTranslator:
     def gettext(self, lang, key, **kwargs):
         translations = {
             "webapp_open_schedule": "Open Schedule",
+            "webapp_open_calendar_sync": "Calendar Sync",
             "webapp_open_studio": "Open Studio",
             "main_menu_placeholder": "Choose a command",
         }
@@ -64,6 +65,7 @@ class TestTelegramWebAppKeyboards(unittest.IsolatedAsyncioTestCase):
             urls,
             [
                 "https://example.com/schedule?tg=1",
+                "https://example.com/schedule?tg=1&calendar=1",
                 "https://example.com/studio?tg=1",
             ],
         )

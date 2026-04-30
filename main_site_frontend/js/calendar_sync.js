@@ -1,9 +1,14 @@
 ﻿const CALENDAR_PLATFORM_KEY = "mpb_calendar_sync_platform";
 const CALENDAR_REVEALED_PROFILES_KEY = "mpb_calendar_sync_revealed_profiles";
 const CALENDAR_PANEL_COLLAPSED_KEY = "mpb_calendar_sync_collapsed";
+const calendarSyncLaunchParams = new URLSearchParams(window.location.search);
+const shouldFocusCalendarSyncPanel =
+    calendarSyncLaunchParams.get('calendar') === '1' ||
+    calendarSyncLaunchParams.get('panel') === 'calendar';
 let calendarPlatform = loadCalendarPlatform();
 let revealedCalendarProfileIds = loadRevealedCalendarProfileIds();
-let isCalendarPanelCollapsed = loadCalendarPanelCollapsed();
+let isCalendarPanelCollapsed = shouldFocusCalendarSyncPanel ? false : loadCalendarPanelCollapsed();
+let hasFocusedCalendarSyncPanel = false;
 window.calendarCurrentViewMode = 'all';
 
 function createDefaultCalendarSubscriptionState() {
@@ -74,6 +79,14 @@ function persistCalendarPanelCollapsed() {
     try {
         localStorage.setItem(CALENDAR_PANEL_COLLAPSED_KEY, String(isCalendarPanelCollapsed));
     } catch (error) {}
+}
+
+function focusCalendarSyncPanelIfRequested(container) {
+    if (!shouldFocusCalendarSyncPanel || hasFocusedCalendarSyncPanel || !container) return;
+    hasFocusedCalendarSyncPanel = true;
+    window.requestAnimationFrame(() => {
+        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
 }
 
 function renderCalendarButton(labelKey, fallback, className, attributes = '') {
@@ -278,6 +291,7 @@ function renderCalendarSubscription() {
             ${bodyHtml}
         </div>
     `;
+    focusCalendarSyncPanelIfRequested(container);
 }
 
 window.renderCalendarSubscription = renderCalendarSubscription;

@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import html
 import io
 import logging
 import mimetypes
@@ -39,6 +40,11 @@ from ..auth import get_current_user
 router = APIRouter(prefix="/studio", tags=["studio"])
 logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+
+def _build_studio_telegram_caption(project_name: str) -> str:
+    escaped_name = html.escape(project_name, quote=True)
+    return f"📄 Ваш проект: <b>{escaped_name}</b>"
 
 
 async def get_owned_project_or_404(db: AsyncSession, project_id: int, owner_id: int) -> Project:
@@ -546,7 +552,7 @@ async def send_project_to_telegram(
     form_data.add_field(
         "document", pdf_bytes, filename=f"{safe_name}.pdf", content_type="application/pdf"
     )
-    form_data.add_field("caption", f"📄 Ваш проект: <b>{project.name}</b>")
+    form_data.add_field("caption", _build_studio_telegram_caption(project.name))
     form_data.add_field("parse_mode", "HTML")
 
     timeout = aiohttp.ClientTimeout(total=60)

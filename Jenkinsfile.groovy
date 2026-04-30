@@ -30,6 +30,87 @@ pipeline {
     }
 
     stages {
+        stage('Pre-Deploy Quality Gate') {
+            steps {
+                script {
+                    env.FAIL_STAGE = 'Pre-Deploy Quality Gate'
+                    sh '''
+                        bash -euo pipefail <<'BASH'
+
+                        LOG_FILE="$WORKSPACE/quality_gate_stage.log"
+                        : > "$LOG_FILE"
+                        {
+
+                        PYTHON_BIN="${PYTHON_BIN:-python3}"
+                        if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+                          PYTHON_BIN=python
+                        fi
+                        if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+                          echo "ERROR: python3/python is required for the pre-deploy quality gate."
+                          exit 1
+                        fi
+
+                        "$PYTHON_BIN" -m venv .jenkins-venv
+                        . .jenkins-venv/bin/activate
+
+                        python -m pip install --upgrade pip
+                        python -m pip install -e .
+                        python -m pip install -r requirements.txt -r fastapi_stats_app/requirements.txt -r scheduler_app/requirements.txt
+                        python -m pip install ruff==0.8.6
+
+                        python - <<'PY'
+import importlib
+import sys
+
+required_modules = [
+    "aiohttp",
+    "aiogram",
+    "fastapi",
+    "fastapi.testclient",
+    "jose",
+    "passlib",
+    "sqlalchemy",
+]
+missing = []
+for module_name in required_modules:
+    try:
+        importlib.import_module(module_name)
+    except Exception as exc:
+        missing.append(f"{module_name}: {exc}")
+
+if missing:
+    print("ERROR: required test/runtime imports are unavailable:")
+    for item in missing:
+        print(f"- {item}")
+    sys.exit(1)
+PY
+
+                        ruff check . --select E9,F63,F7,F82
+
+                        export JWT_SECRET_KEY="jenkins-test-secret"
+                        export BOT_TOKEN="123456:test-token"
+                        export ADMIN_USER_IDS=""
+
+                        set +e
+                        python -m unittest discover -s tests -v 2>&1 | tee unittest_output.log
+                        test_status="${PIPESTATUS[0]}"
+                        set -e
+                        if [ "$test_status" -ne 0 ]; then
+                          exit "$test_status"
+                        fi
+
+                        if grep -Eiq 'fastapi is not installed|ModuleNotFoundError|No module named' unittest_output.log; then
+                          echo "ERROR: unittest output indicates tests were skipped or degraded because dependencies are missing."
+                          exit 1
+                        fi
+
+                        } 2>&1 | tee -a "$LOG_FILE"
+BASH
+                    '''
+                }
+            }
+        }
+
         stage('Deploy to Production') {
             steps {
                 script {
@@ -300,7 +381,7 @@ BASH
                 }
 
                 def failedStage = env.FAIL_STAGE ?: 'unknown'
-                def stageLogFile = (failedStage == 'Post-Deploy Smoke Checks') ? 'smoke_stage.log' : 'deploy_stage.log'
+                def stageLogFile = (failedStage == 'Post-Deploy Smoke Checks') ? 'smoke_stage.log' : ((failedStage == 'Pre-Deploy Quality Gate') ? 'quality_gate_stage.log' : 'deploy_stage.log')
                 def stageLogContent = fileExists(stageLogFile) ? readFile(file: stageLogFile) : ''
                 def stageLogLines = stageLogContent ? stageLogContent.readLines() : []
                 def tailLines = stageLogLines.size() > 40 ? stageLogLines[-40..-1] : stageLogLines

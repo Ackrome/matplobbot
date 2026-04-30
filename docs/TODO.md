@@ -27,9 +27,8 @@ Last updated: 2026-04-17
 - [x] Create a safe broadcast script/admin command to send the announcements and changelog to all active users with proper rate-limiting (max ~30 msgs/sec for Telegram).
 
 ### P1 - Reliability, Security, and Delivery
-- [ ] Publish minimal Terms of Service and Privacy Policy on the website and add a /privacy command to the bot.
-- [ ] Escape HTML-sensitive `project.name` before Studio Telegram send (`parse_mode=HTML`) to prevent malformed captions/injection-like rendering; add regression test with `<`, `>`, `&`, and quotes.
-- [ ] Add Jenkins pre-deploy quality gate (`python -m unittest` or `pytest` + lint) and fail fast when FastAPI test modules are skipped because dependencies are missing.
+- [x] Escape HTML-sensitive `project.name` before Studio Telegram send (`parse_mode=HTML`) to prevent malformed captions/injection-like rendering; add regression test with `<`, `>`, `&`, and quotes.
+- [x] Add Jenkins pre-deploy quality gate (`python -m unittest` or `pytest` + lint) and fail fast when FastAPI test modules are skipped because dependencies are missing.
 
 ### P2 - API, Dashboard & Architecture
 - [ ] Fix `/api/schedule/cached_list` duplicates by returning only latest row per (`entity_type`, `entity_id`) and add API test.
@@ -39,6 +38,7 @@ Last updated: 2026-04-17
 
 ### P2 - Killer Features & Integrations (The "Cool" Factor)
 - [x] **Telegram Mini App (TMA):** Integrate `/schedule` and `/studio` as seamless Web Apps inside Telegram.
+- [x] Well, in miniapps we should integrate calendas sync subscription management too. So if user in telegram uses it - it should be able to manage his webcal sync.
 - [ ] **Smart OCR:** Accept photos of formulas/boards, convert to LaTeX (via API), and open in Document Studio.
 - [x] **PWA Upgrade:** Add a Service Worker to `main_site_frontend` for instant offline loading and mobile app installation.
 

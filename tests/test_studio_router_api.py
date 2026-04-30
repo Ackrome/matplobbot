@@ -174,6 +174,53 @@ class TestStudioRouterAPI(unittest.TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertTrue(response.json().get("detail"))
 
+    def test_send_telegram_escapes_project_name_in_html_caption(self):
+        project = SimpleNamespace(
+            id=1,
+            owner_id=1,
+            name='Report <draft> & "quotes" \'single\'',
+            build_cache=None,
+        )
+        files = [
+            SimpleNamespace(
+                file_path="main.tex",
+                content_text="\\documentclass{article}",
+                content_binary=None,
+                is_main=True,
+            )
+        ]
+        self.db.execute.side_effect = [_mock_scalar_result(project), _mock_scalars_result(files)]
+        fake_session = _FakeTelegramSession(_FakeTelegramResponse(status=200, body="ok"))
+
+        with (
+            patch.object(studio_router, "BOT_TOKEN", "test-token"),
+            patch.object(studio_router, "dispatch_traced_task") as mocked_dispatch_task,
+            patch.object(
+                studio_router.asyncio,
+                "to_thread",
+                new=AsyncMock(
+                    return_value={"status": "ok", "pdf": base64.b64encode(b"%PDF-test").decode()}
+                ),
+            ),
+            patch.object(studio_router.aiohttp, "ClientSession", return_value=fake_session),
+        ):
+            mocked_dispatch_task.return_value = SimpleNamespace(get=Mock())
+            response = self.client.post("/api/studio/projects/1/send_telegram")
+
+        self.assertEqual(response.status_code, 200)
+        _, post_kwargs = fake_session.post_calls[0]
+        fields = {
+            field[0]["name"]: field[2]
+            for field in post_kwargs["data"]._fields
+            if "name" in field[0]
+        }
+        self.assertEqual(fields["parse_mode"], "HTML")
+        self.assertEqual(
+            fields["caption"],
+            "📄 Ваш проект: <b>Report &lt;draft&gt; &amp; &quot;quotes&quot; &#x27;single&#x27;</b>",
+        )
+        self.assertNotIn("<draft>", fields["caption"])
+
     def test_studio_openapi_documents_typed_and_binary_responses(self):
         schema = self.app.openapi()
 
