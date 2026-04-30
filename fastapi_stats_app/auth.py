@@ -4,12 +4,7 @@ import hmac
 import json
 import os
 from datetime import datetime, timedelta
-<<<<<<< HEAD
 from urllib.parse import parse_qsl
-=======
-from urllib.parse import unquote
-
->>>>>>> 4657a144b0034d88bbb9cacb479319044478e740
 from fastapi import Depends, HTTPException, WebSocket, WebSocketException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -126,7 +121,6 @@ def parse_verified_telegram_webapp_init_data(init_data: str) -> dict | None:
     if auth_date is None:
         return None
 
-<<<<<<< HEAD
     now = int(time.time())
     if TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS > 0:
         is_too_old = now - auth_date > TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS
@@ -134,12 +128,7 @@ def parse_verified_telegram_webapp_init_data(init_data: str) -> dict | None:
         # но расширяем лимит для токенов "из будущего" до 24 часов
         is_from_future = auth_date - now > 86400
         if is_too_old or is_from_future:
-            return None
-=======
-    # Проверка времени полностью отключена, чтобы исключить влияние
-    # некорректного часового пояса/рассинхрона времени на сервере.
->>>>>>> 4657a144b0034d88bbb9cacb479319044478e740
-
+            return NoneW
     raw_user = parsed_data.get("user")
     if not raw_user:
         return None
