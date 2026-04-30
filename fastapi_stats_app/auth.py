@@ -3,9 +3,8 @@ import hashlib
 import hmac
 import json
 import os
-import time
 from datetime import datetime, timedelta
-from urllib.parse import parse_qsl, unquote
+from urllib.parse import unquote
 
 from fastapi import Depends, HTTPException, WebSocket, WebSocketException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -129,7 +128,7 @@ def parse_verified_telegram_webapp_init_data(init_data: str) -> dict | None:
     if auth_date is None:
         return None
 
-    # Проверка времени полностью отключена, чтобы исключить влияние 
+    # Проверка времени полностью отключена, чтобы исключить влияние
     # некорректного часового пояса/рассинхрона времени на сервере.
 
     raw_user = parsed_data.get("user")
