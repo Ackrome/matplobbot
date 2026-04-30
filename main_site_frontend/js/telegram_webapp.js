@@ -10,6 +10,20 @@
         isActive: isTelegramLaunch,
         webApp: webApp || null,
     };
+    window.mpbTelegramAuthState = {
+        attempted: isTelegramLaunch,
+        hasInitData: Boolean(webApp?.initData),
+        pending: Boolean(isTelegramLaunch && webApp?.initData),
+        error: null,
+    };
+
+    function markTelegramAuthSettled(error = null) {
+        window.mpbTelegramAuthState.pending = false;
+        window.mpbTelegramAuthState.error = error ? String(error.message || error) : null;
+        window.dispatchEvent(new CustomEvent("mpb-telegram-auth-settled", {
+            detail: { ...window.mpbTelegramAuthState },
+        }));
+    }
 
     function setCssVar(name, value) {
         if (value) document.documentElement.style.setProperty(name, value);
@@ -30,7 +44,10 @@
     }
 
     async function exchangeInitData() {
-        if (!isTelegramLaunch || !webApp?.initData) return null;
+        if (!isTelegramLaunch || !webApp?.initData) {
+            if (isTelegramLaunch) markTelegramAuthSettled("missing-init-data");
+            return null;
+        }
 
         const response = await fetch(`${apiBase}/auth/telegram/webapp`, {
             method: "POST",
@@ -44,11 +61,13 @@
         const data = await response.json();
         localStorage.setItem("jwt_token", data.access_token);
         window.dispatchEvent(new CustomEvent("mpb-auth-token-changed"));
+        markTelegramAuthSettled();
         return data.access_token;
     }
 
     window.mpbTelegramAuthReady = exchangeInitData().catch((error) => {
         console.warn(error);
+        markTelegramAuthSettled(error);
         return null;
     });
 

@@ -564,7 +564,8 @@ What it does:
 - enable/disable sync
 - rotate secret
 - delete custom preset
-- Telegram Mini App launch from the bot's `Calendar Sync` Web App button, which opens `/schedule?tg=1&calendar=1`, signs in with Telegram init data, expands the panel, and scrolls directly to sync management.
+- Telegram Mini App launch from the bot's `Calendar Sync` Web App button, which opens `/schedule?tg=1&calendar=1`, signs in with Telegram init data, keeps the panel collapsed on open, and scrolls directly to the sync card.
+- In Telegram Mini App, the collapsed sync card remains visible while Telegram auth is pending or unavailable, so users can expand it and see the sign-in state instead of the panel disappearing.
 - Shows profile health (event count, next event, cache status, source updated, last access).
 - Adds the last university-site schedule parsing time to every generated iCal event description.
 
@@ -572,11 +573,11 @@ How to use:
 
 1. Sign in and open `/schedule`.
 2. Link the website account to Telegram to generate the private secret link.
-3. Expand `Calendar subscription`.
+3. Expand `Calendar subscription` when you need to copy links or edit sync settings; it opens collapsed by default.
 4. Open any group, lecturer, or room schedule and use `Save current view` to create a website-only iCal profile.
 5. Select a built-in or custom profile and copy/subscribe to its URL.
 6. Use `Reset link` if URL must be revoked.
-7. In Telegram, tap the bot's `Calendar Sync` miniapp button to manage the same WebCal feed without manual website login.
+7. In Telegram, tap the bot's `Calendar Sync` miniapp button to open the collapsed sync card and manage the same WebCal feed without manual website login.
 8. Open an event in your calendar app to see when Matplobbot last parsed that source from the university site.
 
 ### Stats Dashboard

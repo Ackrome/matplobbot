@@ -7,7 +7,7 @@ const shouldFocusCalendarSyncPanel =
     calendarSyncLaunchParams.get('panel') === 'calendar';
 let calendarPlatform = loadCalendarPlatform();
 let revealedCalendarProfileIds = loadRevealedCalendarProfileIds();
-let isCalendarPanelCollapsed = shouldFocusCalendarSyncPanel ? false : loadCalendarPanelCollapsed();
+let isCalendarPanelCollapsed = true;
 let hasFocusedCalendarSyncPanel = false;
 window.calendarCurrentViewMode = 'all';
 
@@ -104,6 +104,56 @@ window.toggleCalendarSubscriptionPanel = function() {
     renderCalendarSubscription();
 }
 
+function renderTelegramCalendarAuthPlaceholder(container) {
+    const authState = window.mpbTelegramAuthState || {};
+    const isPending = Boolean(authState.pending);
+    const statusKey = isPending ? 'schedule.calendar.statusSetup' : 'schedule.calendar.statusUnavailable';
+    const statusFallback = isPending ? 'Setup' : 'Unavailable';
+    const statusClass = isPending
+        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+        : 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300';
+    const toggleLabel = isCalendarPanelCollapsed
+        ? t('schedule.calendar.expand', 'Expand')
+        : t('schedule.calendar.collapse', 'Collapse');
+    const detail = isPending
+        ? t('schedule.calendar.telegramAuthPending', 'Signing in through Telegram...')
+        : t('schedule.calendar.telegramAuthUnavailable', 'Calendar sync needs Telegram Mini App sign-in. Open this page from the bot Web App button.');
+    const bodyHtml = isCalendarPanelCollapsed
+        ? ''
+        : `
+            <div id="calendarSubscriptionBody" class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+                ${escapeHtml(detail)}
+            </div>
+        `;
+
+    container.innerHTML = `
+        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                    <div class="mb-1 text-xs font-black uppercase tracking-[0.2em] text-blue-500 dark:text-blue-300">${escapeHtml(t('schedule.calendar.eyebrow', 'Sync'))}</div>
+                    <h2 class="text-xl font-black text-slate-900 dark:text-slate-100">${escapeHtml(t('schedule.calendar.title', 'Calendar subscription'))}</h2>
+                    <p class="mt-1 max-w-3xl text-sm text-slate-600 dark:text-slate-300">${escapeHtml(t('schedule.calendar.description', 'Connect your personal ICS feed to Apple Calendar, Google Calendar, or any other calendar app.'))}</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="rounded-full px-3 py-1 text-xs font-black ${statusClass}">${escapeHtml(t(statusKey, statusFallback))}</span>
+                    <button type="button" onclick="toggleCalendarSubscriptionPanel()"
+                        aria-expanded="${String(!isCalendarPanelCollapsed)}"
+                        aria-controls="calendarSubscriptionBody"
+                        aria-label="${escapeHtml(toggleLabel)}"
+                        class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
+                        <span>${escapeHtml(toggleLabel)}</span>
+                        <svg class="h-3.5 w-3.5 transition-transform ${isCalendarPanelCollapsed ? '' : 'rotate-180'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            ${bodyHtml}
+        </div>
+    `;
+    focusCalendarSyncPanelIfRequested(container);
+}
+
 function renderCalendarSubscription() {
     const container = document.getElementById('calendarSubscriptionSection');
     if (!container) return;
@@ -150,8 +200,12 @@ function renderCalendarSubscription() {
     }
 
     if (!scheduleAuthUser) {
-        container.innerHTML = '';
-        container.classList.add('hidden');
+        if (window.mpbTelegramWebApp?.isActive) {
+            renderTelegramCalendarAuthPlaceholder(container);
+        } else {
+            container.innerHTML = '';
+            container.classList.add('hidden');
+        }
         return;
     }
 
@@ -296,6 +350,10 @@ function renderCalendarSubscription() {
 
 window.renderCalendarSubscription = renderCalendarSubscription;
 window._renderCalendarSubscriptionImpl = renderCalendarSubscription;
+
+window.addEventListener('mpb-telegram-auth-settled', () => {
+    if (!scheduleAuthUser) renderCalendarSubscription();
+});
 
 window.getSelectedCalendarProfile = function() {
     return (calendarSubscriptionState.profiles ||[]).find((profile) => profile.selected) || null;
