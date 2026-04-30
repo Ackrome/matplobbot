@@ -178,7 +178,7 @@ class TestStudioRouterAPI(unittest.TestCase):
         project = SimpleNamespace(
             id=1,
             owner_id=1,
-            name='Report <draft> & "quotes" \'single\'',
+            name="Report <draft> & \"quotes\" 'single'",
             build_cache=None,
         )
         files = [
