@@ -40,6 +40,17 @@ from shared_lib.database import (
 )
 from shared_lib.i18n import translator
 from shared_lib.redis_client import redis_client
+from shared_lib.services.calendar_sync_state import (
+    CALENDAR_PROFILE_LIMIT,
+    CALENDAR_SYNC_KEY,
+    CalendarProfilePayload,
+    build_profile_definitions,
+    build_profile_links,
+    find_profile_definition,
+    normalize_calendar_sync_state,
+    serialize_calendar_sync_state,
+    upsert_custom_profile,
+)
 from shared_lib.services.schedule_service import (
     format_schedule,
     generate_ical_from_aggregated_schedule,
@@ -49,17 +60,6 @@ from shared_lib.services.schedule_service import (
     get_schedule_with_cache_fallback,
     get_semester_bounds,
     get_unique_modules_hybrid,
-)
-from shared_lib.services.calendar_sync_state import (
-    CALENDAR_SYNC_KEY,
-    CALENDAR_PROFILE_LIMIT,
-    CalendarProfilePayload,
-    build_profile_definitions,
-    build_profile_links,
-    find_profile_definition,
-    normalize_calendar_sync_state,
-    serialize_calendar_sync_state,
-    upsert_custom_profile,
 )
 from shared_lib.services.university_api import RuzAPIClient  # Import the class for type hinting
 
@@ -138,7 +138,9 @@ class ScheduleManager:
         self.router.callback_query(F.data == "mysch_cal_revoke")(self.handle_cal_revoke)
         self.router.message(Command("calendar_sync"))(self.cmd_calendar_sync)
         self.router.callback_query(F.data == "cal_sync_menu")(self.handle_calendar_sync_menu)
-        self.router.callback_query(F.data == "cal_sync_profiles")(self.handle_calendar_sync_profiles)
+        self.router.callback_query(F.data == "cal_sync_profiles")(
+            self.handle_calendar_sync_profiles
+        )
         self.router.callback_query(F.data == "cal_sync_toggle")(self.handle_calendar_sync_toggle)
         self.router.callback_query(F.data == "cal_sync_reset")(self.handle_calendar_sync_reset)
         self.router.callback_query(F.data == "cal_sync_add_subscription")(
@@ -1904,7 +1906,9 @@ class ScheduleManager:
         context = await self._load_calendar_sync_context(user_id)
         sync_state = context["sync_state"]
         if not find_profile_definition(sync_state, profile_id):
-            await callback.answer(translator.gettext(lang, "cal_sync_profile_not_found"), show_alert=True)
+            await callback.answer(
+                translator.gettext(lang, "cal_sync_profile_not_found"), show_alert=True
+            )
             return
 
         sync_state["selected_profile_id"] = profile_id
@@ -1922,7 +1926,9 @@ class ScheduleManager:
             profile for profile in sync_state["custom_profiles"] if profile["id"] != profile_id
         ]
         if len(next_profiles) == len(sync_state["custom_profiles"]):
-            await callback.answer(translator.gettext(lang, "cal_sync_profile_not_found"), show_alert=True)
+            await callback.answer(
+                translator.gettext(lang, "cal_sync_profile_not_found"), show_alert=True
+            )
             return
 
         sync_state["custom_profiles"] = next_profiles
@@ -1939,12 +1945,16 @@ class ScheduleManager:
         try:
             sub_id = int(callback.data.split(":", 1)[1])
         except (IndexError, ValueError):
-            await callback.answer(translator.gettext(lang, "subscription_info_outdated"), show_alert=True)
+            await callback.answer(
+                translator.gettext(lang, "subscription_info_outdated"), show_alert=True
+            )
             return
 
         sub = await database.get_subscription_by_id(sub_id)
         if not sub or sub["user_id"] != user_id:
-            await callback.answer(translator.gettext(lang, "subscription_info_outdated"), show_alert=True)
+            await callback.answer(
+                translator.gettext(lang, "subscription_info_outdated"), show_alert=True
+            )
             return
 
         modules = await get_subscription_modules(sub_id)

@@ -153,7 +153,11 @@ def build_profile_definitions(sync_state: dict) -> list[dict]:
 
 def find_profile_definition(sync_state: dict, profile_id: str) -> dict | None:
     return next(
-        (profile for profile in build_profile_definitions(sync_state) if profile["id"] == profile_id),
+        (
+            profile
+            for profile in build_profile_definitions(sync_state)
+            if profile["id"] == profile_id
+        ),
         None,
     )
 
@@ -201,9 +205,13 @@ def build_custom_profile_name(payload: CalendarProfilePayload) -> str:
     return f"{payload.entity_name} ({suffix})"
 
 
-def upsert_custom_profile(sync_state: dict, payload: CalendarProfilePayload) -> tuple[dict, dict, bool]:
+def upsert_custom_profile(
+    sync_state: dict, payload: CalendarProfilePayload
+) -> tuple[dict, dict, bool]:
     normalized_modules = sorted({module.strip() for module in payload.modules if module.strip()})
-    next_state = normalize_calendar_sync_state({CALENDAR_SYNC_KEY: serialize_calendar_sync_state(sync_state)})
+    next_state = normalize_calendar_sync_state(
+        {CALENDAR_SYNC_KEY: serialize_calendar_sync_state(sync_state)}
+    )
     existing_profile = next(
         (
             profile

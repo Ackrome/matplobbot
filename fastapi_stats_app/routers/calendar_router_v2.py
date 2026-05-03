@@ -23,8 +23,8 @@ from shared_lib.models import CachedSchedule, WebAccount
 from shared_lib.redis_client import redis_client
 from shared_lib.schemas import (
     CalendarSubscriptionProfileCreateRequest,
-    CalendarSubscriptionProfileUpdateRequest,
     CalendarSubscriptionProfileSelectRequest,
+    CalendarSubscriptionProfileUpdateRequest,
     CalendarSubscriptionResponse,
     CalendarSubscriptionToggleRequest,
 )
