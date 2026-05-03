@@ -23,6 +23,7 @@ from shared_lib.models import CachedSchedule, WebAccount
 from shared_lib.redis_client import redis_client
 from shared_lib.schemas import (
     CalendarSubscriptionProfileCreateRequest,
+    CalendarSubscriptionProfileUpdateRequest,
     CalendarSubscriptionProfileSelectRequest,
     CalendarSubscriptionResponse,
     CalendarSubscriptionToggleRequest,
@@ -870,6 +871,46 @@ async def delete_calendar_subscription_profile(
     sync_state["profile_status"].pop(profile_id, None)
     if sync_state.get("selected_profile_id") == profile_id:
         sync_state["selected_profile_id"] = DEFAULT_PROFILE_ID
+
+    account = await _save_calendar_sync_state(account, db, sync_state)
+    current_user["preferences"] = (
+        account.preferences if account else current_user.get("preferences", {})
+    )
+    current_user["db_obj"] = account
+    return await _build_calendar_subscription_response(request, current_user, db)
+
+
+@router.patch(
+    "/cal/subscription/profiles/{profile_id}",
+    response_model=CalendarSubscriptionResponse,
+    summary="Update a custom website calendar profile",
+)
+async def update_calendar_subscription_profile(
+    profile_id: str,
+    payload: CalendarSubscriptionProfileUpdateRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session_dependency),
+    current_user: dict = Depends(get_current_user),
+):
+    _validate_calendar_sync_user(current_user)
+    account = await _get_account_for_current_user(current_user, db)
+    sync_state = _normalize_calendar_sync_state(current_user.get("preferences"))
+
+    profile = next(
+        (item for item in sync_state["custom_profiles"] if item["id"] == profile_id),
+        None,
+    )
+    if not profile:
+        raise HTTPException(status_code=404, detail="Calendar profile not found")
+
+    if payload.name is not None:
+        profile["name"] = payload.name.strip()
+    if payload.lesson_mode is not None:
+        profile["lesson_mode"] = payload.lesson_mode
+    if payload.modules is not None:
+        profile["modules"] = sorted(
+            {str(module).strip() for module in payload.modules if str(module).strip()}
+        )
 
     account = await _save_calendar_sync_state(account, db, sync_state)
     current_user["preferences"] = (

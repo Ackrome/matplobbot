@@ -1,6 +1,8 @@
 ﻿const CALENDAR_PLATFORM_KEY = "mpb_calendar_sync_platform";
 const CALENDAR_REVEALED_PROFILES_KEY = "mpb_calendar_sync_revealed_profiles";
 const CALENDAR_PANEL_COLLAPSED_KEY = "mpb_calendar_sync_collapsed";
+const CALENDAR_BOT_DEEPLINK =
+    window.__MPB_BOT_DEEPLINK__ || "https://t.me/matplobbot?start=calendar_sync";
 const calendarSyncLaunchParams = new URLSearchParams(window.location.search);
 const shouldFocusCalendarSyncPanel =
     calendarSyncLaunchParams.get('calendar') === '1' ||
@@ -99,6 +101,15 @@ function renderCalendarButton(labelKey, fallback, className, attributes = '') {
     `;
 }
 
+function renderCalendarBotLink(className = '') {
+    return `
+        <a href="${escapeHtml(CALENDAR_BOT_DEEPLINK)}" target="_blank" rel="noopener"
+            class="inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-bold transition-colors ${className}">
+            ${escapeHtml(t('schedule.calendar.botManage', 'Open in bot'))}
+        </a>
+    `;
+}
+
 window.toggleCalendarSubscriptionPanel = function() {
     hasUserToggledCalendarPanel = true;
     isCalendarPanelCollapsed = !isCalendarPanelCollapsed;
@@ -144,6 +155,7 @@ function renderTelegramCalendarAuthPlaceholder(container) {
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="rounded-full px-3 py-1 text-xs font-black ${statusClass}">${escapeHtml(t(statusKey, statusFallback))}</span>
+                    ${renderCalendarBotLink('border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50')}
                     <button type="button" onclick="toggleCalendarSubscriptionPanel()"
                         aria-expanded="${String(!isCalendarPanelCollapsed)}"
                         aria-controls="calendarSubscriptionBody"
@@ -268,6 +280,64 @@ function renderCalendarSubscription() {
         [t('schedule.calendar.health.next', 'Next'), health.next_event_at ? formatCalendarDateTime(health.next_event_at, health.next_event_label || '') : escapeHtml('-')],
         [t('schedule.calendar.health.updated', 'Cache updated'), health.source_updated_at ? formatCalendarDateTime(health.source_updated_at, '') : escapeHtml('-')]
     ] : [];
+    const profileKindLabel = selectedProfile?.kind === 'custom'
+        ? t('schedule.calendar.profile.custom', 'Preset')
+        : t('schedule.calendar.profile.builtin', 'Built-in');
+    const lessonModeLabel = selectedProfile?.lesson_mode === 'exams_only'
+        ? t('schedule.calendar.mode.exams', 'Exams only')
+        : t('schedule.calendar.mode.all', 'All classes');
+    const modulesLabel = selectedProfile?.modules?.length
+        ? t('schedule.calendar.currentView.someModules', 'Selected modules: {count}', { count: selectedProfile.modules.length })
+        : t('schedule.calendar.currentView.allModules', 'All modules');
+    const canUpdateModulesFromCurrentView = Boolean(
+        selectedProfile?.kind === 'custom' &&
+        currentEntity?.id &&
+        selectedProfile.entity_type === currentEntity.type &&
+        String(selectedProfile.entity_id) === String(currentEntity.id)
+    );
+    const profileSettings = selectedProfile
+        ? `
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/40">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="min-w-0">
+                        <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400">${escapeHtml(t('schedule.calendar.profileSettings', 'Profile settings'))}</div>
+                        <div class="mt-1 text-base font-black text-slate-900 dark:text-slate-100">${escapeHtml(selectedProfile.name)}</div>
+                        <div class="mt-1 text-sm text-slate-500 dark:text-slate-400">${escapeHtml(selectedProfile.scope_label || selectedProfile.entity_name || selectedProfile.name)}</div>
+                    </div>
+                    ${selectedProfile.kind === 'custom' ? `
+                        <div class="flex flex-wrap gap-2">
+                            ${renderCalendarButton('schedule.calendar.rename', 'Rename', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="renameCalendarSubscriptionProfile('${escapeJsString(selectedProfile.id)}')"`) }
+                            ${canUpdateModulesFromCurrentView ? renderCalendarButton('schedule.calendar.updateModules', 'Use current filters', 'border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50', `onclick="updateCalendarSubscriptionProfile('${escapeJsString(selectedProfile.id)}', { modules: window.getCalendarCurrentViewModules() })"`) : ''}
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70">
+                        <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(t('schedule.calendar.meta.type', 'Type'))}</div>
+                        <div class="mt-1 text-xs font-bold text-slate-700 dark:text-slate-200">${escapeHtml(profileKindLabel)}</div>
+                    </div>
+                    <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70">
+                        <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(t('schedule.calendar.meta.mode', 'Mode'))}</div>
+                        ${selectedProfile.kind === 'custom' ? `
+                            <select onchange="updateCalendarSubscriptionProfile('${escapeJsString(selectedProfile.id)}', { lesson_mode: this.value })"
+                                class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                                <option value="all" ${selectedProfile.lesson_mode === 'all' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.all', 'All classes'))}</option>
+                                <option value="exams_only" ${selectedProfile.lesson_mode === 'exams_only' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.exams', 'Exams only'))}</option>
+                            </select>
+                        ` : `<div class="mt-1 text-xs font-bold text-slate-700 dark:text-slate-200">${escapeHtml(lessonModeLabel)}</div>`}
+                    </div>
+                    <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70">
+                        <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(t('schedule.calendar.meta.modules', 'Modules'))}</div>
+                        <div class="mt-1 text-xs font-bold text-slate-700 dark:text-slate-200">${escapeHtml(modulesLabel)}</div>
+                    </div>
+                    <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70">
+                        <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(t('schedule.calendar.meta.subscriptions', 'Subscriptions'))}</div>
+                        <div class="mt-1 text-xs font-bold text-slate-700 dark:text-slate-200">${escapeHtml(String(selectedProfile.subscription_count ?? 0))}</div>
+                    </div>
+                </div>
+            </div>
+        `
+        : '';
 
     const urlPanel = state.eligibility?.available
         ? `
@@ -312,6 +382,7 @@ function renderCalendarSubscription() {
             <div id="calendarSubscriptionBody" class="mt-5 space-y-4">
                 ${profiles.length ? `<div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">${profileButtons}</div>` : ''}
                 ${currentViewSave}
+                ${profileSettings}
                 ${urlPanel}
                 ${selectedProfile ? `
                     <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
@@ -337,6 +408,7 @@ function renderCalendarSubscription() {
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="rounded-full px-3 py-1 text-xs font-black ${statusClass}">${escapeHtml(t(statusKey, statusFallback))}</span>
+                    ${renderCalendarBotLink('border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50')}
                     ${isCalendarPanelCollapsed ? '' : deleteButton}
                     <button type="button" onclick="toggleCalendarSubscriptionPanel()"
                         aria-expanded="${String(!isCalendarPanelCollapsed)}"
@@ -573,6 +645,27 @@ window.createCalendarProfileFromCurrentView = async function() {
             modules: window.getCalendarCurrentViewModules()
         })
     });
+}
+
+window.updateCalendarSubscriptionProfile = async function(profileId, payload) {
+    if (!profileId || !payload || typeof payload !== 'object') return;
+    await performCalendarMutation(`${API_BASE}/cal/subscription/profiles/${encodeURIComponent(profileId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+    });
+}
+
+window.renameCalendarSubscriptionProfile = async function(profileId) {
+    const selectedProfile = window.getSelectedCalendarProfile();
+    if (!profileId || !selectedProfile || selectedProfile.id !== profileId) return;
+    const nextName = window.prompt(
+        t('schedule.calendar.renamePrompt', 'Preset name'),
+        selectedProfile.name || ''
+    );
+    if (nextName === null) return;
+    const trimmed = nextName.trim();
+    if (!trimmed) return;
+    await window.updateCalendarSubscriptionProfile(profileId, { name: trimmed });
 }
 
 window.deleteCalendarSubscriptionProfile = async function(profileId) {

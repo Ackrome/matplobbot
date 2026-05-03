@@ -317,6 +317,12 @@ class CalendarSubscriptionProfileCreateRequest(BaseModel):
     modules: list[str] = Field(default_factory=list)
 
 
+class CalendarSubscriptionProfileUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    lesson_mode: Literal["all", "exams_only"] | None = None
+    modules: list[str] | None = None
+
+
 class CalendarSubscriptionProfileSelectRequest(BaseModel):
     profile_id: str = Field(..., min_length=1, max_length=64)
 

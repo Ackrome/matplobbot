@@ -1,6 +1,7 @@
 import asyncio
 import calendar
 import hashlib
+import html
 import json
 import logging
 import re
@@ -48,6 +49,17 @@ from shared_lib.services.schedule_service import (
     get_schedule_with_cache_fallback,
     get_semester_bounds,
     get_unique_modules_hybrid,
+)
+from shared_lib.services.calendar_sync_state import (
+    CALENDAR_SYNC_KEY,
+    CALENDAR_PROFILE_LIMIT,
+    CalendarProfilePayload,
+    build_profile_definitions,
+    build_profile_links,
+    find_profile_definition,
+    normalize_calendar_sync_state,
+    serialize_calendar_sync_state,
+    upsert_custom_profile,
 )
 from shared_lib.services.university_api import RuzAPIClient  # Import the class for type hinting
 
@@ -124,6 +136,23 @@ class ScheduleManager:
         )
         self.router.callback_query(F.data == "mysch_cal_link")(self.handle_cal_link)
         self.router.callback_query(F.data == "mysch_cal_revoke")(self.handle_cal_revoke)
+        self.router.message(Command("calendar_sync"))(self.cmd_calendar_sync)
+        self.router.callback_query(F.data == "cal_sync_menu")(self.handle_calendar_sync_menu)
+        self.router.callback_query(F.data == "cal_sync_profiles")(self.handle_calendar_sync_profiles)
+        self.router.callback_query(F.data == "cal_sync_toggle")(self.handle_calendar_sync_toggle)
+        self.router.callback_query(F.data == "cal_sync_reset")(self.handle_calendar_sync_reset)
+        self.router.callback_query(F.data == "cal_sync_add_subscription")(
+            self.handle_calendar_sync_add_subscription
+        )
+        self.router.callback_query(F.data.startswith("cal_sync_select:"))(
+            self.handle_calendar_sync_select_profile
+        )
+        self.router.callback_query(F.data.startswith("cal_sync_delete:"))(
+            self.handle_calendar_sync_delete_profile
+        )
+        self.router.callback_query(F.data.startswith("cal_sync_sub_profile:"))(
+            self.handle_calendar_sync_create_subscription_profile
+        )
 
     async def _append_source_parsed_time(
         self, text: str, lang: str, entity_type: str, entity_id: str
@@ -1583,6 +1612,12 @@ class ScheduleManager:
         )
         builder.row(
             InlineKeyboardButton(
+                text=translator.gettext(lang, "cal_sync_profiles_button"),
+                callback_data="cal_sync_menu",
+            )
+        )
+        builder.row(
+            InlineKeyboardButton(
                 text=translator.gettext(lang, "kb_back_to_calendar_button"),
                 callback_data="mysch_back_cal",
             )
@@ -1605,3 +1640,341 @@ class ScheduleManager:
             show_alert=True,
         )
         await self._send_cal_link_message(callback.message, callback.from_user.id, is_edit=True)
+
+    async def _load_calendar_sync_context(self, user_id: int) -> dict:
+        preferences = await database.get_or_create_web_account_preferences_for_telegram(user_id)
+        sync_state = normalize_calendar_sync_state(preferences)
+        secret = await database.get_or_create_calendar_secret(user_id)
+        subscriptions, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
+        active_subscriptions = [item for item in subscriptions if item["is_active"]]
+
+        from bot.config import PUBLIC_API_URL
+
+        return {
+            "preferences": preferences,
+            "sync_state": sync_state,
+            "secret": secret,
+            "base_url": PUBLIC_API_URL.rstrip("/"),
+            "subscriptions": subscriptions,
+            "active_subscriptions": active_subscriptions,
+            "profiles": build_profile_definitions(sync_state),
+        }
+
+    async def _save_calendar_sync_state_for_user(
+        self, user_id: int, preferences: dict, sync_state: dict
+    ) -> dict:
+        next_preferences = dict(preferences or {})
+        next_preferences[CALENDAR_SYNC_KEY] = serialize_calendar_sync_state(sync_state)
+        return await database.save_web_account_preferences_for_telegram(user_id, next_preferences)
+
+    @staticmethod
+    def _shorten_button_label(value: str, max_len: int = 34) -> str:
+        return value if len(value) <= max_len else f"{value[: max_len - 1]}..."
+
+    def _calendar_profile_link(self, context: dict, profile_id: str) -> dict[str, str]:
+        return build_profile_links(context["base_url"], context["secret"], profile_id)
+
+    def _calendar_profile_label(self, lang: str, profile: dict) -> str:
+        mode_key = (
+            "cal_sync_mode_exams"
+            if profile.get("lesson_mode") == "exams_only"
+            else "cal_sync_mode_all"
+        )
+        type_key = (
+            "cal_sync_profile_type_custom"
+            if profile.get("kind") == "custom"
+            else "cal_sync_profile_type_builtin"
+        )
+        modules = profile.get("modules") or []
+        module_text = (
+            translator.gettext(lang, "cal_sync_modules_count", count=len(modules))
+            if modules
+            else translator.gettext(lang, "cal_sync_modules_all")
+        )
+        return translator.gettext(
+            lang,
+            "cal_sync_profile_line",
+            name=html.escape(str(profile.get("name", "-"))),
+            type=translator.gettext(lang, type_key),
+            mode=translator.gettext(lang, mode_key),
+            modules=module_text,
+        )
+
+    def _build_calendar_sync_menu_keyboard(self, lang: str, context: dict) -> InlineKeyboardBuilder:
+        sync_state = context["sync_state"]
+        selected_profile_id = sync_state.get("selected_profile_id", "all")
+        links = self._calendar_profile_link(context, selected_profile_id)
+        enabled = bool(sync_state.get("enabled", True))
+
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "cal_sync_open_link_button"),
+                url=links["http_url"],
+            )
+        )
+        builder.row(
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "settings_manage_subscriptions_btn"),
+                callback_data="manage_personal_subscriptions",
+            )
+        )
+        builder.row(
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "cal_sync_profiles_button"),
+                callback_data="cal_sync_profiles",
+            )
+        )
+        builder.row(
+            InlineKeyboardButton(
+                text=translator.gettext(
+                    lang,
+                    "cal_sync_disable_button" if enabled else "cal_sync_enable_button",
+                ),
+                callback_data="cal_sync_toggle",
+            ),
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "cal_link_reset_button"),
+                callback_data="cal_sync_reset",
+            ),
+        )
+        builder.row(
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "cal_sync_add_subscription_button"),
+                callback_data="cal_sync_add_subscription",
+            )
+        )
+        return builder
+
+    async def _render_calendar_sync_menu(
+        self, target: Message | CallbackQuery, user_id: int, is_edit: bool = False
+    ):
+        lang = await translator.get_language(user_id)
+        context = await self._load_calendar_sync_context(user_id)
+        sync_state = context["sync_state"]
+        profiles = context["profiles"]
+        selected_profile_id = sync_state.get("selected_profile_id", "all")
+        selected_profile = find_profile_definition(sync_state, selected_profile_id) or profiles[0]
+        links = self._calendar_profile_link(context, selected_profile["id"])
+
+        text = translator.gettext(
+            lang,
+            "cal_sync_menu_text",
+            status=translator.gettext(
+                lang,
+                "cal_sync_status_enabled"
+                if sync_state.get("enabled", True)
+                else "cal_sync_status_disabled",
+            ),
+            profile=html.escape(selected_profile.get("name", "-")),
+            profile_count=len(profiles),
+            active_count=len(context["active_subscriptions"]),
+            total_count=len(context["subscriptions"]),
+            link=html.escape(links["masked_http_url"]),
+        )
+        keyboard = self._build_calendar_sync_menu_keyboard(lang, context)
+        message = target.message if isinstance(target, CallbackQuery) else target
+        if is_edit:
+            await message.edit_text(text, reply_markup=keyboard.as_markup(), parse_mode="HTML")
+        else:
+            await message.answer(text, reply_markup=keyboard.as_markup(), parse_mode="HTML")
+
+    async def cmd_calendar_sync(self, message: Message, state: FSMContext | None = None):
+        if state:
+            await state.clear()
+        await self._render_calendar_sync_menu(message, message.from_user.id, is_edit=False)
+
+    async def handle_calendar_sync_menu(self, callback: CallbackQuery):
+        await self._render_calendar_sync_menu(callback, callback.from_user.id, is_edit=True)
+        await callback.answer()
+
+    async def handle_calendar_sync_toggle(self, callback: CallbackQuery):
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        context = await self._load_calendar_sync_context(user_id)
+        sync_state = context["sync_state"]
+        sync_state["enabled"] = not bool(sync_state.get("enabled", True))
+        preferences = await self._save_calendar_sync_state_for_user(
+            user_id, context["preferences"], sync_state
+        )
+        context["preferences"] = preferences
+        context["sync_state"] = normalize_calendar_sync_state(preferences)
+        await callback.answer(
+            translator.gettext(
+                lang,
+                "cal_sync_enabled_toast"
+                if context["sync_state"].get("enabled", True)
+                else "cal_sync_disabled_toast",
+            )
+        )
+        await self._render_calendar_sync_menu(callback, user_id, is_edit=True)
+
+    async def handle_calendar_sync_reset(self, callback: CallbackQuery):
+        await database.regenerate_calendar_secret(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id)
+        await callback.answer(translator.gettext(lang, "cal_link_reset_success"), show_alert=True)
+        await self._render_calendar_sync_menu(callback, callback.from_user.id, is_edit=True)
+
+    async def handle_calendar_sync_add_subscription(
+        self, callback: CallbackQuery, state: FSMContext
+    ):
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
+        await callback.answer()
+        await callback.message.answer(translator.gettext(lang, "cal_sync_add_subscription_hint"))
+        schedule_message = callback.message.model_copy(update={"from_user": callback.from_user})
+        await self.cmd_schedule(schedule_message, state)
+
+    async def handle_calendar_sync_profiles(self, callback: CallbackQuery, answer: bool = True):
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        context = await self._load_calendar_sync_context(user_id)
+        sync_state = context["sync_state"]
+        selected_profile_id = sync_state.get("selected_profile_id", "all")
+
+        profile_lines = [
+            self._calendar_profile_label(lang, profile) for profile in context["profiles"]
+        ]
+        text = translator.gettext(
+            lang,
+            "cal_sync_profiles_text",
+            profile_count=len(context["profiles"]),
+            profile_limit=CALENDAR_PROFILE_LIMIT,
+            profiles="\n".join(profile_lines) if profile_lines else "-",
+        )
+
+        builder = InlineKeyboardBuilder()
+        for profile in context["profiles"]:
+            selected_prefix = "✓ " if profile["id"] == selected_profile_id else ""
+            label = self._shorten_button_label(f"{selected_prefix}{profile['name']}")
+            if profile.get("can_delete"):
+                builder.row(
+                    InlineKeyboardButton(
+                        text=label,
+                        callback_data=f"cal_sync_select:{profile['id']}",
+                    ),
+                    InlineKeyboardButton(
+                        text=translator.gettext(lang, "btn_delete"),
+                        callback_data=f"cal_sync_delete:{profile['id']}",
+                    ),
+                )
+            else:
+                builder.row(
+                    InlineKeyboardButton(
+                        text=label,
+                        callback_data=f"cal_sync_select:{profile['id']}",
+                    )
+                )
+
+        active_subs = context["active_subscriptions"]
+        if active_subs:
+            builder.row(
+                InlineKeyboardButton(
+                    text=translator.gettext(lang, "cal_sync_create_profile_header"),
+                    callback_data="noop",
+                )
+            )
+            for sub in active_subs[:8]:
+                builder.row(
+                    InlineKeyboardButton(
+                        text=self._shorten_button_label(f"+ {sub['entity_name']}"),
+                        callback_data=f"cal_sync_sub_profile:{sub['id']}",
+                    )
+                )
+
+        builder.row(
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "settings_manage_subscriptions_btn"),
+                callback_data="manage_personal_subscriptions",
+            )
+        )
+        builder.row(
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "back_to_settings"),
+                callback_data="cal_sync_menu",
+            )
+        )
+        await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+        if answer:
+            await callback.answer()
+
+    async def handle_calendar_sync_select_profile(self, callback: CallbackQuery):
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        profile_id = callback.data.split(":", 1)[1]
+        context = await self._load_calendar_sync_context(user_id)
+        sync_state = context["sync_state"]
+        if not find_profile_definition(sync_state, profile_id):
+            await callback.answer(translator.gettext(lang, "cal_sync_profile_not_found"), show_alert=True)
+            return
+
+        sync_state["selected_profile_id"] = profile_id
+        await self._save_calendar_sync_state_for_user(user_id, context["preferences"], sync_state)
+        await callback.answer(translator.gettext(lang, "cal_sync_profile_selected"))
+        await self.handle_calendar_sync_profiles(callback, answer=False)
+
+    async def handle_calendar_sync_delete_profile(self, callback: CallbackQuery):
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        profile_id = callback.data.split(":", 1)[1]
+        context = await self._load_calendar_sync_context(user_id)
+        sync_state = context["sync_state"]
+        next_profiles = [
+            profile for profile in sync_state["custom_profiles"] if profile["id"] != profile_id
+        ]
+        if len(next_profiles) == len(sync_state["custom_profiles"]):
+            await callback.answer(translator.gettext(lang, "cal_sync_profile_not_found"), show_alert=True)
+            return
+
+        sync_state["custom_profiles"] = next_profiles
+        sync_state.get("profile_status", {}).pop(profile_id, None)
+        if sync_state.get("selected_profile_id") == profile_id:
+            sync_state["selected_profile_id"] = "all"
+        await self._save_calendar_sync_state_for_user(user_id, context["preferences"], sync_state)
+        await callback.answer(translator.gettext(lang, "cal_sync_profile_deleted"))
+        await self.handle_calendar_sync_profiles(callback, answer=False)
+
+    async def handle_calendar_sync_create_subscription_profile(self, callback: CallbackQuery):
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
+        try:
+            sub_id = int(callback.data.split(":", 1)[1])
+        except (IndexError, ValueError):
+            await callback.answer(translator.gettext(lang, "subscription_info_outdated"), show_alert=True)
+            return
+
+        sub = await database.get_subscription_by_id(sub_id)
+        if not sub or sub["user_id"] != user_id:
+            await callback.answer(translator.gettext(lang, "subscription_info_outdated"), show_alert=True)
+            return
+
+        modules = await get_subscription_modules(sub_id)
+        context = await self._load_calendar_sync_context(user_id)
+        sync_state = context["sync_state"]
+        payload = CalendarProfilePayload(
+            entity_type=sub["entity_type"],
+            entity_id=str(sub["entity_id"]),
+            entity_name=sub["entity_name"],
+            lesson_mode="all",
+            modules=tuple(modules or ()),
+        )
+        try:
+            next_state, _profile, created = upsert_custom_profile(sync_state, payload)
+        except ValueError:
+            await callback.answer(
+                translator.gettext(
+                    lang,
+                    "cal_sync_profile_limit",
+                    count=CALENDAR_PROFILE_LIMIT,
+                ),
+                show_alert=True,
+            )
+            return
+
+        await self._save_calendar_sync_state_for_user(user_id, context["preferences"], next_state)
+        await callback.answer(
+            translator.gettext(
+                lang,
+                "cal_sync_profile_created" if created else "cal_sync_profile_selected",
+            )
+        )
+        await self.handle_calendar_sync_profiles(callback, answer=False)

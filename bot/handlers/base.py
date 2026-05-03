@@ -364,6 +364,14 @@ class BaseManager:
         await callback.answer()
 
     async def command_start_regular(self, message: Message):
+        payload = ""
+        if message.text:
+            parts = message.text.split(maxsplit=1)
+            payload = parts[1].strip() if len(parts) > 1 else ""
+        if payload in {"calendar_sync", "cal_sync"}:
+            await self.schedule_manager.cmd_calendar_sync(message)
+            return
+
         lang = await translator.get_language(message.from_user.id, message.chat.id)
         await message.answer(
             translator.gettext(lang, "start_welcome", full_name=message.from_user.full_name),

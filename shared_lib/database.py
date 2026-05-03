@@ -19,6 +19,7 @@ from .models import (
     UserFavorite,
     UserGithubRepo,
     UserScheduleSubscription,
+    WebAccount,
 )
 from .redis_client import redis_client
 
@@ -330,6 +331,50 @@ async def get_user_myschedule_filter_presets(user_id: int) -> list[dict]:
 async def get_user_myschedule_filter_preset(user_id: int, preset_id: str) -> dict | None:
     presets = await get_user_myschedule_filter_presets(user_id)
     return next((item for item in presets if item.get("id") == preset_id), None)
+
+
+async def get_or_create_web_account_preferences_for_telegram(user_id: int) -> dict:
+    async with get_session() as session:
+        await session.execute(
+            pg_insert(User)
+            .values(user_id=user_id, full_name="Unknown User")
+            .on_conflict_do_nothing()
+        )
+
+        result = await session.execute(select(WebAccount).where(WebAccount.telegram_id == user_id))
+        account = result.scalar_one_or_none()
+        if not account:
+            account = WebAccount(role="user", preferences={}, telegram_id=user_id)
+            session.add(account)
+            await session.flush()
+
+        preferences = dict(account.preferences or {})
+        await session.commit()
+        return preferences
+
+
+async def save_web_account_preferences_for_telegram(user_id: int, preferences: dict) -> dict:
+    async with get_session() as session:
+        await session.execute(
+            pg_insert(User)
+            .values(user_id=user_id, full_name="Unknown User")
+            .on_conflict_do_nothing()
+        )
+
+        result = await session.execute(
+            select(WebAccount).where(WebAccount.telegram_id == user_id).with_for_update()
+        )
+        account = result.scalar_one_or_none()
+        if not account:
+            account = WebAccount(role="user", preferences={}, telegram_id=user_id)
+            session.add(account)
+            await session.flush()
+
+        account.preferences = dict(preferences or {})
+        session.add(account)
+        await session.commit()
+        await session.refresh(account)
+        return dict(account.preferences or {})
 
 
 async def save_user_myschedule_filter_preset(

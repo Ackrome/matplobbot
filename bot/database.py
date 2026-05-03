@@ -28,6 +28,9 @@ from shared_lib.database import (
     get_or_create_calendar_secret as get_or_create_calendar_secret,
 )
 from shared_lib.database import (
+    get_or_create_web_account_preferences_for_telegram as get_or_create_web_account_preferences_for_telegram,
+)
+from shared_lib.database import (
     get_session as get_session,
 )
 from shared_lib.database import (
@@ -88,6 +91,9 @@ from shared_lib.database import (
     save_user_search_preset as save_user_search_preset,
 )
 from shared_lib.database import (
+    save_web_account_preferences_for_telegram as save_web_account_preferences_for_telegram,
+)
+from shared_lib.database import (
     set_onboarding_completed as set_onboarding_completed,
 )
 from shared_lib.database import (
@@ -139,7 +145,9 @@ __all__ = [
     "get_user_subscriptions",
     "update_subscription_hash",
     "get_or_create_calendar_secret",
+    "get_or_create_web_account_preferences_for_telegram",
     "regenerate_calendar_secret",
+    "save_web_account_preferences_for_telegram",
     "get_subscription_by_id",
     "get_session",
     "get_admin_daily_summary",

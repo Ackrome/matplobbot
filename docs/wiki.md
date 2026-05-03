@@ -16,6 +16,7 @@ This page is a full feature map of the project: bot, website, API, scheduler, wo
 | [Search presets](#search-presets) | `/search_presets` | Save and rerun search configurations |
 | [Schedule discovery](#schedule-discovery) | `/schedule` | Search group/lecturer/room and view day or week schedule |
 | [Personal aggregated schedule](#personal-aggregated-schedule) | `/myschedule` | Combined view across active subscriptions with filters |
+| [Bot calendar sync manager](#bot-calendar-sync-manager) | `/calendar_sync`, `/start calendar_sync` | Manage WebCal link, calendar profiles, and schedule subscriptions in Telegram |
 | [Settings center](#settings-center) | `/settings` | Personal/group settings, subscriptions, short names, privacy |
 | [Rendering tools](#rendering-tools) | `/latex`, `/mermaid` | Render formulas and diagrams |
 | [Short-name suggestions](#short-name-suggestions) | `/offershorter` | User suggestion flow with admin moderation |
@@ -228,6 +229,29 @@ How to use:
 3. Open `Filters` and apply a built-in preset or save the current filters as a named preset.
 4. Toggle per-type/per-source filters and day/week navigation as needed.
 5. Export iCal or manage personal calendar link from inline actions.
+
+### Bot Calendar Sync Manager
+
+Commands:
+
+- `/calendar_sync`
+- `/start calendar_sync`
+
+What it does:
+
+- Opens the Telegram-side manager for the same WebCal sync state used by the website.
+- Shows sync enabled/disabled state, selected calendar profile, profile count, active schedule subscription count, and the selected feed URL.
+- Lets users open the selected feed, reset the private calendar secret, enable/disable sync, and jump into schedule subscription management.
+- Lists built-in and custom calendar profiles, supports selecting and deleting profiles, and creates custom calendar presets from active schedule subscriptions.
+- Uses website account preferences linked by Telegram ID, so profiles created in the bot and profiles created on the site share the same `calendar_sync` state.
+
+How to use:
+
+1. Send `/calendar_sync`, or open `https://t.me/matplobbot?start=calendar_sync`.
+2. Use `Manage Schedule Subscriptions` to toggle, retime, delete, or edit modules for bot schedule subscriptions.
+3. Open `Profiles and presets` to select a built-in feed or create a custom preset from an active subscription.
+4. Use `Open selected feed` or copy the shown URL into a calendar app.
+5. Use `Reset Link` if the private URL was exposed.
 
 ### Settings Center
 
@@ -564,6 +588,8 @@ What it does:
 - enable/disable sync
 - rotate secret
 - delete custom preset
+- edit custom preset name, lesson mode, and modules from the current schedule filters
+- direct bot deep link through `window.__MPB_BOT_DEEPLINK__` / `https://t.me/matplobbot?start=calendar_sync`
 - Telegram Mini App launch from the bot's `Calendar Sync` Web App button, which opens `/schedule?tg=1&calendar=1`, signs in with Telegram init data, keeps the panel collapsed on open, and scrolls directly to the sync card.
 - In Telegram Mini App, the collapsed sync card remains visible while Telegram auth is pending or unavailable, so users can expand it and see the sign-in state instead of the panel disappearing.
 - Shows profile health (event count, next event, cache status, source updated, last access).
@@ -575,10 +601,11 @@ How to use:
 2. Link the website account to Telegram to generate the private secret link.
 3. Expand `Calendar subscription` when you need to copy links or edit sync settings; it opens collapsed by default.
 4. Open any group, lecturer, or room schedule and use `Save current view` to create a website-only iCal profile.
-5. Select a built-in or custom profile and copy/subscribe to its URL.
-6. Use `Reset link` if URL must be revoked.
-7. In Telegram, tap the bot's `Calendar Sync` miniapp button to open the collapsed sync card and manage the same WebCal feed without manual website login.
-8. Open an event in your calendar app to see when Matplobbot last parsed that source from the university site.
+5. Select a built-in or custom profile. For custom profiles, rename the preset, switch between all classes and exams only, or apply the currently selected module filters.
+6. Copy/subscribe to the selected URL, preview the feed, or download the ICS file.
+7. Use `Reset link` if URL must be revoked.
+8. In Telegram, tap `Open in bot` or the bot's `Calendar Sync` miniapp button to manage the same WebCal feed without relying on Mini App auth.
+9. Open an event in your calendar app to see when Matplobbot last parsed that source from the university site.
 
 ### Stats Dashboard
 
@@ -831,6 +858,7 @@ Authorized endpoints:
 - `POST /api/cal/subscription/toggle`
 - `POST /api/cal/subscription/select`
 - `POST /api/cal/subscription/profiles`
+- `PATCH /api/cal/subscription/profiles/{profile_id}`
 - `DELETE /api/cal/subscription/profiles/{profile_id}`
 
 Public feed endpoints:
