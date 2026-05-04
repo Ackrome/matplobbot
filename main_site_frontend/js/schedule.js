@@ -354,15 +354,60 @@ function getCurrentEntityModulePresets() {
     return modulePresets.filter((preset) => `${preset.entity_type}:${preset.entity_id}` === entityKey);
 }
 
-function getCurrentWeekModuleSet() {
+function getCurrentWeekEnd() {
     const weekEnd = new Date(currentWeekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
+    return weekEnd;
+}
+
+function isLessonInCurrentPeriod(lesson) {
+    const lessonDate = parseDate(lesson?.date || '');
+    const weekEnd = getCurrentWeekEnd();
+    return lessonDate >= currentWeekStart && lessonDate <= weekEnd;
+}
+
+function isLessonAllowedByLessonMode(lesson) {
+    return schedulePageState.lessonMode !== 'exams_only' || isExamLikeKind(lesson?.kindOfWork);
+}
+
+function isLessonAllowedByModuleFilter(lesson) {
+    return !lesson?.module || selectedModules.has(lesson.module);
+}
+
+function isLessonInCurrentDisplayedScope(lesson, { includeModuleFilter = true } = {}) {
+    if (!lesson) return false;
+    if (!isLessonInCurrentPeriod(lesson)) return false;
+    if (!isLessonAllowedByLessonMode(lesson)) return false;
+    if (includeModuleFilter && !isLessonAllowedByModuleFilter(lesson)) return false;
+    return true;
+}
+
+function getCurrentWeekModuleSet() {
     return new Set((Array.isArray(fullSchedule) ? fullSchedule : [])
-        .filter((lesson) => {
-            const lessonDate = parseDate(lesson.date || '');
-            return lessonDate >= currentWeekStart && lessonDate <= weekEnd && lesson.module;
-        })
+        .filter((lesson) => isLessonInCurrentPeriod(lesson) && lesson.module)
         .map((lesson) => lesson.module));
+}
+
+function getCurrentDisplayedModuleSet() {
+    return new Set((Array.isArray(fullSchedule) ? fullSchedule : [])
+        .filter((lesson) => isLessonInCurrentDisplayedScope(lesson, { includeModuleFilter: false }) && lesson.module)
+        .map((lesson) => lesson.module));
+}
+
+function getModuleDisplayStatus(moduleName, displayedModules, weekModules) {
+    if (displayedModules.has(moduleName)) {
+        return { active: true, label: '' };
+    }
+    if (weekModules.has(moduleName)) {
+        return {
+            active: false,
+            label: t('schedule.modules.notInCurrentView', 'Not in current view')
+        };
+    }
+    return {
+        active: false,
+        label: t('schedule.modules.notThisWeek', 'Not this week')
+    };
 }
 
 function getModuleSearchMatch(moduleName) {
@@ -533,6 +578,7 @@ function buildScheduleChangeSummary(previousSnapshot, currentSchedule, updatedAt
             if (lesson.date !== previous.date || lesson.beginLesson !== previous.beginLesson || lesson.endLesson !== previous.endLesson) {
                 baseSummary.movedLessons.push({
                     lesson,
+                    previous,
                     label: buildLessonChangeLabel(lesson),
                     from: `${previous.date} ${previous.beginLesson}-${previous.endLesson}`.trim(),
                     to: `${lesson.date} ${lesson.beginLesson}-${lesson.endLesson}`.trim()
@@ -541,6 +587,7 @@ function buildScheduleChangeSummary(previousSnapshot, currentSchedule, updatedAt
             if (lesson.auditorium !== previous.auditorium) {
                 baseSummary.roomChanges.push({
                     lesson,
+                    previous,
                     label: buildLessonChangeLabel(lesson),
                     from: previous.auditorium || '-',
                     to: lesson.auditorium || '-'
@@ -549,6 +596,7 @@ function buildScheduleChangeSummary(previousSnapshot, currentSchedule, updatedAt
             if (lesson.lecturer_title !== previous.lecturer_title) {
                 baseSummary.teacherChanges.push({
                     lesson,
+                    previous,
                     label: buildLessonChangeLabel(lesson),
                     from: previous.lecturer_title || '-',
                     to: lesson.lecturer_title || '-'
@@ -733,7 +781,24 @@ function formatScheduleSnapshotDate(value) {
         : formatUiDate(parsed, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-function getScheduleChangeCount(summary = scheduleChangeSummary) {
+function isScheduleChangeVisible(item) {
+    return isLessonInCurrentDisplayedScope(item?.lesson, { includeModuleFilter: true })
+        || isLessonInCurrentDisplayedScope(item?.previous, { includeModuleFilter: true });
+}
+
+function getFilteredScheduleChangeSummary(summary = scheduleChangeSummary) {
+    if (!summary) return null;
+    return {
+        ...summary,
+        newLessons: (summary.newLessons || []).filter(isScheduleChangeVisible),
+        removedLessons: (summary.removedLessons || []).filter(isScheduleChangeVisible),
+        movedLessons: (summary.movedLessons || []).filter(isScheduleChangeVisible),
+        roomChanges: (summary.roomChanges || []).filter(isScheduleChangeVisible),
+        teacherChanges: (summary.teacherChanges || []).filter(isScheduleChangeVisible)
+    };
+}
+
+function getScheduleChangeCount(summary = getFilteredScheduleChangeSummary()) {
     if (!summary) return 0;
     return [
         summary.newLessons,
@@ -774,12 +839,13 @@ function renderScheduleChangesPanel() {
         container.innerHTML = '';
         return;
     }
-    const summary = scheduleChangeSummary;
+    const rawSummary = scheduleChangeSummary;
+    const summary = getFilteredScheduleChangeSummary(rawSummary);
     const total = getScheduleChangeCount(summary);
     const parsedLabel = sourceUpdatedAt
         ? formatScheduleSnapshotDate(sourceUpdatedAt)
         : t('schedule.context.parsedUnknown', 'Parsed time unknown');
-    const previousLabel = formatScheduleSnapshotDate(summary?.previousSourceUpdatedAt || summary?.previousCapturedAt);
+    const previousLabel = formatScheduleSnapshotDate(rawSummary?.previousSourceUpdatedAt || rawSummary?.previousCapturedAt);
     container.classList.remove('hidden');
     container.innerHTML = `
         <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 md:p-5">
@@ -788,7 +854,7 @@ function renderScheduleChangesPanel() {
                     <div class="text-xs font-black uppercase tracking-[0.2em] text-blue-500 dark:text-blue-300">${escapeHtml(t('schedule.changes.eyebrow', 'Changes'))}</div>
                     <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-slate-100">${escapeHtml(t('schedule.changes.title', 'Schedule changes'))}</h2>
                     <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">
-                        ${escapeHtml(t('schedule.changes.subtitle', 'Compared with the previous local snapshot.'))}
+                        ${escapeHtml(t('schedule.changes.subtitle', 'Compared with the previous local snapshot and current filters.'))}
                     </p>
                 </div>
                 <div class="grid gap-2 sm:flex sm:flex-wrap sm:justify-end">
@@ -1171,25 +1237,26 @@ function renderModuleFilters() {
         });
     }
     const weekModules = getCurrentWeekModuleSet();
+    const displayedModules = getCurrentDisplayedModuleSet();
     const selected = allAvailableModules.filter((mod) => selectedModules.has(mod) && getModuleSearchMatch(mod));
     const available = allAvailableModules.filter((mod) => !selectedModules.has(mod) && getModuleSearchMatch(mod));
     const presets = getCurrentEntityModulePresets();
 
     function renderModuleChip(mod, isSelected) {
-        const activeThisWeek = weekModules.has(mod);
+        const displayStatus = getModuleDisplayStatus(mod, displayedModules, weekModules);
         return `
             <div class="group/module flex max-w-full flex-wrap items-center gap-1 rounded-xl border px-2 py-1.5 text-xs font-bold transition-all duration-200
                 ${isSelected
-                    ? (activeThisWeek
+                    ? (displayStatus.active
                         ? 'border-slate-900 bg-slate-900 text-white shadow-lg shadow-slate-900/15'
                         : 'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200')
-                    : (activeThisWeek
+                    : (displayStatus.active
                         ? 'border-slate-200 bg-slate-50 text-slate-500 hover:bg-white hover:border-blue-200 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:border-blue-700 dark:hover:text-slate-200'
                         : 'border-amber-200 bg-white text-amber-600 hover:bg-amber-50 dark:border-amber-900/70 dark:bg-slate-900 dark:text-amber-300 dark:hover:bg-amber-950/30')}">
                 <button type="button" onclick="window.toggleModule('${escapeJsString(mod)}')" class="inline-flex min-w-0 flex-1 items-center gap-2 text-left">
                     ${isSelected ? '<span class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/15 text-[10px]">ON</span>' : ''}
                     <span class="truncate">${escapeHtml(mod)}</span>
-                    ${activeThisWeek ? '' : `<span class="shrink-0 rounded-full bg-amber-200/70 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">${escapeHtml(t('schedule.modules.notThisWeek', 'Not this week'))}</span>`}
+                    ${displayStatus.active ? '' : `<span class="shrink-0 rounded-full bg-amber-200/70 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">${escapeHtml(displayStatus.label)}</span>`}
                 </button>
                 <button type="button" onclick="selectOnlyModule('${escapeJsString(mod)}')" class="rounded-lg bg-white/80 px-2 py-1 text-[10px] font-black text-slate-600 ring-1 ring-slate-200 hover:bg-blue-50 hover:text-blue-700 dark:bg-slate-900/70 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(t('schedule.modules.only', 'Only'))}</button>
                 <button type="button" onclick="selectAllExceptModule('${escapeJsString(mod)}')" class="rounded-lg bg-white/80 px-2 py-1 text-[10px] font-black text-slate-600 ring-1 ring-slate-200 hover:bg-rose-50 hover:text-rose-700 dark:bg-slate-900/70 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(t('schedule.modules.except', 'Except'))}</button>
@@ -1287,21 +1354,17 @@ function filterAndRender() {
     if (isOfflineMode) document.getElementById('offlineWarning').classList.remove('hidden');
     else document.getElementById('offlineWarning').classList.add('hidden');
 
-    const weekEnd = new Date(currentWeekStart);
-    weekEnd.setDate(weekEnd.getDate() + 6);
+    const weekEnd = getCurrentWeekEnd();
     document.getElementById('weekRangeDisplay').innerText =
         `${formatUiDate(currentWeekStart, {day:'numeric', month:'short'})} - ${formatUiDate(weekEnd, {day:'numeric', month:'short'})}`;
 
     const filteredLessons = fullSchedule.filter(lesson => {
-        if (lesson.module && !selectedModules.has(lesson.module)) return false;
-        if (schedulePageState.lessonMode === 'exams_only' && !isExamLikeKind(lesson.kindOfWork)) return false;
-        const lessonDate = parseDate(lesson.date);
-        if (lessonDate < currentWeekStart || lessonDate > weekEnd) return false;
-        return true;
+        return isLessonInCurrentDisplayedScope(lesson, { includeModuleFilter: true });
     });
     renderDesktopGrid(filteredLessons);
     renderMobileFeed(filteredLessons);
     commitScheduleState({ urlMode: 'replace' });
+    renderModuleFilters();
 }
 
 function renderDesktopGrid(lessons) {

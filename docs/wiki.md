@@ -562,11 +562,11 @@ What it does:
 - module search and selected-module counter in the filter header
 - schedule module presets saved per schedule entity
 - quick module actions: only this module, all except this module, reset/all
-- amber highlighting for semester modules that are not present in the currently opened week
+- amber highlighting for modules that are not present in the currently visible period/mode
 - all classes / exams-only lesson mode
 - short names
 - full lecturer name
-- Optional `Changes` panel compares the current schedule with the previous local snapshot for the same entity.
+- Optional `Changes` panel compares the current schedule with the previous local snapshot for the same entity and respects the current week, module filters, and lesson mode.
 - The changes panel reports new, cancelled, moved, room-changed, and lecturer-changed lessons plus source parsing time and previous snapshot time.
 - Includes copy-to-clipboard actions for room/lecturer.
 - Shows source update timestamp and offline/fallback states.
