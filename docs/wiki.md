@@ -552,11 +552,22 @@ What it does:
 - Syncs that state across URL parameters, local/remote preferences, browser history, and visible UI controls.
 - Shows a signed-in `My schedule` summary panel with active schedule, next class, today's classes, offline warning, and fast actions.
 - Desktop timetable grid + mobile card view.
+- View density switcher:
+- `Cards` for the current rich card feed
+- `Compact` for seeing more lessons on one screen
+- `Table` for desktop timetable scanning
+- `Exams` for an exam-focused feed with exam filtering enabled
 - Filters and toggles:
 - module filters
+- module search and selected-module counter in the filter header
+- schedule module presets saved per schedule entity
+- quick module actions: only this module, all except this module, reset/all
+- amber highlighting for semester modules that are not present in the currently opened week
 - all classes / exams-only lesson mode
 - short names
 - full lecturer name
+- Optional `Changes` panel compares the current schedule with the previous local snapshot for the same entity.
+- The changes panel reports new, cancelled, moved, room-changed, and lecturer-changed lessons plus source parsing time and previous snapshot time.
 - Includes copy-to-clipboard actions for room/lecturer.
 - Shows source update timestamp and offline/fallback states.
 - Highlights exam-like lessons, including `Семинар+зачет` and `Экзамены`, with the dedicated exam color instead of the regular seminar color.
@@ -568,8 +579,10 @@ How to use:
 2. Sign in to see the `My schedule` summary for the saved/active schedule.
 3. Search for group, lecturer, or room when you need another source.
 4. Pick result and switch day/week context; the URL updates with the current state.
-5. Use filters panel to adjust modules, lesson mode, and card/table rendering.
-6. Copy the schedule link from the summary panel to share the same view.
+5. Use filters panel to search modules, toggle them, save a module preset, or apply `Only` / `Except` actions from a module chip.
+6. Use `Cards`, `Compact`, `Table`, or `Exams` to choose display density. The choice is saved and reflected in the URL.
+7. Tap `Show changes` in the summary panel to compare with the previous local snapshot.
+8. Copy the schedule link from the summary panel to share the same view.
 
 ### Calendar Sync Panel
 

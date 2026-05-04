@@ -2,9 +2,15 @@
     if (typeof loadSchedule === "undefined" || typeof filterAndRender === "undefined") return;
     const UI_PREFS_KEY = "mpb_schedule_ui_prefs";
     const uiState = {
-        viewMode: "auto",
+        viewMode: "cards",
         filtersCollapsed: window.innerWidth < 768,
     };
+    const SCHEDULE_UI_VIEW_MODES = ["cards", "compact", "table", "exams", "auto"];
+    let isRenderingForViewMode = false;
+    function normalizeUiViewMode(mode) {
+        if (mode === "auto") return "cards";
+        return SCHEDULE_UI_VIEW_MODES.includes(mode) ? mode : "cards";
+    }
     function getUiLanguage() {
         const source = window.mpbI18n?.getLanguage?.() || document.documentElement.lang || "ru";
         return String(source).toLowerCase().startsWith("ru") ? "ru" : "en";
@@ -28,9 +34,7 @@
     function loadUiPrefs() {
         try {
             const payload = JSON.parse(localStorage.getItem(UI_PREFS_KEY) || "{}");
-            if (["auto", "table", "cards"].includes(payload.view_mode)) {
-                uiState.viewMode = payload.view_mode;
-            }
+            uiState.viewMode = normalizeUiViewMode(payload.view_mode);
             if (typeof payload.filters_collapsed === "boolean") {
                 uiState.filtersCollapsed = payload.filters_collapsed;
             } else {
@@ -43,7 +47,7 @@
                 }
             }
         } catch {
-            uiState.viewMode = "auto";
+            uiState.viewMode = "cards";
             uiState.filtersCollapsed = window.innerWidth < 768;
         }
         syncUiStateFromPageState();
@@ -51,9 +55,7 @@
     function syncUiStateFromPageState() {
         const state = window.getSchedulePageState?.();
         if (!state) return;
-        if (["auto", "table", "cards"].includes(state.viewMode)) {
-            uiState.viewMode = state.viewMode;
-        }
+        uiState.viewMode = normalizeUiViewMode(state.viewMode);
         if (state.date) {
             const parsed = parseDate(state.date);
             if (!Number.isNaN(parsed.getTime())) {
@@ -103,6 +105,21 @@
             .schedule-feed-card-meta{display:grid;grid-template-columns:minmax(0,1fr);gap:.55rem}
             .schedule-feed-card-meta-item{display:flex;align-items:flex-start;gap:.55rem;min-width:0;font-size:.88rem;line-height:1.35;font-weight:600;color:var(--schedule-muted)}
             .schedule-feed-card-meta-item span{min-width:0;overflow-wrap:anywhere}
+            .schedule-cards-feed.schedule-cards-compact{padding:.5rem}
+            .schedule-cards-feed.schedule-cards-compact .schedule-day-section{margin-bottom:.65rem;border-radius:1rem}
+            .schedule-cards-feed.schedule-cards-compact .schedule-day-header{padding:.65rem .85rem}
+            .schedule-cards-feed.schedule-cards-compact .schedule-day-header-label{font-size:.6rem}
+            .schedule-cards-feed.schedule-cards-compact .schedule-day-header-title{margin-top:.2rem;font-size:1rem}
+            .schedule-cards-feed.schedule-cards-compact .schedule-day-pill{padding:.25rem .5rem;font-size:.62rem}
+            .schedule-cards-feed.schedule-cards-compact .schedule-feed-card{gap:.45rem;padding:.7rem .85rem}
+            .schedule-cards-feed.schedule-cards-compact .schedule-feed-card-head{gap:.5rem}
+            .schedule-cards-feed.schedule-cards-compact .schedule-feed-card-start{font-size:1.05rem}
+            .schedule-cards-feed.schedule-cards-compact .schedule-feed-card-end{font-size:.72rem}
+            .schedule-cards-feed.schedule-cards-compact .schedule-feed-card-title{font-size:.88rem;line-height:1.25}
+            .schedule-cards-feed.schedule-cards-compact .schedule-feed-card-meta{gap:.35rem}
+            .schedule-cards-feed.schedule-cards-compact .schedule-feed-card-meta-item{font-size:.78rem;line-height:1.25}
+            .schedule-cards-feed.schedule-cards-exams .schedule-day-header{background:linear-gradient(135deg,var(--lesson-exam-bg),var(--schedule-grid-head))}
+            .schedule-cards-feed.schedule-cards-exams .schedule-day-pill{background:#be123c}
             @media (max-width:1023px){.schedule-day-header-title{font-size:1.15rem}}
             @media (min-width:1024px){
                 .schedule-cards-feed.schedule-cards-desktop{padding:1rem}
@@ -138,9 +155,10 @@
     }
     function syncContextBarLabels() {
         const labels = {
-            viewAutoBtn: ["schedule.view.auto", "Авто"],
-            viewTableBtn:["schedule.view.table", "Таблица"],
             viewCardsBtn:["schedule.view.cards", "Карточки"],
+            viewCompactBtn:["schedule.view.compact", "Компактно"],
+            viewTableBtn:["schedule.view.table", "Таблица"],
+            viewExamsBtn:["schedule.view.exams", "Экзамены"],
         };
         Object.entries(labels).forEach(([id, [key, fallback]]) => {
             const element = document.getElementById(id);
@@ -150,31 +168,45 @@
         });
     }
     function setViewMode(mode) {
-        uiState.viewMode = mode;
-        window.setScheduleViewModeState?.(mode, { updateUrl: true });
+        const nextMode = normalizeUiViewMode(mode);
+        const previousLessonMode = window.getSchedulePageState?.().lessonMode;
+        uiState.viewMode = nextMode;
+        window.setScheduleViewModeState?.(nextMode, { updateUrl: true });
         const desktop = document.getElementById("desktopSchedule");
         const mobile = document.getElementById("mobileSchedule");
         if (!desktop || !mobile) return;
-        const auto = mode === "auto";
-        const table = mode === "table";
-        const cards = mode === "cards";
+        const auto = nextMode === "auto";
+        const table = nextMode === "table";
+        const cards = nextMode === "cards";
+        const compact = nextMode === "compact";
+        const exams = nextMode === "exams";
         const showDesktop = table || (auto && window.innerWidth >= 1024);
-        const showCardsFeed = cards || (auto && window.innerWidth < 1024);
+        const showCardsFeed = cards || compact || exams || (auto && window.innerWidth < 1024);
         desktop.style.display = showDesktop ? "block" : "none";
         mobile.style.display = showCardsFeed ? "flex" : "none";
         desktop.classList.toggle("hidden", !showDesktop);
         mobile.classList.toggle("hidden", !showCardsFeed);
         mobile.classList.toggle("schedule-cards-desktop", cards && window.innerWidth >= 1024);
+        mobile.classList.toggle("schedule-cards-compact", compact || exams);
+        mobile.classList.toggle("schedule-cards-exams", exams);
         const isActive = (id, active) => {
             const btn = document.getElementById(id);
             if (!btn) return;
             btn.classList.toggle("schedule-view-active", active);
             btn.classList.toggle("schedule-view-idle", !active);
         };
-        isActive("viewAutoBtn", auto);
         isActive("viewTableBtn", table);
         isActive("viewCardsBtn", cards);
+        isActive("viewCompactBtn", compact);
+        isActive("viewExamsBtn", exams);
         saveUiPrefs();
+        const shouldRerenderForExamMode = !isRenderingForViewMode
+            && ((nextMode === "exams") !== (previousLessonMode === "exams_only"));
+        if (shouldRerenderForExamMode) {
+            isRenderingForViewMode = true;
+            filterAndRender();
+            isRenderingForViewMode = false;
+        }
     }
     function updateContextBar() {
         const entityEl = document.getElementById("contextEntity");
@@ -278,13 +310,14 @@
     }
     function bindToolbar() {
         document.getElementById("filterToggleBtn")?.addEventListener("click", () => toggleFilterSection());
-        document.getElementById("viewAutoBtn")?.addEventListener("click", () => setViewMode("auto"));
-        document.getElementById("viewTableBtn")?.addEventListener("click", () => setViewMode("table"));
         document.getElementById("viewCardsBtn")?.addEventListener("click", () => setViewMode("cards"));
+        document.getElementById("viewCompactBtn")?.addEventListener("click", () => setViewMode("compact"));
+        document.getElementById("viewTableBtn")?.addEventListener("click", () => setViewMode("table"));
+        document.getElementById("viewExamsBtn")?.addEventListener("click", () => setViewMode("exams"));
         window.addEventListener("resize", () => setViewMode(uiState.viewMode));
         window.addEventListener("mpb-schedule-state-change", (event) => {
             const nextMode = event.detail?.state?.viewMode;
-            if (["auto", "table", "cards"].includes(nextMode) && nextMode !== uiState.viewMode) {
+            if (SCHEDULE_UI_VIEW_MODES.includes(nextMode) && nextMode !== uiState.viewMode) {
                 uiState.viewMode = nextMode;
                 setViewMode(nextMode);
             }

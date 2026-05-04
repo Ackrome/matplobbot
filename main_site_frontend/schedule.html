@@ -14,7 +14,7 @@
     <link rel="manifest" href="/site.webmanifest">
     <script src="/js/theme_bootstrap.js?v=1"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="/css/tailwind.css?v=4">
+    <link rel="stylesheet" href="/css/tailwind.css?v=5">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -355,6 +355,7 @@
                 </div>
             </div>
             <section id="scheduleHomePanel" class="hidden mb-4 md:mb-6"></section>
+            <section id="scheduleChangesPanel" class="hidden mb-4 md:mb-6"></section>
             <section id="calendarSubscriptionSection" class="hidden mb-4 md:mb-6"></section>
 
             <!-- ГЛАВНЫЙ БЛОК РАСПИСАНИЯ -->
@@ -362,8 +363,8 @@
 
                 <div id="scheduleControls" class="schedule-control-panel hidden flex flex-col bg-white dark:bg-slate-800">
                     <!-- Верхний ряд: Название + Meta (Icon) + Вид -->
-                    <div class="flex items-center justify-between p-4 md:px-6 md:py-4 border-b border-slate-100 dark:border-slate-700">
-                        <div class="flex items-center gap-3">
+                    <div class="flex flex-col gap-3 p-4 border-b border-slate-100 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between md:px-6 md:py-4">
+                        <div class="flex min-w-0 items-center gap-3">
                             <span class="font-black text-slate-800 text-xl md:text-2xl dark:text-slate-100" id="contextEntity">-</span>
                             <div class="relative group cursor-help flex items-center justify-center w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -374,10 +375,11 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="hidden md:flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1 text-xs dark:border-slate-700 dark:bg-slate-900">
-                            <button type="button" id="viewAutoBtn" class="rounded-lg px-3 py-1.5 font-bold text-slate-700 transition-colors">Авто</button>
-                            <button type="button" id="viewTableBtn" class="rounded-lg px-3 py-1.5 font-bold text-slate-700 transition-colors">Таблица</button>
-                            <button type="button" id="viewCardsBtn" class="rounded-lg px-3 py-1.5 font-bold text-slate-700 transition-colors">Карточки</button>
+                        <div class="grid w-full grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 text-[11px] dark:border-slate-700 dark:bg-slate-900 sm:w-auto sm:flex sm:items-center sm:text-xs">
+                            <button type="button" id="viewCardsBtn" class="rounded-lg px-2 py-1.5 font-bold text-slate-700 transition-colors sm:px-3">Карточки</button>
+                            <button type="button" id="viewCompactBtn" class="rounded-lg px-2 py-1.5 font-bold text-slate-700 transition-colors sm:px-3">Компактно</button>
+                            <button type="button" id="viewTableBtn" class="rounded-lg px-2 py-1.5 font-bold text-slate-700 transition-colors sm:px-3">Таблица</button>
+                            <button type="button" id="viewExamsBtn" class="rounded-lg px-2 py-1.5 font-bold text-slate-700 transition-colors sm:px-3">Экзамены</button>
                         </div>
                     </div>
 
@@ -397,6 +399,7 @@
                         <button type="button" id="filterToggleBtn" class="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-sm transition-colors w-full sm:w-auto dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
                             <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
                             <span data-i18n="schedule.filters.desktop">Фильтры и модули</span>
+                            <span id="moduleSelectionSummary" class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500 dark:bg-slate-900 dark:text-slate-300"></span>
                             <svg id="filterArrow" class="w-4 h-4 text-slate-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </button>
                     </div>
@@ -454,9 +457,9 @@
     <script src="/js/runtime_config.js?v=2"></script>
     <script src="/js/ui_utils.js?v=1"></script>
     <script src="/js/telegram_webapp.js?v=4"></script>
-    <script src="/js/navbar.js?v=28"></script>
-    <script src="/js/schedule.js?v=24"></script>
+    <script src="/js/navbar.js?v=29"></script>
+    <script src="/js/schedule.js?v=25"></script>
     <script src="/js/calendar_sync.js?v=12"></script>
-    <script src="/js/schedule_ux.js?v=8"></script>
+    <script src="/js/schedule_ux.js?v=9"></script>
 </body>
 </html>

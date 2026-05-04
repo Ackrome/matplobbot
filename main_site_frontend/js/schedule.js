@@ -1,8 +1,10 @@
 const API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : "/api";
 const STORAGE_KEY = "mpb_user_preferences";
+const SCHEDULE_SNAPSHOTS_KEY = "mpb_schedule_snapshots";
 const SCHEDULE_ENTITY_TYPES = new Set(['group', 'person', 'auditorium']);
-const SCHEDULE_VIEW_MODES = new Set(['auto', 'table', 'cards']);
+const SCHEDULE_VIEW_MODES = new Set(['auto', 'table', 'cards', 'compact', 'exams']);
 const SCHEDULE_LESSON_MODES = new Set(['all', 'exams_only']);
+const MODULE_PRESET_LIMIT = 12;
 const FIXED_TIMES =[
     { start: '08:30', end: '10:00' },
     { start: '10:10', end: '11:40' },
@@ -24,16 +26,20 @@ let isOfflineMode = false;
 let currentWeekStart = getMonday(new Date());
 let cachedOfflineEntities = [];
 let latestSearchResults =[];
+let moduleFilterQuery = '';
+let modulePresets = [];
+let scheduleChangeSummary = null;
 
 function createDefaultSchedulePageState() {
     return {
         entity: { type: null, id: null, name: null },
         date: getISODateStr(new Date()),
-        viewMode: 'auto',
+        viewMode: 'cards',
         selectedModules: [],
         lessonMode: 'all',
         offline: false,
-        calendarProfileId: null
+        calendarProfileId: null,
+        showChanges: false
     };
 }
 
@@ -63,7 +69,7 @@ function normalizeScheduleModules(value) {
 
 function normalizeScheduleViewMode(value) {
     const mode = String(value || '').trim();
-    return SCHEDULE_VIEW_MODES.has(mode) ? mode : 'auto';
+    return SCHEDULE_VIEW_MODES.has(mode) ? mode : 'cards';
 }
 
 function normalizeScheduleLessonMode(value) {
@@ -85,7 +91,8 @@ function setSchedulePageState(patch = {}) {
         offline: Boolean(patch.offline ?? schedulePageState.offline),
         calendarProfileId: patch.calendarProfileId === undefined
             ? schedulePageState.calendarProfileId
-            : (patch.calendarProfileId ? String(patch.calendarProfileId) : null)
+            : (patch.calendarProfileId ? String(patch.calendarProfileId) : null),
+        showChanges: Boolean(patch.showChanges ?? schedulePageState.showChanges)
     };
     window.schedulePageState = schedulePageState;
     window.dispatchEvent(new CustomEvent('mpb-schedule-state-change', { detail: { state: window.getSchedulePageState() } }));
@@ -119,6 +126,7 @@ function parseScheduleStateFromUrl() {
         lessonMode: normalizeScheduleLessonMode(params.get('mode')),
         offline: params.get('offline') === '1',
         calendarProfileId: params.get('profile') || null,
+        showChanges: params.get('changes') === '1',
         hasEntity: Boolean(entity.id),
         hasModules: Boolean(modulesParam && modulesParam !== 'all'),
         hasEmptyModules: modulesParam === 'none'
@@ -133,7 +141,8 @@ function buildScheduleStateFromPreferences(prefs = {}) {
         selectedModules: normalizeScheduleModules(prefs.modules || prefs.scheduleState?.selectedModules),
         lessonMode: normalizeScheduleLessonMode(prefs.lessonMode || prefs.scheduleState?.lessonMode),
         offline: false,
-        calendarProfileId: prefs.calendarProfileId || prefs.scheduleState?.calendarProfileId || null
+        calendarProfileId: prefs.calendarProfileId || prefs.scheduleState?.calendarProfileId || null,
+        showChanges: Boolean(prefs.showChanges || prefs.scheduleState?.showChanges)
     };
     return { ...state, hasEntity: Boolean(state.entity.id), hasModules: state.selectedModules.length > 0 };
 }
@@ -160,12 +169,14 @@ function syncScheduleUrl(mode = 'replace') {
     } else {
         params.delete('modules');
     }
-    if (schedulePageState.viewMode !== 'auto') params.set('view', schedulePageState.viewMode);
+    if (schedulePageState.viewMode !== 'cards') params.set('view', schedulePageState.viewMode);
     else params.delete('view');
     if (schedulePageState.lessonMode !== 'all') params.set('mode', schedulePageState.lessonMode);
     else params.delete('mode');
     if (schedulePageState.calendarProfileId) params.set('profile', schedulePageState.calendarProfileId);
     else params.delete('profile');
+    if (schedulePageState.showChanges) params.set('changes', '1');
+    else params.delete('changes');
     params.delete('offline');
     const nextUrl = `${url.pathname}${params.toString() ? `?${params.toString()}` : ''}${url.hash}`;
     const method = mode === 'push' ? 'pushState' : 'replaceState';
@@ -181,21 +192,45 @@ function commitScheduleState({ urlMode = 'replace', updateUrl = true } = {}) {
     });
     if (updateUrl) syncScheduleUrl(urlMode);
     renderScheduleHome();
+    renderScheduleChangesPanel();
 }
 
 window.setScheduleViewModeState = function(mode, { updateUrl = true } = {}) {
-    setSchedulePageState({ viewMode: mode });
+    const nextMode = normalizeScheduleViewMode(mode);
+    const nextLessonMode = nextMode === 'exams'
+        ? 'exams_only'
+        : (schedulePageState.viewMode === 'exams' ? 'all' : schedulePageState.lessonMode);
+    setSchedulePageState({
+        viewMode: nextMode,
+        lessonMode: nextLessonMode
+    });
+    window.calendarCurrentViewMode = schedulePageState.lessonMode === 'exams_only' ? 'exams_only' : 'all';
     if (updateUrl) syncScheduleUrl('replace');
     renderScheduleHome();
+    renderScheduleChangesPanel();
 }
 
-window.setScheduleLessonMode = function(mode) {
+window.setScheduleLessonMode = function(mode, options = {}) {
     const nextMode = normalizeScheduleLessonMode(mode);
-    setSchedulePageState({ lessonMode: nextMode });
+    setSchedulePageState({
+        lessonMode: nextMode,
+        viewMode: nextMode === 'exams_only' && !options.keepViewMode
+            ? 'exams'
+            : (schedulePageState.viewMode === 'exams' && !options.keepViewMode ? 'cards' : schedulePageState.viewMode)
+    });
     window.calendarCurrentViewMode = nextMode === 'exams_only' ? 'exams_only' : 'all';
     filterAndRender();
     savePreferences();
     if (window._renderCalendarSubscriptionImpl) window._renderCalendarSubscriptionImpl();
+}
+
+window.toggleScheduleChanges = function(forceOpen = null) {
+    const nextValue = typeof forceOpen === 'boolean' ? forceOpen : !schedulePageState.showChanges;
+    setSchedulePageState({ showChanges: nextValue });
+    syncScheduleUrl('replace');
+    renderScheduleHome();
+    renderScheduleChangesPanel();
+    savePreferences();
 }
 
 // Делаем юзера глобальным, чтобы calendar_sync.js тоже его видел
@@ -293,6 +328,242 @@ function renderOfflineHistory(list = cachedOfflineEntities) {
     }).join('');
 }
 
+function getCurrentEntityKey() {
+    return currentEntity?.type && currentEntity?.id
+        ? `${currentEntity.type}:${currentEntity.id}`
+        : '';
+}
+
+function normalizeModulePresetList(value) {
+    if (!Array.isArray(value)) return [];
+    return value.map((preset) => ({
+        id: String(preset.id || `preset-${Date.now().toString(36)}`),
+        name: String(preset.name || '').trim() || t('schedule.modules.presetFallback', 'Module preset'),
+        entity_type: preset.entity_type || preset.entity?.type || null,
+        entity_id: preset.entity_id === undefined || preset.entity_id === null
+            ? null
+            : String(preset.entity_id),
+        entity_name: preset.entity_name || preset.entity?.name || '',
+        modules: normalizeScheduleModules(preset.modules),
+        created_at: preset.created_at || new Date().toISOString()
+    })).filter((preset) => preset.entity_type && preset.entity_id && preset.modules.length > 0).slice(0, MODULE_PRESET_LIMIT);
+}
+
+function getCurrentEntityModulePresets() {
+    const entityKey = getCurrentEntityKey();
+    return modulePresets.filter((preset) => `${preset.entity_type}:${preset.entity_id}` === entityKey);
+}
+
+function getCurrentWeekModuleSet() {
+    const weekEnd = new Date(currentWeekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    return new Set((Array.isArray(fullSchedule) ? fullSchedule : [])
+        .filter((lesson) => {
+            const lessonDate = parseDate(lesson.date || '');
+            return lessonDate >= currentWeekStart && lessonDate <= weekEnd && lesson.module;
+        })
+        .map((lesson) => lesson.module));
+}
+
+function getModuleSearchMatch(moduleName) {
+    const query = moduleFilterQuery.trim().toLowerCase();
+    return !query || String(moduleName || '').toLowerCase().includes(query);
+}
+
+function persistModuleSelection() {
+    renderModuleFilters();
+    filterAndRender();
+    savePreferences();
+    if (window._renderCalendarSubscriptionImpl) window._renderCalendarSubscriptionImpl();
+}
+
+window.setModuleFilterQuery = function(value) {
+    moduleFilterQuery = String(value || '');
+    renderModuleFilters();
+}
+
+window.selectOnlyModule = function(moduleName) {
+    selectedModules = moduleName ? new Set([moduleName]) : new Set();
+    persistModuleSelection();
+}
+
+window.selectAllExceptModule = function(moduleName) {
+    selectedModules = new Set(allAvailableModules.filter((module) => module !== moduleName));
+    persistModuleSelection();
+}
+
+window.saveCurrentModulePreset = function() {
+    if (!currentEntity?.id) return;
+    const modules = Array.from(selectedModules).filter((module) => allAvailableModules.includes(module));
+    if (!modules.length) {
+        window.mpbPopup?.(t('schedule.modules.emptyPresetError', 'Select at least one module first.'), { type: 'warning' });
+        return;
+    }
+    const defaultName = t('schedule.modules.presetDefaultName', '{entity}: {count} modules', {
+        entity: currentEntity.name || currentEntity.id,
+        count: modules.length
+    });
+    const name = window.prompt(t('schedule.modules.presetNamePrompt', 'Preset name'), defaultName);
+    if (!name) return;
+    const entityKey = getCurrentEntityKey();
+    const nextPreset = {
+        id: `modules-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+        name: name.trim() || defaultName,
+        entity_type: currentEntity.type,
+        entity_id: String(currentEntity.id),
+        entity_name: currentEntity.name || '',
+        modules,
+        created_at: new Date().toISOString()
+    };
+    const others = modulePresets.filter((preset) => `${preset.entity_type}:${preset.entity_id}` !== entityKey);
+    const sameEntity = getCurrentEntityModulePresets().filter((preset) => preset.name !== nextPreset.name);
+    modulePresets = normalizeModulePresetList([nextPreset, ...sameEntity, ...others]);
+    savePreferences();
+    renderModuleFilters();
+}
+
+window.applyModulePreset = function(presetId) {
+    const preset = modulePresets.find((item) => item.id === presetId);
+    if (!preset) return;
+    const availableSet = new Set(allAvailableModules);
+    selectedModules = new Set(preset.modules.filter((module) => availableSet.has(module)));
+    persistModuleSelection();
+}
+
+window.deleteModulePreset = function(presetId) {
+    modulePresets = modulePresets.filter((item) => item.id !== presetId);
+    savePreferences();
+    renderModuleFilters();
+}
+
+function getSnapshotEntityKey(entity = currentEntity) {
+    return entity?.type && entity?.id ? `${entity.type}:${entity.id}` : '';
+}
+
+function loadScheduleSnapshots() {
+    try {
+        const payload = JSON.parse(localStorage.getItem(SCHEDULE_SNAPSHOTS_KEY) || '{}');
+        return payload && typeof payload === 'object' ? payload : {};
+    } catch {
+        return {};
+    }
+}
+
+function persistScheduleSnapshot(entityKey, schedule, updatedAt) {
+    if (!entityKey) return;
+    const snapshots = loadScheduleSnapshots();
+    snapshots[entityKey] = {
+        captured_at: new Date().toISOString(),
+        source_updated_at: updatedAt || null,
+        lessons: (Array.isArray(schedule) ? schedule : []).map(normalizeLessonForSnapshot)
+    };
+    localStorage.setItem(SCHEDULE_SNAPSHOTS_KEY, JSON.stringify(snapshots));
+}
+
+function normalizeLessonForSnapshot(lesson) {
+    return {
+        identity: getLessonIdentity(lesson),
+        date: String(lesson.date || ''),
+        beginLesson: String(lesson.beginLesson || ''),
+        endLesson: String(lesson.endLesson || ''),
+        discipline: String(lesson.discipline_full || lesson.discipline || lesson.discipline_short || ''),
+        kindOfWork: String(lesson.kindOfWork || ''),
+        module: String(lesson.module || ''),
+        auditorium: String(lesson.auditorium || ''),
+        lecturer_title: String(lesson.lecturer_title || '')
+    };
+}
+
+function normalizeSnapshotText(value) {
+    return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function getLessonIdentity(lesson) {
+    return [
+        normalizeSnapshotText(lesson.discipline_full || lesson.discipline || lesson.discipline_short),
+        normalizeSnapshotText(lesson.kindOfWork),
+        normalizeSnapshotText(lesson.module)
+    ].join('|');
+}
+
+function buildLessonChangeLabel(lesson) {
+    return [
+        lesson.discipline || '-',
+        lesson.module,
+        lesson.date,
+        lesson.beginLesson
+    ].filter(Boolean).join(' · ');
+}
+
+function buildScheduleChangeSummary(previousSnapshot, currentSchedule, updatedAt) {
+    const currentLessons = (Array.isArray(currentSchedule) ? currentSchedule : []).map(normalizeLessonForSnapshot);
+    const baseSummary = {
+        hasPrevious: Boolean(previousSnapshot?.lessons?.length),
+        previousCapturedAt: previousSnapshot?.captured_at || null,
+        previousSourceUpdatedAt: previousSnapshot?.source_updated_at || null,
+        sourceUpdatedAt: updatedAt || null,
+        newLessons: [],
+        removedLessons: [],
+        movedLessons: [],
+        roomChanges: [],
+        teacherChanges: []
+    };
+    if (!baseSummary.hasPrevious) return baseSummary;
+
+    const previousByIdentity = new Map();
+    previousSnapshot.lessons.forEach((lesson) => {
+        if (!previousByIdentity.has(lesson.identity)) previousByIdentity.set(lesson.identity, []);
+        previousByIdentity.get(lesson.identity).push(lesson);
+    });
+    const currentByIdentity = new Map();
+    currentLessons.forEach((lesson) => {
+        if (!currentByIdentity.has(lesson.identity)) currentByIdentity.set(lesson.identity, []);
+        currentByIdentity.get(lesson.identity).push(lesson);
+    });
+
+    currentByIdentity.forEach((currentItems, identity) => {
+        const previousItems = previousByIdentity.get(identity) || [];
+        if (!previousItems.length) {
+            baseSummary.newLessons.push(...currentItems.map((lesson) => ({ lesson, label: buildLessonChangeLabel(lesson) })));
+            return;
+        }
+        currentItems.forEach((lesson, index) => {
+            const previous = previousItems[Math.min(index, previousItems.length - 1)];
+            if (!previous) return;
+            if (lesson.date !== previous.date || lesson.beginLesson !== previous.beginLesson || lesson.endLesson !== previous.endLesson) {
+                baseSummary.movedLessons.push({
+                    lesson,
+                    label: buildLessonChangeLabel(lesson),
+                    from: `${previous.date} ${previous.beginLesson}-${previous.endLesson}`.trim(),
+                    to: `${lesson.date} ${lesson.beginLesson}-${lesson.endLesson}`.trim()
+                });
+            }
+            if (lesson.auditorium !== previous.auditorium) {
+                baseSummary.roomChanges.push({
+                    lesson,
+                    label: buildLessonChangeLabel(lesson),
+                    from: previous.auditorium || '-',
+                    to: lesson.auditorium || '-'
+                });
+            }
+            if (lesson.lecturer_title !== previous.lecturer_title) {
+                baseSummary.teacherChanges.push({
+                    lesson,
+                    label: buildLessonChangeLabel(lesson),
+                    from: previous.lecturer_title || '-',
+                    to: lesson.lecturer_title || '-'
+                });
+            }
+        });
+    });
+    previousByIdentity.forEach((previousItems, identity) => {
+        if (!currentByIdentity.has(identity)) {
+            baseSummary.removedLessons.push(...previousItems.map((lesson) => ({ lesson, label: buildLessonChangeLabel(lesson) })));
+        }
+    });
+    return baseSummary;
+}
+
 function getLessonDateTime(lesson) {
     const datePart = getISODateStr(parseDate(lesson.date || ''));
     const timePart = String(lesson.beginLesson || '00:00').padStart(5, '0');
@@ -388,6 +659,9 @@ function renderScheduleHome() {
         ? 'All classes'
         : 'Exams only';
     const lessonModeTarget = schedulePageState.lessonMode === 'exams_only' ? 'all' : 'exams_only';
+    const changeCount = getScheduleChangeCount();
+    const changesButtonKey = schedulePageState.showChanges ? 'schedule.changes.hide' : 'schedule.changes.show';
+    const changesButtonFallback = schedulePageState.showChanges ? 'Hide changes' : 'Show changes';
 
     container.classList.remove('hidden');
     container.innerHTML = `
@@ -401,6 +675,7 @@ function renderScheduleHome() {
                 <div class="grid gap-2 sm:flex sm:flex-wrap sm:justify-end">
                     ${hasEntity ? `<button type="button" onclick="setTodayWeek()" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">${escapeHtml(t('schedule.home.thisWeek', 'This week'))}</button>` : ''}
                     ${hasEntity ? `<button type="button" onclick="setScheduleLessonMode('${lessonModeTarget}')" class="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50">${escapeHtml(t(lessonModeButtonKey, lessonModeButtonFallback))}</button>` : ''}
+                    ${hasEntity ? `<button type="button" onclick="toggleScheduleChanges()" class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-700 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200 dark:hover:bg-amber-950/50">${escapeHtml(t(changesButtonKey, changesButtonFallback))}${changeCount ? ` (${escapeHtml(String(changeCount))})` : ''}</button>` : ''}
                     ${hasEntity ? `<button type="button" onclick="copyScheduleShareLink(event)" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">${escapeHtml(t('schedule.home.copyLink', 'Copy link'))}</button>` : ''}
                     <button type="button" onclick="openCalendarSyncFromScheduleHome()" class="rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500">${escapeHtml(t('schedule.home.calendar', 'Calendar'))}</button>
                     <button type="button" onclick="focusScheduleSearch()" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">${escapeHtml(t('schedule.home.changeSchedule', 'Change schedule'))}</button>
@@ -450,6 +725,110 @@ window.openCalendarSyncFromScheduleHome = function() {
     }
 }
 
+function formatScheduleSnapshotDate(value) {
+    if (!value) return t('schedule.changes.never', 'No previous snapshot');
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime())
+        ? value
+        : formatUiDate(parsed, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function getScheduleChangeCount(summary = scheduleChangeSummary) {
+    if (!summary) return 0;
+    return [
+        summary.newLessons,
+        summary.removedLessons,
+        summary.movedLessons,
+        summary.roomChanges,
+        summary.teacherChanges
+    ].reduce((total, items) => total + (Array.isArray(items) ? items.length : 0), 0);
+}
+
+function renderScheduleChangeList(titleKey, fallback, items, toneClass, formatter = null) {
+    const normalized = Array.isArray(items) ? items : [];
+    return `
+        <section class="rounded-2xl border ${toneClass} p-3">
+            <div class="flex items-center justify-between gap-3">
+                <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-300">${escapeHtml(t(titleKey, fallback))}</div>
+                <span class="rounded-full bg-white px-2 py-0.5 text-[10px] font-black text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700">${normalized.length}</span>
+            </div>
+            <div class="mt-3 space-y-2">
+                ${normalized.length
+                    ? normalized.slice(0, 6).map((item) => `
+                        <div class="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 dark:bg-slate-900/70 dark:text-slate-200 dark:ring-slate-700">
+                            <div class="line-clamp-2">${escapeHtml(item.label)}</div>
+                            ${formatter ? `<div class="mt-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">${escapeHtml(formatter(item))}</div>` : ''}
+                        </div>
+                    `).join('')
+                    : `<div class="text-xs font-medium text-slate-400">${escapeHtml(t('schedule.changes.noneInGroup', 'No items'))}</div>`}
+            </div>
+        </section>
+    `;
+}
+
+function renderScheduleChangesPanel() {
+    const container = document.getElementById('scheduleChangesPanel');
+    if (!container) return;
+    if (!currentEntity?.id || !schedulePageState.showChanges) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+    }
+    const summary = scheduleChangeSummary;
+    const total = getScheduleChangeCount(summary);
+    const parsedLabel = sourceUpdatedAt
+        ? formatScheduleSnapshotDate(sourceUpdatedAt)
+        : t('schedule.context.parsedUnknown', 'Parsed time unknown');
+    const previousLabel = formatScheduleSnapshotDate(summary?.previousSourceUpdatedAt || summary?.previousCapturedAt);
+    container.classList.remove('hidden');
+    container.innerHTML = `
+        <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 md:p-5">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div class="min-w-0">
+                    <div class="text-xs font-black uppercase tracking-[0.2em] text-blue-500 dark:text-blue-300">${escapeHtml(t('schedule.changes.eyebrow', 'Changes'))}</div>
+                    <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-slate-100">${escapeHtml(t('schedule.changes.title', 'Schedule changes'))}</h2>
+                    <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">
+                        ${escapeHtml(t('schedule.changes.subtitle', 'Compared with the previous local snapshot.'))}
+                    </p>
+                </div>
+                <div class="grid gap-2 sm:flex sm:flex-wrap sm:justify-end">
+                    <span class="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600 dark:bg-slate-900 dark:text-slate-300">${escapeHtml(t('schedule.changes.total', 'Changes: {count}', { count: total }))}</span>
+                    <button type="button" onclick="toggleScheduleChanges(false)" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">${escapeHtml(t('schedule.changes.hide', 'Hide'))}</button>
+                </div>
+            </div>
+            <div class="mt-4 grid gap-2 sm:grid-cols-2">
+                <div class="rounded-2xl bg-slate-50 p-3 text-xs font-semibold text-slate-600 dark:bg-slate-900/60 dark:text-slate-300">
+                    <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(t('schedule.changes.sourceUpdated', 'Parsed'))}</div>
+                    <div class="mt-1">${escapeHtml(parsedLabel)}</div>
+                </div>
+                <div class="rounded-2xl bg-slate-50 p-3 text-xs font-semibold text-slate-600 dark:bg-slate-900/60 dark:text-slate-300">
+                    <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(t('schedule.changes.previous', 'Previous snapshot'))}</div>
+                    <div class="mt-1">${escapeHtml(previousLabel)}</div>
+                </div>
+            </div>
+            ${summary?.hasPrevious ? `
+                ${total === 0 ? `
+                    <div class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
+                        ${escapeHtml(t('schedule.changes.none', 'No schedule changes since the previous snapshot.'))}
+                    </div>
+                ` : `
+                    <div class="mt-4 grid gap-3 xl:grid-cols-5">
+                        ${renderScheduleChangeList('schedule.changes.new', 'New', summary.newLessons, 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/20')}
+                        ${renderScheduleChangeList('schedule.changes.removed', 'Cancelled', summary.removedLessons, 'border-rose-200 bg-rose-50/70 dark:border-rose-900/60 dark:bg-rose-950/20')}
+                        ${renderScheduleChangeList('schedule.changes.moved', 'Moved', summary.movedLessons, 'border-amber-200 bg-amber-50/70 dark:border-amber-900/60 dark:bg-amber-950/20', (item) => `${item.from} -> ${item.to}`)}
+                        ${renderScheduleChangeList('schedule.changes.rooms', 'Room', summary.roomChanges, 'border-blue-200 bg-blue-50/70 dark:border-blue-900/60 dark:bg-blue-950/20', (item) => `${item.from} -> ${item.to}`)}
+                        ${renderScheduleChangeList('schedule.changes.teachers', 'Lecturer', summary.teacherChanges, 'border-violet-200 bg-violet-50/70 dark:border-violet-900/60 dark:bg-violet-950/20', (item) => `${item.from} -> ${item.to}`)}
+                    </div>
+                `}
+            ` : `
+                <div class="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300">
+                    ${escapeHtml(t('schedule.changes.firstSnapshot', 'Snapshot saved. Future loads of this schedule will show changes here.'))}
+                </div>
+            `}
+        </div>
+    `;
+}
+
 async function initOfflineHistory() {
     try {
         const res = await fetch(`${API_BASE}/schedule/cached_list`);
@@ -497,6 +876,7 @@ async function loadInitialPreferences() {
     }
 
     if (prefsToApply) {
+        modulePresets = normalizeModulePresetList(prefsToApply.modulePresets || prefsToApply.scheduleState?.modulePresets || []);
         if (prefsToApply.useShortNames !== undefined) {
             const el = document.getElementById('useShortNames');
             if (el) el.checked = prefsToApply.useShortNames;
@@ -541,6 +921,8 @@ async function savePreferences() {
         viewMode: schedulePageState.viewMode,
         lessonMode: schedulePageState.lessonMode,
         calendarProfileId: schedulePageState.calendarProfileId,
+        showChanges: schedulePageState.showChanges,
+        modulePresets,
         scheduleState: window.getSchedulePageState(),
         useShortNames: document.getElementById('useShortNames')?.checked ?? true,
         showFullLecturerName: document.getElementById('showFullLecturerName')?.checked ?? false
@@ -712,6 +1094,10 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         allAvailableModules = data.available_modules ||[];
         loadedBounds = data.loaded_bounds || {start: "2000-01-01", end: "2099-01-01"};
         sourceUpdatedAt = data.source_updated_at || null;
+        const snapshotKey = getSnapshotEntityKey(nextEntity);
+        const previousSnapshot = loadScheduleSnapshots()[snapshotKey];
+        scheduleChangeSummary = buildScheduleChangeSummary(previousSnapshot, fullSchedule, sourceUpdatedAt);
+        persistScheduleSnapshot(snapshotKey, fullSchedule, sourceUpdatedAt);
         if (selectedModules.size > 0) {
             const availableSet = new Set(allAvailableModules);
             selectedModules = new Set(Array.from(selectedModules).filter((module) => availableSet.has(module)));
@@ -752,12 +1138,14 @@ async function applyScheduleStateFromUrl() {
     fullSchedule = [];
     allAvailableModules = [];
     selectedModules.clear();
+    scheduleChangeSummary = null;
     isOfflineMode = false;
     document.getElementById('scheduleControls')?.classList.add('hidden');
     document.getElementById('defaultState')?.classList.remove('hidden');
     document.getElementById('desktopSchedule').innerHTML = '';
     document.getElementById('mobileSchedule').innerHTML = '';
     renderScheduleHome();
+    renderScheduleChangesPanel();
 }
 
 window.addEventListener('popstate', () => {
@@ -767,25 +1155,45 @@ window.addEventListener('popstate', () => {
 function renderModuleFilters() {
     const container = document.getElementById('moduleContainer');
     const section = document.getElementById('moduleFilterSection');
+    const summary = document.getElementById('moduleSelectionSummary');
     if (!container || !section) return;
     if (allAvailableModules.length === 0) {
         section.classList.add('hidden');
+        if (summary) summary.textContent = '';
         return;
     }
     section.classList.remove('hidden');
-    const selected = allAvailableModules.filter((mod) => selectedModules.has(mod));
-    const available = allAvailableModules.filter((mod) => !selectedModules.has(mod));
+    const selectedCount = allAvailableModules.filter((mod) => selectedModules.has(mod)).length;
+    if (summary) {
+        summary.textContent = t('schedule.modules.selectedCount', '{selected}/{total}', {
+            selected: selectedCount,
+            total: allAvailableModules.length
+        });
+    }
+    const weekModules = getCurrentWeekModuleSet();
+    const selected = allAvailableModules.filter((mod) => selectedModules.has(mod) && getModuleSearchMatch(mod));
+    const available = allAvailableModules.filter((mod) => !selectedModules.has(mod) && getModuleSearchMatch(mod));
+    const presets = getCurrentEntityModulePresets();
 
     function renderModuleChip(mod, isSelected) {
+        const activeThisWeek = weekModules.has(mod);
         return `
-            <button onclick="window.toggleModule('${escapeJsString(mod)}')"
-                class="inline-flex max-w-full items-center gap-2 rounded-xl border px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-200
+            <div class="group/module flex max-w-full flex-wrap items-center gap-1 rounded-xl border px-2 py-1.5 text-xs font-bold transition-all duration-200
                 ${isSelected
-                    ? 'bg-slate-900 border-slate-900 text-white shadow-lg shadow-slate-900/15'
-                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-blue-200 hover:text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:border-blue-700 dark:hover:text-slate-200'}">
-                ${isSelected ? '<span class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/15 text-[10px]">ON</span>' : ''}
-                <span class="truncate">${escapeHtml(mod)}</span>
-            </button>
+                    ? (activeThisWeek
+                        ? 'border-slate-900 bg-slate-900 text-white shadow-lg shadow-slate-900/15'
+                        : 'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200')
+                    : (activeThisWeek
+                        ? 'border-slate-200 bg-slate-50 text-slate-500 hover:bg-white hover:border-blue-200 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:border-blue-700 dark:hover:text-slate-200'
+                        : 'border-amber-200 bg-white text-amber-600 hover:bg-amber-50 dark:border-amber-900/70 dark:bg-slate-900 dark:text-amber-300 dark:hover:bg-amber-950/30')}">
+                <button type="button" onclick="window.toggleModule('${escapeJsString(mod)}')" class="inline-flex min-w-0 flex-1 items-center gap-2 text-left">
+                    ${isSelected ? '<span class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/15 text-[10px]">ON</span>' : ''}
+                    <span class="truncate">${escapeHtml(mod)}</span>
+                    ${activeThisWeek ? '' : `<span class="shrink-0 rounded-full bg-amber-200/70 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">${escapeHtml(t('schedule.modules.notThisWeek', 'Not this week'))}</span>`}
+                </button>
+                <button type="button" onclick="selectOnlyModule('${escapeJsString(mod)}')" class="rounded-lg bg-white/80 px-2 py-1 text-[10px] font-black text-slate-600 ring-1 ring-slate-200 hover:bg-blue-50 hover:text-blue-700 dark:bg-slate-900/70 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(t('schedule.modules.only', 'Only'))}</button>
+                <button type="button" onclick="selectAllExceptModule('${escapeJsString(mod)}')" class="rounded-lg bg-white/80 px-2 py-1 text-[10px] font-black text-slate-600 ring-1 ring-slate-200 hover:bg-rose-50 hover:text-rose-700 dark:bg-slate-900/70 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(t('schedule.modules.except', 'Except'))}</button>
+            </div>
         `;
     }
 
@@ -805,9 +1213,46 @@ function renderModuleFilters() {
     }
 
     container.innerHTML = `
-        <div class="space-y-3">
-            ${renderModuleGroup('schedule.filters.selected', 'Активные', selected, 'border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/80')}
-            ${renderModuleGroup('schedule.filters.available', 'Доступные', available, 'border-blue-100 bg-blue-50/40 dark:border-blue-900/60 dark:bg-blue-950/20')}
+        <div class="space-y-4">
+            <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+                <label class="relative block">
+                    <span class="sr-only">${escapeHtml(t('schedule.modules.search', 'Search modules'))}</span>
+                    <input value="${escapeHtml(moduleFilterQuery)}" oninput="setModuleFilterQuery(this.value)"
+                        placeholder="${escapeHtml(t('schedule.modules.searchPlaceholder', 'Search modules...'))}"
+                        class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                </label>
+                <div class="grid gap-2 sm:flex sm:flex-wrap">
+                    <button type="button" onclick="saveCurrentModulePreset()" class="rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500">${escapeHtml(t('schedule.modules.savePreset', 'Save preset'))}</button>
+                    <button type="button" onclick="selectAllModules()" class="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50">${escapeHtml(t('schedule.filters.all', 'All'))}</button>
+                    <button type="button" onclick="clearAllModules()" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">${escapeHtml(t('schedule.filters.clear', 'Reset'))}</button>
+                </div>
+            </div>
+            ${presets.length ? `
+                <section class="rounded-2xl border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-900/60 dark:bg-blue-950/20">
+                    <div class="mb-3 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-blue-500 dark:text-blue-300">
+                        <span>${escapeHtml(t('schedule.modules.presets', 'Module presets'))}</span>
+                        <span class="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500 shadow-sm dark:bg-slate-900 dark:text-slate-300">${presets.length}</span>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        ${presets.map((preset) => `
+                            <div class="inline-flex max-w-full items-center overflow-hidden rounded-xl border border-blue-200 bg-white text-xs font-black text-blue-700 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-200">
+                                <button type="button" onclick="applyModulePreset('${escapeJsString(preset.id)}')" class="min-w-0 px-3 py-2 text-left hover:bg-blue-50 dark:hover:bg-blue-950/40">
+                                    <span class="block truncate">${escapeHtml(preset.name)}</span>
+                                    <span class="block text-[9px] font-bold uppercase tracking-wide text-slate-400">${escapeHtml(t('schedule.modules.selectedCount', '{selected}/{total}', { selected: preset.modules.length, total: allAvailableModules.length }))}</span>
+                                </button>
+                                <button type="button" onclick="deleteModulePreset('${escapeJsString(preset.id)}')" class="px-2 py-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30" aria-label="${escapeHtml(t('schedule.modules.deletePreset', 'Delete preset'))}">x</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </section>
+            ` : ''}
+            ${moduleFilterQuery && !selected.length && !available.length ? `
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                    ${escapeHtml(t('schedule.modules.noSearchResults', 'No modules match the search.'))}
+                </div>
+            ` : ''}
+            ${renderModuleGroup('schedule.filters.selected', 'Active', selected, 'border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/80')}
+            ${renderModuleGroup('schedule.filters.available', 'Available', available, 'border-blue-100 bg-blue-50/40 dark:border-blue-900/60 dark:bg-blue-950/20')}
         </div>
     `;
 }
