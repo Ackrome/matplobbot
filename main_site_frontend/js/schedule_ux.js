@@ -46,6 +46,20 @@
             uiState.viewMode = "auto";
             uiState.filtersCollapsed = window.innerWidth < 768;
         }
+        syncUiStateFromPageState();
+    }
+    function syncUiStateFromPageState() {
+        const state = window.getSchedulePageState?.();
+        if (!state) return;
+        if (["auto", "table", "cards"].includes(state.viewMode)) {
+            uiState.viewMode = state.viewMode;
+        }
+        if (state.date) {
+            const parsed = parseDate(state.date);
+            if (!Number.isNaN(parsed.getTime())) {
+                currentWeekStart = getMonday(parsed);
+            }
+        }
     }
     function saveUiPrefs() {
         localStorage.setItem(
@@ -137,6 +151,7 @@
     }
     function setViewMode(mode) {
         uiState.viewMode = mode;
+        window.setScheduleViewModeState?.(mode, { updateUrl: true });
         const desktop = document.getElementById("desktopSchedule");
         const mobile = document.getElementById("mobileSchedule");
         if (!desktop || !mobile) return;
@@ -267,6 +282,13 @@
         document.getElementById("viewTableBtn")?.addEventListener("click", () => setViewMode("table"));
         document.getElementById("viewCardsBtn")?.addEventListener("click", () => setViewMode("cards"));
         window.addEventListener("resize", () => setViewMode(uiState.viewMode));
+        window.addEventListener("mpb-schedule-state-change", (event) => {
+            const nextMode = event.detail?.state?.viewMode;
+            if (["auto", "table", "cards"].includes(nextMode) && nextMode !== uiState.viewMode) {
+                uiState.viewMode = nextMode;
+                setViewMode(nextMode);
+            }
+        });
     }
     const rawLoadSchedule = loadSchedule;
     loadSchedule = async function patchedLoadSchedule(...args) {

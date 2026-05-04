@@ -756,7 +756,15 @@ window.saveCalendarProfileModuleDraft = async function(profileId) {
 window.openCalendarPresetSchedule = async function(profileId) {
     const profile = (calendarSubscriptionState.profiles || []).find((item) => item.id === profileId);
     if (!profile?.entity_type || !profile?.entity_id || typeof loadSchedule !== 'function') return;
-    await loadSchedule(profile.entity_type, profile.entity_id, profile.entity_name || profile.name || '');
+    const profileModules = Array.isArray(profile.modules) ? profile.modules.filter(Boolean) : [];
+    if (profileModules.length && typeof selectedModules !== 'undefined') {
+        selectedModules = new Set(profileModules);
+    }
+    await loadSchedule(profile.entity_type, profile.entity_id, profile.entity_name || profile.name || '', null, {
+        preserveModules: profileModules.length > 0,
+        calendarProfileId: profile.id,
+        urlMode: 'push'
+    });
 }
 
 function formatCalendarDateTime(value, fallback) {

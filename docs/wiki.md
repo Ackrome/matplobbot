@@ -547,9 +547,14 @@ Files:
 What it does:
 
 - Unified search for group/lecturer/auditorium.
+- Opens schedules from shareable URLs such as `/schedule?type=group&id=...&name=...&date=2026-05-04`.
+- Keeps a single page state object with entity, date, view mode, selected modules, lesson mode, offline state, and active calendar profile.
+- Syncs that state across URL parameters, local/remote preferences, browser history, and visible UI controls.
+- Shows a signed-in `My schedule` summary panel with active schedule, next class, today's classes, offline warning, and fast actions.
 - Desktop timetable grid + mobile card view.
 - Filters and toggles:
 - module filters
+- all classes / exams-only lesson mode
 - short names
 - full lecturer name
 - Includes copy-to-clipboard actions for room/lecturer.
@@ -559,10 +564,12 @@ What it does:
 
 How to use:
 
-1. Open `/schedule`.
-2. Search for group, lecturer, or room.
-3. Pick result and switch day/week context.
-4. Use filters panel to adjust card/table rendering.
+1. Open `/schedule`, or open a direct URL with `type`, `id`, `name`, and optional `date`.
+2. Sign in to see the `My schedule` summary for the saved/active schedule.
+3. Search for group, lecturer, or room when you need another source.
+4. Pick result and switch day/week context; the URL updates with the current state.
+5. Use filters panel to adjust modules, lesson mode, and card/table rendering.
+6. Copy the schedule link from the summary panel to share the same view.
 
 ### Calendar Sync Panel
 
