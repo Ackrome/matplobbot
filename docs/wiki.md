@@ -582,13 +582,18 @@ What it does:
 - Warms the semester schedule cache when a website profile is saved, then the background scheduler keeps these web-only sources refreshed.
 - Supports:
 - expand/collapse panel state
+- collapsed summary with active preset, event count, next event, and fast actions
+- selected-state preset cards for built-in and custom profiles
+- separate preset settings, connection, and diagnostics/management sections
+- visible selected-module chips for every preset, including the `All modules` state
+- custom preset module checklist on the matching schedule page
 - copy/reveal/hide URL
-- Apple/Google/Outlook guidance
+- Apple/Google/Outlook setup guidance with persisted target-calendar choice
 - preview and download
 - enable/disable sync
 - rotate secret
 - delete custom preset
-- edit custom preset name, lesson mode, and modules from the current schedule filters
+- edit custom preset name, lesson mode, and saved module set
 - direct bot deep link through `window.__MPB_BOT_DEEPLINK__` / `https://t.me/matplobbot?start=calendar_sync`
 - Telegram Mini App launch from the bot's `Calendar Sync` Web App button, which opens `/schedule?tg=1&calendar=1`, signs in with Telegram init data, keeps the panel collapsed on open, and scrolls directly to the sync card.
 - In Telegram Mini App, the collapsed sync card remains visible while Telegram auth is pending or unavailable, so users can expand it and see the sign-in state instead of the panel disappearing.
@@ -599,13 +604,15 @@ How to use:
 
 1. Sign in and open `/schedule`.
 2. Link the website account to Telegram to generate the private secret link.
-3. Expand `Calendar subscription` when you need to copy links or edit sync settings; it opens collapsed by default.
-4. Open any group, lecturer, or room schedule and use `Save current view` to create a website-only iCal profile.
-5. Select a built-in or custom profile. For custom profiles, rename the preset, switch between all classes and exams only, or apply the currently selected module filters.
-6. Copy/subscribe to the selected URL, preview the feed, or download the ICS file.
-7. Use `Reset link` if URL must be revoked.
-8. In Telegram, tap `Open in bot` or the bot's `Calendar Sync` miniapp button to manage the same WebCal feed without relying on Mini App auth.
-9. Open an event in your calendar app to see when Matplobbot last parsed that source from the university site.
+3. Use the collapsed `Calendar subscription` card for the normal flow: check the active preset, copy the link, or open calendar management in the bot.
+4. Expand the card when you need deeper control.
+5. In `Presets`, switch between built-in feeds and custom website presets.
+6. Open any group, lecturer, or room schedule and use `Save current view` to create a website-only iCal profile.
+7. In `Profile settings`, inspect which modules are included in the selected preset. For custom presets, open the matching schedule from the module notice when needed, then use the checklist to add/remove modules and save the preset.
+8. In `Connection`, choose Apple, Google, Outlook, or another calendar app, preview the feed, download ICS, and follow the platform-specific action.
+9. In `Diagnostics and management`, inspect cache/source health, reset the secret URL, disable sync, or delete a custom preset.
+10. In Telegram, tap `Open in bot` or the bot's `Calendar Sync` miniapp button to manage the same WebCal feed without relying on Mini App auth.
+11. Open an event in your calendar app to see when Matplobbot last parsed that source from the university site.
 
 ### Stats Dashboard
 

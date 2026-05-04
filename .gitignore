@@ -27,3 +27,9 @@ AGENTS.md
 
 .ruff_cache/**
 .pycache_tmp_exec_20260410/**
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
