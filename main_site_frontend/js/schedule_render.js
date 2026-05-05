@@ -16,6 +16,8 @@
             calendar: '<path d="M8 2v4"></path><path d="M16 2v4"></path><path d="M3 10h18"></path><path d="M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"></path>',
             module: '<path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h10"></path>',
             hide: '<path d="M3 3l18 18"></path><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"></path><path d="M9.9 5.1A10.8 10.8 0 0 1 12 5c6 0 9 7 9 7a13.2 13.2 0 0 1-2.1 3.1"></path><path d="M6.6 6.6C3.8 8.4 2 12 2 12s3 7 10 7a10.8 10.8 0 0 0 4.1-.8"></path>',
+            actions: '<path d="M4 7h16"></path><path d="M4 12h10"></path><path d="M4 17h7"></path>',
+            chevron: '<path d="m6 9 6 6 6-6"></path>',
         };
         return `<svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[name] || icons.copy}</svg>`;
     }
@@ -40,17 +42,27 @@
     function renderLessonActions(lessonId, labels, options = {}) {
         const compact = Boolean(options.compact);
         const className = compact
-            ? "mt-2 flex flex-wrap gap-1.5"
-            : "mt-3 flex flex-wrap gap-1.5";
+            ? "lesson-actions lesson-actions--compact"
+            : "lesson-actions";
+        const actionToggleLabel = labels.actionsToggle || "Actions";
+        const actionHideLabel = labels.actionsHide || actionToggleLabel;
         return `
-            <div class="${className}">
-                ${renderActionButton("copyRoom", lessonId, labels.copyRoom, "copy", !options.hasRoom)}
-                ${renderActionButton("openTeacher", lessonId, labels.openTeacher, "teacher", !options.hasTeacher)}
-                ${renderActionButton("openRoom", lessonId, labels.openRoom, "room", !options.hasRoom)}
-                ${renderActionButton("singleIcs", lessonId, labels.singleIcs, "calendar")}
-                ${renderActionButton("onlyModule", lessonId, labels.onlyModule, "module", !options.hasModule)}
-                ${renderActionButton("hideModule", lessonId, labels.hideModule, "hide", !options.hasModule)}
-            </div>
+            <details class="${className}">
+                <summary class="lesson-actions-toggle" title="${escapeHtml(actionToggleLabel)}">
+                    ${icon("actions")}
+                    <span class="lesson-actions-closed-label">${escapeHtml(actionToggleLabel)}</span>
+                    <span class="lesson-actions-open-label">${escapeHtml(actionHideLabel)}</span>
+                    <span class="lesson-actions-chevron">${icon("chevron")}</span>
+                </summary>
+                <div class="lesson-actions-panel">
+                    ${renderActionButton("copyRoom", lessonId, labels.copyRoom, "copy", !options.hasRoom)}
+                    ${renderActionButton("openTeacher", lessonId, labels.openTeacher, "teacher", !options.hasTeacher)}
+                    ${renderActionButton("openRoom", lessonId, labels.openRoom, "room", !options.hasRoom)}
+                    ${renderActionButton("singleIcs", lessonId, labels.singleIcs, "calendar")}
+                    ${renderActionButton("onlyModule", lessonId, labels.onlyModule, "module", !options.hasModule)}
+                    ${renderActionButton("hideModule", lessonId, labels.hideModule, "hide", !options.hasModule)}
+                </div>
+            </details>
         `;
     }
 

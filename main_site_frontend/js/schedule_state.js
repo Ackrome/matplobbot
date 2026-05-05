@@ -5,6 +5,11 @@
     const MAX_FAVORITES = 30;
     const ENTITY_TYPES = new Set(["group", "person", "auditorium"]);
 
+    function normalizeModules(value) {
+        if (!Array.isArray(value)) return null;
+        return Array.from(new Set(value.map((module) => String(module).trim()).filter(Boolean)));
+    }
+
     function normalizeEntity(entity) {
         const type = ENTITY_TYPES.has(String(entity?.type || "").toLowerCase())
             ? String(entity.type).toLowerCase()
@@ -13,7 +18,8 @@
         const label = entity?.label ?? entity?.name ?? entity?.entity_name ?? id;
         const name = label === undefined || label === null ? null : String(label);
         if (!type || !id) return null;
-        return {
+        const modules = normalizeModules(entity?.modules ?? entity?.selectedModules);
+        const normalized = {
             type,
             id,
             label: name || id,
@@ -22,6 +28,8 @@
             is_offline: Boolean(entity?.is_offline),
             updated_at: entity?.updated_at || entity?.opened_at || null,
         };
+        if (modules !== null) normalized.modules = modules;
+        return normalized;
     }
 
     function entityKey(entity) {
@@ -78,6 +86,11 @@
         return Boolean(keyValue && getFavorites().some((item) => entityKey(item) === keyValue));
     }
 
+    function getFavorite(entity) {
+        const keyValue = entityKey(entity);
+        return keyValue ? getFavorites().find((item) => entityKey(item) === keyValue) || null : null;
+    }
+
     function toggleFavorite(entity) {
         const normalized = normalizeEntity(entity);
         if (!normalized) return { active: false, items: getFavorites() };
@@ -88,6 +101,25 @@
             ? [{ ...normalized, favorited_at: new Date().toISOString() }, ...favorites]
             : favorites.filter((item) => entityKey(item) !== keyValue);
         return { active, items: writeList(FAVORITES_KEY, next, MAX_FAVORITES) };
+    }
+
+    function updateFavorite(entity, patch = {}) {
+        const favorites = getFavorites();
+        const keyValue = entityKey(entity);
+        const existing = favorites.find((item) => entityKey(item) === keyValue);
+        if (!existing) return { active: false, items: favorites };
+        const normalized = normalizeEntity({ ...existing, ...entity, ...patch });
+        if (!normalized) return { active: false, items: favorites };
+        const next = [
+            {
+                ...existing,
+                ...normalized,
+                favorited_at: existing.favorited_at || new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            },
+            ...favorites.filter((item) => entityKey(item) !== keyValue),
+        ];
+        return { active: true, items: writeList(FAVORITES_KEY, next, MAX_FAVORITES) };
     }
 
     function levenshtein(a, b) {
@@ -166,11 +198,13 @@
         addRecent,
         entityKey,
         filterLocalEntities,
+        getFavorite,
         getFavorites,
         getRecent,
         isFavorite,
         mergeEntities,
         normalizeEntity,
         toggleFavorite,
+        updateFavorite,
     };
 })();

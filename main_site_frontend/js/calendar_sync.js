@@ -13,6 +13,7 @@ let isCalendarPanelCollapsed = true;
 let isCalendarSyncPanelOpen = shouldFocusCalendarSyncPanel;
 let hasUserToggledCalendarPanel = false;
 let hasFocusedCalendarSyncPanel = false;
+let isCalendarDrawerDragging = false;
 window.calendarCurrentViewMode = 'all';
 
 function createDefaultCalendarSubscriptionState() {
@@ -90,8 +91,66 @@ function focusCalendarSyncPanelIfRequested(container) {
     if (!shouldFocusCalendarSyncPanel || hasFocusedCalendarSyncPanel || !container) return;
     hasFocusedCalendarSyncPanel = true;
     window.requestAnimationFrame(() => {
-        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const focusTarget = container.querySelector('button, a, input, select, textarea');
+        focusTarget?.focus?.({ preventScroll: true });
     });
+}
+
+function getCalendarDrawerWidth() {
+    const container = document.getElementById('calendarSubscriptionSection');
+    const width = container?.getBoundingClientRect?.().width || Math.min(544, window.innerWidth - 16);
+    return Math.max(0, width);
+}
+
+function setCalendarDrawerOffset(offset, { dragging = false } = {}) {
+    const container = document.getElementById('calendarSubscriptionSection');
+    const handle = document.getElementById('calendarSyncHandle');
+    if (!container) return;
+    const width = getCalendarDrawerWidth();
+    const nextOffset = Math.max(0, Math.min(width, Number(offset) || 0));
+    container.style.setProperty('--calendar-sync-drawer-offset', `${nextOffset}px`);
+    container.classList.toggle('is-dragging', dragging);
+    handle?.classList.toggle('is-dragging', dragging);
+}
+
+function setCalendarDrawerVisibility(open, { immediate = false, dragging = false } = {}) {
+    const container = document.getElementById('calendarSubscriptionSection');
+    if (!container) return;
+    window.clearTimeout(container._calendarHideTimer);
+    const width = getCalendarDrawerWidth();
+    if (open) {
+        const alreadyVisible = !container.classList.contains('hidden') && container.classList.contains('is-open');
+        container.classList.remove('hidden');
+        container.setAttribute('aria-hidden', 'false');
+        if (alreadyVisible && !immediate && !dragging) {
+            setCalendarDrawerOffset(0);
+            return;
+        }
+        if (immediate || dragging) {
+            setCalendarDrawerOffset(dragging ? width : 0, { dragging });
+            container.classList.add('is-open');
+            return;
+        }
+        setCalendarDrawerOffset(width);
+        window.requestAnimationFrame(() => {
+            container.classList.add('is-open');
+            setCalendarDrawerOffset(0);
+        });
+        return;
+    }
+    container.setAttribute('aria-hidden', 'true');
+    container.classList.remove('is-open');
+    setCalendarDrawerOffset(width, { dragging });
+    if (immediate) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+    }
+    container._calendarHideTimer = window.setTimeout(() => {
+        if (isCalendarSyncPanelOpen) return;
+        container.classList.add('hidden');
+        container.innerHTML = '';
+    }, 240);
 }
 
 function renderCalendarButton(labelKey, fallback, className, attributes = '') {
@@ -245,19 +304,11 @@ window.openCalendarSyncPanel = function() {
     isCalendarPanelCollapsed = false;
     persistCalendarPanelCollapsed();
     renderCalendarSubscription();
-    const container = document.getElementById('calendarSubscriptionSection');
-    if (container) {
-        requestAnimationFrame(() => container.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-    }
 }
 
 window.closeCalendarSyncPanel = function() {
     isCalendarSyncPanelOpen = false;
-    const container = document.getElementById('calendarSubscriptionSection');
-    if (container) {
-        container.classList.add('hidden');
-        container.innerHTML = '';
-    }
+    setCalendarDrawerVisibility(false);
 }
 
 window.toggleCalendarSyncPanel = function() {
@@ -269,7 +320,7 @@ function installCalendarSyncHandle() {
     const handle = document.getElementById('calendarSyncHandle');
     if (!handle || handle.dataset.bound === '1') return;
     handle.dataset.bound = '1';
-    let startX = 0;
+    let dragState = null;
     let suppressClick = false;
     handle.addEventListener('click', () => {
         if (suppressClick) {
@@ -279,20 +330,65 @@ function installCalendarSyncHandle() {
         window.toggleCalendarSyncPanel();
     });
     handle.addEventListener('pointerdown', (event) => {
-        startX = event.clientX;
+        if (event.button !== undefined && event.button !== 0) return;
+        dragState = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            width: getCalendarDrawerWidth(),
+            initialOffset: isCalendarSyncPanelOpen ? 0 : getCalendarDrawerWidth(),
+            active: false,
+        };
         handle.setPointerCapture?.(event.pointerId);
     });
     handle.addEventListener('pointermove', (event) => {
-        if (!startX) return;
-        if (Math.abs(event.clientX - startX) > 24) {
+        if (!dragState) return;
+        const delta = event.clientX - dragState.startX;
+        if (!dragState.active && Math.abs(delta) > 4) {
+            dragState.active = true;
             suppressClick = true;
-            window.openCalendarSyncPanel();
+            if (!isCalendarSyncPanelOpen) {
+                isCalendarSyncPanelOpen = true;
+                hasUserToggledCalendarPanel = true;
+                isCalendarPanelCollapsed = false;
+                persistCalendarPanelCollapsed();
+                isCalendarDrawerDragging = true;
+                renderCalendarSubscription();
+            }
         }
+        if (!dragState.active) return;
+        event.preventDefault();
+        const offset = dragState.initialOffset + delta;
+        setCalendarDrawerOffset(offset, { dragging: true });
     });
-    handle.addEventListener('pointerup', () => {
-        startX = 0;
+    const finishDrag = () => {
+        const pointerId = dragState?.pointerId;
+        if (dragState?.active) {
+            const width = dragState.width || getCalendarDrawerWidth();
+            const currentOffset = parseFloat(
+                document.getElementById('calendarSubscriptionSection')?.style.getPropertyValue('--calendar-sync-drawer-offset') || String(width)
+            );
+            const visibleWidth = Math.max(0, width - currentOffset);
+            if (visibleWidth >= width * 0.35) {
+                isCalendarSyncPanelOpen = true;
+                setCalendarDrawerOffset(0);
+                document.getElementById('calendarSubscriptionSection')?.classList.add('is-open');
+            } else {
+                isCalendarSyncPanelOpen = false;
+                setCalendarDrawerVisibility(false);
+            }
+        }
+        if (pointerId !== undefined) {
+            try {
+                handle.releasePointerCapture?.(pointerId);
+            } catch (error) {}
+        }
+        isCalendarDrawerDragging = false;
+        dragState = null;
+        setCalendarDrawerOffset(isCalendarSyncPanelOpen ? 0 : getCalendarDrawerWidth());
         setTimeout(() => { suppressClick = false; }, 250);
-    });
+    };
+    handle.addEventListener('pointerup', finishDrag);
+    handle.addEventListener('pointercancel', finishDrag);
 }
 
 function renderTelegramCalendarAuthPlaceholder(container) {
@@ -324,7 +420,7 @@ function renderTelegramCalendarAuthPlaceholder(container) {
         `;
 
     container.innerHTML = `
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="calendar-sync-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                     <div class="mb-1 text-xs font-black uppercase tracking-[0.2em] text-blue-500 dark:text-blue-300">${escapeHtml(t('schedule.calendar.eyebrow', 'Sync'))}</div>
@@ -360,11 +456,10 @@ function renderCalendarSubscription() {
     if (!container) return;
 
     if (!isCalendarSyncPanelOpen) {
-        container.classList.add('hidden');
-        container.innerHTML = '';
+        setCalendarDrawerVisibility(false);
         return;
     }
-    container.classList.remove('hidden');
+    setCalendarDrawerVisibility(true, { dragging: isCalendarDrawerDragging });
     const state = calendarSubscriptionState || createDefaultCalendarSubscriptionState();
     const selectedProfile = window.getSelectedCalendarProfile?.() || state.profiles?.[0] || null;
     const isReady = Boolean(state.enabled && state.sync_enabled && selectedProfile?.links?.http_url);
@@ -729,7 +824,7 @@ function renderCalendarSubscription() {
         `;
 
     container.innerHTML = `
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="calendar-sync-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">

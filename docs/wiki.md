@@ -563,6 +563,7 @@ What it does:
 - download a one-lesson `.ics`
 - show only the lesson module
 - hide the lesson module
+- The quick-action strip is collapsed by default behind the `Actions` / `Действия` control so dense timetable cells stay compact.
 - View density switcher:
 - `Cards` for the current rich card feed
 - `Compact` for seeing more lessons on one screen
@@ -572,6 +573,7 @@ What it does:
 - module filters
 - module search and selected-module counter in the filter header
 - schedule module presets saved per schedule entity
+- favorite schedules remember the selected module set when they are saved from the currently opened schedule
 - quick module actions: only this module, all except this module, reset/all
 - amber highlighting for modules that are not present in the currently visible period/mode
 - all classes / exams-only lesson mode
@@ -595,11 +597,13 @@ How to use:
 4. Pick result and switch day/week context; the URL updates with the current state.
 5. Use favorites in the summary/search panel to pin often-used groups, lecturers, or rooms.
 6. Use filters panel to search modules, toggle them, save a module preset, or apply `Only` / `Except` actions from a module chip.
-7. Use quick actions on lesson cards for room copy, lecturer/room navigation, one-lesson ICS export, and module-focused filtering.
-8. Use `Cards`, `Compact`, `Table`, or `Exams` to choose display density. The choice is saved and reflected in the URL.
-9. Tap `Show changes` in the summary panel to compare with the previous local snapshot.
-10. Open the offline drawer to see cached schedules and refresh the current schedule cache.
-11. Copy the schedule link from the summary panel to share the same view.
+7. Open `Actions` / `Действия` on a lesson card, then use quick actions for room copy, lecturer/room navigation, one-lesson ICS export, and module-focused filtering.
+8. Add the opened schedule to favorites after choosing modules when you want that favorite to reopen with the same module set.
+9. Pick another non-favorite schedule from search to reset the module filter to all modules available for that schedule.
+10. Use `Cards`, `Compact`, `Table`, or `Exams` to choose display density. The choice is saved and reflected in the URL.
+11. Tap `Show changes` in the summary panel to compare with the previous local snapshot.
+12. Open the offline drawer to see cached schedules and refresh the current schedule cache.
+13. Copy the schedule link from the summary panel to share the same view.
 
 ### Calendar Sync Panel
 
@@ -612,6 +616,7 @@ What it does:
 - Shows eligibility based on Telegram linkage. Bot subscriptions are no longer required for website-owned iCal profiles.
 - Opens from the side `Calendar sync` handle on `/schedule` instead of occupying page space by default.
 - The handle can be clicked or dragged inward; `/schedule?calendar=1` still opens the panel directly.
+- The panel slides in as a fixed right drawer above the schedule and follows pointer drag while the mouse or touch is held down.
 - Manages profile-based iCal feeds:
 - built-in `All classes`
 - built-in `Exams only`
@@ -634,7 +639,7 @@ What it does:
 - delete custom preset
 - edit custom preset name, lesson mode, and saved module set
 - direct bot deep link through `window.__MPB_BOT_DEEPLINK__` / `https://t.me/matplobbot?start=calendar_sync`
-- Telegram Mini App launch from the bot's `Calendar Sync` Web App button, which opens `/schedule?tg=1&calendar=1`, signs in with Telegram init data, keeps the panel collapsed on open, and scrolls directly to the sync card.
+- Telegram Mini App launch from the bot's `Calendar Sync` Web App button, which opens `/schedule?tg=1&calendar=1`, signs in with Telegram init data, and opens the right drawer directly.
 - In Telegram Mini App, the collapsed sync card remains visible while Telegram auth is pending or unavailable, so users can expand it and see the sign-in state instead of the panel disappearing.
 - Shows profile health (event count, next event, cache status, source updated, last access).
 - Adds the last university-site schedule parsing time to every generated iCal event description.
@@ -643,7 +648,7 @@ How to use:
 
 1. Sign in and open `/schedule`.
 2. Link the website account to Telegram to generate the private secret link.
-3. Click or drag the side `Calendar sync` handle to open the calendar panel.
+3. Click the side `Calendar sync` handle to open the right drawer, or hold and drag it inward to control the slide-out position.
 4. Use the panel summary for the normal flow: check the active preset, copy the link, or open calendar management in the bot.
 5. In `Presets`, switch between built-in feeds and custom website presets.
 6. Open any group, lecturer, or room schedule and use `Save current view` to create a website-only iCal profile.

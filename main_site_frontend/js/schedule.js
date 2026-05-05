@@ -60,6 +60,11 @@ function normalizeScheduleEntity(entity) {
     return type && id ? { type, id, name: name || id } : { type: null, id: null, name: null };
 }
 
+function getScheduleEntityKey(entity) {
+    const normalized = normalizeScheduleEntity(entity);
+    return normalized.type && normalized.id ? `${normalized.type}:${normalized.id}` : '';
+}
+
 function normalizeScheduleDate(value) {
     const raw = String(value || '').trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
@@ -495,8 +500,18 @@ function getModuleSearchMatch(moduleName) {
 function persistModuleSelection() {
     renderModuleFilters();
     filterAndRender();
+    syncCurrentFavoriteModules();
     savePreferences();
     if (window._renderCalendarSubscriptionImpl) window._renderCalendarSubscriptionImpl();
+}
+
+function getSelectedModulesForStorage() {
+    return Array.from(selectedModules).filter((module) => allAvailableModules.includes(module));
+}
+
+function syncCurrentFavoriteModules() {
+    if (!currentEntity?.id || !window.ScheduleState?.isFavorite?.(currentEntity)) return;
+    window.ScheduleState.updateFavorite(currentEntity, { modules: getSelectedModulesForStorage() });
 }
 
 window.setModuleFilterQuery = function(value) {
@@ -844,7 +859,10 @@ window.copyScheduleShareLink = function(event) {
 
 window.toggleCurrentScheduleFavorite = function() {
     if (!currentEntity?.id) return;
-    window.ScheduleState?.toggleFavorite?.(currentEntity);
+    window.ScheduleState?.toggleFavorite?.({
+        ...currentEntity,
+        modules: getSelectedModulesForStorage()
+    });
     renderScheduleHome();
     if (!resultsBox.classList.contains('hidden')) {
         renderSearchResults(latestSearchResults, { query: latestSearchQuery, networkState: latestSearchResults.length ? 'ok' : 'empty' });
@@ -1044,8 +1062,12 @@ async function loadInitialPreferences() {
     }
 
     const prefState = buildScheduleStateFromPreferences(prefsToApply || {});
+    const urlMatchesPrefEntity = getScheduleEntityKey(urlState.entity) === getScheduleEntityKey(prefState.entity);
+    const initialModules = urlState.hasEmptyModules
+        ? []
+        : (urlState.hasModules ? urlState.selectedModules : (urlMatchesPrefEntity ? prefState.selectedModules : []));
     const initialState = urlState.hasEntity
-        ? { ...prefState, ...urlState, selectedModules: urlState.hasModules ? urlState.selectedModules : prefState.selectedModules }
+        ? { ...prefState, ...urlState, selectedModules: initialModules }
         : (prefState.hasEntity ? prefState : { ...schedulePageState, ...urlState });
     setSchedulePageState(initialState);
     window.calendarCurrentViewMode = schedulePageState.lessonMode === 'exams_only' ? 'exams_only' : 'all';
@@ -1207,11 +1229,15 @@ function renderSearchEntityRow(item, sourceLabel = '') {
     const normalized = window.ScheduleState?.normalizeEntity?.(item) || item;
     const typeMeta = getSearchResultTypeMeta(normalized.type);
     const favorite = window.ScheduleState?.isFavorite?.(normalized);
+    const savedModules = Array.isArray(normalized.modules) ? normalized.modules : null;
     const offlineBadge = normalized.is_offline
         ? `<span class="rounded bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-600 dark:bg-orange-950/40 dark:text-orange-300">${escapeHtml(t('schedule.search.cacheBadge', 'CACHE'))}</span>`
         : '';
     const sourceBadge = sourceLabel
         ? `<span class="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-900 dark:text-slate-300">${escapeHtml(sourceLabel)}</span>`
+        : '';
+    const modulesBadge = savedModules
+        ? `<span class="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">${escapeHtml(t('schedule.search.savedModules', '{count} modules', { count: savedModules.length }))}</span>`
         : '';
     const itemType = escapeJsString(normalized.type || 'group');
     const itemId = escapeJsString(normalized.id);
@@ -1219,12 +1245,13 @@ function renderSearchEntityRow(item, sourceLabel = '') {
     return `
         <div class="group flex items-stretch border-b border-slate-100 last:border-none dark:border-slate-700">
             <button type="button" class="min-w-0 flex-1 px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-slate-700"
-                onclick="loadSchedule('${itemType}', '${itemId}', '${itemLabel}')">
+                onclick="openScheduleFromSearch('${itemType}', '${itemId}', '${itemLabel}')">
                 <div class="flex flex-wrap items-center gap-2 font-bold text-slate-800 dark:text-slate-100">
                     <span class="truncate">${escapeHtml(normalized.label || normalized.name || normalized.id)}</span>
                     <span class="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${typeMeta.badgeClass}">${escapeHtml(typeMeta.label)}</span>
                     ${offlineBadge}
                     ${sourceBadge}
+                    ${modulesBadge}
                 </div>
                 <div class="mt-0.5 truncate text-xs text-slate-400">${escapeHtml(normalized.description || typeMeta.label)}</div>
             </button>
@@ -1334,18 +1361,34 @@ window.setScheduleSearchCategory = function(type) {
 
 window.toggleSearchFavorite = function(event, type, id, label) {
     event?.stopPropagation();
-    window.ScheduleState?.toggleFavorite?.({ type, id, label });
+    const entity = { type, id, label };
+    const isCurrent = getScheduleEntityKey(entity) === getScheduleEntityKey(currentEntity);
+    window.ScheduleState?.toggleFavorite?.(isCurrent
+        ? { ...entity, modules: getSelectedModulesForStorage() }
+        : entity);
     renderSearchResults(latestSearchResults, { query: latestSearchQuery, networkState: latestSearchResults.length ? 'ok' : 'empty' });
     renderScheduleHome();
+}
+
+window.openScheduleFromSearch = function(type, id, label) {
+    const favorite = window.ScheduleState?.getFavorite?.({ type, id, label });
+    if (Array.isArray(favorite?.modules)) {
+        selectedModules = new Set(favorite.modules);
+        return loadSchedule(type, id, label, null, {
+            preserveModules: true,
+            keepEmptyModules: favorite.modules.length === 0
+        });
+    }
+    return loadSchedule(type, id, label);
 }
 
 async function loadSchedule(type, id, name, targetDate = null, options = {}) {
     resultsBox.classList.add('hidden');
     groupInput.value = name || id || '';
-    const previousEntityKey = `${currentEntity.type || ''}:${currentEntity.id || ''}`;
+    const previousEntityKey = getScheduleEntityKey(currentEntity);
     const nextEntity = normalizeScheduleEntity({ type, id, name });
     if (!nextEntity.id) return;
-    const nextEntityKey = `${nextEntity.type || ''}:${nextEntity.id || ''}`;
+    const nextEntityKey = getScheduleEntityKey(nextEntity);
     const entityChanged = previousEntityKey !== nextEntityKey;
     if (entityChanged && !options.preserveModules) {
         selectedModules.clear();
@@ -1548,26 +1591,17 @@ function renderModuleFilters() {
 window.toggleModule = function(mod) {
     if (selectedModules.has(mod)) selectedModules.delete(mod);
     else selectedModules.add(mod);
-    renderModuleFilters();
-    filterAndRender();
-    savePreferences();
-    if (window._renderCalendarSubscriptionImpl) window._renderCalendarSubscriptionImpl();
+    persistModuleSelection();
 }
 
 window.selectAllModules = function() {
     selectedModules = new Set(allAvailableModules);
-    renderModuleFilters();
-    filterAndRender();
-    savePreferences();
-    if (window._renderCalendarSubscriptionImpl) window._renderCalendarSubscriptionImpl();
+    persistModuleSelection();
 }
 
 window.clearAllModules = function() {
     selectedModules.clear();
-    renderModuleFilters();
-    filterAndRender();
-    savePreferences();
-    if (window._renderCalendarSubscriptionImpl) window._renderCalendarSubscriptionImpl();
+    persistModuleSelection();
 }
 
 window.refreshCurrentScheduleCache = async function() {
@@ -1813,6 +1847,8 @@ function getLessonActionLabels() {
         singleIcs: t('schedule.lesson.singleIcs', 'Add to calendar'),
         onlyModule: t('schedule.lesson.onlyModule', 'Only module'),
         hideModule: t('schedule.lesson.hideModule', 'Hide module'),
+        actionsToggle: t('schedule.lesson.actionsToggle', 'Actions'),
+        actionsHide: t('schedule.lesson.actionsHide', 'Hide actions'),
     };
 }
 
