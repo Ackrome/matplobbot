@@ -312,6 +312,136 @@
             opacity: 1;
             pointer-events: auto;
         }
+        .schedule-shell-layout {
+            position: relative;
+            overflow: visible;
+        }
+        .schedule-workspace {
+            min-height: inherit;
+        }
+        .schedule-primary-column {
+            min-width: 0;
+        }
+        .schedule-toolbar-kicker {
+            color: var(--schedule-muted);
+        }
+        .schedule-entity-trigger,
+        .schedule-ghost-button {
+            border: 1px solid var(--schedule-panel-border);
+            background: color-mix(in srgb, var(--schedule-panel) 94%, transparent);
+            color: var(--schedule-text);
+            transition: border-color .18s ease, background-color .18s ease, color .18s ease, box-shadow .18s ease;
+        }
+        .schedule-entity-trigger:hover,
+        .schedule-ghost-button:hover {
+            border-color: color-mix(in srgb, var(--lesson-default-border) 55%, var(--schedule-panel-border));
+            background: color-mix(in srgb, var(--schedule-panel) 82%, var(--lesson-default-bg));
+            box-shadow: 0 16px 30px -28px rgba(37, 99, 235, 0.55);
+        }
+        .schedule-entity-trigger:focus-within,
+        .schedule-ghost-button:focus-visible {
+            outline: 2px solid #93c5fd;
+            outline-offset: 2px;
+        }
+        .schedule-entity-trigger input::placeholder {
+            color: var(--schedule-muted);
+        }
+        .schedule-inline-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.65rem;
+            min-height: 2.75rem;
+            border: 1px solid var(--schedule-panel-border);
+            border-radius: 999px;
+            background: color-mix(in srgb, var(--schedule-panel) 94%, transparent);
+            padding: 0.4rem 0.55rem 0.4rem 0.85rem;
+            transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+        }
+        .schedule-inline-toggle:hover {
+            border-color: color-mix(in srgb, var(--lesson-default-border) 55%, var(--schedule-panel-border));
+            background: color-mix(in srgb, var(--schedule-panel) 82%, var(--lesson-default-bg));
+            box-shadow: 0 16px 30px -28px rgba(37, 99, 235, 0.55);
+        }
+        .schedule-inline-toggle-label {
+            color: var(--schedule-text);
+        }
+        .schedule-inline-toggle-hint {
+            color: var(--schedule-muted);
+        }
+        .schedule-utility-cluster {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem;
+            border: 1px solid var(--schedule-panel-border);
+            border-radius: 1rem;
+            background: color-mix(in srgb, var(--schedule-panel) 94%, transparent);
+            box-shadow: 0 16px 30px -28px rgba(37, 99, 235, 0.45);
+        }
+        .schedule-utility-button {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.45rem;
+            min-width: 2.75rem;
+            min-height: 2.75rem;
+            padding: 0.7rem;
+            border-radius: 0.9rem;
+            color: var(--schedule-muted);
+            transition: color .18s ease, background-color .18s ease, box-shadow .18s ease, transform .18s ease;
+        }
+        .schedule-utility-button:hover {
+            color: var(--schedule-text);
+            background: color-mix(in srgb, var(--schedule-panel-soft) 88%, transparent);
+            box-shadow: 0 12px 24px -22px rgba(15, 23, 42, 0.4);
+            transform: translateY(-1px);
+        }
+        .schedule-utility-button:focus-visible {
+            outline: 2px solid #93c5fd;
+            outline-offset: 2px;
+        }
+        .schedule-utility-button:disabled {
+            cursor: not-allowed;
+            opacity: 0.45;
+            box-shadow: none;
+            transform: none;
+        }
+        .schedule-utility-button--wide {
+            padding-inline: 0.9rem;
+        }
+        .schedule-utility-button.is-active {
+            color: #b45309;
+            background: #fffbeb;
+        }
+        .schedule-utility-button.is-favorite {
+            color: #b45309;
+            background: #fef3c7;
+        }
+        .schedule-utility-badge {
+            position: absolute;
+            top: 0.3rem;
+            right: 0.3rem;
+            min-width: 1rem;
+            height: 1rem;
+            padding: 0 0.22rem;
+            border-radius: 999px;
+            background: #2563eb;
+            color: #ffffff;
+            font-size: 0.6rem;
+            font-weight: 900;
+            line-height: 1rem;
+            text-align: center;
+            box-shadow: 0 6px 16px -10px rgba(37, 99, 235, 0.9);
+        }
+        .dark .schedule-utility-button.is-active {
+            color: #fdba74;
+            background: rgba(120, 53, 15, 0.3);
+        }
+        .dark .schedule-utility-button.is-favorite {
+            color: #fbbf24;
+            background: rgba(120, 53, 15, 0.45);
+        }
         #calendarSubscriptionSection.calendar-sync-drawer {
             position: fixed;
             top: 1rem;
@@ -422,6 +552,10 @@
                 min-height: 3.6rem;
                 padding: 0.85rem 0.95rem;
             }
+            .schedule-utility-cluster {
+                width: 100%;
+                justify-content: flex-end;
+            }
             #calendarSubscriptionSection.calendar-sync-drawer {
                 top: auto;
                 right: 0.5rem;
@@ -431,6 +565,38 @@
             }
             #calendarSubscriptionSection .calendar-sync-card {
                 border-radius: 1.4rem;
+            }
+        }
+        @media (min-width: 1280px) {
+            .schedule-shell--calendar-open .schedule-workspace {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) minmax(22rem, 24rem);
+                align-items: start;
+            }
+            .schedule-shell--calendar-open #calendarSubscriptionSection.calendar-sync-drawer {
+                position: sticky;
+                top: 6rem;
+                right: auto;
+                bottom: auto;
+                width: auto;
+                align-self: start;
+                max-height: calc(100vh - 7rem);
+                overflow-y: auto;
+                overscroll-behavior: contain;
+                scrollbar-gutter: stable;
+                transform: none !important;
+                padding: 0;
+                border-left: 1px solid var(--schedule-panel-border);
+                background: color-mix(in srgb, var(--schedule-panel-soft) 90%, transparent);
+            }
+            .schedule-shell--calendar-open #calendarSubscriptionSection .calendar-sync-card {
+                min-height: auto;
+                border: 0;
+                border-radius: 0 2rem 2rem 0;
+                box-shadow: none;
+            }
+            #calendarSubscriptionBackdrop {
+                display: none !important;
             }
         }
     </style>
@@ -475,164 +641,199 @@
     <!-- КОНТЕНТ -->
     <main class="pt-24 max-w-[1600px] mx-auto px-2 sm:px-6 lg:px-8 pb-20">
         <div class="w-full">
-            <div class="flex flex-col md:flex-row justify-between items-center mb-4 md:mb-6 gap-3 relative z-40 w-full px-1">
-                <div class="flex items-center justify-between w-full md:w-auto gap-3">
-                    <h1 data-i18n="schedule.heading" class="text-2xl md:text-4xl font-black text-slate-900 tracking-tight dark:text-slate-100">Расписание</h1>
-                    <div class="relative" id="offlinePanelContainer">
-                        <button onclick="toggleOfflinePanel(event)"
-                            class="group flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-blue-400 transition-all dark:border-slate-700 dark:bg-slate-800">
-                            <div class="relative flex h-2 w-2">
-                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                            </div>
-                            <span data-i18n="schedule.offline.available" class="text-xs md:text-sm font-bold text-slate-600 dark:text-slate-300">Доступно оффлайн</span>
-                            <svg id="offlineArrow" class="w-4 h-4 text-slate-400 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </button>
-                        <div id="offlineDropdown"
-                            class="absolute right-0 md:left-0 mt-2 w-80 max-w-[calc(100vw-1rem)] bg-white border border-slate-100 rounded-2xl shadow-2xl overflow-hidden hidden opacity-0 translate-y-2 transition-all duration-200 z-50 dark:border-slate-700 dark:bg-slate-800">
-                            <div class="p-3 border-b border-slate-50 bg-slate-50/50 dark:border-slate-700 dark:bg-slate-900/50">
-                                <h3 data-i18n="schedule.offline.available" class="font-black text-[10px] text-slate-400 uppercase tracking-wider text-center">Доступно оффлайн</h3>
-                            </div>
-                            <div id="cachedEntitiesList" class="p-1.5 flex flex-col gap-1 max-h-80 overflow-y-auto custom-scrollbar"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="relative w-full md:w-96" id="searchContainer">
-                    <input type="text" id="groupSearch" data-search-input data-i18n-placeholder="schedule.search.placeholder" autocomplete="off"
-                        class="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-slate-700 text-sm md:text-base dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
-                        placeholder="Найти группу, преподавателя или аудиторию...">
-                    <div class="absolute left-3.5 top-3 text-slate-400">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                    </div>
-                    <div id="searchResults" class="absolute w-full mt-2 bg-white border border-slate-100 rounded-xl shadow-2xl overflow-hidden hidden max-h-80 overflow-y-auto custom-scrollbar z-50 dark:border-slate-700 dark:bg-slate-800"></div>
-                </div>
-            </div>
             <section id="scheduleHomePanel" class="hidden mb-4 md:mb-6"></section>
             <section id="scheduleChangesPanel" class="hidden mb-4 md:mb-6"></section>
             <div id="calendarSubscriptionBackdrop" class="hidden"></div>
-            <section id="calendarSubscriptionSection" class="calendar-sync-drawer hidden" aria-hidden="true"></section>
 
             <!-- ГЛАВНЫЙ БЛОК РАСПИСАНИЯ -->
-            <div id="mainScheduleBlock" class="schedule-shell bg-white rounded-3xl md:rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col w-full min-h-[500px] dark:border-slate-700 dark:bg-slate-800">
+            <div id="mainScheduleBlock" class="schedule-shell schedule-shell-layout bg-white rounded-3xl md:rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden w-full min-h-[500px] dark:border-slate-700 dark:bg-slate-800">
+                <div id="scheduleWorkspace" class="schedule-workspace">
+                    <div id="schedulePrimaryColumn" class="schedule-primary-column flex flex-col">
+                        <div id="scheduleControls" class="schedule-control-panel flex flex-col bg-white dark:bg-slate-800">
+                            <div class="schedule-control-band border-b border-slate-100 bg-slate-50/40 p-4 dark:border-slate-700 dark:bg-slate-900/40 md:px-6 md:py-5">
+                                <div class="grid gap-3 xl:grid-cols-[minmax(15rem,21rem)_minmax(0,1fr)_auto] xl:items-center">
+                                    <div class="flex items-center gap-2">
+                                        <div class="relative min-w-0 flex-1" id="searchContainer">
+                                            <label class="schedule-entity-trigger flex min-h-[4.35rem] items-center gap-3 rounded-2xl px-3.5 py-3 shadow-sm">
+                                                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">
+                                                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h8M8 12h8M8 17h5"></path>
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path>
+                                                    </svg>
+                                                </div>
+                                                <div class="min-w-0 flex-1">
+                                                    <div class="schedule-toolbar-kicker text-[10px] font-black uppercase tracking-[0.18em]">Расписание</div>
+                                                    <input type="text" id="groupSearch" data-search-input data-i18n-placeholder="schedule.search.placeholder" autocomplete="off"
+                                                        class="mt-1 w-full bg-transparent p-0 text-sm font-black text-slate-900 outline-none placeholder:font-semibold dark:text-slate-100"
+                                                        placeholder="Найти группу, преподавателя или аудиторию...">
+                                                </div>
+                                                <svg class="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path>
+                                                </svg>
+                                            </label>
+                                            <div id="searchResults" class="absolute left-0 right-0 z-50 mt-2 hidden max-h-80 overflow-y-auto overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl custom-scrollbar dark:border-slate-700 dark:bg-slate-800"></div>
+                                        </div>
+                                        <div class="relative shrink-0" id="offlinePanelContainer">
+                                            <button onclick="toggleOfflinePanel(event)"
+                                                class="schedule-ghost-button group inline-flex h-[4.35rem] w-[4.35rem] items-center justify-center rounded-2xl shadow-sm">
+                                                <span class="relative flex h-3.5 w-3.5">
+                                                    <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                                                    <span class="relative inline-flex h-3.5 w-3.5 rounded-full bg-emerald-500"></span>
+                                                </span>
+                                            </button>
+                                            <div id="offlineDropdown"
+                                                class="absolute right-0 mt-2 hidden w-80 max-w-[calc(100vw-1rem)] translate-y-2 overflow-hidden rounded-2xl border border-slate-100 bg-white opacity-0 shadow-2xl transition-all duration-200 dark:border-slate-700 dark:bg-slate-800">
+                                                <div class="border-b border-slate-50 bg-slate-50/50 p-3 dark:border-slate-700 dark:bg-slate-900/50">
+                                                    <h3 data-i18n="schedule.offline.available" class="text-center text-[10px] font-black uppercase tracking-wider text-slate-400">Доступно оффлайн</h3>
+                                                </div>
+                                                <div id="cachedEntitiesList" class="custom-scrollbar flex max-h-80 flex-col gap-1 overflow-y-auto p-1.5"></div>
+                                            </div>
+                                        </div>
+                                    </div>
 
-                <div id="scheduleControls" class="schedule-control-panel hidden flex flex-col bg-white dark:bg-slate-800">
-                    <!-- Верхний ряд: Название + Meta (Icon) + Вид -->
-                    <div class="flex flex-col gap-3 p-4 border-b border-slate-100 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between md:px-6 md:py-4">
-                        <div class="flex min-w-0 items-center gap-3">
-                            <span class="font-black text-slate-800 text-xl md:text-2xl dark:text-slate-100" id="contextEntity">-</span>
-                            <div class="relative group cursor-help flex items-center justify-center w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                <!-- Tooltip -->
-                                <div class="absolute left-0 top-full mt-2 w-64 p-3 bg-slate-800 text-white text-xs rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
-                                    <div id="contextRange" class="mb-1 text-slate-300"></div>
-                                    <div id="contextParsed" class="font-medium text-blue-300"></div>
+                                    <div class="flex flex-wrap items-center justify-center gap-2 xl:justify-self-center">
+                                        <button onclick="changeWeek(-1)" class="schedule-ghost-button inline-flex h-12 w-12 items-center justify-center rounded-2xl shadow-sm">
+                                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                                        </button>
+                                        <div class="min-w-[150px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                                            <div id="weekRangeDisplay" class="text-sm font-black text-slate-800 dark:text-slate-100"></div>
+                                        </div>
+                                        <button onclick="changeWeek(1)" class="schedule-ghost-button inline-flex h-12 w-12 items-center justify-center rounded-2xl shadow-sm">
+                                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                        </button>
+                                        <button id="scheduleTodayBtn" onclick="setTodayWeek()" data-i18n="schedule.today" class="schedule-ghost-button inline-flex min-h-12 items-center justify-center rounded-2xl px-4 py-3 text-sm font-black text-blue-600 shadow-sm dark:text-blue-300">Сегодня</button>
+                                    </div>
+
+                                    <div class="flex flex-wrap items-center justify-end gap-2">
+                                        <button type="button" id="filterToggleBtn" class="schedule-ghost-button inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold shadow-sm">
+                                            <svg class="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+                                            <span data-i18n="schedule.filters.desktop">Фильтры и модули</span>
+                                            <span id="moduleSelectionSummary" class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500 dark:bg-slate-900 dark:text-slate-300"></span>
+                                            <svg id="filterArrow" class="h-4 w-4 text-slate-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                        </button>
+                                        <button type="button" id="calendarSyncOpenBtn" data-calendar-sync-trigger class="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 shadow-sm transition-colors hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-900/50">
+                                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7H3m0 0 3-3M3 7l3 3"></path><path stroke-linecap="round" stroke-linejoin="round" d="M16 17h5m0 0-3-3m3 3-3 3"></path><path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6a4 4 0 0 1 4 4v1"></path><path stroke-linecap="round" stroke-linejoin="round" d="M15 17H9a4 4 0 0 1-4-4v-1"></path></svg>
+                                            <span data-i18n="schedule.calendar.openDrawer">Календарь</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="border-b border-slate-100 px-4 py-4 dark:border-slate-700 md:px-6 md:py-4">
+                                <div class="sr-only">
+                                    <div id="contextEntity">-</div>
+                                    <div id="contextRange"></div>
+                                    <div id="contextParsed"></div>
+                                </div>
+                                <div class="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <label class="schedule-inline-toggle cursor-pointer select-none">
+                                            <span class="min-w-0">
+                                                <span data-i18n="schedule.filters.shortNames" class="schedule-inline-toggle-label text-sm font-black">Короткие названия</span>
+                                            </span>
+                                            <span class="mpb-switch shrink-0">
+                                                <input type="checkbox" id="useShortNames" class="sr-only mpb-switch-input" checked onchange="filterAndRender(); savePreferences();">
+                                                <span class="mpb-switch-track"></span>
+                                                <span class="mpb-switch-thumb"></span>
+                                            </span>
+                                        </label>
+                                        <label class="schedule-inline-toggle cursor-pointer select-none">
+                                            <span class="min-w-0">
+                                                <span data-i18n="schedule.filters.fullLecturer" class="schedule-inline-toggle-label text-sm font-black">ФИО полностью</span>
+                                            </span>
+                                            <span class="mpb-switch shrink-0">
+                                                <input type="checkbox" id="showFullLecturerName" class="sr-only mpb-switch-input" onchange="filterAndRender(); savePreferences();">
+                                                <span class="mpb-switch-track"></span>
+                                                <span class="mpb-switch-thumb"></span>
+                                            </span>
+                                        </label>
+                                        <label class="schedule-inline-toggle cursor-pointer select-none">
+                                            <span class="min-w-0">
+                                                <span data-i18n="schedule.filters.lessonActions" class="schedule-inline-toggle-label text-sm font-black">Действия</span>
+                                            </span>
+                                            <span class="mpb-switch shrink-0">
+                                                <input type="checkbox" id="showLessonActions" class="sr-only mpb-switch-input" checked onchange="filterAndRender(); savePreferences();">
+                                                <span class="mpb-switch-track"></span>
+                                                <span class="mpb-switch-thumb"></span>
+                                            </span>
+                                        </label>
+                                    </div>
+
+                                    <div class="flex flex-wrap items-center justify-end gap-2">
+                                        <div class="grid grid-cols-2 gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1 text-[11px] dark:border-slate-700 dark:bg-slate-900 sm:flex sm:items-center sm:text-xs">
+                                            <button type="button" id="viewCardsBtn" class="rounded-xl px-3 py-2 font-bold text-slate-700 transition-colors">Карточки</button>
+                                            <button type="button" id="viewCompactBtn" class="rounded-xl px-3 py-2 font-bold text-slate-700 transition-colors">Компактно</button>
+                                            <button type="button" id="viewTableBtn" class="rounded-xl px-3 py-2 font-bold text-slate-700 transition-colors">Таблица</button>
+                                            <button type="button" id="viewExamsBtn" class="rounded-xl px-3 py-2 font-bold text-slate-700 transition-colors">Экзамены</button>
+                                        </div>
+                                        <div class="schedule-utility-cluster">
+                                            <button type="button" id="scheduleChangesToggleBtn" onclick="toggleScheduleChanges()" class="schedule-utility-button schedule-utility-button--wide" title="Изменения" aria-label="Изменения">
+                                                <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l2.5 2.5"></path>
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+                                                </svg>
+                                                <span class="text-[11px] font-black uppercase tracking-[0.12em]">Изм.</span>
+                                                <span id="scheduleChangesCountBadge" class="schedule-utility-badge hidden"></span>
+                                                <span class="sr-only" id="scheduleChangesToggleBtnLabel">Изменения</span>
+                                            </button>
+                                            <button type="button" id="scheduleFavoriteBtn" onclick="toggleCurrentScheduleFavorite()" class="schedule-utility-button" title="В избранное" aria-label="В избранное">
+                                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                                    <path id="scheduleFavoriteIcon" class="fill-none" stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.1 5.06a.56.56 0 0 0 .47.34l5.46.44a.56.56 0 0 1 .32.98l-4.16 3.57a.56.56 0 0 0-.18.55l1.27 5.33a.56.56 0 0 1-.84.61l-4.67-2.85a.56.56 0 0 0-.58 0L7.04 20.38a.56.56 0 0 1-.84-.61l1.27-5.33a.56.56 0 0 0-.18-.55l-4.16-3.57a.56.56 0 0 1 .32-.98l5.46-.44a.56.56 0 0 0 .47-.34z"></path>
+                                                </svg>
+                                                <span class="sr-only" id="scheduleFavoriteBtnLabel">В избранное</span>
+                                            </button>
+                                            <button type="button" id="scheduleShareBtn" onclick="copyScheduleShareLink(event)" class="schedule-utility-button" title="Копировать ссылку" aria-label="Копировать ссылку">
+                                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M10 13a5 5 0 0 0 7.54.54l2.92-2.92a5 5 0 0 0-7.07-7.07L11.7 5.21"></path>
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M14 11a5 5 0 0 0-7.54-.54L3.54 13.4a5 5 0 0 0 7.07 7.07l1.67-1.67"></path>
+                                                </svg>
+                                                <span class="sr-only" id="scheduleShareBtnLabel">Копировать ссылку</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Панель фильтров -->
+                            <div id="moduleFilterSection" class="schedule-control-band hidden border-b border-slate-100 bg-slate-50 p-4 shadow-inner dark:border-slate-700 dark:bg-slate-900 md:px-6 md:py-5">
+                                <div id="filterContent" class="space-y-4">
+                                    <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                                        <div class="min-w-0">
+                                            <div class="schedule-toolbar-kicker text-[10px] font-black uppercase tracking-[0.18em]">Фильтры</div>
+                                            <div class="mt-1 text-base font-black text-slate-900 dark:text-slate-100">Модули и быстрые пресеты</div>
+                                        </div>
+                                        <div id="moduleQuickControls" class="hidden flex-wrap items-center gap-2">
+                                            <span id="moduleSelectionStatus" class="rounded-full bg-white px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 shadow-sm dark:bg-slate-800 dark:text-slate-300"></span>
+                                            <button type="button" onclick="saveCurrentModulePreset()" data-i18n="schedule.modules.savePreset" class="rounded-2xl bg-slate-900 px-3 py-2 text-xs font-black text-white hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500">Сохранить пресет</button>
+                                            <button type="button" onclick="selectAllModules()" data-i18n="schedule.filters.all" class="rounded-2xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50">Всё</button>
+                                            <button type="button" onclick="clearAllModules()" data-i18n="schedule.filters.clear" class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Сброс</button>
+                                        </div>
+                                    </div>
+                                    <div id="moduleContainer" class="space-y-4"></div>
                                 </div>
                             </div>
                         </div>
-                        <div class="grid w-full grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 text-[11px] dark:border-slate-700 dark:bg-slate-900 sm:w-auto sm:flex sm:items-center sm:text-xs">
-                            <button type="button" id="viewCardsBtn" class="rounded-lg px-2 py-1.5 font-bold text-slate-700 transition-colors sm:px-3">Карточки</button>
-                            <button type="button" id="viewCompactBtn" class="rounded-lg px-2 py-1.5 font-bold text-slate-700 transition-colors sm:px-3">Компактно</button>
-                            <button type="button" id="viewTableBtn" class="rounded-lg px-2 py-1.5 font-bold text-slate-700 transition-colors sm:px-3">Таблица</button>
-                            <button type="button" id="viewExamsBtn" class="rounded-lg px-2 py-1.5 font-bold text-slate-700 transition-colors sm:px-3">Экзамены</button>
-                        </div>
-                    </div>
 
-                    <!-- Нижний ряд: Навигация + Фильтры -->
-                    <div class="schedule-control-band flex flex-col sm:flex-row sm:items-center justify-between p-4 md:px-6 md:py-4 gap-4 border-b border-slate-100 bg-slate-50/30 dark:border-slate-700 dark:bg-slate-900/40">
-                        <div class="flex items-center gap-2">
-                            <button onclick="changeWeek(-1)" class="p-2.5 bg-white hover:bg-slate-50 rounded-xl text-slate-600 shadow-sm border border-slate-200 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                            </button>
-                            <div class="text-sm font-bold text-slate-800 text-center min-w-[130px] md:min-w-[160px] dark:text-slate-100" id="weekRangeDisplay"></div>
-                            <button onclick="changeWeek(1)" class="p-2.5 bg-white hover:bg-slate-50 rounded-xl text-slate-600 shadow-sm border border-slate-200 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                            </button>
-                            <button onclick="setTodayWeek()" data-i18n="schedule.today" class="ml-2 px-4 py-2.5 text-sm font-bold bg-white hover:bg-blue-50 text-blue-600 transition-colors rounded-xl border border-blue-100 shadow-sm hidden sm:block dark:border-blue-900/60 dark:bg-slate-800 dark:text-blue-300 dark:hover:bg-slate-700">Сегодня</button>
-                        </div>
-
-                        <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                            <button type="button" id="calendarSyncOpenBtn" data-calendar-sync-trigger class="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl shadow-sm transition-colors w-full sm:w-auto dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-900/50">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7H3m0 0 3-3M3 7l3 3"></path><path stroke-linecap="round" stroke-linejoin="round" d="M16 17h5m0 0-3-3m3 3-3 3"></path><path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6a4 4 0 0 1 4 4v1"></path><path stroke-linecap="round" stroke-linejoin="round" d="M15 17H9a4 4 0 0 1-4-4v-1"></path></svg>
-                                <span data-i18n="schedule.calendar.openDrawer">Календарь</span>
-                            </button>
-                            <button type="button" id="filterToggleBtn" class="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-sm transition-colors w-full sm:w-auto dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
-                                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
-                                <span data-i18n="schedule.filters.desktop">Фильтры и модули</span>
-                                <span id="moduleSelectionSummary" class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500 dark:bg-slate-900 dark:text-slate-300"></span>
-                                <svg id="filterArrow" class="w-4 h-4 text-slate-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Панель фильтров -->
-                    <div id="moduleFilterSection" class="schedule-control-band p-4 md:px-6 md:py-5 bg-slate-50 border-b border-slate-100 hidden shadow-inner dark:border-slate-700 dark:bg-slate-900">
-                        <div id="filterContent" class="space-y-4">
-                            <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                                <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 xl:flex-1">
-                                    <label class="schedule-setting-card cursor-pointer select-none">
-                                        <div class="min-w-0">
-                                            <div data-i18n="schedule.filters.shortNames" class="schedule-setting-card-label text-sm font-black">Короткие названия</div>
-                                            <div data-i18n="schedule.filters.shortNamesHint" class="schedule-setting-card-hint mt-1 text-[11px] font-semibold">Компактнее названия дисциплин</div>
-                                        </div>
-                                        <span class="mpb-switch shrink-0">
-                                            <input type="checkbox" id="useShortNames" class="sr-only mpb-switch-input" checked onchange="filterAndRender(); savePreferences();">
-                                            <span class="mpb-switch-track"></span>
-                                            <span class="mpb-switch-thumb"></span>
-                                        </span>
-                                    </label>
-                                    <label class="schedule-setting-card cursor-pointer select-none">
-                                        <div class="min-w-0">
-                                            <div data-i18n="schedule.filters.fullLecturer" class="schedule-setting-card-label text-sm font-black">ФИО полностью</div>
-                                            <div data-i18n="schedule.filters.fullLecturerHint" class="schedule-setting-card-hint mt-1 text-[11px] font-semibold">Не сокращать преподавателей</div>
-                                        </div>
-                                        <span class="mpb-switch shrink-0">
-                                            <input type="checkbox" id="showFullLecturerName" class="sr-only mpb-switch-input" onchange="filterAndRender(); savePreferences();">
-                                            <span class="mpb-switch-track"></span>
-                                            <span class="mpb-switch-thumb"></span>
-                                        </span>
-                                    </label>
-                                    <label class="schedule-setting-card cursor-pointer select-none">
-                                        <div class="min-w-0">
-                                            <div data-i18n="schedule.filters.lessonActions" class="schedule-setting-card-label text-sm font-black">Действия</div>
-                                            <div data-i18n="schedule.filters.lessonActionsHint" class="schedule-setting-card-hint mt-1 text-[11px] font-semibold">Быстрые кнопки прямо в ячейках</div>
-                                        </div>
-                                        <span class="mpb-switch shrink-0">
-                                            <input type="checkbox" id="showLessonActions" class="sr-only mpb-switch-input" checked onchange="filterAndRender(); savePreferences();">
-                                            <span class="mpb-switch-track"></span>
-                                            <span class="mpb-switch-thumb"></span>
-                                        </span>
-                                    </label>
-                                </div>
-                                <div id="moduleQuickControls" class="hidden flex-wrap items-center gap-2">
-                                    <span id="moduleSelectionStatus" class="rounded-full bg-white px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 shadow-sm dark:bg-slate-800 dark:text-slate-300"></span>
-                                    <button type="button" onclick="saveCurrentModulePreset()" data-i18n="schedule.modules.savePreset" class="rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500">Сохранить пресет</button>
-                                    <button type="button" onclick="selectAllModules()" data-i18n="schedule.filters.all" class="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50">Всё</button>
-                                    <button type="button" onclick="clearAllModules()" data-i18n="schedule.filters.clear" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Сброс</button>
-                                </div>
+                        <div id="scheduleGridContent" class="schedule-grid-surface relative flex-grow bg-white dark:bg-slate-800">
+                            <div id="offlineWarning" class="hidden m-3 flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-800 fade-in">
+                                <svg class="h-4 w-4 shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                <span data-i18n="schedule.offline.warning" class="text-xs font-medium md:text-sm">ВУЗ недоступен. Загружена сохраненная копия.</span>
                             </div>
-                            <div id="moduleContainer" class="space-y-4"></div>
+                            <div id="desktopSchedule" class="hidden w-full lg:block"></div>
+                            <div id="mobileSchedule" class="schedule-cards-feed block flex-col gap-0 lg:hidden"></div>
+
+                            <div id="defaultState" class="px-4 py-24 text-center">
+                                <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-50 text-slate-200 dark:bg-slate-900 dark:text-slate-600">
+                                    <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                </div>
+                                <h3 data-i18n="schedule.state.default" class="text-base font-bold tracking-tight text-slate-400">Выберите расписание</h3>
+                            </div>
                         </div>
                     </div>
+                    <section id="calendarSubscriptionSection" class="calendar-sync-drawer hidden" aria-hidden="true"></section>
                 </div>
-
-                <div id="scheduleGridContent" class="schedule-grid-surface relative bg-white flex-grow dark:bg-slate-800">
-                    <div id="offlineWarning" class="hidden m-3 p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-2 text-amber-800 fade-in">
-                        <svg class="w-4 h-4 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                        <span data-i18n="schedule.offline.warning" class="text-xs md:text-sm font-medium">ВУЗ недоступен. Загружена сохраненная копия.</span>
-                    </div>
-                    <div id="desktopSchedule" class="hidden lg:block w-full"></div>
-                    <div id="mobileSchedule" class="block lg:hidden flex flex-col gap-0 schedule-cards-feed"></div>
-
-                    <div id="defaultState" class="text-center py-24 px-4">
-                        <div class="w-16 h-16 bg-slate-50 text-slate-200 rounded-full flex items-center justify-center mx-auto mb-4 dark:bg-slate-900 dark:text-slate-600">
-                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                        </div>
-                        <h3 data-i18n="schedule.state.default" class="text-base font-bold text-slate-400 tracking-tight">Выберите расписание</h3>
-                    </div>
-                </div>
-            </div>        </div>
+            </div>
+        </div>
     </main>
 
     <script src="/js/runtime_config.js?v=2"></script>

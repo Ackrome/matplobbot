@@ -234,6 +234,11 @@ window.setScheduleLessonMode = function(mode, options = {}) {
     if (window._renderCalendarSubscriptionImpl) window._renderCalendarSubscriptionImpl();
 }
 
+window.setScheduleCalendarProfile = function(profileId, { updateUrl = true } = {}) {
+    setSchedulePageState({ calendarProfileId: profileId || null });
+    if (updateUrl) syncScheduleUrl('replace');
+}
+
 window.toggleScheduleChanges = function(forceOpen = null) {
     const nextValue = typeof forceOpen === 'boolean' ? forceOpen : !schedulePageState.showChanges;
     setSchedulePageState({ showChanges: nextValue });
@@ -876,6 +881,79 @@ function renderScheduleHome() {
     `;
 }
 
+function syncScheduleToolbarActions({ hasEntity, isFavorite, changeCount }) {
+    const favoriteBtn = document.getElementById('scheduleFavoriteBtn');
+    const shareBtn = document.getElementById('scheduleShareBtn');
+    const changesBtn = document.getElementById('scheduleChangesToggleBtn');
+    const todayBtn = document.getElementById('scheduleTodayBtn');
+    const favoriteIcon = document.getElementById('scheduleFavoriteIcon');
+    const favoriteLabel = document.getElementById('scheduleFavoriteBtnLabel');
+    const shareLabel = document.getElementById('scheduleShareBtnLabel');
+    const changesLabel = document.getElementById('scheduleChangesToggleBtnLabel');
+    const changesBadge = document.getElementById('scheduleChangesCountBadge');
+
+    const favoriteText = t(
+        isFavorite ? 'schedule.search.favorited' : 'schedule.search.favorite',
+        isFavorite ? 'Saved' : 'Favorite'
+    );
+    const shareText = t('schedule.home.copyLink', 'Copy link');
+    const changesText = `${t(
+        schedulePageState.showChanges ? 'schedule.changes.hide' : 'schedule.changes.show',
+        schedulePageState.showChanges ? 'Hide changes' : 'Show changes'
+    )}${changeCount ? ` (${changeCount})` : ''}`;
+
+    if (favoriteBtn) {
+        favoriteBtn.disabled = !hasEntity;
+        favoriteBtn.classList.toggle('is-favorite', hasEntity && isFavorite);
+        favoriteBtn.classList.toggle('opacity-50', !hasEntity);
+        favoriteBtn.setAttribute('title', favoriteText);
+        favoriteBtn.setAttribute('aria-label', favoriteText);
+        if (favoriteLabel) favoriteLabel.textContent = favoriteText;
+        if (favoriteIcon) {
+            favoriteIcon.classList.toggle('fill-current', hasEntity && isFavorite);
+            favoriteIcon.classList.toggle('fill-none', !(hasEntity && isFavorite));
+        }
+    }
+
+    if (shareBtn) {
+        shareBtn.disabled = !hasEntity;
+        shareBtn.classList.toggle('opacity-50', !hasEntity);
+        shareBtn.setAttribute('title', shareText);
+        shareBtn.setAttribute('aria-label', shareText);
+        if (shareLabel) shareLabel.textContent = shareText;
+    }
+
+    if (changesBtn) {
+        changesBtn.disabled = !hasEntity;
+        changesBtn.classList.toggle('is-active', hasEntity && (schedulePageState.showChanges || changeCount > 0));
+        changesBtn.classList.toggle('opacity-50', !hasEntity);
+        changesBtn.setAttribute('title', changesText);
+        changesBtn.setAttribute('aria-label', changesText);
+        if (changesLabel) changesLabel.textContent = changesText;
+        if (changesBadge) {
+            changesBadge.textContent = changeCount > 99 ? '99+' : String(changeCount || '');
+            changesBadge.classList.toggle('hidden', !changeCount);
+        }
+    }
+
+    if (todayBtn) {
+        todayBtn.disabled = !hasEntity;
+        todayBtn.classList.toggle('opacity-50', !hasEntity);
+    }
+}
+
+renderScheduleHome = function renderScheduleToolbarOnly() {
+    const container = document.getElementById('scheduleHomePanel');
+    const hasEntity = Boolean(currentEntity?.id);
+    const changeCount = getScheduleChangeCount();
+    const isFavorite = hasEntity && window.ScheduleState?.isFavorite?.(currentEntity);
+
+    syncScheduleToolbarActions({ hasEntity, isFavorite, changeCount });
+    if (!container) return;
+    container.classList.add('hidden');
+    container.innerHTML = '';
+}
+
 window.focusScheduleSearch = function() {
     const input = document.getElementById('groupSearch');
     input?.focus();
@@ -1504,7 +1582,7 @@ async function applyScheduleStateFromUrl() {
     selectedModules.clear();
     scheduleChangeSummary = null;
     isOfflineMode = false;
-    document.getElementById('scheduleControls')?.classList.add('hidden');
+    document.getElementById('scheduleControls')?.classList.remove('hidden');
     document.getElementById('defaultState')?.classList.remove('hidden');
     document.getElementById('desktopSchedule').innerHTML = '';
     document.getElementById('mobileSchedule').innerHTML = '';

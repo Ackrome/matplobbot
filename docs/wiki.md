@@ -554,7 +554,9 @@ What it does:
 - Opens schedules from shareable URLs such as `/schedule?type=group&id=...&name=...&date=2026-05-04`.
 - Keeps a single page state object with entity, date, view mode, selected modules, lesson mode, offline state, and active calendar profile.
 - Syncs that state across URL parameters, local/remote preferences, browser history, and visible UI controls.
-- Shows a signed-in `My schedule` summary panel with active schedule, next class, today's classes, offline warning, and fast actions.
+- Uses a compact schedule shell: entity selector on the left, week navigation in the center, and `Filters and modules` + `Calendar` actions on the right.
+- Keeps the three global display toggles (`Short names`, `Full lecturer name`, `Actions`) visible directly under the toolbar instead of burying them in a separate settings block.
+- Keeps `Changes`, `Favorite`, and `Copy link` as a compact utility strip next to the view switcher instead of three large text buttons.
 - Desktop timetable grid + mobile card view.
 - Lesson cards include a systematic quick-action strip:
 - copy room
@@ -567,13 +569,14 @@ What it does:
 - View density switcher:
 - `Cards` for the current rich card feed
 - `Compact` for seeing more lessons on one screen
-- `Table` for desktop timetable scanning
+- `Table` for desktop timetable scanning; on narrow/mobile screens it falls back to the card feed instead of forcing the dense grid
 - `Exams` for an exam-focused feed with exam filtering enabled
 - Filters and toggles:
 - module filters
 - module search and selected-module counter in the filter header
 - schedule module presets saved per schedule entity
-- favorite schedules remember the selected module set when they are saved from the currently opened schedule
+- calendar presets can reopen a different schedule entity, lesson mode, and module selection directly on `/schedule`
+- favorite schedules remain lightweight bookmarks for fast reopening from search/local history; they still remember the selected module set when saved from the currently opened schedule
 - quick module actions: only this module, all except this module, reset/all
 - amber highlighting for modules that are not present in the currently visible period/mode
 - all classes / exams-only lesson mode
@@ -596,18 +599,15 @@ What it does:
 How to use:
 
 1. Open `/schedule`, or open a direct URL with `type`, `id`, `name`, and optional `date`.
-2. Sign in to see the `My schedule` summary for the saved/active schedule.
-3. Search for group, lecturer, or room when you need another source.
-4. Pick result and switch day/week context; the URL updates with the current state.
-5. Use favorites in the summary/search panel to pin often-used groups, lecturers, or rooms.
-6. Use the filter panel to switch `Short names`, `Full lecturer name`, and `Actions`, then search modules, toggle them, save a module preset, or apply `Only` / `Except` actions from a module chip.
-7. Turn on `Actions` when you want inline quick buttons directly inside lesson cells/cards for room copy, lecturer/room navigation, one-lesson ICS export, and module-focused filtering.
-8. Add the opened schedule to favorites after choosing modules when you want that favorite to reopen with the same module set.
-9. Pick another non-favorite schedule from search to reset the module filter to all modules available for that schedule.
-10. Use `Cards`, `Compact`, `Table`, or `Exams` to choose display density. The choice is saved and reflected in the URL.
-11. Tap `Show changes` in the summary panel to compare with the previous local snapshot.
-12. Open the offline drawer to see cached schedules and refresh the current schedule cache.
-13. Copy the schedule link from the summary panel to share the same view.
+2. Use the top-left selector to search for a group, lecturer, or room.
+3. Pick a result, then switch week context; the URL updates with the current state.
+4. Use the toggle row for `Short names`, `Full lecturer name`, and `Actions`, then open the filter panel to search modules, toggle them, save a module preset, or apply `Only` / `Except` actions from a module chip.
+5. Turn on `Actions` when you want inline quick buttons directly inside lesson cells/cards for room copy, lecturer/room navigation, one-lesson ICS export, and module-focused filtering.
+6. Use the compact utility strip next to the view switcher: `Changes` (`Изм.`) compares the current schedule with the previous local snapshot, `Favorite` pins the current entity with its selected module set, and `Copy link` shares the exact current view.
+7. Use favorites in search/local history when you want pinned entities that reopen fast without switching calendar presets.
+8. Pick another non-favorite schedule from search to reset the module filter to all modules available for that schedule.
+9. Use `Cards`, `Compact`, `Table`, or `Exams` to choose display density. The choice is saved and reflected in the URL; `Table` is treated as a desktop mode and automatically falls back to cards on phones.
+10. Open the offline drawer to see cached schedules and refresh the current schedule cache.
 
 ### Calendar Sync Panel
 
@@ -618,8 +618,8 @@ Files:
 What it does:
 
 - Shows eligibility based on Telegram linkage. Bot subscriptions are no longer required for website-owned iCal profiles.
-- Opens from the `Calendar` button in the schedule toolbar and from the `Calendar` action in the `My schedule` summary; `/schedule?calendar=1` still opens the panel directly.
-- The panel now opens as a compact right drawer with backdrop/focus dismissal instead of a persistent floating side handle.
+- Opens from the `Calendar` button in the schedule toolbar; `/schedule?calendar=1` still opens the panel directly.
+- On desktop, the panel is embedded as a right rail inside the schedule shell and scrolls internally instead of stretching the full page. On mobile and narrow widths it falls back to a dismissible drawer with backdrop and `Esc`/outside-click close.
 - Manages profile-based iCal feeds:
 - built-in `All classes`
 - built-in `Exams only`
@@ -641,6 +641,8 @@ What it does:
 - rotate secret
 - delete custom preset
 - edit custom preset name, lesson mode, and saved module set
+- switching presets preserves the currently viewed week on `/schedule`
+- custom presets with `All modules` restore the full module set even if the user previously narrowed the page to a subset
 - direct bot deep link through `window.__MPB_BOT_DEEPLINK__` / `https://t.me/matplobbot?start=calendar_sync`
 - Telegram Mini App launch from the bot's `Calendar Sync` Web App button, which opens `/schedule?tg=1&calendar=1`, signs in with Telegram init data, and opens the right drawer directly.
 - In Telegram Mini App, the collapsed sync card remains visible while Telegram auth is pending or unavailable, so users can expand it and see the sign-in state instead of the panel disappearing.
@@ -651,9 +653,9 @@ How to use:
 
 1. Sign in and open `/schedule`.
 2. Link the website account to Telegram to generate the private secret link.
-3. Click `Calendar` in the schedule toolbar or in the `My schedule` summary to open the right drawer.
+3. Click `Calendar` in the schedule toolbar to open the rail/drawer.
 4. Use the drawer header and `Connection` section for the normal flow: check the active preset, copy the link, open the feed in the target calendar app, or jump to bot management.
-5. In `Presets`, switch between built-in feeds and custom website presets.
+5. In `Presets`, switch between built-in feeds and custom website presets. Built-in presets update the current lesson mode, and custom presets also reopen their saved schedule entity/modules on the page while keeping the currently selected week.
 6. Open any group, lecturer, or room schedule and use `Save current view` to create a website-only iCal profile.
 7. In `Profile settings`, inspect which modules are included in the selected preset. For custom presets, open the matching schedule from the module notice when needed, then use the checklist to add/remove modules and save the preset.
 8. In `Connection`, choose Apple, Google, Outlook, or another calendar app, preview the feed, download ICS, and follow the platform-specific action.

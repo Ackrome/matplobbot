@@ -170,23 +170,25 @@
     function setViewMode(mode) {
         const nextMode = normalizeUiViewMode(mode);
         const previousLessonMode = window.getSchedulePageState?.().lessonMode;
+        const isDesktopViewport = window.innerWidth >= 1024;
+        const effectiveMode = nextMode === "table" && !isDesktopViewport ? "cards" : nextMode;
         uiState.viewMode = nextMode;
         window.setScheduleViewModeState?.(nextMode, { updateUrl: true });
         const desktop = document.getElementById("desktopSchedule");
         const mobile = document.getElementById("mobileSchedule");
         if (!desktop || !mobile) return;
-        const auto = nextMode === "auto";
-        const table = nextMode === "table";
-        const cards = nextMode === "cards";
-        const compact = nextMode === "compact";
-        const exams = nextMode === "exams";
-        const showDesktop = table || (auto && window.innerWidth >= 1024);
-        const showCardsFeed = cards || compact || exams || (auto && window.innerWidth < 1024);
+        const auto = effectiveMode === "auto";
+        const table = effectiveMode === "table";
+        const cards = effectiveMode === "cards";
+        const compact = effectiveMode === "compact";
+        const exams = effectiveMode === "exams";
+        const showDesktop = table || (auto && isDesktopViewport);
+        const showCardsFeed = cards || compact || exams || (auto && !isDesktopViewport);
         desktop.style.display = showDesktop ? "block" : "none";
         mobile.style.display = showCardsFeed ? "flex" : "none";
         desktop.classList.toggle("hidden", !showDesktop);
         mobile.classList.toggle("hidden", !showCardsFeed);
-        mobile.classList.toggle("schedule-cards-desktop", cards && window.innerWidth >= 1024);
+        mobile.classList.toggle("schedule-cards-desktop", cards && isDesktopViewport);
         mobile.classList.toggle("schedule-cards-compact", compact || exams);
         mobile.classList.toggle("schedule-cards-exams", exams);
         const isActive = (id, active) => {
