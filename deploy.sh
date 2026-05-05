@@ -18,6 +18,10 @@ is_lease_error() {
   grep -Eqi 'lease .* not found|lease does not exist|failed commit on ref'
 }
 
+is_retryable_pull_error() {
+  grep -Eqi 'lease .* not found|lease does not exist|failed commit on ref|connection reset by peer|TLS handshake timeout|i/o timeout|context deadline exceeded|unexpected EOF|EOF$|net/http: request canceled|temporary failure in name resolution|no such host|server misbehaving|too many requests|toomanyrequests|502 Bad Gateway|503 Service Unavailable|504 Gateway Timeout|failed to fetch .* token'
+}
+
 repair_docker_pull_state() {
   echo "Detected Docker/containerd lease pull error. Running safe cleanup before retry..."
   docker builder prune -af || true
@@ -41,8 +45,14 @@ pull_service_with_retry() {
 
     echo "$output"
 
-    if printf '%s' "$output" | is_lease_error; then
-      repair_docker_pull_state
+    if printf '%s' "$output" | is_retryable_pull_error; then
+      if printf '%s' "$output" | is_lease_error; then
+        repair_docker_pull_state
+      else
+        local backoff_seconds=$((attempt * 5))
+        echo "Transient pull failure for '$service'. Retrying in ${backoff_seconds}s..."
+        sleep "$backoff_seconds"
+      fi
       attempt=$((attempt + 1))
       continue
     fi
@@ -56,15 +66,20 @@ pull_service_with_retry() {
 }
 
 pull_images_resiliently() {
-  local services
-  services="$(docker compose -f "$COMPOSE_FILE" config --services)"
+  local services=(
+    mpb-telegram-bot
+    mpb-scheduler
+    migrator
+    mpb-worker
+    mpb-fastapi-stats
+  )
 
-  for service in $services; do
+  for service in "${services[@]}"; do
     pull_service_with_retry "$service"
   done
 }
 
-echo "--- Pulling new images from ghcr.io ---"
+echo "--- Pulling application images from ghcr.io ---"
 pull_images_resiliently
 
 echo "--- Restarting services with new images ---"

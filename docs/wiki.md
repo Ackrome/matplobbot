@@ -1208,15 +1208,17 @@ Jenkins + deploy features:
 - The gate fails if unittest output shows dependency-driven skips/import errors such as missing FastAPI modules.
 - `Jenkinsfile.groovy` performs production deploy and smoke checks.
 - Deploy host fingerprint pinning via `APP_VM_SHA256` (with optional one-off override).
-- `deploy.sh` performs resilient service-by-service pull with lease-error recovery and retries.
+- `deploy.sh` pre-pulls only the GHCR application services, retries transient registry/network pull failures, and avoids unnecessary Docker Hub pulls for stable infra services on routine deploys.
 - `deploy.sh` also rebuilds local build services such as `proxy` and restarts config-mounted services such as `main-site-frontend` and `caddy` so repo changes are actually applied in production.
 
 How to use:
 
 1. Push to `main` to run CI and image publishing.
 2. Start the Jenkins deploy job; it must pass the pre-deploy quality gate before deployment starts.
-3. Jenkins deploy job pulls tagged images and runs smoke checks.
-4. Keep `WIKI_PUSH_TOKEN` configured for automatic wiki mirror updates.
+3. Jenkins deploy job pre-pulls the tagged GHCR app images and runs smoke checks; routine deploys reuse already-cached `redis`, `postgres`, `nginx`, and `caddy` images instead of re-pulling them every time.
+4. If you changed a pinned infra image tag or are deploying onto a fresh host with no cached infra images, pre-pull them once before the rollout, for example:
+   `docker compose -f docker-compose.prod.yml pull redis postgres main-site-frontend caddy`
+5. Keep `WIKI_PUSH_TOKEN` configured for automatic wiki mirror updates.
 
 ## Practical Notes
 
