@@ -22,7 +22,10 @@
         return `<svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[name] || icons.copy}</svg>`;
     }
 
-    function renderActionButton(action, lessonId, label, iconName, disabled = false) {
+    function renderActionButton(action, lessonId, label, iconName, options = {}) {
+        const normalizedOptions = typeof options === "boolean" ? { disabled: options } : options;
+        const disabled = Boolean(normalizedOptions.disabled);
+        const iconOnly = Boolean(normalizedOptions.iconOnly);
         return `
             <button type="button"
                 data-lesson-action="${escapeHtml(action)}"
@@ -30,22 +33,45 @@
                 ${disabled ? "disabled" : `onclick="runLessonAction('${action}', '${lessonId}', event)"`}
                 title="${escapeHtml(label)}"
                 aria-label="${escapeHtml(label)}"
-                class="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] font-black transition-colors ${disabled
+                class="lesson-action-btn inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border ${iconOnly ? "px-2.5" : "px-2"} py-1 text-[10px] font-black transition-colors ${disabled
                     ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-600"
                     : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-blue-950/40 dark:hover:text-blue-200"}">
                 ${icon(iconName)}
-                <span class="hidden sm:inline">${escapeHtml(label)}</span>
+                ${iconOnly
+                    ? `<span class="sr-only">${escapeHtml(label)}</span>`
+                    : `<span class="hidden sm:inline">${escapeHtml(label)}</span>`}
             </button>
         `;
     }
 
     function renderLessonActions(lessonId, labels, options = {}) {
         const compact = Boolean(options.compact);
+        const inline = Boolean(options.inline);
+        const iconOnly = Boolean(options.iconOnly);
         const className = compact
             ? "lesson-actions lesson-actions--compact"
             : "lesson-actions";
         const actionToggleLabel = labels.actionsToggle || "Actions";
         const actionHideLabel = labels.actionsHide || actionToggleLabel;
+        const actionItems = [
+            ["copyRoom", labels.copyRoom, "copy", !options.hasRoom],
+            ["openTeacher", labels.openTeacher, "teacher", !options.hasTeacher],
+            ["openRoom", labels.openRoom, "room", !options.hasRoom],
+            ["singleIcs", labels.singleIcs, "calendar", false],
+            ["onlyModule", labels.onlyModule, "module", !options.hasModule],
+            ["hideModule", labels.hideModule, "hide", !options.hasModule],
+        ];
+        const renderedButtons = actionItems
+            .filter(([, , , disabled]) => !inline || !disabled)
+            .map(([action, label, iconName, disabled]) => renderActionButton(action, lessonId, label, iconName, {
+                disabled,
+                iconOnly,
+            }))
+            .join("");
+        if (!renderedButtons) return "";
+        if (inline) {
+            return `<div class="lesson-actions-panel lesson-actions-panel--inline">${renderedButtons}</div>`;
+        }
         return `
             <details class="${className}">
                 <summary class="lesson-actions-toggle" title="${escapeHtml(actionToggleLabel)}">
@@ -55,12 +81,7 @@
                     <span class="lesson-actions-chevron">${icon("chevron")}</span>
                 </summary>
                 <div class="lesson-actions-panel">
-                    ${renderActionButton("copyRoom", lessonId, labels.copyRoom, "copy", !options.hasRoom)}
-                    ${renderActionButton("openTeacher", lessonId, labels.openTeacher, "teacher", !options.hasTeacher)}
-                    ${renderActionButton("openRoom", lessonId, labels.openRoom, "room", !options.hasRoom)}
-                    ${renderActionButton("singleIcs", lessonId, labels.singleIcs, "calendar")}
-                    ${renderActionButton("onlyModule", lessonId, labels.onlyModule, "module", !options.hasModule)}
-                    ${renderActionButton("hideModule", lessonId, labels.hideModule, "hide", !options.hasModule)}
+                    ${renderedButtons}
                 </div>
             </details>
         `;

@@ -287,6 +287,36 @@ function escapeJsString(value) {
         .replace(/'/g, "\\'");
 }
 
+function areLessonActionsVisible() {
+    return document.getElementById('showLessonActions')?.checked ?? true;
+}
+
+function getPreferredDisciplineName(lesson) {
+    const useShort = document.getElementById('useShortNames')?.checked ?? true;
+    const shortName = String(lesson?.discipline_short || '').trim();
+    const fullName = String(lesson?.discipline_full || lesson?.discipline || '').trim();
+    return useShort
+        ? (shortName || fullName || '-')
+        : (fullName || shortName || '-');
+}
+
+function getCompactLecturerName(value) {
+    const tokens = String(value || '').trim().split(/\s+/).filter(Boolean);
+    if (!tokens.length) return '';
+    if (tokens.length === 1) return tokens[0];
+    const [surname, ...rest] = tokens;
+    const initials = rest.map((token) => token[0]).filter(Boolean).slice(0, 2);
+    return initials.length ? `${surname} ${initials.map((char) => `${char}.`).join('')}` : surname;
+}
+
+function getPreferredLecturerName(value) {
+    const fullName = String(value || '').trim();
+    if (!fullName) return '';
+    return (document.getElementById('showFullLecturerName')?.checked ?? false)
+        ? fullName
+        : getCompactLecturerName(fullName);
+}
+
 window.addEventListener('mpb-auth-ready', (event) => {
     window.scheduleAuthUser = event.detail?.user || null;
     renderScheduleHome();
@@ -1059,6 +1089,10 @@ async function loadInitialPreferences() {
             const el = document.getElementById('showFullLecturerName');
             if (el) el.checked = prefsToApply.showFullLecturerName;
         }
+        if (prefsToApply.showLessonActions !== undefined) {
+            const el = document.getElementById('showLessonActions');
+            if (el) el.checked = prefsToApply.showLessonActions;
+        }
     }
 
     const prefState = buildScheduleStateFromPreferences(prefsToApply || {});
@@ -1103,7 +1137,8 @@ async function savePreferences() {
         modulePresets,
         scheduleState: window.getSchedulePageState(),
         useShortNames: document.getElementById('useShortNames')?.checked ?? true,
-        showFullLecturerName: document.getElementById('showFullLecturerName')?.checked ?? false
+        showFullLecturerName: document.getElementById('showFullLecturerName')?.checked ?? false,
+        showLessonActions: document.getElementById('showLessonActions')?.checked ?? true
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
     const token = localStorage.getItem('jwt_token');
@@ -1485,13 +1520,20 @@ function renderModuleFilters() {
     const container = document.getElementById('moduleContainer');
     const section = document.getElementById('moduleFilterSection');
     const summary = document.getElementById('moduleSelectionSummary');
+    const quickControls = document.getElementById('moduleQuickControls');
+    const selectionStatus = document.getElementById('moduleSelectionStatus');
     if (!container || !section) return;
     if (allAvailableModules.length === 0) {
-        section.classList.add('hidden');
         if (summary) summary.textContent = '';
+        if (selectionStatus) selectionStatus.textContent = '';
+        if (quickControls) quickControls.classList.add('hidden');
+        container.innerHTML = `
+            <div class="rounded-2xl border border-slate-200 bg-white/70 px-4 py-3 text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
+                ${escapeHtml(t('schedule.modules.emptyState', 'Для этого расписания нет отдельных модулей.'))}
+            </div>
+        `;
         return;
     }
-    section.classList.remove('hidden');
     const selectedCount = allAvailableModules.filter((mod) => selectedModules.has(mod)).length;
     if (summary) {
         summary.textContent = t('schedule.modules.selectedCount', '{selected}/{total}', {
@@ -1499,6 +1541,12 @@ function renderModuleFilters() {
             total: allAvailableModules.length
         });
     }
+    if (selectionStatus) {
+        selectionStatus.textContent = t('schedule.modules.toolbarSummary', 'Модулей выбрано: {count}', {
+            count: selectedCount
+        });
+    }
+    if (quickControls) quickControls.classList.remove('hidden');
     const weekModules = getCurrentWeekModuleSet();
     const displayedModules = getCurrentDisplayedModuleSet();
     const selected = allAvailableModules.filter((mod) => selectedModules.has(mod) && getModuleSearchMatch(mod));
@@ -1508,10 +1556,10 @@ function renderModuleFilters() {
     function renderModuleChip(mod, isSelected) {
         const displayStatus = getModuleDisplayStatus(mod, displayedModules, weekModules);
         return `
-            <div class="group/module flex max-w-full flex-wrap items-center gap-1 rounded-xl border px-2 py-1.5 text-xs font-bold transition-all duration-200
+            <div class="group/module flex max-w-full flex-wrap items-center gap-1 rounded-2xl border px-2.5 py-2 text-xs font-bold transition-all duration-200
                 ${isSelected
                     ? (displayStatus.active
-                        ? 'border-slate-900 bg-slate-900 text-white shadow-lg shadow-slate-900/15'
+                        ? 'border-slate-900 bg-slate-900 text-white shadow-lg shadow-slate-900/10'
                         : 'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200')
                     : (displayStatus.active
                         ? 'border-slate-200 bg-slate-50 text-slate-500 hover:bg-white hover:border-blue-200 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:border-blue-700 dark:hover:text-slate-200'
@@ -1551,10 +1599,11 @@ function renderModuleFilters() {
                         placeholder="${escapeHtml(t('schedule.modules.searchPlaceholder', 'Search modules...'))}"
                         class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
                 </label>
-                <div class="grid gap-2 sm:flex sm:flex-wrap">
-                    <button type="button" onclick="saveCurrentModulePreset()" class="rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500">${escapeHtml(t('schedule.modules.savePreset', 'Save preset'))}</button>
-                    <button type="button" onclick="selectAllModules()" class="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50">${escapeHtml(t('schedule.filters.all', 'All'))}</button>
-                    <button type="button" onclick="clearAllModules()" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">${escapeHtml(t('schedule.filters.clear', 'Reset'))}</button>
+                <div class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                    ${escapeHtml(t('schedule.modules.selectedCount', '{selected}/{total}', {
+                        selected: selectedCount,
+                        total: allAvailableModules.length
+                    }))}
                 </div>
             </div>
             ${presets.length ? `
@@ -1906,31 +1955,30 @@ window.runLessonAction = async function(action, lessonId, event) {
 function renderCard(l, isDesktop) {
     const lessonActionId = getLessonActionId(l);
     const color = getBadgeColor(l.kindOfWork);
-    const useShort = document.getElementById('useShortNames')?.checked ?? true;
-    const showFullLecturerName = document.getElementById('showFullLecturerName')?.checked ?? false;
-    const discName = useShort ? l.discipline_short : l.discipline_full;
+    const discName = getPreferredDisciplineName(l);
+    const teacherLabel = getPreferredLecturerName(l.lecturer_title);
+    const showLessonActions = areLessonActionsVisible();
     const safeKind = escapeHtml(getShortKind(l.kindOfWork));
     const safeModule = escapeHtml(l.module || '');
     const safeDiscipline = escapeHtml(discName || '');
     const safeAuditorium = escapeHtml(l.auditorium || '');
     const safeAuditoriumJs = escapeJsString(l.auditorium || '');
-    const safeLecturer = escapeHtml(l.lecturer_title || '');
+    const safeLecturer = escapeHtml(teacherLabel || '');
     const safeLecturerJs = escapeJsString(l.lecturer_title || '');
     const roomTitle = escapeHtml(t('schedule.copy.room', 'Копировать аудиторию'));
     const teacherTitle = escapeHtml(t('schedule.copy.teacher', 'Копировать преподавателя'));
-    const actionHtml = window.ScheduleRender?.renderLessonActions?.(lessonActionId, getLessonActionLabels(), {
-        compact: isDesktop,
-        hasModule: Boolean(l.module),
-        hasRoom: Boolean(l.auditorium),
-        hasTeacher: Boolean(l.lecturer_title || l.lecturer || l.lecturer_id),
-    }) || '';
+    const actionHtml = showLessonActions
+        ? (window.ScheduleRender?.renderLessonActions?.(lessonActionId, getLessonActionLabels(), {
+            compact: isDesktop,
+            inline: true,
+            iconOnly: isDesktop,
+            hasModule: Boolean(l.module),
+            hasRoom: Boolean(l.auditorium),
+            hasTeacher: Boolean(l.lecturer_title || l.lecturer || l.lecturer_id),
+        }) || '')
+        : '';
 
     if (isDesktop) {
-        const teacherTokens = String(l.lecturer_title || '').split(' ').filter(Boolean);
-        const teacherShort = teacherTokens.length > 2
-            ? `${teacherTokens[0]} ${teacherTokens[1][0]}.${teacherTokens[2][0]}.`
-            : l.lecturer_title;
-        const teacherLabel = showFullLecturerName ? l.lecturer_title : teacherShort;
         const safeTeacherLabel = escapeHtml(teacherLabel || '');
         return `
         <div class="lesson-card ${color.bg} p-2.5 sm:p-3 rounded-2xl border transition-transform hover:-translate-y-0.5 hover:shadow-md flex flex-col h-full min-h-[110px]">
@@ -1947,11 +1995,12 @@ function renderCard(l, isDesktop) {
                 ${safeDiscipline}
             </div>
             <div class="flex flex-col gap-1">
+                ${safeAuditorium ? `
                 <div class="lesson-meta flex items-center gap-1 text-[10px] font-medium hover:text-blue-600 cursor-pointer transition-colors"
                      onclick="copyToClipboard('${safeAuditoriumJs}', event)" title="${roomTitle}">
                     <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     <span class="truncate">${safeAuditorium}</span>
-                </div>
+                </div>` : ''}
                 ${teacherLabel ? `
                 <div class="lesson-meta flex items-center gap-1 text-[10px] font-medium hover:text-blue-600 cursor-pointer transition-colors"
                      onclick="copyToClipboard('${safeLecturerJs}', event)" title="${teacherTitle}">
@@ -1981,18 +2030,22 @@ function renderCard(l, isDesktop) {
                 </span>` : ''}
         </div>
         <div class="schedule-feed-card-meta">
-            <div class="schedule-feed-card-meta-item cursor-pointer active:text-blue-600"
-                 onclick="copyToClipboard('${safeAuditoriumJs}', event)"
-                 title="${roomTitle}">
-                <svg class="w-3.5 h-3.5 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" stroke-width="2"></path></svg>
-                <span>${safeAuditorium}</span>
-            </div>
-            <div class="schedule-feed-card-meta-item cursor-pointer active:text-blue-600"
-                 onclick="copyToClipboard('${safeLecturerJs}', event)"
-                 title="${teacherTitle}">
-                <svg class="w-3.5 h-3.5 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" stroke-width="2"></path></svg>
-                <span>${safeLecturer}</span>
-            </div>
+            ${safeAuditorium ? `
+                <div class="schedule-feed-card-meta-item cursor-pointer active:text-blue-600"
+                     onclick="copyToClipboard('${safeAuditoriumJs}', event)"
+                     title="${roomTitle}">
+                    <svg class="w-3.5 h-3.5 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" stroke-width="2"></path></svg>
+                    <span>${safeAuditorium}</span>
+                </div>
+            ` : ''}
+            ${safeLecturer ? `
+                <div class="schedule-feed-card-meta-item cursor-pointer active:text-blue-600"
+                     onclick="copyToClipboard('${safeLecturerJs}', event)"
+                     title="${teacherTitle}">
+                    <svg class="w-3.5 h-3.5 opacity-40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" stroke-width="2"></path></svg>
+                    <span>${safeLecturer}</span>
+                </div>
+            ` : ''}
         </div>
         ${actionHtml}
     </article>`;

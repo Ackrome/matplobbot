@@ -248,6 +248,14 @@
             gap: 0.375rem;
             margin-top: 0.5rem;
         }
+        .lesson-actions-panel--inline {
+            display: flex;
+            gap: 0.375rem;
+            margin-top: 0.7rem;
+        }
+        .lesson-actions-panel--inline .lesson-action-btn {
+            min-height: 1.9rem;
+        }
         .lesson-actions[open] .lesson-actions-panel {
             display: flex;
         }
@@ -267,20 +275,59 @@
         .lesson-actions[open] .lesson-actions-chevron {
             transform: rotate(180deg);
         }
+        .schedule-setting-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.85rem;
+            min-height: 4rem;
+            border: 1px solid var(--schedule-panel-border);
+            border-radius: 1rem;
+            background: color-mix(in srgb, var(--schedule-panel) 92%, transparent);
+            padding: 0.9rem 1rem;
+            transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+        }
+        .schedule-setting-card:hover {
+            border-color: color-mix(in srgb, var(--lesson-default-border) 60%, var(--schedule-panel-border));
+            background: color-mix(in srgb, var(--schedule-panel) 82%, var(--lesson-default-bg));
+            box-shadow: 0 14px 30px -26px rgba(37, 99, 235, 0.55);
+        }
+        .schedule-setting-card-label {
+            color: var(--schedule-text);
+        }
+        .schedule-setting-card-hint {
+            color: var(--schedule-muted);
+        }
+        #calendarSubscriptionBackdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 70;
+            background: rgba(15, 23, 42, 0.3);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            backdrop-filter: blur(4px);
+        }
+        #calendarSubscriptionBackdrop.is-open {
+            opacity: 1;
+            pointer-events: auto;
+        }
         #calendarSubscriptionSection.calendar-sync-drawer {
             position: fixed;
-            inset: 0 0 0 auto;
+            top: 1rem;
+            right: 1rem;
+            bottom: 1rem;
             z-index: 80;
-            width: min(34rem, calc(100vw - 1rem));
+            width: min(30rem, calc(100vw - 1rem));
             overflow-y: auto;
-            padding: 1rem;
+            padding: 0;
             pointer-events: auto;
             transform: translateX(var(--calendar-sync-drawer-offset, 100%));
-            opacity: 0;
-            transition: transform 0.22s ease, opacity 0.22s ease;
+            opacity: 1;
+            transition: transform 0.22s ease;
         }
         #calendarSubscriptionSection.calendar-sync-drawer.is-open {
-            opacity: 1;
+            transform: translateX(0);
         }
         #calendarSubscriptionSection.calendar-sync-drawer.is-dragging {
             transition: none;
@@ -290,14 +337,8 @@
         }
         #calendarSubscriptionSection .calendar-sync-card {
             min-height: 100%;
+            border-radius: 1.75rem;
             box-shadow: 0 24px 70px -26px rgba(15, 23, 42, 0.55);
-        }
-        #calendarSyncHandle {
-            z-index: 90;
-            touch-action: none;
-        }
-        #calendarSyncHandle.is-dragging {
-            cursor: grabbing;
         }
         .schedule-feed-card-kind.lesson-card {
             box-shadow: none;
@@ -366,9 +407,31 @@
             border-radius: 1.25rem;
             box-shadow: none;
         }
+        html.tg-webapp #calendarSubscriptionSection.calendar-sync-drawer {
+            top: calc(env(safe-area-inset-top) + 0.5rem);
+            right: 0.5rem;
+            bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+            width: min(30rem, calc(100vw - 1rem));
+        }
         html.tg-webapp #offlineDropdown,
         html.tg-webapp #searchResults {
             max-height: min(20rem, 55vh);
+        }
+        @media (max-width: 767px) {
+            .schedule-setting-card {
+                min-height: 3.6rem;
+                padding: 0.85rem 0.95rem;
+            }
+            #calendarSubscriptionSection.calendar-sync-drawer {
+                top: auto;
+                right: 0.5rem;
+                bottom: 0.5rem;
+                left: 0.5rem;
+                width: auto;
+            }
+            #calendarSubscriptionSection .calendar-sync-card {
+                border-radius: 1.4rem;
+            }
         }
     </style>
 </head>
@@ -439,7 +502,7 @@
                 <div class="relative w-full md:w-96" id="searchContainer">
                     <input type="text" id="groupSearch" data-search-input data-i18n-placeholder="schedule.search.placeholder" autocomplete="off"
                         class="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-slate-700 text-sm md:text-base dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
-                        placeholder="Найти группу или ФИО...">
+                        placeholder="Найти группу, преподавателя или аудиторию...">
                     <div class="absolute left-3.5 top-3 text-slate-400">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                     </div>
@@ -448,19 +511,8 @@
             </div>
             <section id="scheduleHomePanel" class="hidden mb-4 md:mb-6"></section>
             <section id="scheduleChangesPanel" class="hidden mb-4 md:mb-6"></section>
+            <div id="calendarSubscriptionBackdrop" class="hidden"></div>
             <section id="calendarSubscriptionSection" class="calendar-sync-drawer hidden" aria-hidden="true"></section>
-            <button type="button" id="calendarSyncHandle"
-                class="group fixed right-0 top-1/2 z-40 flex -translate-y-1/2 items-center justify-center rounded-l-2xl border border-r-0 border-blue-200 bg-white px-2.5 py-4 text-blue-700 shadow-xl shadow-blue-900/10 transition-all hover:-translate-x-1 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-900/70 dark:bg-slate-900 dark:text-blue-200 dark:hover:bg-blue-950"
-                aria-label="Calendar sync"
-                title="Calendar sync">
-                <span class="pointer-events-none absolute right-full mr-2 rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-black text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100" id="calendarSyncHandleTip">Calendar sync</span>
-                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M8 7H3m0 0 3-3M3 7l3 3"></path>
-                    <path d="M16 17h5m0 0-3-3m3 3-3 3"></path>
-                    <path d="M9 7h6a4 4 0 0 1 4 4v1"></path>
-                    <path d="M15 17H9a4 4 0 0 1-4-4v-1"></path>
-                </svg>
-            </button>
 
             <!-- ГЛАВНЫЙ БЛОК РАСПИСАНИЯ -->
             <div id="mainScheduleBlock" class="schedule-shell bg-white rounded-3xl md:rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col w-full min-h-[500px] dark:border-slate-700 dark:bg-slate-800">
@@ -500,42 +552,67 @@
                             <button onclick="setTodayWeek()" data-i18n="schedule.today" class="ml-2 px-4 py-2.5 text-sm font-bold bg-white hover:bg-blue-50 text-blue-600 transition-colors rounded-xl border border-blue-100 shadow-sm hidden sm:block dark:border-blue-900/60 dark:bg-slate-800 dark:text-blue-300 dark:hover:bg-slate-700">Сегодня</button>
                         </div>
 
-                        <button type="button" id="filterToggleBtn" class="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-sm transition-colors w-full sm:w-auto dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
-                            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
-                            <span data-i18n="schedule.filters.desktop">Фильтры и модули</span>
-                            <span id="moduleSelectionSummary" class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500 dark:bg-slate-900 dark:text-slate-300"></span>
-                            <svg id="filterArrow" class="w-4 h-4 text-slate-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        </button>
+                        <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                            <button type="button" id="calendarSyncOpenBtn" data-calendar-sync-trigger class="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl shadow-sm transition-colors w-full sm:w-auto dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-900/50">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7H3m0 0 3-3M3 7l3 3"></path><path stroke-linecap="round" stroke-linejoin="round" d="M16 17h5m0 0-3-3m3 3-3 3"></path><path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6a4 4 0 0 1 4 4v1"></path><path stroke-linecap="round" stroke-linejoin="round" d="M15 17H9a4 4 0 0 1-4-4v-1"></path></svg>
+                                <span data-i18n="schedule.calendar.openDrawer">Календарь</span>
+                            </button>
+                            <button type="button" id="filterToggleBtn" class="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-sm transition-colors w-full sm:w-auto dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+                                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+                                <span data-i18n="schedule.filters.desktop">Фильтры и модули</span>
+                                <span id="moduleSelectionSummary" class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500 dark:bg-slate-900 dark:text-slate-300"></span>
+                                <svg id="filterArrow" class="w-4 h-4 text-slate-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Панель фильтров -->
                     <div id="moduleFilterSection" class="schedule-control-band p-4 md:px-6 md:py-5 bg-slate-50 border-b border-slate-100 hidden shadow-inner dark:border-slate-700 dark:bg-slate-900">
                         <div id="filterContent" class="space-y-4">
-                            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                                <div class="flex flex-wrap items-center gap-5">
-                                    <label class="flex items-center cursor-pointer group select-none">
-                                        <span class="mpb-switch">
+                            <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                                <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 xl:flex-1">
+                                    <label class="schedule-setting-card cursor-pointer select-none">
+                                        <div class="min-w-0">
+                                            <div data-i18n="schedule.filters.shortNames" class="schedule-setting-card-label text-sm font-black">Короткие названия</div>
+                                            <div data-i18n="schedule.filters.shortNamesHint" class="schedule-setting-card-hint mt-1 text-[11px] font-semibold">Компактнее названия дисциплин</div>
+                                        </div>
+                                        <span class="mpb-switch shrink-0">
                                             <input type="checkbox" id="useShortNames" class="sr-only mpb-switch-input" checked onchange="filterAndRender(); savePreferences();">
                                             <span class="mpb-switch-track"></span>
                                             <span class="mpb-switch-thumb"></span>
                                         </span>
-                                        <span data-i18n="schedule.filters.shortNames" class="ml-2 text-sm font-semibold text-slate-600 group-hover:text-slate-900 transition-colors dark:text-slate-300 dark:group-hover:text-slate-100">Короткие названия</span>
                                     </label>
-                                    <label class="flex items-center cursor-pointer group select-none">
-                                        <span class="mpb-switch">
+                                    <label class="schedule-setting-card cursor-pointer select-none">
+                                        <div class="min-w-0">
+                                            <div data-i18n="schedule.filters.fullLecturer" class="schedule-setting-card-label text-sm font-black">ФИО полностью</div>
+                                            <div data-i18n="schedule.filters.fullLecturerHint" class="schedule-setting-card-hint mt-1 text-[11px] font-semibold">Не сокращать преподавателей</div>
+                                        </div>
+                                        <span class="mpb-switch shrink-0">
                                             <input type="checkbox" id="showFullLecturerName" class="sr-only mpb-switch-input" onchange="filterAndRender(); savePreferences();">
                                             <span class="mpb-switch-track"></span>
                                             <span class="mpb-switch-thumb"></span>
                                         </span>
-                                        <span data-i18n="schedule.filters.fullLecturer" class="ml-2 text-sm font-semibold text-slate-600 group-hover:text-slate-900 transition-colors dark:text-slate-300 dark:group-hover:text-slate-100">ФИО полностью</span>
+                                    </label>
+                                    <label class="schedule-setting-card cursor-pointer select-none">
+                                        <div class="min-w-0">
+                                            <div data-i18n="schedule.filters.lessonActions" class="schedule-setting-card-label text-sm font-black">Действия</div>
+                                            <div data-i18n="schedule.filters.lessonActionsHint" class="schedule-setting-card-hint mt-1 text-[11px] font-semibold">Быстрые кнопки прямо в ячейках</div>
+                                        </div>
+                                        <span class="mpb-switch shrink-0">
+                                            <input type="checkbox" id="showLessonActions" class="sr-only mpb-switch-input" checked onchange="filterAndRender(); savePreferences();">
+                                            <span class="mpb-switch-track"></span>
+                                            <span class="mpb-switch-thumb"></span>
+                                        </span>
                                     </label>
                                 </div>
-                                <div class="flex gap-2">
-                                    <button onclick="selectAllModules()" data-i18n="schedule.filters.all" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors uppercase">Всё</button>
-                                    <button onclick="clearAllModules()" data-i18n="schedule.filters.clear" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors uppercase dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">Сброс</button>
+                                <div id="moduleQuickControls" class="hidden flex-wrap items-center gap-2">
+                                    <span id="moduleSelectionStatus" class="rounded-full bg-white px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 shadow-sm dark:bg-slate-800 dark:text-slate-300"></span>
+                                    <button type="button" onclick="saveCurrentModulePreset()" data-i18n="schedule.modules.savePreset" class="rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500">Сохранить пресет</button>
+                                    <button type="button" onclick="selectAllModules()" data-i18n="schedule.filters.all" class="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50">Всё</button>
+                                    <button type="button" onclick="clearAllModules()" data-i18n="schedule.filters.clear" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Сброс</button>
                                 </div>
                             </div>
-                            <div id="moduleContainer" class="flex flex-wrap gap-2"></div>
+                            <div id="moduleContainer" class="space-y-4"></div>
                         </div>
                     </div>
                 </div>

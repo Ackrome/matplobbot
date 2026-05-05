@@ -563,7 +563,7 @@ What it does:
 - download a one-lesson `.ics`
 - show only the lesson module
 - hide the lesson module
-- The quick-action strip is collapsed by default behind the `Actions` / `Действия` control so dense timetable cells stay compact.
+- Lesson actions are controlled by the shared `Actions` toggle in the filter area, so users can keep cells compact or expose inline quick buttons across the whole schedule.
 - View density switcher:
 - `Cards` for the current rich card feed
 - `Compact` for seeing more lessons on one screen
@@ -579,9 +579,13 @@ What it does:
 - all classes / exams-only lesson mode
 - short names
 - full lecturer name
+- lesson actions visibility toggle shared across table/cards views
+- display toggles stay available even when the selected schedule has no module split
+- full lecturer-name preference applies to both desktop cells and mobile cards
 - Optional `Changes` panel compares the current schedule with the previous local snapshot for the same entity and respects the current week, module filters, and lesson mode.
 - The changes panel reports new, cancelled, moved, room-changed, and lecturer-changed lessons plus source parsing time and previous snapshot time.
 - Includes copy-to-clipboard actions for room/lecturer.
+- When the `Actions` toggle is enabled, lesson cards and timetable cells expose inline quick buttons for room copy, lecturer/room navigation, one-lesson ICS export, and module-only/module-hide actions without opening a per-card accordion.
 - Shows source update timestamp and offline/fallback states.
 - Search UX includes recent schedules, favorites, quick type categories, local fuzzy matching, and separate loading/empty/network-error states.
 - Offline drawer shows cached schedules, cache update time, and a refresh action for the current schedule.
@@ -596,8 +600,8 @@ How to use:
 3. Search for group, lecturer, or room when you need another source.
 4. Pick result and switch day/week context; the URL updates with the current state.
 5. Use favorites in the summary/search panel to pin often-used groups, lecturers, or rooms.
-6. Use filters panel to search modules, toggle them, save a module preset, or apply `Only` / `Except` actions from a module chip.
-7. Open `Actions` / `Действия` on a lesson card, then use quick actions for room copy, lecturer/room navigation, one-lesson ICS export, and module-focused filtering.
+6. Use the filter panel to switch `Short names`, `Full lecturer name`, and `Actions`, then search modules, toggle them, save a module preset, or apply `Only` / `Except` actions from a module chip.
+7. Turn on `Actions` when you want inline quick buttons directly inside lesson cells/cards for room copy, lecturer/room navigation, one-lesson ICS export, and module-focused filtering.
 8. Add the opened schedule to favorites after choosing modules when you want that favorite to reopen with the same module set.
 9. Pick another non-favorite schedule from search to reset the module filter to all modules available for that schedule.
 10. Use `Cards`, `Compact`, `Table`, or `Exams` to choose display density. The choice is saved and reflected in the URL.
@@ -614,9 +618,8 @@ Files:
 What it does:
 
 - Shows eligibility based on Telegram linkage. Bot subscriptions are no longer required for website-owned iCal profiles.
-- Opens from the side `Calendar sync` handle on `/schedule` instead of occupying page space by default.
-- The handle can be clicked or dragged inward; `/schedule?calendar=1` still opens the panel directly.
-- The panel slides in as a fixed right drawer above the schedule and follows pointer drag while the mouse or touch is held down.
+- Opens from the `Calendar` button in the schedule toolbar and from the `Calendar` action in the `My schedule` summary; `/schedule?calendar=1` still opens the panel directly.
+- The panel now opens as a compact right drawer with backdrop/focus dismissal instead of a persistent floating side handle.
 - Manages profile-based iCal feeds:
 - built-in `All classes`
 - built-in `Exams only`
@@ -627,8 +630,8 @@ What it does:
 - Supports:
 - expand/collapse panel state
 - collapsed summary with active preset, event count, next event, and fast actions
-- selected-state preset cards for built-in and custom profiles
-- separate preset settings, connection, and diagnostics/management sections
+- compact selected-state preset rows for built-in and custom profiles
+- separate connection, current-page preset save, preset settings, and diagnostics/management sections ordered by everyday usage priority
 - visible selected-module chips for every preset, including the `All modules` state
 - custom preset module checklist on the matching schedule page
 - copy/reveal/hide URL
@@ -648,8 +651,8 @@ How to use:
 
 1. Sign in and open `/schedule`.
 2. Link the website account to Telegram to generate the private secret link.
-3. Click the side `Calendar sync` handle to open the right drawer, or hold and drag it inward to control the slide-out position.
-4. Use the panel summary for the normal flow: check the active preset, copy the link, or open calendar management in the bot.
+3. Click `Calendar` in the schedule toolbar or in the `My schedule` summary to open the right drawer.
+4. Use the drawer header and `Connection` section for the normal flow: check the active preset, copy the link, open the feed in the target calendar app, or jump to bot management.
 5. In `Presets`, switch between built-in feeds and custom website presets.
 6. Open any group, lecturer, or room schedule and use `Save current view` to create a website-only iCal profile.
 7. In `Profile settings`, inspect which modules are included in the selected preset. For custom presets, open the matching schedule from the module notice when needed, then use the checklist to add/remove modules and save the preset.

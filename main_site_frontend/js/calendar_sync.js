@@ -9,7 +9,7 @@ const shouldFocusCalendarSyncPanel =
     calendarSyncLaunchParams.get('panel') === 'calendar';
 let calendarPlatform = loadCalendarPlatform();
 let revealedCalendarProfileIds = loadRevealedCalendarProfileIds();
-let isCalendarPanelCollapsed = true;
+let isCalendarPanelCollapsed = loadCalendarPanelCollapsed();
 let isCalendarSyncPanelOpen = shouldFocusCalendarSyncPanel;
 let hasUserToggledCalendarPanel = false;
 let hasFocusedCalendarSyncPanel = false;
@@ -104,24 +104,32 @@ function getCalendarDrawerWidth() {
 
 function setCalendarDrawerOffset(offset, { dragging = false } = {}) {
     const container = document.getElementById('calendarSubscriptionSection');
-    const handle = document.getElementById('calendarSyncHandle');
     if (!container) return;
     const width = getCalendarDrawerWidth();
     const nextOffset = Math.max(0, Math.min(width, Number(offset) || 0));
     container.style.setProperty('--calendar-sync-drawer-offset', `${nextOffset}px`);
     container.classList.toggle('is-dragging', dragging);
-    handle?.classList.toggle('is-dragging', dragging);
+}
+
+function syncCalendarDrawerTriggers() {
+    document.querySelectorAll('[data-calendar-sync-trigger]').forEach((button) => {
+        button.setAttribute('aria-expanded', String(isCalendarSyncPanelOpen));
+    });
 }
 
 function setCalendarDrawerVisibility(open, { immediate = false, dragging = false } = {}) {
     const container = document.getElementById('calendarSubscriptionSection');
+    const backdrop = document.getElementById('calendarSubscriptionBackdrop');
     if (!container) return;
     window.clearTimeout(container._calendarHideTimer);
     const width = getCalendarDrawerWidth();
+    syncCalendarDrawerTriggers();
     if (open) {
         const alreadyVisible = !container.classList.contains('hidden') && container.classList.contains('is-open');
         container.classList.remove('hidden');
         container.setAttribute('aria-hidden', 'false');
+        backdrop?.classList.remove('hidden');
+        window.requestAnimationFrame(() => backdrop?.classList.add('is-open'));
         if (alreadyVisible && !immediate && !dragging) {
             setCalendarDrawerOffset(0);
             return;
@@ -141,6 +149,12 @@ function setCalendarDrawerVisibility(open, { immediate = false, dragging = false
     container.setAttribute('aria-hidden', 'true');
     container.classList.remove('is-open');
     setCalendarDrawerOffset(width, { dragging });
+    backdrop?.classList.remove('is-open');
+    backdrop?._hideTimer && window.clearTimeout(backdrop._hideTimer);
+    backdrop._hideTimer = window.setTimeout(() => {
+        if (isCalendarSyncPanelOpen) return;
+        backdrop?.classList.add('hidden');
+    }, immediate ? 0 : 220);
     if (immediate) {
         container.classList.add('hidden');
         container.innerHTML = '';
@@ -317,78 +331,25 @@ window.toggleCalendarSyncPanel = function() {
 }
 
 function installCalendarSyncHandle() {
-    const handle = document.getElementById('calendarSyncHandle');
-    if (!handle || handle.dataset.bound === '1') return;
-    handle.dataset.bound = '1';
-    let dragState = null;
-    let suppressClick = false;
-    handle.addEventListener('click', () => {
-        if (suppressClick) {
-            suppressClick = false;
-            return;
-        }
-        window.toggleCalendarSyncPanel();
+    document.querySelectorAll('[data-calendar-sync-trigger]').forEach((button) => {
+        if (button.dataset.bound === '1') return;
+        button.dataset.bound = '1';
+        button.addEventListener('click', () => window.toggleCalendarSyncPanel());
     });
-    handle.addEventListener('pointerdown', (event) => {
-        if (event.button !== undefined && event.button !== 0) return;
-        dragState = {
-            pointerId: event.pointerId,
-            startX: event.clientX,
-            width: getCalendarDrawerWidth(),
-            initialOffset: isCalendarSyncPanelOpen ? 0 : getCalendarDrawerWidth(),
-            active: false,
-        };
-        handle.setPointerCapture?.(event.pointerId);
-    });
-    handle.addEventListener('pointermove', (event) => {
-        if (!dragState) return;
-        const delta = event.clientX - dragState.startX;
-        if (!dragState.active && Math.abs(delta) > 4) {
-            dragState.active = true;
-            suppressClick = true;
-            if (!isCalendarSyncPanelOpen) {
-                isCalendarSyncPanelOpen = true;
-                hasUserToggledCalendarPanel = true;
-                isCalendarPanelCollapsed = false;
-                persistCalendarPanelCollapsed();
-                isCalendarDrawerDragging = true;
-                renderCalendarSubscription();
+    const backdrop = document.getElementById('calendarSubscriptionBackdrop');
+    if (backdrop && backdrop.dataset.bound !== '1') {
+        backdrop.dataset.bound = '1';
+        backdrop.addEventListener('click', () => window.closeCalendarSyncPanel());
+    }
+    if (document.body.dataset.calendarEscapeBound !== '1') {
+        document.body.dataset.calendarEscapeBound = '1';
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && isCalendarSyncPanelOpen) {
+                window.closeCalendarSyncPanel();
             }
-        }
-        if (!dragState.active) return;
-        event.preventDefault();
-        const offset = dragState.initialOffset + delta;
-        setCalendarDrawerOffset(offset, { dragging: true });
-    });
-    const finishDrag = () => {
-        const pointerId = dragState?.pointerId;
-        if (dragState?.active) {
-            const width = dragState.width || getCalendarDrawerWidth();
-            const currentOffset = parseFloat(
-                document.getElementById('calendarSubscriptionSection')?.style.getPropertyValue('--calendar-sync-drawer-offset') || String(width)
-            );
-            const visibleWidth = Math.max(0, width - currentOffset);
-            if (visibleWidth >= width * 0.35) {
-                isCalendarSyncPanelOpen = true;
-                setCalendarDrawerOffset(0);
-                document.getElementById('calendarSubscriptionSection')?.classList.add('is-open');
-            } else {
-                isCalendarSyncPanelOpen = false;
-                setCalendarDrawerVisibility(false);
-            }
-        }
-        if (pointerId !== undefined) {
-            try {
-                handle.releasePointerCapture?.(pointerId);
-            } catch (error) {}
-        }
-        isCalendarDrawerDragging = false;
-        dragState = null;
-        setCalendarDrawerOffset(isCalendarSyncPanelOpen ? 0 : getCalendarDrawerWidth());
-        setTimeout(() => { suppressClick = false; }, 250);
-    };
-    handle.addEventListener('pointerup', finishDrag);
-    handle.addEventListener('pointercancel', finishDrag);
+        });
+    }
+    syncCalendarDrawerTriggers();
 }
 
 function renderTelegramCalendarAuthPlaceholder(container) {
@@ -422,13 +383,15 @@ function renderTelegramCalendarAuthPlaceholder(container) {
     container.innerHTML = `
         <div class="calendar-sync-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                    <div class="mb-1 text-xs font-black uppercase tracking-[0.2em] text-blue-500 dark:text-blue-300">${escapeHtml(t('schedule.calendar.eyebrow', 'Sync'))}</div>
-                    <h2 class="text-xl font-black text-slate-900 dark:text-slate-100">${escapeHtml(t('schedule.calendar.title', 'Calendar subscription'))}</h2>
+                <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="rounded-full px-3 py-1 text-xs font-black ${statusClass}">${escapeHtml(t(statusKey, statusFallback))}</span>
+                        <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:bg-slate-900 dark:text-slate-300">${escapeHtml(t('schedule.calendar.openDrawer', 'Calendar'))}</span>
+                    </div>
+                    <h2 class="mt-3 text-lg font-black text-slate-900 dark:text-slate-100">${escapeHtml(t('schedule.calendar.openDrawer', 'Calendar'))}</h2>
                     <p class="mt-1 max-w-3xl text-sm text-slate-600 dark:text-slate-300">${escapeHtml(t('schedule.calendar.description', 'Connect your personal ICS feed to Apple Calendar, Google Calendar, or any other calendar app.'))}</p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
-                    <span class="rounded-full px-3 py-1 text-xs font-black ${statusClass}">${escapeHtml(t(statusKey, statusFallback))}</span>
                     ${renderCalendarBotLink('border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50')}
                     <button type="button" onclick="toggleCalendarSubscriptionPanel()"
                         aria-expanded="${String(!isCalendarPanelCollapsed)}"
@@ -442,7 +405,7 @@ function renderTelegramCalendarAuthPlaceholder(container) {
                     </button>
                     <button type="button" onclick="closeCalendarSyncPanel()"
                         aria-label="${escapeHtml(t('schedule.calendar.hidePanel', 'Hide calendar sync'))}"
-                        class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-500 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">x</button>
+                        class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-xs font-black text-slate-500 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">✕</button>
                 </div>
             </div>
             ${bodyHtml}
@@ -506,8 +469,25 @@ function renderCalendarSubscription() {
         if (window.mpbTelegramWebApp?.isActive) {
             renderTelegramCalendarAuthPlaceholder(container);
         } else {
-            container.innerHTML = '';
-            container.classList.add('hidden');
+            container.innerHTML = `
+                <div class="calendar-sync-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <div class="flex flex-col gap-4">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">${escapeHtml(t('schedule.calendar.statusSetup', 'Setup'))}</span>
+                            <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:bg-slate-900 dark:text-slate-300">${escapeHtml(t('schedule.calendar.openDrawer', 'Calendar'))}</span>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-black text-slate-900 dark:text-slate-100">${escapeHtml(t('schedule.calendar.openDrawer', 'Calendar'))}</h2>
+                            <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">${escapeHtml(t('schedule.calendar.authRequired', 'Sign in on the website or open the bot to manage your personal calendar feed.'))}</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <a href="/login" class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500">${escapeHtml(t('schedule.calendar.signIn', 'Sign in'))}</a>
+                            ${renderCalendarBotLink('border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            focusCalendarSyncPanelIfRequested(container);
         }
         return;
     }
@@ -541,22 +521,24 @@ function renderCalendarSubscription() {
         const active = profile.selected;
         return `
             <button type="button" onclick="selectCalendarSubscriptionProfile('${escapeJsString(profile.id)}')"
-                class="group min-w-0 rounded-2xl border p-4 text-left transition-all ${active
+                class="group min-w-0 rounded-2xl border p-3.5 text-left transition-all ${active
                     ? 'border-blue-300 bg-blue-50 text-blue-800 shadow-sm shadow-blue-500/10 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100'
-                    : 'border-slate-200 bg-white text-slate-600 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-slate-800'}">
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-slate-800'}">
                 <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
-                        <div class="truncate text-sm font-black">${escapeHtml(profile.name)}</div>
-                        <div class="mt-1 text-[10px] font-black uppercase tracking-[0.14em] opacity-70">${escapeHtml(getCalendarProfileKindLabel(profile))}</div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <div class="truncate text-sm font-black">${escapeHtml(profile.name)}</div>
+                            <span class="rounded-full bg-white/80 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.16em] text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(getCalendarProfileKindLabel(profile))}</span>
+                        </div>
+                        <p class="mt-1 line-clamp-2 text-xs font-medium opacity-80">${escapeHtml(getCalendarProfileDescription(profile))}</p>
+                        <div class="mt-2 flex flex-wrap gap-1.5">
+                            <span class="rounded-full bg-white/80 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(getCalendarLessonModeLabel(profile))}</span>
+                            <span class="rounded-full bg-white/80 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(getCalendarModulesLabel(profile))}</span>
+                        </div>
                     </div>
                     <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}">
                         ${active ? '<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>' : ''}
                     </span>
-                </div>
-                <p class="mt-3 line-clamp-2 text-xs font-medium opacity-80">${escapeHtml(getCalendarProfileDescription(profile))}</p>
-                <div class="mt-3 flex flex-wrap gap-1.5">
-                    <span class="rounded-full bg-white/80 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(getCalendarLessonModeLabel(profile))}</span>
-                    <span class="rounded-full bg-white/80 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(getCalendarModulesLabel(profile))}</span>
                 </div>
             </button>
         `;
@@ -593,7 +575,7 @@ function renderCalendarSubscription() {
     ] : [];
     const compactSummary = selectedProfile
         ? `
-            <div class="mt-4 hidden gap-2 md:grid md:grid-cols-3">
+            <div class="mt-4 grid gap-2 sm:grid-cols-3">
                 ${renderCalendarValueCard(t('schedule.calendar.activePreset', 'Active preset'), escapeHtml(selectedProfile.name), 'bg-slate-50 dark:bg-slate-900/40')}
                 ${renderCalendarValueCard(t('schedule.calendar.health.events', 'Events'), escapeHtml(eventCountLabel), 'bg-slate-50 dark:bg-slate-900/40')}
                 ${renderCalendarValueCard(t('schedule.calendar.health.next', 'Next'), nextEventLabel, 'bg-slate-50 dark:bg-slate-900/40')}
@@ -806,18 +788,18 @@ function renderCalendarSubscription() {
         ? ''
         : `
             <div id="calendarSubscriptionBody" class="mt-5 space-y-4">
+                ${connectionPanel}
+                ${currentViewSave}
+                ${profileSettings}
                 ${profiles.length ? `
                     <section class="space-y-3">
                         <div class="flex items-center justify-between gap-3">
                             <h3 class="text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(t('schedule.calendar.presetsTitle', 'Presets'))}</h3>
                             <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500 dark:bg-slate-900 dark:text-slate-300">${escapeHtml(t('schedule.calendar.presetsCount', '{count} profiles', { count: profiles.length }))}</span>
                         </div>
-                        <div class="grid gap-2 lg:grid-cols-3">${profileButtons}</div>
+                        <div class="grid gap-2">${profileButtons}</div>
                     </section>
                 ` : ''}
-                ${currentViewSave}
-                ${profileSettings}
-                ${connectionPanel}
                 ${diagnosticsPanel}
                 <p class="text-xs text-slate-500 dark:text-slate-400">${escapeHtml(t('schedule.calendar.instructions', 'Use the iOS / Mac button for Apple Calendar. For Google Calendar, copy the HTTPS URL and add it from URL in the web version.'))}</p>
             </div>
@@ -828,10 +810,10 @@ function renderCalendarSubscription() {
             <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
-                        <div class="text-xs font-black uppercase tracking-[0.2em] text-blue-500 dark:text-blue-300">${escapeHtml(t('schedule.calendar.eyebrow', 'Sync'))}</div>
                         <span class="rounded-full px-3 py-1 text-xs font-black ${statusClass}">${escapeHtml(t(statusKey, statusFallback))}</span>
+                        <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:bg-slate-900 dark:text-slate-300">${escapeHtml(t('schedule.calendar.openDrawer', 'Calendar'))}</span>
                     </div>
-                    <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-slate-100">${escapeHtml(t('schedule.calendar.title', 'Calendar subscription'))}</h2>
+                    <h2 class="mt-3 text-lg font-black text-slate-900 dark:text-slate-100">${escapeHtml(t('schedule.calendar.openDrawer', 'Calendar'))}</h2>
                     <p class="mt-1 max-w-3xl text-sm text-slate-600 dark:text-slate-300">${escapeHtml(selectedProfile ? selectedProfileDescription : t('schedule.calendar.description', 'Connect your personal ICS feed to Apple Calendar, Google Calendar, or any other calendar app.'))}</p>
                     ${selectedProfile ? `
                         <div class="mt-3 flex flex-wrap gap-1.5">
@@ -857,7 +839,7 @@ function renderCalendarSubscription() {
                     </button>
                     <button type="button" onclick="closeCalendarSyncPanel()"
                         aria-label="${escapeHtml(t('schedule.calendar.hidePanel', 'Hide calendar sync'))}"
-                        class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-500 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">x</button>
+                        class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-xs font-black text-slate-500 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">✕</button>
                 </div>
             </div>
             ${isCalendarPanelCollapsed ? compactSummary : bodyHtml}
@@ -1186,12 +1168,9 @@ window.clearAllModules = function(...args) {
 
 document.addEventListener('DOMContentLoaded', () => {
     installCalendarSyncHandle();
-    const tip = document.getElementById('calendarSyncHandleTip');
-    if (tip) tip.textContent = t('schedule.calendar.handleTooltip', 'Calendar sync');
-    const handle = document.getElementById('calendarSyncHandle');
-    if (handle) {
-        const label = t('schedule.calendar.handleTooltip', 'Calendar sync');
-        handle.setAttribute('title', label);
-        handle.setAttribute('aria-label', label);
-    }
+    const label = t('schedule.calendar.handleTooltip', 'Calendar sync');
+    document.querySelectorAll('[data-calendar-sync-trigger]').forEach((button) => {
+        button.setAttribute('title', label);
+        button.setAttribute('aria-label', label);
+    });
 });
