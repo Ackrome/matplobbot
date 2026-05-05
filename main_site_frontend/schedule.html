@@ -14,7 +14,7 @@
     <link rel="manifest" href="/site.webmanifest">
     <script src="/js/theme_bootstrap.js?v=1"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="/css/tailwind.css?v=5">
+    <link rel="stylesheet" href="/css/tailwind.css?v=6">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -336,7 +336,7 @@
                             </svg>
                         </button>
                         <div id="offlineDropdown"
-                            class="absolute right-0 md:left-0 mt-2 w-64 md:w-72 bg-white border border-slate-100 rounded-2xl shadow-2xl overflow-hidden hidden opacity-0 translate-y-2 transition-all duration-200 z-50 dark:border-slate-700 dark:bg-slate-800">
+                            class="absolute right-0 md:left-0 mt-2 w-80 max-w-[calc(100vw-1rem)] bg-white border border-slate-100 rounded-2xl shadow-2xl overflow-hidden hidden opacity-0 translate-y-2 transition-all duration-200 z-50 dark:border-slate-700 dark:bg-slate-800">
                             <div class="p-3 border-b border-slate-50 bg-slate-50/50 dark:border-slate-700 dark:bg-slate-900/50">
                                 <h3 data-i18n="schedule.offline.available" class="font-black text-[10px] text-slate-400 uppercase tracking-wider text-center">Доступно оффлайн</h3>
                             </div>
@@ -357,6 +357,18 @@
             <section id="scheduleHomePanel" class="hidden mb-4 md:mb-6"></section>
             <section id="scheduleChangesPanel" class="hidden mb-4 md:mb-6"></section>
             <section id="calendarSubscriptionSection" class="hidden mb-4 md:mb-6"></section>
+            <button type="button" id="calendarSyncHandle"
+                class="group fixed right-0 top-1/2 z-40 flex -translate-y-1/2 items-center justify-center rounded-l-2xl border border-r-0 border-blue-200 bg-white px-2.5 py-4 text-blue-700 shadow-xl shadow-blue-900/10 transition-all hover:-translate-x-1 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-900/70 dark:bg-slate-900 dark:text-blue-200 dark:hover:bg-blue-950"
+                aria-label="Calendar sync"
+                title="Calendar sync">
+                <span class="pointer-events-none absolute right-full mr-2 rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-black text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100" id="calendarSyncHandleTip">Calendar sync</span>
+                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M8 7H3m0 0 3-3M3 7l3 3"></path>
+                    <path d="M16 17h5m0 0-3-3m3 3-3 3"></path>
+                    <path d="M9 7h6a4 4 0 0 1 4 4v1"></path>
+                    <path d="M15 17H9a4 4 0 0 1-4-4v-1"></path>
+                </svg>
+            </button>
 
             <!-- ГЛАВНЫЙ БЛОК РАСПИСАНИЯ -->
             <div id="mainScheduleBlock" class="schedule-shell bg-white rounded-3xl md:rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col w-full min-h-[500px] dark:border-slate-700 dark:bg-slate-800">
@@ -457,9 +469,13 @@
     <script src="/js/runtime_config.js?v=2"></script>
     <script src="/js/ui_utils.js?v=1"></script>
     <script src="/js/telegram_webapp.js?v=4"></script>
-    <script src="/js/navbar.js?v=30"></script>
-    <script src="/js/schedule.js?v=26"></script>
-    <script src="/js/calendar_sync.js?v=12"></script>
+    <script src="/js/navbar.js?v=31"></script>
+    <script src="/js/schedule_state.js?v=1"></script>
+    <script src="/js/schedule_api.js?v=1"></script>
+    <script src="/js/schedule_filters.js?v=1"></script>
+    <script src="/js/schedule_render.js?v=1"></script>
+    <script src="/js/schedule.js?v=27"></script>
+    <script src="/js/calendar_sync.js?v=13"></script>
     <script src="/js/schedule_ux.js?v=9"></script>
 </body>
 </html>

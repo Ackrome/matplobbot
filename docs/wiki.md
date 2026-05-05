@@ -542,6 +542,10 @@ Files:
 
 - `main_site_frontend/schedule.html`
 - `main_site_frontend/js/schedule.js`
+- `main_site_frontend/js/schedule_state.js`
+- `main_site_frontend/js/schedule_api.js`
+- `main_site_frontend/js/schedule_filters.js`
+- `main_site_frontend/js/schedule_render.js`
 - `main_site_frontend/js/schedule_ux.js`
 
 What it does:
@@ -552,6 +556,13 @@ What it does:
 - Syncs that state across URL parameters, local/remote preferences, browser history, and visible UI controls.
 - Shows a signed-in `My schedule` summary panel with active schedule, next class, today's classes, offline warning, and fast actions.
 - Desktop timetable grid + mobile card view.
+- Lesson cards include a systematic quick-action strip:
+- copy room
+- open lecturer schedule
+- open room schedule
+- download a one-lesson `.ics`
+- show only the lesson module
+- hide the lesson module
 - View density switcher:
 - `Cards` for the current rich card feed
 - `Compact` for seeing more lessons on one screen
@@ -570,8 +581,11 @@ What it does:
 - The changes panel reports new, cancelled, moved, room-changed, and lecturer-changed lessons plus source parsing time and previous snapshot time.
 - Includes copy-to-clipboard actions for room/lecturer.
 - Shows source update timestamp and offline/fallback states.
+- Search UX includes recent schedules, favorites, quick type categories, local fuzzy matching, and separate loading/empty/network-error states.
+- Offline drawer shows cached schedules, cache update time, and a refresh action for the current schedule.
 - Highlights exam-like lessons, including `Семинар+зачет` and `Экзамены`, with the dedicated exam color instead of the regular seminar color.
 - Persists preference state locally and in account preferences when available.
+- Frontend schedule code is being split into focused helper modules: `schedule_state.js`, `schedule_api.js`, `schedule_filters.js`, and `schedule_render.js`.
 
 How to use:
 
@@ -579,10 +593,13 @@ How to use:
 2. Sign in to see the `My schedule` summary for the saved/active schedule.
 3. Search for group, lecturer, or room when you need another source.
 4. Pick result and switch day/week context; the URL updates with the current state.
-5. Use filters panel to search modules, toggle them, save a module preset, or apply `Only` / `Except` actions from a module chip.
-6. Use `Cards`, `Compact`, `Table`, or `Exams` to choose display density. The choice is saved and reflected in the URL.
-7. Tap `Show changes` in the summary panel to compare with the previous local snapshot.
-8. Copy the schedule link from the summary panel to share the same view.
+5. Use favorites in the summary/search panel to pin often-used groups, lecturers, or rooms.
+6. Use filters panel to search modules, toggle them, save a module preset, or apply `Only` / `Except` actions from a module chip.
+7. Use quick actions on lesson cards for room copy, lecturer/room navigation, one-lesson ICS export, and module-focused filtering.
+8. Use `Cards`, `Compact`, `Table`, or `Exams` to choose display density. The choice is saved and reflected in the URL.
+9. Tap `Show changes` in the summary panel to compare with the previous local snapshot.
+10. Open the offline drawer to see cached schedules and refresh the current schedule cache.
+11. Copy the schedule link from the summary panel to share the same view.
 
 ### Calendar Sync Panel
 
@@ -593,6 +610,8 @@ Files:
 What it does:
 
 - Shows eligibility based on Telegram linkage. Bot subscriptions are no longer required for website-owned iCal profiles.
+- Opens from the side `Calendar sync` handle on `/schedule` instead of occupying page space by default.
+- The handle can be clicked or dragged inward; `/schedule?calendar=1` still opens the panel directly.
 - Manages profile-based iCal feeds:
 - built-in `All classes`
 - built-in `Exams only`
@@ -624,8 +643,8 @@ How to use:
 
 1. Sign in and open `/schedule`.
 2. Link the website account to Telegram to generate the private secret link.
-3. Use the collapsed `Calendar subscription` card for the normal flow: check the active preset, copy the link, or open calendar management in the bot.
-4. Expand the card when you need deeper control.
+3. Click or drag the side `Calendar sync` handle to open the calendar panel.
+4. Use the panel summary for the normal flow: check the active preset, copy the link, or open calendar management in the bot.
 5. In `Presets`, switch between built-in feeds and custom website presets.
 6. Open any group, lecturer, or room schedule and use `Save current view` to create a website-only iCal profile.
 7. In `Profile settings`, inspect which modules are included in the selected preset. For custom presets, open the matching schedule from the module notice when needed, then use the checklist to add/remove modules and save the preset.
@@ -778,12 +797,14 @@ Feature details:
 - Search terms must contain at least 2 non-whitespace characters; shorter terms return `422`.
 - For mixed entity types with equal relevance, response ordering is deterministic: `group` -> `person` -> `auditorium`, then stable lexical tie-break by label/id.
 - Search automatically falls back to local cache if upstream RUZ fails.
+- Cached list returns recently cached groups, lecturers, and rooms with `updated_at` so the offline drawer can show data freshness.
 - Schedule data returns:
 - `schedule`
 - `available_modules`
 - `is_offline`
 - `source_updated_at`
 - `loaded_bounds`
+- `GET /api/schedule/data/{type}/{id}` accepts `refresh=1` to force a live refresh attempt even when the local cache is still fresh.
 
 #### Schedule Search Offline Fallback Semantics (Frontend)
 
@@ -805,6 +826,7 @@ How to use:
 1. Call `/search?term=...&type=all|group|person|auditorium` with a term of at least 2 non-whitespace characters.
 2. Use returned entity `type/id` with `/data/{type}/{id}`.
 3. Optionally pass `base_date=YYYY-MM-DD` to center the loaded window.
+4. Pass `refresh=1` from an explicit user action such as `Refresh cache`; do not use it for every automatic navigation.
 
 ### Stats API
 

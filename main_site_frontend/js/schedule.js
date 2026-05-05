@@ -26,9 +26,14 @@ let isOfflineMode = false;
 let currentWeekStart = getMonday(new Date());
 let cachedOfflineEntities = [];
 let latestSearchResults =[];
+let latestSearchQuery = '';
+let searchCategory = 'all';
+let searchRequestSeq = 0;
 let moduleFilterQuery = '';
 let modulePresets = [];
 let scheduleChangeSummary = null;
+let lessonActionMap = new Map();
+let isRefreshingScheduleCache = false;
 
 function createDefaultSchedulePageState() {
     return {
@@ -292,7 +297,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.mpbI18n?.registerTranslator?.(() => {
         renderOfflineHistory();
         if (!resultsBox.classList.contains('hidden')) {
-            renderSearchResults(latestSearchResults);
+            if (latestSearchQuery.length < 2) renderSearchHome();
+            else renderSearchResults(latestSearchResults, { query: latestSearchQuery, networkState: latestSearchResults.length ? 'ok' : 'empty' });
         }
         if (currentEntity?.id || fullSchedule.length > 0 || allAvailableModules.length > 0) {
             renderModuleFilters();
@@ -302,24 +308,82 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 });
 
+function formatRelativeDateTime(value) {
+    if (!value) return t('schedule.context.parsedUnknown', 'Parsed time unknown');
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return String(value);
+    const diffMs = Date.now() - parsed.getTime();
+    const absMs = Math.abs(diffMs);
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+    if (absMs < minute) return t('schedule.time.justNow', 'just now');
+    if (absMs < hour) {
+        return t('schedule.time.minutesAgo', '{count} min ago', { count: Math.max(1, Math.round(absMs / minute)) });
+    }
+    if (absMs < day) {
+        return t('schedule.time.hoursAgo', '{count} h ago', { count: Math.max(1, Math.round(absMs / hour)) });
+    }
+    return formatUiDate(parsed, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function isScheduleCacheStale(value) {
+    if (!value) return false;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return false;
+    return Date.now() - parsed.getTime() > 24 * 60 * 60 * 1000;
+}
+
 function renderOfflineHistory(list = cachedOfflineEntities) {
     const container = document.getElementById('cachedEntitiesList');
     if (!container) return;
-    if (!Array.isArray(list) || list.length === 0) {
-        container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400 italic">${escapeHtml(t('schedule.history.empty', 'История пуста'))}</div>`;
+    const normalizedList = Array.isArray(list) ? list : [];
+    const newestUpdatedAt = normalizedList
+        .map((item) => item.updated_at)
+        .filter(Boolean)
+        .sort()
+        .at(-1);
+    const currentUpdatedAt = sourceUpdatedAt || newestUpdatedAt || null;
+    const currentCacheLabel = currentUpdatedAt
+        ? formatRelativeDateTime(currentUpdatedAt)
+        : t('schedule.offline.updatedUnknown', 'Update time unknown');
+    const refreshDisabled = !currentEntity?.id || isRefreshingScheduleCache;
+    const headerHtml = `
+        <div class="space-y-2 p-2">
+            <div class="rounded-xl bg-slate-50 p-3 text-xs font-semibold text-slate-600 dark:bg-slate-900/70 dark:text-slate-300">
+                <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(t('schedule.offline.lastUpdated', 'Cache updated'))}</div>
+                <div class="mt-1">${escapeHtml(currentCacheLabel)}</div>
+            </div>
+            <button type="button" onclick="refreshCurrentScheduleCache()"
+                ${refreshDisabled ? 'disabled' : ''}
+                class="w-full rounded-xl border px-3 py-2 text-xs font-black transition-colors ${refreshDisabled
+                    ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-600'
+                    : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50'}">
+                ${escapeHtml(isRefreshingScheduleCache ? t('schedule.offline.refreshing', 'Refreshing...') : t('schedule.offline.refresh', 'Refresh cache'))}
+            </button>
+        </div>
+    `;
+    if (normalizedList.length === 0) {
+        container.innerHTML = `${headerHtml}<div class="p-6 text-center text-xs text-slate-400 italic">${escapeHtml(t('schedule.history.empty', 'History is empty'))}</div>`;
         return;
     }
-    container.innerHTML = list.map(item => {
+    container.innerHTML = headerHtml + normalizedList.map(item => {
         const itemType = escapeJsString(item.type);
         const itemId = escapeJsString(item.id);
-        const itemLabel = escapeJsString(item.label);
-        const labelText = escapeHtml(item.label);
-        const savedText = escapeHtml(t('schedule.history.saved', 'Сохранено оффлайн'));
+        const itemLabel = escapeJsString(item.label || item.name || item.id);
+        const labelText = escapeHtml(item.label || item.name || item.id);
+        const typeMeta = getSearchResultTypeMeta(item.type);
+        const savedText = item.updated_at
+            ? escapeHtml(formatRelativeDateTime(item.updated_at))
+            : escapeHtml(t('schedule.history.saved', 'Saved offline'));
         return `
             <button onclick="loadSchedule('${itemType}', '${itemId}', '${itemLabel}'); closeOfflinePanel();"
                     class="group w-full text-left px-4 py-3 bg-white hover:bg-blue-50 rounded-xl transition-all flex items-center justify-between border border-transparent hover:border-blue-100 dark:bg-slate-800 dark:hover:bg-slate-700 dark:hover:border-slate-600">
                 <div>
-                    <div class="text-xs font-black text-slate-700 group-hover:text-blue-700 dark:text-slate-200 dark:group-hover:text-blue-300">${labelText}</div>
+                    <div class="flex items-center gap-2 text-xs font-black text-slate-700 group-hover:text-blue-700 dark:text-slate-200 dark:group-hover:text-blue-300">
+                        <span>${labelText}</span>
+                        <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-slate-500 dark:bg-slate-900 dark:text-slate-400">${escapeHtml(typeMeta.label)}</span>
+                    </div>
                     <div class="text-[9px] text-slate-400 uppercase tracking-tighter mt-0.5">${savedText}</div>
                 </div>
                 <svg class="w-3 h-3 text-slate-300 group-hover:text-blue-400 dark:text-slate-500 dark:group-hover:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -355,15 +419,20 @@ function getCurrentEntityModulePresets() {
 }
 
 function getCurrentWeekEnd() {
-    const weekEnd = new Date(currentWeekStart);
-    weekEnd.setDate(weekEnd.getDate() + 6);
-    return weekEnd;
+    return window.ScheduleFilters?.getWeekEnd?.(currentWeekStart) || (() => {
+        const weekEnd = new Date(currentWeekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        return weekEnd;
+    })();
 }
 
 function isLessonInCurrentPeriod(lesson) {
-    const lessonDate = parseDate(lesson?.date || '');
-    const weekEnd = getCurrentWeekEnd();
-    return lessonDate >= currentWeekStart && lessonDate <= weekEnd;
+    return window.ScheduleFilters?.isLessonInPeriod?.(lesson, currentWeekStart, parseDate)
+        ?? (() => {
+            const lessonDate = parseDate(lesson?.date || '');
+            const weekEnd = getCurrentWeekEnd();
+            return lessonDate >= currentWeekStart && lessonDate <= weekEnd;
+        })();
 }
 
 function isLessonAllowedByLessonMode(lesson) {
@@ -375,11 +444,19 @@ function isLessonAllowedByModuleFilter(lesson) {
 }
 
 function isLessonInCurrentDisplayedScope(lesson, { includeModuleFilter = true } = {}) {
-    if (!lesson) return false;
-    if (!isLessonInCurrentPeriod(lesson)) return false;
-    if (!isLessonAllowedByLessonMode(lesson)) return false;
-    if (includeModuleFilter && !isLessonAllowedByModuleFilter(lesson)) return false;
-    return true;
+    return window.ScheduleFilters?.isLessonVisible?.(lesson, {
+        includeModuleFilter,
+        isExamLikeKind,
+        lessonMode: schedulePageState.lessonMode,
+        parseDate,
+        selectedModules,
+        weekStart: currentWeekStart,
+    }) ?? (
+        Boolean(lesson) &&
+        isLessonInCurrentPeriod(lesson) &&
+        isLessonAllowedByLessonMode(lesson) &&
+        (!includeModuleFilter || isLessonAllowedByModuleFilter(lesson))
+    );
 }
 
 function getCurrentWeekModuleSet() {
@@ -710,6 +787,7 @@ function renderScheduleHome() {
     const changeCount = getScheduleChangeCount();
     const changesButtonKey = schedulePageState.showChanges ? 'schedule.changes.hide' : 'schedule.changes.show';
     const changesButtonFallback = schedulePageState.showChanges ? 'Hide changes' : 'Show changes';
+    const isFavorite = hasEntity && window.ScheduleState?.isFavorite?.(currentEntity);
 
     container.classList.remove('hidden');
     container.innerHTML = `
@@ -722,6 +800,7 @@ function renderScheduleHome() {
                 </div>
                 <div class="grid gap-2 sm:flex sm:flex-wrap sm:justify-end">
                     ${hasEntity ? `<button type="button" onclick="setTodayWeek()" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">${escapeHtml(t('schedule.home.thisWeek', 'This week'))}</button>` : ''}
+                    ${hasEntity ? `<button type="button" onclick="toggleCurrentScheduleFavorite()" class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-700 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200 dark:hover:bg-amber-950/50">${isFavorite ? '★' : '☆'} ${escapeHtml(t(isFavorite ? 'schedule.search.favorited' : 'schedule.search.favorite', isFavorite ? 'Favorite' : 'Favorite'))}</button>` : ''}
                     ${hasEntity ? `<button type="button" onclick="setScheduleLessonMode('${lessonModeTarget}')" class="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50">${escapeHtml(t(lessonModeButtonKey, lessonModeButtonFallback))}</button>` : ''}
                     ${hasEntity ? `<button type="button" onclick="toggleScheduleChanges()" class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-700 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200 dark:hover:bg-amber-950/50">${escapeHtml(t(changesButtonKey, changesButtonFallback))}${changeCount ? ` (${escapeHtml(String(changeCount))})` : ''}</button>` : ''}
                     ${hasEntity ? `<button type="button" onclick="copyScheduleShareLink(event)" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">${escapeHtml(t('schedule.home.copyLink', 'Copy link'))}</button>` : ''}
@@ -763,7 +842,20 @@ window.copyScheduleShareLink = function(event) {
     copyToClipboard(window.location.href, event);
 }
 
+window.toggleCurrentScheduleFavorite = function() {
+    if (!currentEntity?.id) return;
+    window.ScheduleState?.toggleFavorite?.(currentEntity);
+    renderScheduleHome();
+    if (!resultsBox.classList.contains('hidden')) {
+        renderSearchResults(latestSearchResults, { query: latestSearchQuery, networkState: latestSearchResults.length ? 'ok' : 'empty' });
+    }
+}
+
 window.openCalendarSyncFromScheduleHome = function() {
+    if (window.openCalendarSyncPanel) {
+        window.openCalendarSyncPanel();
+        return;
+    }
     const panel = document.getElementById('calendarSubscriptionSection');
     if (!panel) return;
     panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -897,13 +989,11 @@ function renderScheduleChangesPanel() {
 
 async function initOfflineHistory() {
     try {
-        const res = await fetch(`${API_BASE}/schedule/cached_list`);
-        if (res.ok) {
-            cachedOfflineEntities = await res.json();
-            renderOfflineHistory();
-        }
+        cachedOfflineEntities = await (window.ScheduleApi?.getCachedSchedules?.() || fetch(`${API_BASE}/schedule/cached_list`).then((res) => res.ok ? res.json() : []));
+        renderOfflineHistory();
     } catch (e) {
         console.warn("Не удалось загрузить список кэша:", e);
+        renderOfflineHistory([]);
     }
 }
 
@@ -1065,24 +1155,6 @@ function copyToClipboard(text, event) {
     });
 }
 
-groupInput.addEventListener('input', debounce(async (e) => {
-    const query = e.target.value.trim();
-    if (query.length < 2) {
-        latestSearchResults =[];
-        resultsBox.classList.add('hidden');
-        return;
-    }
-    try {
-        const res = await fetch(`${API_BASE}/schedule/search?term=${encodeURIComponent(query)}&type=all`);
-        if (!res.ok) throw new Error("API Error");
-        const data = await res.json();
-        renderSearchResults(data);
-    } catch (err) {
-        resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-red-500 text-center font-medium">${escapeHtml(t('schedule.search.error', 'Ошибка поиска или сервер недоступен.'))}</div>`;
-        resultsBox.classList.remove('hidden');
-    }
-}, 300));
-
 function getSearchResultTypeMeta(type) {
     const normalizedType = String(type || 'group').toLowerCase();
     if (normalizedType === 'person') {
@@ -1094,35 +1166,177 @@ function getSearchResultTypeMeta(type) {
     return { label: t('schedule.search.type.group', 'Группа'), badgeClass: 'bg-violet-100 text-violet-700' };
 }
 
-function renderSearchResults(results) {
+function getSearchCategoryButtons() {
+    const items = [
+        ['all', 'schedule.search.category.all', 'All'],
+        ['group', 'schedule.search.type.group', 'Group'],
+        ['person', 'schedule.search.type.person', 'Lecturer'],
+        ['auditorium', 'schedule.search.type.auditorium', 'Auditorium'],
+    ];
+    return `
+        <div class="flex gap-1 overflow-x-auto p-2">
+            ${items.map(([type, key, fallback]) => `
+                <button type="button" onclick="setScheduleSearchCategory('${type}')"
+                    class="shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-black transition-colors ${searchCategory === type
+                        ? 'bg-slate-900 text-white dark:bg-blue-600'
+                        : 'bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-700'}">
+                    ${escapeHtml(t(key, fallback))}
+                </button>
+            `).join('')}
+        </div>
+    `;
+}
+
+function getSearchLocalSources(query = '') {
+    const favorites = window.ScheduleState?.getFavorites?.() || [];
+    const recent = window.ScheduleState?.getRecent?.() || [];
+    const cached = (cachedOfflineEntities || []).map((item) => ({ ...item, is_offline: true }));
+    const merged = window.ScheduleState?.mergeEntities?.([favorites, recent, cached]) || [...favorites, ...recent, ...cached];
+    if (!query) {
+        return { favorites, recent, cached, matches: [] };
+    }
+    return {
+        favorites,
+        recent,
+        cached,
+        matches: window.ScheduleState?.filterLocalEntities?.(query, merged, searchCategory) || []
+    };
+}
+
+function renderSearchEntityRow(item, sourceLabel = '') {
+    const normalized = window.ScheduleState?.normalizeEntity?.(item) || item;
+    const typeMeta = getSearchResultTypeMeta(normalized.type);
+    const favorite = window.ScheduleState?.isFavorite?.(normalized);
+    const offlineBadge = normalized.is_offline
+        ? `<span class="rounded bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-600 dark:bg-orange-950/40 dark:text-orange-300">${escapeHtml(t('schedule.search.cacheBadge', 'CACHE'))}</span>`
+        : '';
+    const sourceBadge = sourceLabel
+        ? `<span class="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-900 dark:text-slate-300">${escapeHtml(sourceLabel)}</span>`
+        : '';
+    const itemType = escapeJsString(normalized.type || 'group');
+    const itemId = escapeJsString(normalized.id);
+    const itemLabel = escapeJsString(normalized.label || normalized.name || normalized.id);
+    return `
+        <div class="group flex items-stretch border-b border-slate-100 last:border-none dark:border-slate-700">
+            <button type="button" class="min-w-0 flex-1 px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-slate-700"
+                onclick="loadSchedule('${itemType}', '${itemId}', '${itemLabel}')">
+                <div class="flex flex-wrap items-center gap-2 font-bold text-slate-800 dark:text-slate-100">
+                    <span class="truncate">${escapeHtml(normalized.label || normalized.name || normalized.id)}</span>
+                    <span class="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${typeMeta.badgeClass}">${escapeHtml(typeMeta.label)}</span>
+                    ${offlineBadge}
+                    ${sourceBadge}
+                </div>
+                <div class="mt-0.5 truncate text-xs text-slate-400">${escapeHtml(normalized.description || typeMeta.label)}</div>
+            </button>
+            <button type="button" onclick="toggleSearchFavorite(event, '${itemType}', '${itemId}', '${itemLabel}')"
+                class="flex w-11 items-center justify-center text-lg ${favorite ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400'}"
+                aria-label="${escapeHtml(t('schedule.search.favorite', 'Favorite'))}">
+                ${favorite ? '★' : '☆'}
+            </button>
+        </div>
+    `;
+}
+
+function renderSearchSection(titleKey, fallback, items, sourceLabel = '') {
+    if (!items.length) return '';
+    return `
+        <section>
+            <div class="px-4 pb-1 pt-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">${escapeHtml(t(titleKey, fallback))}</div>
+            ${items.map((item) => renderSearchEntityRow(item, sourceLabel)).join('')}
+        </section>
+    `;
+}
+
+function renderSearchHome() {
+    const { favorites, recent, cached } = getSearchLocalSources();
+    resultsBox.innerHTML = `
+        ${getSearchCategoryButtons()}
+        ${renderSearchSection('schedule.search.favorites', 'Favorites', favorites.slice(0, 5), t('schedule.search.source.favorite', 'Favorite'))}
+        ${renderSearchSection('schedule.search.recent', 'Recent', recent.slice(0, 5), t('schedule.search.source.recent', 'Recent'))}
+        ${renderSearchSection('schedule.search.offlineList', 'Available offline', cached.slice(0, 8), t('schedule.search.cacheBadge', 'CACHE'))}
+        ${(!favorites.length && !recent.length && !cached.length) ? `
+            <div class="px-6 py-8 text-center text-sm font-semibold text-slate-400">${escapeHtml(t('schedule.search.startTyping', 'Start typing to search schedules.'))}</div>
+        ` : ''}
+    `;
+    resultsBox.classList.remove('hidden');
+}
+
+function renderSearchLoading(query) {
+    const localMatches = getSearchLocalSources(query).matches.slice(0, 5);
+    resultsBox.innerHTML = `
+        ${getSearchCategoryButtons()}
+        ${renderSearchSection('schedule.search.localMatches', 'From your lists', localMatches, t('schedule.search.source.local', 'Local'))}
+        <div class="space-y-2 p-4">
+            <div class="skeleton h-12 rounded-xl"></div>
+            <div class="skeleton h-12 rounded-xl"></div>
+            <div class="skeleton h-12 rounded-xl"></div>
+        </div>
+    `;
+    resultsBox.classList.remove('hidden');
+}
+
+function renderSearchResults(results, { query = latestSearchQuery, networkState = 'ok' } = {}) {
     const normalizedResults = Array.isArray(results) ? results :[];
     latestSearchResults = normalizedResults;
-    if (normalizedResults.length === 0) {
-        resultsBox.innerHTML = `<div class="px-6 py-4 text-sm text-slate-500 text-center dark:text-slate-400">${escapeHtml(t('schedule.search.empty', 'Ничего не найдено'))}</div>`;
-    } else {
-        resultsBox.innerHTML = normalizedResults.map(item => {
-            const typeMeta = getSearchResultTypeMeta(item.type);
-            const offlineBadge = item.is_offline
-                ? `<span class="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-600">${escapeHtml(t('schedule.search.cacheBadge', 'КЭШ'))}</span>`
-                : '';
-            const itemType = escapeJsString(item.type || 'group');
-            const itemId = escapeJsString(item.id);
-            const itemLabel = escapeJsString(item.label);
-            const labelText = escapeHtml(item.label);
-            const descriptionText = escapeHtml(item.description || typeMeta.label);
-            return `
-            <div class="px-6 py-3 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-none dark:border-slate-700 dark:hover:bg-slate-700"
-                 onclick="loadSchedule('${itemType}', '${itemId}', '${itemLabel}')">
-                <div class="font-bold text-slate-800 flex items-center flex-wrap gap-2 dark:text-slate-100">
-                    <span>${labelText}</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${typeMeta.badgeClass}">${escapeHtml(typeMeta.label)}</span>
-                    ${offlineBadge}
-                </div>
-                <div class="text-xs text-slate-400 mt-0.5">${descriptionText}</div>
-            </div>`;
-        }).join('');
-    }
+    const localMatches = getSearchLocalSources(query).matches;
+    const localKeys = new Set(localMatches.map((item) => window.ScheduleState?.entityKey?.(item)));
+    const remoteResults = normalizedResults.filter((item) => !localKeys.has(window.ScheduleState?.entityKey?.(item)));
+    const networkHtml = networkState === 'network-error'
+        ? `<div class="mx-3 my-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">${escapeHtml(t('schedule.search.networkError', 'Network error. Showing local matches if available.'))}</div>`
+        : '';
+    const emptyHtml = !localMatches.length && !remoteResults.length
+        ? `<div class="px-6 py-8 text-center text-sm font-semibold text-slate-400">${escapeHtml(networkState === 'empty' ? t('schedule.search.empty', 'Nothing found') : t('schedule.search.emptyLocal', 'No matching saved schedules.'))}</div>`
+        : '';
+    resultsBox.innerHTML = `
+        ${getSearchCategoryButtons()}
+        ${networkHtml}
+        ${renderSearchSection('schedule.search.localMatches', 'From your lists', localMatches.slice(0, 6), t('schedule.search.source.local', 'Local'))}
+        ${renderSearchSection('schedule.search.results', 'Search results', remoteResults, '')}
+        ${emptyHtml}
+    `;
     resultsBox.classList.remove('hidden');
+}
+
+async function performScheduleSearch() {
+    const query = groupInput.value.trim();
+    latestSearchQuery = query;
+    const requestId = ++searchRequestSeq;
+    if (query.length < 2) {
+        renderSearchHome();
+        return;
+    }
+    renderSearchLoading(query);
+    try {
+        const data = await (window.ScheduleApi?.searchEntities?.(query, searchCategory) || fetch(`${API_BASE}/schedule/search?term=${encodeURIComponent(query)}&type=${encodeURIComponent(searchCategory)}`).then((res) => {
+            if (!res.ok) throw new Error('API Error');
+            return res.json();
+        }));
+        if (requestId !== searchRequestSeq) return;
+        renderSearchResults(data, { query, networkState: data.length ? 'ok' : 'empty' });
+    } catch (err) {
+        if (requestId !== searchRequestSeq) return;
+        renderSearchResults([], { query, networkState: 'network-error' });
+    }
+}
+
+groupInput.addEventListener('input', debounce(() => {
+    performScheduleSearch();
+}, 250));
+
+groupInput.addEventListener('focus', () => {
+    if (groupInput.value.trim().length < 2) renderSearchHome();
+});
+
+window.setScheduleSearchCategory = function(type) {
+    searchCategory = ['all', 'group', 'person', 'auditorium'].includes(type) ? type : 'all';
+    performScheduleSearch();
+}
+
+window.toggleSearchFavorite = function(event, type, id, label) {
+    event?.stopPropagation();
+    window.ScheduleState?.toggleFavorite?.({ type, id, label });
+    renderSearchResults(latestSearchResults, { query: latestSearchQuery, networkState: latestSearchResults.length ? 'ok' : 'empty' });
+    renderScheduleHome();
 }
 
 async function loadSchedule(type, id, name, targetDate = null, options = {}) {
@@ -1150,16 +1364,22 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
     document.getElementById('desktopSchedule').innerHTML = `<div class="p-8"><div class="skeleton h-64 w-full rounded-3xl"></div></div>`;
     document.getElementById('mobileSchedule').innerHTML = `<div class="skeleton h-64 w-full rounded-3xl"></div>`;
     sourceUpdatedAt = null;
-    let url = `${API_BASE}/schedule/data/${nextEntity.type}/${encodeURIComponent(nextEntity.id)}`;
-    if (requestedDate) url += `?base_date=${requestedDate}`;
     renderScheduleHome();
     try {
-        const res = await fetch(url);
-        const data = await res.json();
+        const data = await (window.ScheduleApi?.loadScheduleData?.({
+            type: nextEntity.type,
+            id: nextEntity.id,
+            baseDate: requestedDate,
+            refresh: Boolean(options.refresh)
+        }) || fetch(`${API_BASE}/schedule/data/${nextEntity.type}/${encodeURIComponent(nextEntity.id)}?base_date=${requestedDate}${options.refresh ? '&refresh=1' : ''}`).then((res) => {
+            if (!res.ok) throw new Error('API Error');
+            return res.json();
+        }));
         fullSchedule = data.schedule ||[];
         allAvailableModules = data.available_modules ||[];
         loadedBounds = data.loaded_bounds || {start: "2000-01-01", end: "2099-01-01"};
         sourceUpdatedAt = data.source_updated_at || null;
+        window.ScheduleState?.addRecent?.(currentEntity);
         const snapshotKey = getSnapshotEntityKey(nextEntity);
         const previousSnapshot = loadScheduleSnapshots()[snapshotKey];
         scheduleChangeSummary = buildScheduleChangeSummary(previousSnapshot, fullSchedule, sourceUpdatedAt);
@@ -1350,9 +1570,39 @@ window.clearAllModules = function() {
     if (window._renderCalendarSubscriptionImpl) window._renderCalendarSubscriptionImpl();
 }
 
+window.refreshCurrentScheduleCache = async function() {
+    if (!currentEntity?.id || isRefreshingScheduleCache) return;
+    isRefreshingScheduleCache = true;
+    renderOfflineHistory();
+    try {
+        await loadSchedule(currentEntity.type, currentEntity.id, currentEntity.name, getISODateStr(currentWeekStart), {
+            preserveModules: true,
+            refresh: true,
+            urlMode: 'replace'
+        });
+        await initOfflineHistory();
+    } finally {
+        isRefreshingScheduleCache = false;
+        renderOfflineHistory();
+    }
+}
+
 function filterAndRender() {
-    if (isOfflineMode) document.getElementById('offlineWarning').classList.remove('hidden');
-    else document.getElementById('offlineWarning').classList.add('hidden');
+    const offlineWarning = document.getElementById('offlineWarning');
+    const cacheIsStale = isScheduleCacheStale(sourceUpdatedAt);
+    if (offlineWarning) {
+        const warningText = offlineWarning.querySelector('[data-i18n="schedule.offline.warning"]');
+        if (isOfflineMode || cacheIsStale) {
+            offlineWarning.classList.remove('hidden');
+            if (warningText) {
+                warningText.textContent = isOfflineMode
+                    ? t('schedule.offline.warningDetailed', 'University service is unavailable. Loaded cached data from {time}.', { time: formatRelativeDateTime(sourceUpdatedAt) })
+                    : t('schedule.offline.staleWarning', 'Opened data may be outdated. Cache updated {time}.', { time: formatRelativeDateTime(sourceUpdatedAt) });
+            }
+        } else {
+            offlineWarning.classList.add('hidden');
+        }
+    }
 
     const weekEnd = getCurrentWeekEnd();
     document.getElementById('weekRangeDisplay').innerText =
@@ -1361,6 +1611,7 @@ function filterAndRender() {
     const filteredLessons = fullSchedule.filter(lesson => {
         return isLessonInCurrentDisplayedScope(lesson, { includeModuleFilter: true });
     });
+    lessonActionMap = new Map();
     renderDesktopGrid(filteredLessons);
     renderMobileFeed(filteredLessons);
     commitScheduleState({ urlMode: 'replace' });
@@ -1534,7 +1785,90 @@ function getShortKind(kind) {
     return kind;
 }
 
+function getLessonActionId(lesson) {
+    const raw = [
+        lesson.date,
+        lesson.beginLesson,
+        lesson.endLesson,
+        lesson.discipline_full || lesson.discipline || lesson.discipline_short,
+        lesson.module,
+        lesson.auditorium,
+        lesson.lecturer_title,
+    ].map((part) => String(part || '')).join('|');
+    let hash = 0;
+    for (let index = 0; index < raw.length; index += 1) {
+        hash = ((hash << 5) - hash) + raw.charCodeAt(index);
+        hash |= 0;
+    }
+    const id = `lesson-${Math.abs(hash).toString(36)}`;
+    lessonActionMap.set(id, lesson);
+    return id;
+}
+
+function getLessonActionLabels() {
+    return {
+        copyRoom: t('schedule.lesson.copyRoom', 'Copy room'),
+        openTeacher: t('schedule.lesson.openTeacher', 'Open lecturer'),
+        openRoom: t('schedule.lesson.openRoom', 'Open room'),
+        singleIcs: t('schedule.lesson.singleIcs', 'Add to calendar'),
+        onlyModule: t('schedule.lesson.onlyModule', 'Only module'),
+        hideModule: t('schedule.lesson.hideModule', 'Hide module'),
+    };
+}
+
+async function openLessonEntitySchedule(type, id, label) {
+    const cleanLabel = String(label || id || '').trim();
+    const cleanId = String(id || '').trim();
+    if (!cleanLabel && !cleanId) return;
+    try {
+        const results = cleanLabel
+            ? await (window.ScheduleApi?.searchEntities?.(cleanLabel, type) || [])
+            : [];
+        const match = Array.isArray(results)
+            ? results.find((item) => String(item.label || '').toLowerCase() === cleanLabel.toLowerCase()) || results[0]
+            : null;
+        if (match?.id) {
+            await loadSchedule(match.type || type, match.id, match.label || cleanLabel);
+            return;
+        }
+    } catch (error) {
+        console.warn('Schedule entity lookup failed:', error);
+    }
+    await loadSchedule(type, cleanId || cleanLabel, cleanLabel || cleanId);
+}
+
+window.runLessonAction = async function(action, lessonId, event) {
+    event?.stopPropagation();
+    const lesson = lessonActionMap.get(lessonId);
+    if (!lesson) return;
+    if (action === 'copyRoom') {
+        copyToClipboard(lesson.auditorium || '', event);
+        return;
+    }
+    if (action === 'openTeacher') {
+        await openLessonEntitySchedule('person', lesson.lecturer || lesson.lecturer_id, lesson.lecturer_title);
+        return;
+    }
+    if (action === 'openRoom') {
+        await openLessonEntitySchedule('auditorium', lesson.auditorium_id || lesson.auditorium, lesson.auditorium);
+        return;
+    }
+    if (action === 'singleIcs') {
+        window.ScheduleRender?.downloadSingleLessonIcs?.(lesson, currentEntity?.name || 'schedule');
+        return;
+    }
+    if (action === 'onlyModule' && lesson.module) {
+        window.selectOnlyModule(lesson.module);
+        return;
+    }
+    if (action === 'hideModule' && lesson.module) {
+        selectedModules.delete(lesson.module);
+        persistModuleSelection();
+    }
+}
+
 function renderCard(l, isDesktop) {
+    const lessonActionId = getLessonActionId(l);
     const color = getBadgeColor(l.kindOfWork);
     const useShort = document.getElementById('useShortNames')?.checked ?? true;
     const showFullLecturerName = document.getElementById('showFullLecturerName')?.checked ?? false;
@@ -1548,6 +1882,12 @@ function renderCard(l, isDesktop) {
     const safeLecturerJs = escapeJsString(l.lecturer_title || '');
     const roomTitle = escapeHtml(t('schedule.copy.room', 'Копировать аудиторию'));
     const teacherTitle = escapeHtml(t('schedule.copy.teacher', 'Копировать преподавателя'));
+    const actionHtml = window.ScheduleRender?.renderLessonActions?.(lessonActionId, getLessonActionLabels(), {
+        compact: isDesktop,
+        hasModule: Boolean(l.module),
+        hasRoom: Boolean(l.auditorium),
+        hasTeacher: Boolean(l.lecturer_title || l.lecturer || l.lecturer_id),
+    }) || '';
 
     if (isDesktop) {
         const teacherTokens = String(l.lecturer_title || '').split(' ').filter(Boolean);
@@ -1583,6 +1923,7 @@ function renderCard(l, isDesktop) {
                     <span class="truncate">${safeTeacherLabel}</span>
                 </div>` : ''}
             </div>
+            ${actionHtml}
         </div>`;
     }
     return `
@@ -1617,6 +1958,7 @@ function renderCard(l, isDesktop) {
                 <span>${safeLecturer}</span>
             </div>
         </div>
+        ${actionHtml}
     </article>`;
 }
 

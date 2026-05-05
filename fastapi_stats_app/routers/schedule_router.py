@@ -255,22 +255,35 @@ async def search_entity(
     summary="List recently cached schedule entities",
 )
 async def get_cached_list(db: AsyncSession = Depends(get_db_session_dependency)):
-    """Returns recently cached groups for the right-side panel."""
+    """Returns recently cached schedule entities for the offline drawer."""
     stmt = text(
         """
-        SELECT entity_type, entity_id,
-               MAX(elem->>'group') as group_name
-        FROM cached_schedules, jsonb_array_elements(schedule_data) as elem
-        WHERE entity_type = 'group' AND elem->>'group' IS NOT NULL
-        GROUP BY entity_type, entity_id, updated_at
+        SELECT cs.entity_type,
+               cs.entity_id,
+               cs.updated_at,
+               COALESCE(
+                   NULLIF(MAX(CASE WHEN cs.entity_type = 'group' THEN elem->>'group' END), ''),
+                   NULLIF(MAX(CASE WHEN cs.entity_type = 'person' THEN elem->>'lecturer_title' END), ''),
+                   NULLIF(MAX(CASE WHEN cs.entity_type = 'auditorium' THEN elem->>'auditorium' END), ''),
+                   cs.entity_id
+               ) AS label
+        FROM cached_schedules cs
+        LEFT JOIN LATERAL jsonb_array_elements(cs.schedule_data) AS elem ON TRUE
+        GROUP BY cs.entity_type, cs.entity_id, cs.updated_at
         ORDER BY updated_at DESC
+        LIMIT 60
     """
     )
     result = await db.execute(stmt)
     return [
-        {"id": r.entity_id, "type": r.entity_type, "label": r.group_name}
+        {
+            "id": r.entity_id,
+            "type": r.entity_type,
+            "label": r.label,
+            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+        }
         for r in result
-        if r.group_name
+        if r.label
     ]
 
 
@@ -301,6 +314,10 @@ async def get_schedule_data(
         None,
         description="Optional center date in YYYY-MM-DD. Invalid format returns 422.",
     ),
+    refresh: bool = Query(
+        False,
+        description="Force a live refresh attempt even when a fresh local cache exists.",
+    ),
     db: AsyncSession = Depends(get_db_session_dependency),
     http_session: aiohttp.ClientSession = Depends(get_shared_http_session),
 ):
@@ -316,7 +333,7 @@ async def get_schedule_data(
     client = create_ruz_api_client(http_session)
     try:
         schedule, is_offline = await get_schedule_with_cache_fallback(
-            client, type, id, start, finish, max_cache_age_hours=6
+            client, type, id, start, finish, max_cache_age_hours=0 if refresh else 6
         )
 
         short_names = await get_all_short_names()

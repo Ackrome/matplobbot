@@ -10,6 +10,7 @@ const shouldFocusCalendarSyncPanel =
 let calendarPlatform = loadCalendarPlatform();
 let revealedCalendarProfileIds = loadRevealedCalendarProfileIds();
 let isCalendarPanelCollapsed = true;
+let isCalendarSyncPanelOpen = shouldFocusCalendarSyncPanel;
 let hasUserToggledCalendarPanel = false;
 let hasFocusedCalendarSyncPanel = false;
 window.calendarCurrentViewMode = 'all';
@@ -238,6 +239,62 @@ window.toggleCalendarSubscriptionPanel = function() {
     renderCalendarSubscription();
 }
 
+window.openCalendarSyncPanel = function() {
+    isCalendarSyncPanelOpen = true;
+    hasUserToggledCalendarPanel = true;
+    isCalendarPanelCollapsed = false;
+    persistCalendarPanelCollapsed();
+    renderCalendarSubscription();
+    const container = document.getElementById('calendarSubscriptionSection');
+    if (container) {
+        requestAnimationFrame(() => container.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+}
+
+window.closeCalendarSyncPanel = function() {
+    isCalendarSyncPanelOpen = false;
+    const container = document.getElementById('calendarSubscriptionSection');
+    if (container) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+    }
+}
+
+window.toggleCalendarSyncPanel = function() {
+    if (isCalendarSyncPanelOpen) window.closeCalendarSyncPanel();
+    else window.openCalendarSyncPanel();
+}
+
+function installCalendarSyncHandle() {
+    const handle = document.getElementById('calendarSyncHandle');
+    if (!handle || handle.dataset.bound === '1') return;
+    handle.dataset.bound = '1';
+    let startX = 0;
+    let suppressClick = false;
+    handle.addEventListener('click', () => {
+        if (suppressClick) {
+            suppressClick = false;
+            return;
+        }
+        window.toggleCalendarSyncPanel();
+    });
+    handle.addEventListener('pointerdown', (event) => {
+        startX = event.clientX;
+        handle.setPointerCapture?.(event.pointerId);
+    });
+    handle.addEventListener('pointermove', (event) => {
+        if (!startX) return;
+        if (Math.abs(event.clientX - startX) > 24) {
+            suppressClick = true;
+            window.openCalendarSyncPanel();
+        }
+    });
+    handle.addEventListener('pointerup', () => {
+        startX = 0;
+        setTimeout(() => { suppressClick = false; }, 250);
+    });
+}
+
 function renderTelegramCalendarAuthPlaceholder(container) {
     if (!hasUserToggledCalendarPanel) isCalendarPanelCollapsed = true;
     const authState = window.mpbTelegramAuthState || {};
@@ -287,6 +344,9 @@ function renderTelegramCalendarAuthPlaceholder(container) {
                             <path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
                         </svg>
                     </button>
+                    <button type="button" onclick="closeCalendarSyncPanel()"
+                        aria-label="${escapeHtml(t('schedule.calendar.hidePanel', 'Hide calendar sync'))}"
+                        class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-500 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">x</button>
                 </div>
             </div>
             ${bodyHtml}
@@ -299,6 +359,11 @@ function renderCalendarSubscription() {
     const container = document.getElementById('calendarSubscriptionSection');
     if (!container) return;
 
+    if (!isCalendarSyncPanelOpen) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+    }
     container.classList.remove('hidden');
     const state = calendarSubscriptionState || createDefaultCalendarSubscriptionState();
     const selectedProfile = window.getSelectedCalendarProfile?.() || state.profiles?.[0] || null;
@@ -695,6 +760,9 @@ function renderCalendarSubscription() {
                             <path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
                         </svg>
                     </button>
+                    <button type="button" onclick="closeCalendarSyncPanel()"
+                        aria-label="${escapeHtml(t('schedule.calendar.hidePanel', 'Hide calendar sync'))}"
+                        class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-500 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">x</button>
                 </div>
             </div>
             ${isCalendarPanelCollapsed ? compactSummary : bodyHtml}
@@ -1020,3 +1088,15 @@ window.clearAllModules = function(...args) {
     originalClearAllModules?.(...args);
     renderCalendarSubscription();
 };
+
+document.addEventListener('DOMContentLoaded', () => {
+    installCalendarSyncHandle();
+    const tip = document.getElementById('calendarSyncHandleTip');
+    if (tip) tip.textContent = t('schedule.calendar.handleTooltip', 'Calendar sync');
+    const handle = document.getElementById('calendarSyncHandle');
+    if (handle) {
+        const label = t('schedule.calendar.handleTooltip', 'Calendar sync');
+        handle.setAttribute('title', label);
+        handle.setAttribute('aria-label', label);
+    }
+});

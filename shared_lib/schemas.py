@@ -365,6 +365,10 @@ class CachedScheduleEntitySchema(BaseModel):
     id: str = Field(..., description="Cached entity identifier.")
     type: str = Field(..., description="Entity type represented in cache.")
     label: str = Field(..., description="Display label for the cached entity.")
+    updated_at: str | None = Field(
+        None,
+        description="Timestamp when this cached schedule was last refreshed.",
+    )
 
     model_config = BASE_CONFIG
 
