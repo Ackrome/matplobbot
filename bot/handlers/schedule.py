@@ -1193,16 +1193,13 @@ class ScheduleManager:
                     or "credit" in kind
                     or "test" in kind
                 )
-                is_exam_consultation = (
-                    ("консульт" in kind or "consult" in kind)
-                    and (
-                        "экзам" in kind
-                        or "аттест" in kind
-                        or "зачет" in kind
-                        or "exam" in kind
-                        or "credit" in kind
-                        or "test" in kind
-                    )
+                is_exam_consultation = ("консульт" in kind or "consult" in kind) and (
+                    "экзам" in kind
+                    or "аттест" in kind
+                    or "зачет" in kind
+                    or "exam" in kind
+                    or "credit" in kind
+                    or "test" in kind
                 )
 
                 if is_exam or is_exam_consultation:
