@@ -590,9 +590,11 @@ What it does:
 - The changes panel reports new, cancelled, moved, room-changed, and lecturer-changed lessons plus source parsing time and previous snapshot time.
 - Includes copy-to-clipboard actions for room/lecturer.
 - When the `Actions` toggle is enabled, lesson cards and timetable cells expose inline quick buttons for room copy, lecturer/room navigation, one-lesson ICS export, and module-only/module-hide actions without opening a per-card accordion.
+- In desktop `Table`, the `Actions` toggle shows a compact action launcher inside each timetable cell instead of a full six-button strip. This keeps long lesson titles visible while still exposing room/teacher/calendar/module actions from a small overlay menu.
 - Shows source update timestamp and offline/fallback states.
 - Search UX includes recent schedules, favorites, quick type categories, local fuzzy matching, and separate loading/empty/network-error states.
 - Offline drawer shows cached schedules, cache update time, and a refresh action for the current schedule.
+- The offline drawer is rendered as a floating overlay layer above the schedule grid, so opening cached schedules never pushes the timetable or control rows down.
 - Highlights exam-like lessons, including `Семинар+зачет` and `Экзамены`, with the dedicated exam color instead of the regular seminar color.
 - Treats `Консультации перед экзаменом` as a consultation, not as a mislabeled exam: the page gives it its own consultation badge/color, but still keeps it in `Exams` / `exams-only` views because it is exam-related.
 - In desktop `Table` view, lessons whose real begin/end time from the university API no longer fits a single hardcoded slot are rendered proportionally inside the timetable grid instead of disappearing. The card starts and ends inside the matching rows according to the spent fraction of time, and off-slot items get an explicit compact time badge inside the card.
@@ -611,7 +613,8 @@ How to use:
 8. Pick another non-favorite schedule from search to reset the module filter to all modules available for that schedule.
 9. Use `Cards`, `Compact`, `Table`, or `Exams` to choose display density. The choice is saved and reflected in the URL; `Table` is treated as a desktop mode and automatically falls back to cards on phones.
 10. In `Table`, read long or off-slot exams by their vertical span inside the grid: the card position shows where the event starts and ends relative to the standard rows, and the compact time chip shows the exact real time when it does not align to the default slot boundaries.
-11. Open the offline drawer to see cached schedules and refresh the current schedule cache.
+11. Turn on `Actions` if you want quick actions in timetable cells. In desktop `Table`, each cell shows a compact action launcher that opens the room/teacher/calendar/module menu above the card without hiding the lesson title.
+12. Open the offline drawer to see cached schedules and refresh the current schedule cache. It opens above the timetable as an overlay, not as an expanding layout block.
 
 ### Calendar Sync Panel
 

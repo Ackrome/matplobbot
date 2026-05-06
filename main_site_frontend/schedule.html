@@ -12,9 +12,9 @@
     <link rel="icon" sizes="192x192" href="/android-chrome-192x192.png">
     <link rel="icon" sizes="512x512" href="/android-chrome-512x512.png">
     <link rel="manifest" href="/site.webmanifest">
-    <script src="/js/theme_bootstrap.js?v=20260506-3"></script>
+    <script src="/js/theme_bootstrap.js?v=20260506-4"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="/css/tailwind.css?v=20260506-3">
+    <link rel="stylesheet" href="/css/tailwind.css?v=20260506-4">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -185,6 +185,11 @@
         .schedule-slot-surface {
             overflow: visible;
         }
+        .schedule-table-wrap,
+        #desktopSchedule,
+        .schedule-table-scroll {
+            isolation: isolate;
+        }
         .schedule-timeline-card .lesson-card {
             height: 100%;
             min-height: 0;
@@ -278,11 +283,104 @@
         }
         .lesson-actions-panel--inline {
             display: flex;
+            flex-wrap: nowrap;
+            align-items: center;
             gap: 0.375rem;
-            margin-top: 0.7rem;
+            margin-top: 0.45rem;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding-bottom: 0.2rem;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .lesson-actions-panel--launcher {
+            display: flex;
+            justify-content: flex-end;
+            position: absolute;
+            right: 0.65rem;
+            bottom: 0.65rem;
+            z-index: 3;
+            margin-top: 0;
+            overflow: visible;
+            padding-bottom: 0;
+        }
+        .lesson-actions-panel--inline::-webkit-scrollbar {
+            display: none;
         }
         .lesson-actions-panel--inline .lesson-action-btn {
-            min-height: 1.9rem;
+            flex: 0 0 auto;
+            min-width: 1.8rem;
+            min-height: 1.8rem;
+            padding-inline: 0.52rem;
+        }
+        .lesson-action-overflow {
+            position: relative;
+            flex: 0 0 auto;
+        }
+        .lesson-action-overflow--launcher {
+            margin-left: auto;
+        }
+        .lesson-action-overflow summary {
+            list-style: none;
+        }
+        .lesson-action-overflow summary::-webkit-details-marker {
+            display: none;
+        }
+        .lesson-action-overflow-toggle {
+            display: inline-flex;
+            min-width: 1.8rem;
+            min-height: 1.8rem;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+            border: 1px solid var(--schedule-panel-border);
+            border-radius: 0.72rem;
+            background: color-mix(in srgb, var(--schedule-panel) 96%, transparent);
+            color: var(--schedule-muted);
+            padding: 0.35rem;
+            cursor: pointer;
+            transition: border-color .18s ease, background-color .18s ease, color .18s ease, box-shadow .18s ease;
+        }
+        .lesson-action-overflow-toggle:hover {
+            border-color: color-mix(in srgb, var(--lesson-default-border) 52%, var(--schedule-panel-border));
+            background: color-mix(in srgb, var(--schedule-panel) 86%, var(--lesson-default-bg));
+            color: var(--lesson-default-text);
+            box-shadow: 0 12px 22px -18px rgba(37, 99, 235, 0.45);
+        }
+        .lesson-action-overflow[open] .lesson-action-overflow-toggle {
+            border-color: color-mix(in srgb, var(--lesson-default-border) 58%, var(--schedule-panel-border));
+            background: color-mix(in srgb, var(--schedule-panel) 82%, var(--lesson-default-bg));
+            color: var(--lesson-default-text);
+        }
+        .lesson-action-overflow-menu {
+            position: absolute;
+            right: 0;
+            bottom: calc(100% + 0.45rem);
+            z-index: 35;
+            display: none;
+            width: max-content;
+            min-width: 10rem;
+            max-width: min(14rem, calc(100vw - 2rem));
+            flex-direction: column;
+            gap: 0.35rem;
+            border: 1px solid color-mix(in srgb, var(--schedule-panel-border) 78%, transparent);
+            border-radius: 0.95rem;
+            background: color-mix(in srgb, var(--schedule-panel) 96%, var(--schedule-panel-soft) 4%);
+            padding: 0.45rem;
+            box-shadow: 0 18px 40px -24px rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(16px);
+        }
+        .lesson-action-overflow[open] .lesson-action-overflow-menu {
+            display: flex;
+        }
+        .lesson-action-overflow-menu--launcher {
+            min-width: 11.5rem;
+        }
+        .lesson-action-overflow-menu .lesson-action-btn {
+            width: 100%;
+            justify-content: flex-start;
+            padding-inline: 0.75rem;
+            text-align: left;
         }
         .lesson-actions[open] .lesson-actions-panel {
             display: flex;
@@ -378,6 +476,8 @@
             background: color-mix(in srgb, var(--schedule-panel) 97%, var(--schedule-panel-soft) 3%);
             border-color: color-mix(in srgb, var(--schedule-panel-border) 84%, var(--schedule-panel) 16%);
             backdrop-filter: blur(22px) saturate(1.18);
+            isolation: isolate;
+            pointer-events: auto;
             box-shadow:
                 0 30px 72px -30px rgba(15, 23, 42, 0.34),
                 0 18px 34px -24px rgba(15, 23, 42, 0.24);
@@ -959,16 +1059,16 @@
         </div>
     </main>
 
-    <script src="/js/runtime_config.js?v=20260506-3"></script>
-    <script src="/js/ui_utils.js?v=20260506-3"></script>
-    <script src="/js/telegram_webapp.js?v=20260506-3"></script>
-    <script src="/js/navbar.js?v=20260506-3"></script>
-    <script src="/js/schedule_state.js?v=20260506-3"></script>
-    <script src="/js/schedule_api.js?v=20260506-3"></script>
-    <script src="/js/schedule_filters.js?v=20260506-3"></script>
-    <script src="/js/schedule_render.js?v=20260506-3"></script>
-    <script src="/js/schedule.js?v=20260506-3"></script>
-    <script src="/js/calendar_sync.js?v=20260506-3"></script>
-    <script src="/js/schedule_ux.js?v=20260506-3"></script>
+    <script src="/js/runtime_config.js?v=20260506-4"></script>
+    <script src="/js/ui_utils.js?v=20260506-4"></script>
+    <script src="/js/telegram_webapp.js?v=20260506-4"></script>
+    <script src="/js/navbar.js?v=20260506-4"></script>
+    <script src="/js/schedule_state.js?v=20260506-4"></script>
+    <script src="/js/schedule_api.js?v=20260506-4"></script>
+    <script src="/js/schedule_filters.js?v=20260506-4"></script>
+    <script src="/js/schedule_render.js?v=20260506-4"></script>
+    <script src="/js/schedule.js?v=20260506-4"></script>
+    <script src="/js/calendar_sync.js?v=20260506-4"></script>
+    <script src="/js/schedule_ux.js?v=20260506-4"></script>
 </body>
 </html>

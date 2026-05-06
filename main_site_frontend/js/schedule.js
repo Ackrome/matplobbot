@@ -300,8 +300,12 @@ function areLessonActionsVisible() {
     return document.getElementById('showLessonActions')?.checked ?? true;
 }
 
+function areShortDisciplineNamesEnabled() {
+    return document.getElementById('useShortNames')?.checked ?? true;
+}
+
 function getPreferredDisciplineName(lesson) {
-    const useShort = document.getElementById('useShortNames')?.checked ?? true;
+    const useShort = areShortDisciplineNamesEnabled();
     const shortName = String(lesson?.discipline_short || '').trim();
     const fullName = String(lesson?.discipline_full || lesson?.discipline || '').trim();
     return useShort
@@ -2165,7 +2169,7 @@ function getShortKind(kind) {
     if (isPreExamConsultationKind(kind)) return '\u041a\u043e\u043d\u0441. \u043f\u0435\u0440\u0435\u0434 \u044d\u043a\u0437.';
     if (isExamLikeKind(kind)) {
         return isPracticeKind(kind)
-            ? '\u0421\u0435\u043c\u0438\u043d\u0430\u0440+\u0437\u0430\u0447\u0435\u0442'
+            ? '\u0421\u0435\u043c.+\u0437\u0430\u0447.'
             : '\u042d\u043a\u0437\u0430\u043c\u0435\u043d';
     }
     if (isLectureKind(kind)) return '\u041b\u0435\u043a\u0446\u0438\u044f';
@@ -2204,6 +2208,7 @@ function getLessonActionLabels() {
         onlyModule: t('schedule.lesson.onlyModule', 'Only module'),
         hideModule: t('schedule.lesson.hideModule', 'Hide module'),
         actionsToggle: t('schedule.lesson.actionsToggle', 'Actions'),
+        actionsMore: t('schedule.lesson.actionsMore', 'More actions'),
         actionsHide: t('schedule.lesson.actionsHide', 'Hide actions'),
     };
 }
@@ -2265,6 +2270,7 @@ function renderCard(l, isDesktop) {
     const discName = getPreferredDisciplineName(l);
     const teacherLabel = getPreferredLecturerName(l.lecturer_title);
     const showLessonActions = areLessonActionsVisible();
+    const useShortNames = areShortDisciplineNamesEnabled();
     const safeKind = escapeHtml(getShortKind(l.kindOfWork));
     const safeModule = escapeHtml(l.module || '');
     const safeDiscipline = escapeHtml(discName || '');
@@ -2274,6 +2280,10 @@ function renderCard(l, isDesktop) {
     const safeLecturerJs = escapeJsString(l.lecturer_title || '');
     const safeTimeRange = escapeHtml(`${l.beginLesson || ''}${l.endLesson ? ` - ${l.endLesson}` : ''}`.trim());
     const showOffSlotTimeLabel = isDesktop && usesOffSlotTimeLabel(l);
+    const titleClampClass = showLessonActions
+        ? (useShortNames ? 'line-clamp-3 min-h-[2.85rem]' : 'line-clamp-3 min-h-[3.3rem]')
+        : (useShortNames ? 'line-clamp-3 min-h-[2.85rem]' : 'line-clamp-4 min-h-[4.1rem]');
+    const metaTextClass = showLessonActions ? 'text-[9px]' : 'text-[10px]';
     const roomTitle = escapeHtml(t('schedule.copy.room', 'Копировать аудиторию'));
     const teacherTitle = escapeHtml(t('schedule.copy.teacher', 'Копировать преподавателя'));
     const actionHtml = showLessonActions
@@ -2288,34 +2298,34 @@ function renderCard(l, isDesktop) {
         : '';
 
     if (isDesktop) {
-        const safeTeacherLabel = escapeHtml(teacherLabel || '');
-        return `
-        <div class="lesson-card ${color.bg} p-2.5 sm:p-3 rounded-2xl border transition-transform hover:-translate-y-0.5 hover:shadow-md flex flex-col h-full min-h-[110px]">
-            <div class="flex justify-between items-start gap-1 mb-1.5">
-                <div class="lesson-kind text-[10px] font-black uppercase tracking-wider truncate" title="${safeKind}">
+    const safeTeacherLabel = escapeHtml(teacherLabel || '');
+    return `
+        <div class="lesson-card ${color.bg} relative p-2.5 sm:p-3 rounded-2xl border transition-transform hover:-translate-y-0.5 hover:shadow-md flex flex-col h-full min-h-[110px]">
+            <div class="mb-1.5 flex items-start justify-between gap-1.5">
+                <div class="lesson-kind min-w-0 flex-1 text-[10px] font-black uppercase tracking-wider truncate" title="${safeKind}">
                     ${safeKind}
                 </div>
                 ${l.module ? `
-                    <span class="lesson-module px-1.5 py-0.5 rounded text-[8px] font-bold truncate max-w-[60px] border shadow-sm" title="${safeModule}">
+                    <span class="lesson-module shrink-0 max-w-[64px] rounded border px-1.5 py-0.5 text-[8px] font-bold truncate shadow-sm" title="${safeModule}">
                         ${safeModule}
                     </span>` : ''}
             </div>
-            <div class="lesson-title font-bold text-[13px] leading-snug line-clamp-3 mb-2 flex-grow" title="${safeDiscipline}">
+            <div class="lesson-title mb-2 shrink-0 overflow-hidden pr-1 font-bold ${useShortNames ? 'text-[13px]' : 'text-[12px]'} leading-[1.22] ${titleClampClass}" title="${safeDiscipline}">
                 ${safeDiscipline}
             </div>
             ${showOffSlotTimeLabel ? `
             <div class="mb-2 inline-flex w-fit items-center gap-1 rounded-full border border-white/15 bg-slate-950/20 px-2 py-1 text-[9px] font-black tracking-[0.18em] text-slate-100/85">
                 <span>${safeTimeRange}</span>
             </div>` : ''}
-            <div class="flex flex-col gap-1">
+            <div class="mt-auto flex flex-col gap-1 ${showLessonActions ? 'pr-9' : ''}">
                 ${safeAuditorium ? `
-                <div class="lesson-meta flex items-center gap-1 text-[10px] font-medium hover:text-blue-600 cursor-pointer transition-colors"
+                <div class="lesson-meta flex items-center gap-1 ${metaTextClass} font-medium hover:text-blue-600 cursor-pointer transition-colors"
                      onclick="copyToClipboard('${safeAuditoriumJs}', event)" title="${roomTitle}">
                     <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     <span class="truncate">${safeAuditorium}</span>
                 </div>` : ''}
                 ${teacherLabel ? `
-                <div class="lesson-meta flex items-center gap-1 text-[10px] font-medium hover:text-blue-600 cursor-pointer transition-colors"
+                <div class="lesson-meta flex items-center gap-1 ${metaTextClass} font-medium hover:text-blue-600 cursor-pointer transition-colors"
                      onclick="copyToClipboard('${safeLecturerJs}', event)" title="${teacherTitle}">
                     <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
                     <span class="truncate">${safeTeacherLabel}</span>
@@ -2384,8 +2394,16 @@ function isSameDay(d1, d2) {
 
 let offlinePanelHideTimer = null;
 
-function positionOfflineDropdown() {
+function ensureOfflineDropdownPortal() {
     const dropdown = document.getElementById('offlineDropdown');
+    if (!dropdown || dropdown.dataset.portalReady === '1') return dropdown;
+    document.body.appendChild(dropdown);
+    dropdown.dataset.portalReady = '1';
+    return dropdown;
+}
+
+function positionOfflineDropdown() {
+    const dropdown = ensureOfflineDropdownPortal();
     const toggle = document.getElementById('offlinePanelToggle');
     if (!dropdown || !toggle || dropdown.classList.contains('hidden')) return;
 
@@ -2415,7 +2433,12 @@ function positionOfflineDropdown() {
     }
     left = Math.max(viewportPadding, Math.min(left, window.innerWidth - dropdownWidth - viewportPadding));
 
-    let top = toggleRect.bottom + gap;
+    const gridSurface = document.getElementById('scheduleGridContent');
+    const gridRect = gridSurface?.getBoundingClientRect?.() || null;
+    const preferredBelowTop = window.innerWidth >= 1024 && gridRect
+        ? Math.max(toggleRect.bottom + gap, gridRect.top + 8)
+        : toggleRect.bottom + gap;
+    let top = preferredBelowTop;
     const fitsBelow = top + dropdownHeight <= window.innerHeight - viewportPadding;
     const canOpenAbove = toggleRect.top - gap - dropdownHeight >= viewportPadding;
     let placement = 'bottom';
@@ -2433,14 +2456,14 @@ function positionOfflineDropdown() {
     dropdown.style.top = `${Math.round(top)}px`;
     dropdown.style.right = 'auto';
     dropdown.style.bottom = 'auto';
-    dropdown.style.zIndex = '120';
+    dropdown.style.zIndex = '140';
     dropdown.style.width = `${Math.round(dropdownWidth)}px`;
     dropdown.style.maxWidth = `calc(100vw - ${viewportPadding * 2}px)`;
     dropdown.style.transformOrigin = `${Math.round(originX)}px ${placement === 'top' ? 'bottom' : 'top'}`;
 }
 
 function setOfflinePanelOpenState(isOpen) {
-    const dropdown = document.getElementById('offlineDropdown');
+    const dropdown = ensureOfflineDropdownPortal();
     const arrow = document.getElementById('offlineArrow');
     const toggle = document.getElementById('offlinePanelToggle');
     if (!dropdown) return;
@@ -2486,7 +2509,9 @@ function closeOfflinePanel() {
 document.addEventListener('click', (e) => {
     if (!searchContainer.contains(e.target)) resultsBox.classList.add('hidden');
     const offlineContainer = document.getElementById('offlinePanelContainer');
-    if (offlineContainer && !offlineContainer.contains(e.target)) {
+    const offlineDropdown = document.getElementById('offlineDropdown');
+    const clickedInsideDropdown = offlineDropdown && offlineDropdown.contains(e.target);
+    if (offlineContainer && !offlineContainer.contains(e.target) && !clickedInsideDropdown) {
         closeOfflinePanel();
     }
 });

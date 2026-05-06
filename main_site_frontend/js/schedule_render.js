@@ -17,6 +17,7 @@
             module: '<path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h10"></path>',
             hide: '<path d="M3 3l18 18"></path><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"></path><path d="M9.9 5.1A10.8 10.8 0 0 1 12 5c6 0 9 7 9 7a13.2 13.2 0 0 1-2.1 3.1"></path><path d="M6.6 6.6C3.8 8.4 2 12 2 12s3 7 10 7a10.8 10.8 0 0 0 4.1-.8"></path>',
             actions: '<path d="M4 7h16"></path><path d="M4 12h10"></path><path d="M4 17h7"></path>',
+            more: '<circle cx="5" cy="12" r="1.5"></circle><circle cx="12" cy="12" r="1.5"></circle><circle cx="19" cy="12" r="1.5"></circle>',
             chevron: '<path d="m6 9 6 6 6-6"></path>',
         };
         return `<svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[name] || icons.copy}</svg>`;
@@ -44,6 +45,52 @@
         `;
     }
 
+    function renderInlineActionOverflow(lessonId, labels, actionItems) {
+        if (!actionItems.length) return "";
+        const overflowLabel = labels.actionsMore || labels.actionsToggle || "More actions";
+        const renderedButtons = actionItems
+            .map(([action, label, iconName, disabled]) => renderActionButton(action, lessonId, label, iconName, {
+                disabled,
+                iconOnly: false,
+            }))
+            .join("");
+        return `
+            <details class="lesson-action-overflow">
+                <summary class="lesson-action-btn lesson-action-overflow-toggle" title="${escapeHtml(overflowLabel)}" aria-label="${escapeHtml(overflowLabel)}">
+                    ${icon("more")}
+                    <span class="sr-only">${escapeHtml(overflowLabel)}</span>
+                </summary>
+                <div class="lesson-action-overflow-menu">
+                    ${renderedButtons}
+                </div>
+            </details>
+        `;
+    }
+
+    function renderInlineActionLauncher(lessonId, labels, actionItems) {
+        if (!actionItems.length) return "";
+        const launcherLabel = labels.actionsToggle || "Actions";
+        const renderedButtons = actionItems
+            .map(([action, label, iconName, disabled]) => renderActionButton(action, lessonId, label, iconName, {
+                disabled,
+                iconOnly: false,
+            }))
+            .join("");
+        return `
+            <div class="lesson-actions-panel lesson-actions-panel--launcher">
+                <details class="lesson-action-overflow lesson-action-overflow--launcher">
+                    <summary class="lesson-action-btn lesson-action-overflow-toggle" title="${escapeHtml(launcherLabel)}" aria-label="${escapeHtml(launcherLabel)}">
+                        ${icon("actions")}
+                        <span class="sr-only">${escapeHtml(launcherLabel)}</span>
+                    </summary>
+                    <div class="lesson-action-overflow-menu lesson-action-overflow-menu--launcher">
+                        ${renderedButtons}
+                    </div>
+                </details>
+            </div>
+        `;
+    }
+
     function renderLessonActions(lessonId, labels, options = {}) {
         const compact = Boolean(options.compact);
         const inline = Boolean(options.inline);
@@ -61,17 +108,32 @@
             ["onlyModule", labels.onlyModule, "module", !options.hasModule],
             ["hideModule", labels.hideModule, "hide", !options.hasModule],
         ];
+        if (inline) {
+            const enabledActions = actionItems.filter(([, , , disabled]) => !disabled);
+            if (iconOnly) {
+                return renderInlineActionLauncher(lessonId, labels, enabledActions);
+            }
+            const primaryActions = actionItems
+                .filter(([action, , , disabled]) => !disabled && ["copyRoom", "openTeacher", "openRoom", "singleIcs"].includes(action))
+                .map(([action, label, iconName, disabled]) => renderActionButton(action, lessonId, label, iconName, {
+                    disabled,
+                    iconOnly,
+                }))
+                .join("");
+            const secondaryActions = actionItems
+                .filter(([action, , , disabled]) => !disabled && ["onlyModule", "hideModule"].includes(action));
+            const overflowHtml = renderInlineActionOverflow(lessonId, labels, secondaryActions);
+            const inlineHtml = `${primaryActions}${overflowHtml}`;
+            if (!inlineHtml) return "";
+            return `<div class="lesson-actions-panel lesson-actions-panel--inline">${inlineHtml}</div>`;
+        }
         const renderedButtons = actionItems
-            .filter(([, , , disabled]) => !inline || !disabled)
             .map(([action, label, iconName, disabled]) => renderActionButton(action, lessonId, label, iconName, {
                 disabled,
                 iconOnly,
             }))
             .join("");
         if (!renderedButtons) return "";
-        if (inline) {
-            return `<div class="lesson-actions-panel lesson-actions-panel--inline">${renderedButtons}</div>`;
-        }
         return `
             <details class="${className}">
                 <summary class="lesson-actions-toggle" title="${escapeHtml(actionToggleLabel)}">
