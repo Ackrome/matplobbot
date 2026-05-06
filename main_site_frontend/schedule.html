@@ -374,6 +374,94 @@
         .schedule-entity-trigger input::placeholder {
             color: var(--schedule-muted);
         }
+        .schedule-offline-popover {
+            background: color-mix(in srgb, var(--schedule-panel) 97%, var(--schedule-panel-soft) 3%);
+            border-color: color-mix(in srgb, var(--schedule-panel-border) 84%, var(--schedule-panel) 16%);
+            backdrop-filter: blur(22px) saturate(1.18);
+            box-shadow:
+                0 30px 72px -30px rgba(15, 23, 42, 0.34),
+                0 18px 34px -24px rgba(15, 23, 42, 0.24);
+        }
+        .schedule-offline-popover-header {
+            border-bottom: 1px solid color-mix(in srgb, var(--schedule-panel-border) 76%, transparent);
+            background: color-mix(in srgb, var(--schedule-panel-soft) 94%, var(--schedule-panel) 6%);
+        }
+        .schedule-offline-summary {
+            border: 1px solid color-mix(in srgb, var(--schedule-panel-border) 76%, transparent);
+            background: color-mix(in srgb, var(--schedule-panel) 94%, var(--schedule-panel-soft));
+        }
+        .schedule-offline-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            border-radius: 999px;
+            padding: 0.28rem 0.6rem;
+            font-size: 0.65rem;
+            font-weight: 900;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            line-height: 1;
+        }
+        .schedule-offline-chip--ok {
+            background: color-mix(in srgb, #dcfce7 82%, transparent);
+            color: #15803d;
+        }
+        .schedule-offline-chip--muted {
+            background: color-mix(in srgb, var(--schedule-panel-soft) 88%, transparent);
+            color: var(--schedule-muted);
+        }
+        .schedule-offline-chip--warn {
+            background: color-mix(in srgb, #fef3c7 82%, transparent);
+            color: #b45309;
+        }
+        html.dark .schedule-offline-chip--ok {
+            background: rgba(34, 197, 94, 0.18);
+            color: #86efac;
+        }
+        html.dark .schedule-offline-chip--warn {
+            background: rgba(245, 158, 11, 0.16);
+            color: #fcd34d;
+        }
+        .schedule-offline-item {
+            display: flex;
+            width: 100%;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.9rem;
+            border: 1px solid transparent;
+            border-radius: 1rem;
+            background: color-mix(in srgb, var(--schedule-panel) 98%, var(--schedule-panel-soft) 2%);
+            padding: 0.9rem 1rem;
+            text-align: left;
+            transition: border-color .18s ease, background-color .18s ease, transform .18s ease, box-shadow .18s ease;
+        }
+        .schedule-offline-item:hover {
+            border-color: color-mix(in srgb, var(--lesson-default-border) 52%, var(--schedule-panel-border));
+            background: color-mix(in srgb, var(--schedule-panel) 90%, var(--lesson-default-bg));
+            transform: translateY(-1px);
+            box-shadow: 0 16px 30px -28px rgba(37, 99, 235, 0.45);
+        }
+        .schedule-offline-item.is-current {
+            border-color: color-mix(in srgb, var(--lesson-default-border) 62%, var(--schedule-panel-border));
+            background: color-mix(in srgb, var(--schedule-panel) 88%, var(--lesson-default-bg));
+        }
+        .schedule-offline-item-meta {
+            color: var(--schedule-muted);
+        }
+        .schedule-offline-popover-list-label {
+            color: var(--schedule-muted);
+        }
+        .schedule-offline-item-arrow {
+            color: color-mix(in srgb, var(--schedule-muted) 72%, transparent);
+            transition: transform .18s ease, color .18s ease;
+        }
+        .schedule-offline-item:hover .schedule-offline-item-arrow {
+            color: var(--lesson-default-text);
+            transform: translateX(2px);
+        }
+        .schedule-offline-empty {
+            color: var(--schedule-muted);
+        }
         .schedule-inline-toggle {
             display: inline-flex;
             align-items: center;
@@ -715,11 +803,13 @@
                                                 </span>
                                             </button>
                                             <div id="offlineDropdown"
-                                                class="absolute right-0 mt-2 hidden w-80 max-w-[calc(100vw-1rem)] translate-y-2 overflow-hidden rounded-2xl border border-slate-100 bg-white opacity-0 shadow-2xl transition-all duration-200 dark:border-slate-700 dark:bg-slate-800">
-                                                <div class="border-b border-slate-50 bg-slate-50/50 p-3 dark:border-slate-700 dark:bg-slate-900/50">
+                                                role="dialog"
+                                                aria-modal="false"
+                                                class="schedule-offline-popover hidden w-[22rem] max-w-[calc(100vw-1rem)] translate-y-2 overflow-hidden rounded-[1.4rem] border bg-white opacity-0 transition-all duration-200 sm:w-[23.5rem] dark:bg-slate-800">
+                                                <div class="schedule-offline-popover-header p-3">
                                                     <h3 data-i18n="schedule.offline.available" class="text-center text-[10px] font-black uppercase tracking-wider text-slate-400">Доступно оффлайн</h3>
                                                 </div>
-                                                <div id="cachedEntitiesList" class="custom-scrollbar flex max-h-80 flex-col gap-1 overflow-y-auto p-1.5"></div>
+                                                <div id="cachedEntitiesList" class="custom-scrollbar flex max-h-96 flex-col gap-1 overflow-y-auto p-1.5"></div>
                                             </div>
                                         </div>
                                     </div>
