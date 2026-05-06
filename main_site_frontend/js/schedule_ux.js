@@ -172,8 +172,8 @@
         const previousLessonMode = window.getSchedulePageState?.().lessonMode;
         const isDesktopViewport = window.innerWidth >= 1024;
         const effectiveMode = nextMode === "table" && !isDesktopViewport ? "cards" : nextMode;
-        uiState.viewMode = nextMode;
-        window.setScheduleViewModeState?.(nextMode, { updateUrl: true });
+        uiState.viewMode = effectiveMode;
+        window.setScheduleViewModeState?.(effectiveMode, { updateUrl: true });
         const desktop = document.getElementById("desktopSchedule");
         const mobile = document.getElementById("mobileSchedule");
         if (!desktop || !mobile) return;
@@ -197,13 +197,22 @@
             btn.classList.toggle("schedule-view-active", active);
             btn.classList.toggle("schedule-view-idle", !active);
         };
+        const tableBtn = document.getElementById("viewTableBtn");
+        if (tableBtn) {
+            tableBtn.disabled = !isDesktopViewport;
+            tableBtn.classList.toggle("cursor-not-allowed", !isDesktopViewport);
+            tableBtn.classList.toggle("opacity-50", !isDesktopViewport);
+            tableBtn.title = !isDesktopViewport
+                ? t("schedule.view.tableDesktopOnly", "Таблица доступна на более широких экранах")
+                : "";
+        }
         isActive("viewTableBtn", table);
         isActive("viewCardsBtn", cards);
         isActive("viewCompactBtn", compact);
         isActive("viewExamsBtn", exams);
         saveUiPrefs();
         const shouldRerenderForExamMode = !isRenderingForViewMode
-            && ((nextMode === "exams") !== (previousLessonMode === "exams_only"));
+            && ((effectiveMode === "exams") !== (previousLessonMode === "exams_only"));
         if (shouldRerenderForExamMode) {
             isRenderingForViewMode = true;
             filterAndRender();

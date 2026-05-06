@@ -569,7 +569,7 @@ What it does:
 - View density switcher:
 - `Cards` for the current rich card feed
 - `Compact` for seeing more lessons on one screen
-- `Table` for desktop timetable scanning; on narrow/mobile screens it falls back to the card feed instead of forcing the dense grid
+- `Table` for desktop timetable scanning; on narrow/mobile screens it is treated as desktop-only, the page switches to the card feed, and the table button is disabled
 - `Exams` for an exam-focused feed with exam filtering enabled
 - Filters and toggles:
 - module filters
@@ -620,6 +620,7 @@ What it does:
 - Shows eligibility based on Telegram linkage. Bot subscriptions are no longer required for website-owned iCal profiles.
 - Opens from the `Calendar` button in the schedule toolbar; `/schedule?calendar=1` still opens the panel directly.
 - On desktop, the panel is embedded as a right rail inside the schedule shell and scrolls internally instead of stretching the full page. On mobile and narrow widths it falls back to a dismissible drawer with backdrop and `Esc`/outside-click close.
+- Internal panel sections adapt to the actual rail/drawer width instead of global viewport breakpoints, so tablet drawers and the desktop rail keep compact stacked controls instead of overflowing into wide multi-column layouts.
 - Manages profile-based iCal feeds:
 - built-in `All classes`
 - built-in `Exams only`

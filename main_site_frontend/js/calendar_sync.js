@@ -528,7 +528,8 @@ function renderCalendarSubscription() {
     const updatedAtLabel = health.source_updated_at
         ? formatCalendarDateTime(health.source_updated_at, '')
         : escapeHtml(t('schedule.calendar.notUpdatedYet', 'Not updated yet'));
-    const selectedProfileDescription = getCalendarProfileDescription(selectedProfile, { compact: embeddedRail });
+    const panelUsesCompactLayout = getCalendarDrawerWidth() < 720;
+    const selectedProfileDescription = getCalendarProfileDescription(selectedProfile, { compact: panelUsesCompactLayout });
     const profileKindLabel = getCalendarProfileKindLabel(selectedProfile);
     const lessonModeLabel = getCalendarLessonModeLabel(selectedProfile);
     const modulesLabel = getCalendarModulesLabel(selectedProfile);
@@ -543,18 +544,18 @@ function renderCalendarSubscription() {
     const moduleDraft = getCalendarProfileModuleDraft(selectedProfile);
     const moduleDraftCount = moduleDraft.size;
     const moduleEditorCanSave = Boolean(selectedProfile?.kind === 'custom' && canUpdateModulesFromCurrentView && availableProfileModules.length);
-    const splitPanelClass = embeddedRail ? 'flex flex-col gap-4' : 'flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between';
-    const splitActionsClass = embeddedRail ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 sm:flex sm:shrink-0 sm:items-center';
-    const sectionHeaderClass = embeddedRail ? 'flex flex-col gap-3' : 'flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between';
-    const sectionActionsClass = embeddedRail ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 sm:flex sm:flex-wrap';
-    const metadataGridClass = embeddedRail ? 'sm:grid-cols-2' : 'sm:grid-cols-2 xl:grid-cols-4';
-    const moduleDraftGridClass = embeddedRail ? 'sm:grid-cols-2' : 'sm:grid-cols-2 xl:grid-cols-3';
-    const diagnosticsGridClass = embeddedRail ? 'sm:grid-cols-2' : 'sm:grid-cols-2 lg:grid-cols-5';
-    const connectionUrlGridClass = embeddedRail ? 'grid gap-2' : 'grid gap-2 xl:grid-cols-[minmax(0,1fr)_auto]';
-    const connectionTabGridClass = embeddedRail ? 'grid gap-2 sm:grid-cols-2' : 'flex flex-wrap gap-2';
-    const connectionActionsClass = embeddedRail ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 sm:flex sm:shrink-0 sm:flex-wrap';
-    const bodyHeaderClass = embeddedRail ? 'flex flex-col gap-4' : 'flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between';
-    const bodyHeaderActionsClass = embeddedRail ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end xl:shrink-0';
+    const splitPanelClass = panelUsesCompactLayout ? 'flex flex-col gap-4' : 'flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between';
+    const splitActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 sm:flex sm:shrink-0 sm:items-center';
+    const sectionHeaderClass = panelUsesCompactLayout ? 'flex flex-col gap-3' : 'flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between';
+    const sectionActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 sm:flex sm:flex-wrap';
+    const metadataGridClass = panelUsesCompactLayout ? 'sm:grid-cols-2' : 'sm:grid-cols-2 xl:grid-cols-4';
+    const moduleDraftGridClass = panelUsesCompactLayout ? 'sm:grid-cols-2' : 'sm:grid-cols-2 xl:grid-cols-3';
+    const diagnosticsGridClass = panelUsesCompactLayout ? 'sm:grid-cols-2' : 'sm:grid-cols-2 lg:grid-cols-5';
+    const connectionUrlGridClass = panelUsesCompactLayout ? 'grid gap-2' : 'grid gap-2 xl:grid-cols-[minmax(0,1fr)_auto]';
+    const connectionTabGridClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'flex flex-wrap gap-2';
+    const connectionActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 sm:flex sm:shrink-0 sm:flex-wrap';
+    const bodyHeaderClass = panelUsesCompactLayout ? 'flex flex-col gap-4' : 'flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between';
+    const bodyHeaderActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end xl:shrink-0';
     const profileButtons = profiles.map((profile) => {
         const active = profile.selected;
         return `
@@ -568,7 +569,7 @@ function renderCalendarSubscription() {
                             <div class="truncate text-sm font-black">${escapeHtml(profile.name)}</div>
                             <span class="rounded-full bg-white/80 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.16em] text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(getCalendarProfileKindLabel(profile))}</span>
                         </div>
-                        <p class="mt-1 line-clamp-2 text-xs font-medium opacity-80">${escapeHtml(getCalendarProfileDescription(profile, { compact: embeddedRail }))}</p>
+                        <p class="mt-1 line-clamp-2 text-xs font-medium opacity-80">${escapeHtml(getCalendarProfileDescription(profile, { compact: panelUsesCompactLayout }))}</p>
                         <div class="mt-2 flex flex-wrap gap-1.5">
                             <span class="rounded-full bg-white/80 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(getCalendarLessonModeLabel(profile))}</span>
                             <span class="rounded-full bg-white/80 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(getCalendarModulesLabel(profile))}</span>
@@ -751,7 +752,7 @@ function renderCalendarSubscription() {
                     <div class="min-w-0">
                         <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400">${escapeHtml(t('schedule.calendar.connectionTitle', 'Connection'))}</div>
                         <div class="mt-1 text-base font-black text-slate-900 dark:text-slate-100">${escapeHtml(isReady ? t('schedule.calendar.connectionReady', 'Subscription link is ready') : t('schedule.calendar.connectionNeedsSetup', 'Subscription needs attention'))}</div>
-                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">${escapeHtml(t('schedule.calendar.connectionDescription', embeddedRail ? 'Choose the calendar app and use the private feed URL.' : 'Choose the target calendar app, then copy or open the private URL.'))}</p>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">${escapeHtml(t('schedule.calendar.connectionDescription', panelUsesCompactLayout ? 'Choose the calendar app and use the private feed URL.' : 'Choose the target calendar app, then copy or open the private URL.'))}</p>
                     </div>
                     ${isReady ? `<span class="w-fit rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">${escapeHtml(t('schedule.calendar.linkReady', 'Link ready'))}</span>` : ''}
                 </div>
@@ -766,9 +767,9 @@ function renderCalendarSubscription() {
                     </div>
                     <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/50">
                         <div class="${connectionTabGridClass}">
-                            ${renderCalendarPlatformTab('apple', 'schedule.calendar.platform.apple', 'iOS / Mac', embeddedRail ? 'w-full' : '')}
-                            ${renderCalendarPlatformTab('google', 'schedule.calendar.platform.google', 'Google', embeddedRail ? 'w-full' : '')}
-                            ${renderCalendarPlatformTab('outlook', 'schedule.calendar.platform.outlook', 'Outlook / other', embeddedRail ? 'w-full' : '')}
+                            ${renderCalendarPlatformTab('apple', 'schedule.calendar.platform.apple', 'iOS / Mac', panelUsesCompactLayout ? 'w-full' : '')}
+                            ${renderCalendarPlatformTab('google', 'schedule.calendar.platform.google', 'Google', panelUsesCompactLayout ? 'w-full' : '')}
+                            ${renderCalendarPlatformTab('outlook', 'schedule.calendar.platform.outlook', 'Outlook / other', panelUsesCompactLayout ? 'w-full' : '')}
                         </div>
                         <div class="${splitPanelClass} mt-3">
                             <p class="text-sm font-medium text-slate-600 dark:text-slate-300">${escapeHtml(t(platformGuideKey, platformGuideFallback))}</p>
@@ -862,7 +863,7 @@ function renderCalendarSubscription() {
                     ` : ''}
                 </div>
                 <div class="${bodyHeaderActionsClass}">
-                    ${!embeddedRail && isReady ? renderCalendarButton('schedule.calendar.copy', 'Copy link', 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500', 'onclick="copyCalendarSubscriptionLink(event)"') : ''}
+                    ${!panelUsesCompactLayout && isReady ? renderCalendarButton('schedule.calendar.copy', 'Copy link', 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500', 'onclick="copyCalendarSubscriptionLink(event)"') : ''}
                     ${!state.sync_enabled ? renderCalendarButton('schedule.calendar.enable', 'Enable', 'bg-blue-600 text-white hover:bg-blue-700 dark:hover:bg-blue-500', `onclick="toggleCalendarSync(true)"`) : ''}
                     ${renderCalendarBotLink('border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50')}
                     <button type="button" onclick="toggleCalendarSubscriptionPanel()"
