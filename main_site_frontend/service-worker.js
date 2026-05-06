@@ -1,4 +1,4 @@
-const CACHE_VERSION = "mpb-site-v15";
+const CACHE_VERSION = "mpb-site-v17";
 const CORE_CACHE = `${CACHE_VERSION}-core`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const OFFLINE_URL = "/offline.html";
@@ -16,19 +16,19 @@ const CORE_ASSETS = [
     "/register.html",
     OFFLINE_URL,
     "/site.webmanifest",
-    "/css/tailwind.css?v=20260506-1",
-    "/js/runtime_config.js?v=20260506-1",
-    "/js/ui_utils.js?v=20260506-1",
-    "/js/navbar.js?v=20260506-1",
-    "/js/theme_bootstrap.js?v=20260506-1",
-    "/js/telegram_webapp.js?v=20260506-1",
-    "/js/schedule_state.js?v=20260506-1",
-    "/js/schedule_api.js?v=20260506-1",
-    "/js/schedule_filters.js?v=20260506-1",
-    "/js/schedule_render.js?v=20260506-1",
-    "/js/schedule.js?v=20260506-1",
-    "/js/calendar_sync.js?v=20260506-1",
-    "/js/schedule_ux.js?v=20260506-1",
+    "/css/tailwind.css?v=20260506-3",
+    "/js/runtime_config.js?v=20260506-3",
+    "/js/ui_utils.js?v=20260506-3",
+    "/js/navbar.js?v=20260506-3",
+    "/js/theme_bootstrap.js?v=20260506-3",
+    "/js/telegram_webapp.js?v=20260506-3",
+    "/js/schedule_state.js?v=20260506-3",
+    "/js/schedule_api.js?v=20260506-3",
+    "/js/schedule_filters.js?v=20260506-3",
+    "/js/schedule_render.js?v=20260506-3",
+    "/js/schedule.js?v=20260506-3",
+    "/js/calendar_sync.js?v=20260506-3",
+    "/js/schedule_ux.js?v=20260506-3",
     "/js/studio.js?v=10",
     "/js/auth.js?v=6",
     "/favicon.ico",

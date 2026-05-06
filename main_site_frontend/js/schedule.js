@@ -15,6 +15,10 @@ const FIXED_TIMES =[
     { start: '18:55', end: '20:25' },
     { start: '20:30', end: '22:00' }
 ];
+const TABLE_SLOT_ROW_HEIGHT_PX = 144;
+const TABLE_TIMELINE_VERTICAL_INSET_PX = 6;
+const TABLE_TIMELINE_LANE_GAP_PX = 8;
+let fixedTimeSlotRangesCache = null;
 
 let fullSchedule =[];
 let loadedBounds = { start: null, end: null };
@@ -476,7 +480,7 @@ function isLessonInCurrentPeriod(lesson) {
 }
 
 function isLessonAllowedByLessonMode(lesson) {
-    return schedulePageState.lessonMode !== 'exams_only' || isExamLikeKind(lesson?.kindOfWork);
+    return schedulePageState.lessonMode !== 'exams_only' || isExamFocusedKind(lesson?.kindOfWork);
 }
 
 function isLessonAllowedByModuleFilter(lesson) {
@@ -486,7 +490,7 @@ function isLessonAllowedByModuleFilter(lesson) {
 function isLessonInCurrentDisplayedScope(lesson, { includeModuleFilter = true } = {}) {
     return window.ScheduleFilters?.isLessonVisible?.(lesson, {
         includeModuleFilter,
-        isExamLikeKind,
+        isExamLikeKind: isExamFocusedKind,
         lessonMode: schedulePageState.lessonMode,
         parseDate,
         selectedModules,
@@ -748,7 +752,7 @@ function getLessonDateTime(lesson) {
 
 function isLessonVisibleInScheduleState(lesson) {
     if (lesson.module && !selectedModules.has(lesson.module)) return false;
-    if (schedulePageState.lessonMode === 'exams_only' && !isExamLikeKind(lesson.kindOfWork)) return false;
+    if (schedulePageState.lessonMode === 'exams_only' && !isExamFocusedKind(lesson.kindOfWork)) return false;
     return true;
 }
 
@@ -1250,6 +1254,140 @@ function getISODateStr(d) {
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+}
+
+function parseTimeToMinutes(timeStr) {
+    const match = String(timeStr || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return null;
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+    return hours * 60 + minutes;
+}
+
+function getFixedTimeSlotRanges() {
+    if (!fixedTimeSlotRangesCache) {
+        fixedTimeSlotRangesCache = FIXED_TIMES.map((slot) => ({
+            ...slot,
+            startMinutes: parseTimeToMinutes(slot.start),
+            endMinutes: parseTimeToMinutes(slot.end)
+        }));
+    }
+    return fixedTimeSlotRangesCache;
+}
+
+function findFixedSlotIndexForMinute(minute, mode = 'start') {
+    const slots = getFixedTimeSlotRanges();
+    if (!slots.length || !Number.isFinite(minute)) return -1;
+    if (minute <= slots[0].startMinutes) return 0;
+
+    for (let index = 0; index < slots.length; index += 1) {
+        const slot = slots[index];
+        if (minute >= slot.startMinutes && minute < slot.endMinutes) return index;
+        if (mode === 'end' && minute === slot.endMinutes) return index;
+
+        const nextSlot = slots[index + 1];
+        if (!nextSlot) continue;
+        if (mode === 'start' && minute >= slot.endMinutes && minute < nextSlot.startMinutes) {
+            return index + 1;
+        }
+        if (mode === 'end' && minute > slot.endMinutes && minute <= nextSlot.startMinutes) {
+            return index;
+        }
+    }
+
+    return slots.length - 1;
+}
+
+function getFixedSlotOffsetPx(minute, slotIndex) {
+    const slot = getFixedTimeSlotRanges()[slotIndex];
+    if (!slot) return 0;
+    if (minute <= slot.startMinutes) return 0;
+    if (minute >= slot.endMinutes) return TABLE_SLOT_ROW_HEIGHT_PX;
+    return ((minute - slot.startMinutes) / Math.max(1, slot.endMinutes - slot.startMinutes)) * TABLE_SLOT_ROW_HEIGHT_PX;
+}
+
+function getLessonTimelinePlacement(lesson) {
+    const startMinutes = parseTimeToMinutes(lesson?.beginLesson);
+    if (!Number.isFinite(startMinutes)) return null;
+
+    let endMinutes = parseTimeToMinutes(lesson?.endLesson);
+    if (!Number.isFinite(endMinutes) || endMinutes <= startMinutes) {
+        const exactSlot = getFixedTimeSlotRanges().find((slot) => slot.start === lesson?.beginLesson);
+        endMinutes = exactSlot?.endMinutes || (startMinutes + 90);
+    }
+
+    const startSlotIndex = findFixedSlotIndexForMinute(startMinutes, 'start');
+    const endSlotIndex = findFixedSlotIndexForMinute(endMinutes, 'end');
+    if (startSlotIndex < 0 || endSlotIndex < 0) return null;
+
+    const anchorSlot = getFixedTimeSlotRanges()[startSlotIndex];
+    const topPx = getFixedSlotOffsetPx(startMinutes, startSlotIndex);
+    const endOffsetPx = getFixedSlotOffsetPx(endMinutes, endSlotIndex);
+    const rawHeightPx = ((endSlotIndex - startSlotIndex) * TABLE_SLOT_ROW_HEIGHT_PX) + endOffsetPx - topPx;
+
+    return {
+        anchorTime: anchorSlot.start,
+        startMinutes,
+        endMinutes,
+        topPx: topPx + TABLE_TIMELINE_VERTICAL_INSET_PX,
+        heightPx: Math.max(78, rawHeightPx - (TABLE_TIMELINE_VERTICAL_INSET_PX * 2))
+    };
+}
+
+function usesOffSlotTimeLabel(lesson) {
+    const begin = String(lesson?.beginLesson || '').trim();
+    const end = String(lesson?.endLesson || '').trim();
+    if (!begin || !end) return false;
+    const startsOnGrid = FIXED_TIMES.some((slot) => slot.start === begin);
+    const endsOnGrid = FIXED_TIMES.some((slot) => slot.end === end);
+    return !(startsOnGrid && endsOnGrid);
+}
+
+function buildDayTimelineLayout(dayLessons) {
+    const items = (dayLessons || [])
+        .map((lesson) => {
+            const placement = getLessonTimelinePlacement(lesson);
+            return placement ? { lesson, placement } : null;
+        })
+        .filter(Boolean)
+        .sort((left, right) => (
+            left.placement.startMinutes - right.placement.startMinutes ||
+            right.placement.endMinutes - left.placement.endMinutes
+        ));
+
+    const positioned = [];
+    let active = [];
+    let currentCluster = [];
+    let currentClusterMaxLanes = 0;
+
+    const flushCluster = () => {
+        currentCluster.forEach((item) => {
+            item.laneCount = Math.max(1, currentClusterMaxLanes);
+        });
+        currentCluster = [];
+        currentClusterMaxLanes = 0;
+    };
+
+    items.forEach((item) => {
+        active = active.filter((activeItem) => activeItem.endMinutes > item.placement.startMinutes);
+        if (!active.length && currentCluster.length) {
+            flushCluster();
+        }
+
+        let lane = 0;
+        const usedLanes = new Set(active.map((activeItem) => activeItem.lane));
+        while (usedLanes.has(lane)) lane += 1;
+
+        item.lane = lane;
+        active.push({ lane, endMinutes: item.placement.endMinutes });
+        currentCluster.push(item);
+        currentClusterMaxLanes = Math.max(currentClusterMaxLanes, active.length);
+        positioned.push(item);
+    });
+
+    flushCluster();
+    return positioned;
 }
 
 function getMonday(d) {
@@ -1787,19 +1925,28 @@ function renderDesktopGrid(lessons) {
         d.setDate(d.getDate() + i);
         weekDates.push(d);
     }
-    const gridData = {};
-    lessons.forEach(l => {
-        const normDate = getISODateStr(parseDate(l.date));
-        if (!gridData[normDate]) gridData[normDate] = {};
-        if (!gridData[normDate][l.beginLesson]) gridData[normDate][l.beginLesson] = [];
-        gridData[normDate][l.beginLesson].push(l);
+    const dayLessonsMap = {};
+    lessons.forEach((lesson) => {
+        const normDate = getISODateStr(parseDate(lesson.date));
+        if (!dayLessonsMap[normDate]) dayLessonsMap[normDate] = [];
+        dayLessonsMap[normDate].push(lesson);
+    });
+
+    const dayTimelineMap = {};
+    Object.entries(dayLessonsMap).forEach(([dateStr, dayLessons]) => {
+        const slotGroups = {};
+        buildDayTimelineLayout(dayLessons).forEach((item) => {
+            if (!slotGroups[item.placement.anchorTime]) slotGroups[item.placement.anchorTime] = [];
+            slotGroups[item.placement.anchorTime].push(item);
+        });
+        dayTimelineMap[dateStr] = slotGroups;
     });
 
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
     let html = `
-    <div class="schedule-table-wrap overflow-hidden relative">
+    <div class="schedule-table-wrap overflow-hidden relative" style="--schedule-slot-row-height: ${TABLE_SLOT_ROW_HEIGHT_PX}px;">
         <table class="schedule-desktop-table w-full table-fixed border-collapse text-left">
             <thead class="schedule-table-head">
                 <tr>
@@ -1824,7 +1971,7 @@ function renderDesktopGrid(lessons) {
         const slotEndMins = hEnd * 60 + mEnd;
         const isCurrentSlot = (currentMinutes >= slotStartMins && currentMinutes <= slotEndMins);
 
-        html += `<tr class="border-t">
+        html += `<tr class="schedule-slot-row border-t">
             <td class="schedule-time-cell p-2 border-r align-top text-center relative">
                 <div class="schedule-time-start text-xs font-black ${isCurrentSlot ? 'text-red-500' : ''}">${timeSlot.start}</div>
                 <div class="schedule-time-end text-[10px] font-medium">${timeSlot.end}</div>
@@ -1832,12 +1979,21 @@ function renderDesktopGrid(lessons) {
             </td>`;
         weekDates.forEach(d => {
             const dateStr = getISODateStr(d);
-            const slotLessons = gridData[dateStr]?.[timeStr] ||[];
+            const slotLessons = dayTimelineMap[dateStr]?.[timeStr] ||[];
             const isToday = isSameDay(d, now);
             html += `<td class="schedule-slot-cell p-1.5 border-r last:border-r-0 align-top ${isToday ? 'is-today' : ''} transition-colors relative">
                 ${isToday && isCurrentSlot ? '<div class="absolute top-1/2 left-0 w-full h-[2px] bg-red-400 z-10 pointer-events-none opacity-50"></div>' : ''}
-                <div class="flex flex-col gap-1.5 h-full">
-                    ${slotLessons.map(l => renderCard(l, true)).join('')}
+                <div class="schedule-slot-surface h-full relative">
+                    ${slotLessons.map(({ lesson, placement, lane, laneCount }) => {
+                        const laneWidth = 100 / Math.max(1, laneCount || 1);
+                        const leftPercent = lane * laneWidth;
+                        return `
+                            <div class="schedule-timeline-card absolute z-20"
+                                 style="top:${placement.topPx}px;height:${placement.heightPx}px;left:calc(${leftPercent}% + ${TABLE_TIMELINE_LANE_GAP_PX / 2}px);width:calc(${laneWidth}% - ${TABLE_TIMELINE_LANE_GAP_PX}px);">
+                                ${renderCard(lesson, true)}
+                            </div>
+                        `;
+                    }).join('')}
                 </div>
             </td>`;
         });
@@ -1895,6 +2051,16 @@ function hasLessonKeyword(kind, keywords) {
     return keywords.some(keyword => kind.includes(keyword));
 }
 
+const EXAM_KIND_KEYWORDS = [
+    '\u044d\u043a\u0437\u0430\u043c',
+    '\u0437\u0430\u0447\u0435\u0442',
+    '\u0430\u0442\u0442\u0435\u0441\u0442',
+    'exam',
+    'credit',
+    'test'
+];
+const CONSULTATION_KIND_KEYWORDS = ['\u043a\u043e\u043d\u0441\u0443\u043b\u044c\u0442', 'consult'];
+
 function isLectureKind(kind) {
     const k = normalizeLessonKind(kind);
     return hasLessonKeyword(k, ['\u043b\u0435\u043a\u0446', 'lecture']);
@@ -1915,25 +2081,28 @@ function isLabKind(kind) {
     return hasLessonKeyword(k, ['\u043b\u0430\u0431\u043e\u0440\u0430\u0442', 'laboratory', 'lab']);
 }
 
-function isExamLikeKind(kind) {
-    const k = normalizeLessonKind(kind);
-    return hasLessonKeyword(k, [
-        '\u044d\u043a\u0437\u0430\u043c',
-        '\u0437\u0430\u0447\u0435\u0442',
-        '\u0430\u0442\u0442\u0435\u0441\u0442',
-        'exam',
-        'credit',
-        'test'
-    ]);
-}
-
 function isConsultationKind(kind) {
     const k = normalizeLessonKind(kind);
-    return hasLessonKeyword(k, ['\u043a\u043e\u043d\u0441\u0443\u043b\u044c\u0442', 'consult']);
+    return hasLessonKeyword(k, CONSULTATION_KIND_KEYWORDS);
+}
+
+function isPreExamConsultationKind(kind) {
+    const k = normalizeLessonKind(kind);
+    return isConsultationKind(k) && hasLessonKeyword(k, EXAM_KIND_KEYWORDS);
+}
+
+function isExamLikeKind(kind) {
+    const k = normalizeLessonKind(kind);
+    return !isConsultationKind(k) && hasLessonKeyword(k, EXAM_KIND_KEYWORDS);
+}
+
+function isExamFocusedKind(kind) {
+    return isExamLikeKind(kind) || isPreExamConsultationKind(kind);
 }
 
 function getShortKind(kind) {
     if (!kind) return '';
+    if (isPreExamConsultationKind(kind)) return '\u041a\u043e\u043d\u0441. \u043f\u0435\u0440\u0435\u0434 \u044d\u043a\u0437.';
     if (isExamLikeKind(kind)) {
         return isPracticeKind(kind)
             ? '\u0421\u0435\u043c\u0438\u043d\u0430\u0440+\u0437\u0430\u0447\u0435\u0442'
@@ -2043,6 +2212,8 @@ function renderCard(l, isDesktop) {
     const safeAuditoriumJs = escapeJsString(l.auditorium || '');
     const safeLecturer = escapeHtml(teacherLabel || '');
     const safeLecturerJs = escapeJsString(l.lecturer_title || '');
+    const safeTimeRange = escapeHtml(`${l.beginLesson || ''}${l.endLesson ? ` - ${l.endLesson}` : ''}`.trim());
+    const showOffSlotTimeLabel = isDesktop && usesOffSlotTimeLabel(l);
     const roomTitle = escapeHtml(t('schedule.copy.room', 'Копировать аудиторию'));
     const teacherTitle = escapeHtml(t('schedule.copy.teacher', 'Копировать преподавателя'));
     const actionHtml = showLessonActions
@@ -2072,6 +2243,10 @@ function renderCard(l, isDesktop) {
             <div class="lesson-title font-bold text-[13px] leading-snug line-clamp-3 mb-2 flex-grow" title="${safeDiscipline}">
                 ${safeDiscipline}
             </div>
+            ${showOffSlotTimeLabel ? `
+            <div class="mb-2 inline-flex w-fit items-center gap-1 rounded-full border border-white/15 bg-slate-950/20 px-2 py-1 text-[9px] font-black tracking-[0.18em] text-slate-100/85">
+                <span>${safeTimeRange}</span>
+            </div>` : ''}
             <div class="flex flex-col gap-1">
                 ${safeAuditorium ? `
                 <div class="lesson-meta flex items-center gap-1 text-[10px] font-medium hover:text-blue-600 cursor-pointer transition-colors"
@@ -2133,6 +2308,7 @@ function getBadgeColor(kind) {
     if (!kind) return { bg: '', border: '', text: 'lesson-kind' };
     if (isExamLikeKind(kind)) return { bg: 'lesson-card--exam', border: '', text: 'lesson-kind' };
     if (isLectureKind(kind)) return { bg: 'lesson-card--lecture', border: '', text: 'lesson-kind' };
+    if (isConsultationKind(kind)) return { bg: 'lesson-card--consultation', border: '', text: 'lesson-kind' };
     if (isPracticeKind(kind) || isLabKind(kind)) return { bg: 'lesson-card--seminar', border: '', text: 'lesson-kind' };
     return { bg: '', border: '', text: 'lesson-kind' };
 }
@@ -2146,38 +2322,58 @@ function isSameDay(d1, d2) {
     return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 }
 
-function toggleOfflinePanel(event) {
-    if (event) event.stopPropagation();
+let offlinePanelHideTimer = null;
+
+function setOfflinePanelOpenState(isOpen) {
     const dropdown = document.getElementById('offlineDropdown');
     const arrow = document.getElementById('offlineArrow');
-    const isHidden = dropdown.classList.contains('hidden');
-    if (isHidden) {
+    const toggle = document.getElementById('offlinePanelToggle');
+    if (!dropdown) return;
+
+    clearTimeout(offlinePanelHideTimer);
+
+    if (isOpen) {
         dropdown.classList.remove('hidden');
-        setTimeout(() => {
+        requestAnimationFrame(() => {
             dropdown.classList.remove('opacity-0', 'translate-y-2');
             dropdown.classList.add('opacity-100', 'translate-y-0');
-        }, 10);
-        arrow.classList.add('rotate-180');
+        });
     } else {
-        closeOfflinePanel();
+        dropdown.classList.add('opacity-0', 'translate-y-2');
+        dropdown.classList.remove('opacity-100', 'translate-y-0');
+        offlinePanelHideTimer = setTimeout(() => dropdown.classList.add('hidden'), 200);
+    }
+
+    if (arrow) {
+        arrow.classList.toggle('rotate-180', isOpen);
+    }
+    if (toggle) {
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     }
 }
 
-function closeOfflinePanel() {
+function toggleOfflinePanel(event) {
+    if (event) event.stopPropagation();
     const dropdown = document.getElementById('offlineDropdown');
-    const arrow = document.getElementById('offlineArrow');
-    if(dropdown && arrow) {
-        dropdown.classList.add('opacity-0', 'translate-y-2');
-        dropdown.classList.remove('opacity-100', 'translate-y-0');
-        arrow.classList.remove('rotate-180');
-        setTimeout(() => dropdown.classList.add('hidden'), 200);
-    }
+    if (!dropdown) return;
+    const isHidden = dropdown.classList.contains('hidden');
+    setOfflinePanelOpenState(isHidden);
+}
+
+function closeOfflinePanel() {
+    setOfflinePanelOpenState(false);
 }
 
 document.addEventListener('click', (e) => {
     if (!searchContainer.contains(e.target)) resultsBox.classList.add('hidden');
     const offlineContainer = document.getElementById('offlinePanelContainer');
     if (offlineContainer && !offlineContainer.contains(e.target)) {
+        closeOfflinePanel();
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
         closeOfflinePanel();
     }
 });

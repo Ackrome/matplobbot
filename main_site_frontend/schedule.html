@@ -12,9 +12,9 @@
     <link rel="icon" sizes="192x192" href="/android-chrome-192x192.png">
     <link rel="icon" sizes="512x512" href="/android-chrome-512x512.png">
     <link rel="manifest" href="/site.webmanifest">
-    <script src="/js/theme_bootstrap.js?v=20260506-1"></script>
+    <script src="/js/theme_bootstrap.js?v=20260506-3"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="/css/tailwind.css?v=20260506-1">
+    <link rel="stylesheet" href="/css/tailwind.css?v=20260506-3">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -44,6 +44,9 @@
             --lesson-seminar-bg: #fffbeb;
             --lesson-seminar-border: #fcd34d;
             --lesson-seminar-text: #b45309;
+            --lesson-consultation-bg: #faf5ff;
+            --lesson-consultation-border: #c084fc;
+            --lesson-consultation-text: #7c3aed;
             --lesson-exam-bg: #fff1f2;
             --lesson-exam-border: #fda4af;
             --lesson-exam-text: #be123c;
@@ -79,6 +82,9 @@
             --lesson-seminar-bg: #312a36;
             --lesson-seminar-border: #7c3f36;
             --lesson-seminar-text: #fde047;
+            --lesson-consultation-bg: #24173a;
+            --lesson-consultation-border: #7c3aed;
+            --lesson-consultation-text: #c4b5fd;
             --lesson-exam-bg: #361f2b;
             --lesson-exam-border: #9f1239;
             --lesson-exam-text: #fda4af;
@@ -162,11 +168,26 @@
         .schedule-slot-cell {
             background: var(--schedule-grid-cell);
         }
+        .schedule-slot-row {
+            height: var(--schedule-slot-row-height, 144px);
+        }
+        .schedule-time-cell,
+        .schedule-slot-cell {
+            height: var(--schedule-slot-row-height, 144px);
+            min-height: var(--schedule-slot-row-height, 144px);
+        }
         .schedule-slot-cell.is-today {
             background: var(--schedule-grid-today);
         }
         .schedule-slot-cell:hover {
             background: var(--schedule-grid-hover);
+        }
+        .schedule-slot-surface {
+            overflow: visible;
+        }
+        .schedule-timeline-card .lesson-card {
+            height: 100%;
+            min-height: 0;
         }
         .lesson-card {
             background: var(--lesson-default-bg);
@@ -182,6 +203,10 @@
             background: var(--lesson-seminar-bg);
             border-color: var(--lesson-seminar-border);
         }
+        .lesson-card--consultation {
+            background: var(--lesson-consultation-bg);
+            border-color: var(--lesson-consultation-border);
+        }
         .lesson-card--exam {
             background: var(--lesson-exam-bg);
             border-color: var(--lesson-exam-border);
@@ -194,6 +219,9 @@
         }
         .lesson-card--seminar .lesson-kind {
             color: var(--lesson-seminar-text);
+        }
+        .lesson-card--consultation .lesson-kind {
+            color: var(--lesson-consultation-text);
         }
         .lesson-card--exam .lesson-kind {
             color: var(--lesson-exam-text);
@@ -674,7 +702,12 @@
                                             <div id="searchResults" class="absolute left-0 right-0 z-50 mt-2 hidden max-h-80 overflow-y-auto overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl custom-scrollbar dark:border-slate-700 dark:bg-slate-800"></div>
                                         </div>
                                         <div class="relative shrink-0" id="offlinePanelContainer">
-                                            <button onclick="toggleOfflinePanel(event)"
+                                            <button
+                                                id="offlinePanelToggle"
+                                                type="button"
+                                                onclick="toggleOfflinePanel(event)"
+                                                aria-controls="offlineDropdown"
+                                                aria-expanded="false"
                                                 class="schedule-ghost-button group inline-flex h-[4.35rem] w-[4.35rem] items-center justify-center rounded-2xl shadow-sm">
                                                 <span class="relative flex h-3.5 w-3.5">
                                                     <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
@@ -836,16 +869,16 @@
         </div>
     </main>
 
-    <script src="/js/runtime_config.js?v=20260506-1"></script>
-    <script src="/js/ui_utils.js?v=20260506-1"></script>
-    <script src="/js/telegram_webapp.js?v=20260506-1"></script>
-    <script src="/js/navbar.js?v=20260506-1"></script>
-    <script src="/js/schedule_state.js?v=20260506-1"></script>
-    <script src="/js/schedule_api.js?v=20260506-1"></script>
-    <script src="/js/schedule_filters.js?v=20260506-1"></script>
-    <script src="/js/schedule_render.js?v=20260506-1"></script>
-    <script src="/js/schedule.js?v=20260506-1"></script>
-    <script src="/js/calendar_sync.js?v=20260506-1"></script>
-    <script src="/js/schedule_ux.js?v=20260506-1"></script>
+    <script src="/js/runtime_config.js?v=20260506-3"></script>
+    <script src="/js/ui_utils.js?v=20260506-3"></script>
+    <script src="/js/telegram_webapp.js?v=20260506-3"></script>
+    <script src="/js/navbar.js?v=20260506-3"></script>
+    <script src="/js/schedule_state.js?v=20260506-3"></script>
+    <script src="/js/schedule_api.js?v=20260506-3"></script>
+    <script src="/js/schedule_filters.js?v=20260506-3"></script>
+    <script src="/js/schedule_render.js?v=20260506-3"></script>
+    <script src="/js/schedule.js?v=20260506-3"></script>
+    <script src="/js/calendar_sync.js?v=20260506-3"></script>
+    <script src="/js/schedule_ux.js?v=20260506-3"></script>
 </body>
 </html>

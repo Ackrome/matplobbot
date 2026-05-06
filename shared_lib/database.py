@@ -98,7 +98,7 @@ DEFAULT_SETTINGS = {
 
 MAX_SEARCH_PRESETS = 15
 MAX_MYSCHEDULE_FILTER_PRESETS = 10
-MYSCHEDULE_FILTER_ALLOWED_TYPES = {"Lecture", "Seminar", "Exam", "Other"}
+MYSCHEDULE_FILTER_ALLOWED_TYPES = {"Lecture", "Seminar", "Exam", "Consultation", "Other"}
 
 
 def normalize_myschedule_filters(filters: dict | None) -> dict:

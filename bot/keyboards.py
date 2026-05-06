@@ -563,6 +563,14 @@ async def get_modules_keyboard(
 FILTER_TYPES_MAP = {"Lecture": "Лекции", "Seminar": "Семинары", "Exam": "Экзамены/Зачеты"}
 
 
+FILTER_TYPES_MAP = {
+    "Lecture": "Лекции",
+    "Seminar": "Семинары",
+    "Exam": "Экзамены/Зачеты",
+    "Consultation": "Консультации",
+}
+
+
 def get_myschedule_calendar_keyboard(
     year: int, month: int, lang: str, busy_days: dict
 ) -> InlineKeyboardMarkup:

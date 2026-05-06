@@ -22,6 +22,15 @@ class TestMyScheduleFiltersSettings(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(normalized["excluded_subs"], [1, 2])
         self.assertEqual(normalized["excluded_types"], ["Lecture", "Other"])
 
+    async def test_normalize_filters_keeps_consultation_type(self):
+        normalized = shared_database.normalize_myschedule_filters(
+            {
+                "excluded_subs": [],
+                "excluded_types": ["Consultation", "DROP", "Consultation"],
+            }
+        )
+        self.assertEqual(normalized["excluded_types"], ["Consultation"])
+
     async def test_get_user_myschedule_filters_uses_defaults(self):
         with patch.object(
             shared_database,

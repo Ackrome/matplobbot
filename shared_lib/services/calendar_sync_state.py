@@ -24,7 +24,7 @@ BUILT_IN_PROFILES = (
         "kind": "built_in",
         "lesson_mode": "exams_only",
         "can_delete": False,
-        "scope_label": "Exams and pass/fail assessments from Telegram and website profiles",
+        "scope_label": "Exams, pass/fail assessments, and pre-exam consultations from Telegram and website profiles",
     },
 )
 

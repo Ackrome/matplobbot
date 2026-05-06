@@ -47,6 +47,10 @@ class TestScheduleServiceCalendar(unittest.TestCase):
         self.assertEqual(_get_simple_lesson_type("Семинар+зачет"), "Exam")
         self.assertEqual(_get_simple_lesson_type("Экзамены"), "Exam")
 
+    def test_simple_lesson_type_treats_pre_exam_consultation_as_consultation(self):
+        self.assertEqual(_get_simple_lesson_type("Консультации перед экзаменом"), "Consultation")
+        self.assertEqual(_get_simple_lesson_type("Консультации текущие"), "Consultation")
+
     def test_profile_ical_description_includes_source_parse_time(self):
         payload = generate_profile_ical_from_aggregated_schedule(
             [

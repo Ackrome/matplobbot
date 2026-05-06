@@ -819,7 +819,6 @@ class ScheduleManager:
                 start=sem_start,
                 finish=sem_end,
             )
-
             await upsert_cached_schedule(
                 sub_data["sub_entity_type"], sub_data["sub_entity_id"], full_semester_schedule
             )
@@ -1109,7 +1108,7 @@ class ScheduleManager:
                 "excluded_types": [
                     str(item)
                     for item in redis_filters.get("excluded_types", [])
-                    if str(item) in {"Lecture", "Seminar", "Exam", "Other"}
+                    if str(item) in {"Lecture", "Seminar", "Exam", "Consultation", "Other"}
                 ],
             }
             if (
@@ -1185,7 +1184,28 @@ class ScheduleManager:
                 kind = lesson.get("kindOfWork", "").lower()
                 is_exam = "экзамен" in kind or "аттестация" in kind or "зачет" in kind
 
-                if is_exam:
+                kind = kind.replace("\u0451", "\u0435")
+                is_exam = (
+                    "экзам" in kind
+                    or "аттест" in kind
+                    or "зачет" in kind
+                    or "exam" in kind
+                    or "credit" in kind
+                    or "test" in kind
+                )
+                is_exam_consultation = (
+                    ("консульт" in kind or "consult" in kind)
+                    and (
+                        "экзам" in kind
+                        or "аттест" in kind
+                        or "зачет" in kind
+                        or "exam" in kind
+                        or "credit" in kind
+                        or "test" in kind
+                    )
+                )
+
+                if is_exam or is_exam_consultation:
                     busy_days[day] = "❗️"
                 elif day not in busy_days:
                     busy_days[day] = "•"

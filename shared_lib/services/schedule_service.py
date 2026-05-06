@@ -66,6 +66,18 @@ MODULE_REGEX = re.compile(r'Модуль\s+["«](.+?)["»]')
 SUBGROUP_REGEX = re.compile(r"(\([А-Яа-яA-Za-z0-9_]+\)-\d+(?: \(\d+\))?)")
 
 
+EXAM_KIND_KEYWORDS = (
+    "\u044d\u043a\u0437\u0430\u043c",
+    "\u0437\u0430\u0447\u0435\u0442",
+    "\u0430\u0442\u0442\u0435\u0441\u0442",
+    "exam",
+    "credit",
+    "test",
+)
+CONSULTATION_KIND_KEYWORDS = ("\u043a\u043e\u043d\u0441\u0443\u043b\u044c\u0442", "consult")
+LESSON_STYLES["Консультации перед экзаменом"] = ("🟧", "Консультация перед экзаменом")
+
+
 def get_module_name(group_name: str | None) -> str | None:
     """
     Извлекает название модуля или подгруппы из названия группы в расписании.
@@ -100,19 +112,21 @@ def _kind_contains_any(normalized_kind: str, keywords: tuple[str, ...]) -> bool:
     return any(keyword in normalized_kind for keyword in keywords)
 
 
+def _is_consultation_kind(normalized_kind: str) -> bool:
+    return _kind_contains_any(normalized_kind, CONSULTATION_KIND_KEYWORDS)
+
+
+def _is_exam_focused_consultation_kind(normalized_kind: str) -> bool:
+    return _is_consultation_kind(normalized_kind) and _kind_contains_any(
+        normalized_kind, EXAM_KIND_KEYWORDS
+    )
+
+
 def _get_simple_lesson_type(kind: str) -> str:
     normalized_kind = _normalize_lesson_kind(kind)
-    if _kind_contains_any(
-        normalized_kind,
-        (
-            "\u044d\u043a\u0437\u0430\u043c",
-            "\u0437\u0430\u0447\u0435\u0442",
-            "\u0430\u0442\u0442\u0435\u0441\u0442",
-            "exam",
-            "credit",
-            "test",
-        ),
-    ):
+    if _is_exam_focused_consultation_kind(normalized_kind):
+        return "Consultation"
+    if _kind_contains_any(normalized_kind, EXAM_KIND_KEYWORDS):
         return "Exam"
     if _kind_contains_any(normalized_kind, ("\u043b\u0435\u043a\u0446", "lecture")):
         return "Lecture"
@@ -129,6 +143,8 @@ def _get_simple_lesson_type(kind: str) -> str:
         ),
     ):
         return "Seminar"
+    if _is_consultation_kind(normalized_kind):
+        return "Consultation"
     return "Other"
 
 

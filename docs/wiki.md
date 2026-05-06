@@ -216,6 +216,7 @@ What it does:
 - Includes filter controls:
 - include/exclude subscriptions
 - include/exclude lesson types
+- Supports a dedicated `Consultation` lesson type in filters. The built-in `Only exams` preset still keeps pre-exam consultations visible.
 - Includes filter presets:
 - built-in (`All lessons`, `Only exams`, `Hide auditoriums`)
 - custom named presets saved from current filter state
@@ -593,6 +594,8 @@ What it does:
 - Search UX includes recent schedules, favorites, quick type categories, local fuzzy matching, and separate loading/empty/network-error states.
 - Offline drawer shows cached schedules, cache update time, and a refresh action for the current schedule.
 - Highlights exam-like lessons, including `Семинар+зачет` and `Экзамены`, with the dedicated exam color instead of the regular seminar color.
+- Treats `Консультации перед экзаменом` as a consultation, not as a mislabeled exam: the page gives it its own consultation badge/color, but still keeps it in `Exams` / `exams-only` views because it is exam-related.
+- In desktop `Table` view, lessons whose real begin/end time from the university API no longer fits a single hardcoded slot are rendered proportionally inside the timetable grid instead of disappearing. The card starts and ends inside the matching rows according to the spent fraction of time, and off-slot items get an explicit compact time badge inside the card.
 - Persists preference state locally and in account preferences when available.
 - Frontend schedule code is being split into focused helper modules: `schedule_state.js`, `schedule_api.js`, `schedule_filters.js`, and `schedule_render.js`.
 
@@ -607,7 +610,8 @@ How to use:
 7. Use favorites in search/local history when you want pinned entities that reopen fast without switching calendar presets.
 8. Pick another non-favorite schedule from search to reset the module filter to all modules available for that schedule.
 9. Use `Cards`, `Compact`, `Table`, or `Exams` to choose display density. The choice is saved and reflected in the URL; `Table` is treated as a desktop mode and automatically falls back to cards on phones.
-10. Open the offline drawer to see cached schedules and refresh the current schedule cache.
+10. In `Table`, read long or off-slot exams by their vertical span inside the grid: the card position shows where the event starts and ends relative to the standard rows, and the compact time chip shows the exact real time when it does not align to the default slot boundaries.
+11. Open the offline drawer to see cached schedules and refresh the current schedule cache.
 
 ### Calendar Sync Panel
 
@@ -652,6 +656,7 @@ What it does:
 - In Telegram Mini App, the collapsed sync card remains visible while Telegram auth is pending or unavailable, so users can expand it and see the sign-in state instead of the panel disappearing.
 - Shows profile health (event count, next event, cache status, source updated, last access).
 - Adds the last university-site schedule parsing time to every generated iCal event description.
+- `Exams only` calendar feeds include pre-exam consultations together with exams and pass/fail assessments, while preserving the `Consultation` event type label.
 
 How to use:
 

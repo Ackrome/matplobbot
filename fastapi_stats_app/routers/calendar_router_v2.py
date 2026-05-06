@@ -64,7 +64,7 @@ BUILT_IN_PROFILES = (
         "kind": "built_in",
         "lesson_mode": "exams_only",
         "can_delete": False,
-        "scope_label": "Exams and pass/fail assessments from Telegram and website profiles",
+        "scope_label": "Exams, pass/fail assessments, and pre-exam consultations from Telegram and website profiles",
     },
 )
 CALENDAR_FEED_RESPONSE = {
@@ -376,6 +376,18 @@ def _count_profile_subscriptions(profile: dict, active_subs: list[dict]) -> int:
     )
 
 
+def _is_exam_focused_lesson(lesson: dict[str, Any]) -> bool:
+    simple_type = str(lesson.get("simple_type") or "").strip()
+    normalized_kind = str(lesson.get("kindOfWork") or "").lower().replace("\u0451", "\u0435")
+    exam_keywords = ("экзам", "зачет", "аттест", "exam", "credit", "test")
+    is_consultation = "консульт" in normalized_kind or "consult" in normalized_kind
+    is_exam_related = any(keyword in normalized_kind for keyword in exam_keywords)
+
+    if simple_type == "Exam":
+        return True
+    return is_consultation and is_exam_related
+
+
 def _filter_schedule_for_profile(schedule: list[dict], profile: dict) -> list[dict]:
     entity_type = profile.get("entity_type")
     entity_id = str(profile.get("entity_id") or "")
@@ -388,7 +400,7 @@ def _filter_schedule_for_profile(schedule: list[dict], profile: dict) -> list[di
             continue
         if entity_id and str(lesson.get("source_entity_id")) != entity_id:
             continue
-        if lesson_mode == "exams_only" and lesson.get("simple_type") != "Exam":
+        if lesson_mode == "exams_only" and not _is_exam_focused_lesson(lesson):
             continue
 
         module_name = lesson.get("module")
