@@ -301,7 +301,7 @@ function renderCalendarValueCard(label, valueHtml, className = '') {
     return `
         <div class="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/40 ${className}">
             <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(label)}</div>
-            <div class="mt-1 line-clamp-2 text-xs font-bold text-slate-700 dark:text-slate-200">${valueHtml}</div>
+            <div class="mt-1 line-clamp-2 text-sm font-black leading-5 text-slate-700 dark:text-slate-200">${valueHtml}</div>
         </div>
     `;
 }
@@ -380,6 +380,7 @@ function installCalendarSyncHandle() {
 function renderTelegramCalendarAuthPlaceholder(container) {
     if (!hasUserToggledCalendarPanel) isCalendarPanelCollapsed = true;
     const authState = window.mpbTelegramAuthState || {};
+    const cardPaddingClass = getCalendarDrawerWidth() >= 460 ? 'p-6' : 'p-5';
     const isPending = Boolean(authState.pending);
     const statusKey = isPending ? 'schedule.calendar.statusSetup' : 'schedule.calendar.statusUnavailable';
     const statusFallback = getUiLanguage() === 'ru' ? (isPending ? 'Настройка' : 'Недоступно') : (isPending ? 'Setup' : 'Unavailable');
@@ -406,7 +407,7 @@ function renderTelegramCalendarAuthPlaceholder(container) {
         `;
 
     container.innerHTML = `
-        <div class="calendar-sync-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="calendar-sync-card rounded-3xl border border-slate-200 bg-white ${cardPaddingClass} shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
@@ -442,6 +443,7 @@ function renderTelegramCalendarAuthPlaceholder(container) {
 function renderCalendarSubscription() {
     const container = document.getElementById('calendarSubscriptionSection');
     if (!container) return;
+    const cardPaddingClass = getCalendarDrawerWidth() >= 460 ? 'p-6' : 'p-5';
 
     if (!isCalendarSyncPanelOpen) {
         setCalendarDrawerVisibility(false);
@@ -466,7 +468,7 @@ function renderCalendarSubscription() {
 
     if (state.loading) {
         container.innerHTML = `
-            <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <div class="rounded-3xl border border-slate-200 bg-white ${cardPaddingClass} shadow-sm dark:border-slate-700 dark:bg-slate-800">
                 <div class="flex items-center gap-3 text-sm font-bold text-slate-600 dark:text-slate-300">
                     <span class="h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"></span>
                     ${escapeHtml(t('schedule.calendar.loading', 'Loading your personal subscription link...'))}
@@ -496,7 +498,7 @@ function renderCalendarSubscription() {
             renderTelegramCalendarAuthPlaceholder(container);
         } else {
             container.innerHTML = `
-                <div class="calendar-sync-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <div class="calendar-sync-card rounded-3xl border border-slate-200 bg-white ${cardPaddingClass} shadow-sm dark:border-slate-700 dark:bg-slate-800">
                     <div class="flex flex-col gap-4">
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">${escapeHtml(t('schedule.calendar.statusSetup', 'Setup'))}</span>
@@ -528,8 +530,12 @@ function renderCalendarSubscription() {
     const updatedAtLabel = health.source_updated_at
         ? formatCalendarDateTime(health.source_updated_at, '')
         : escapeHtml(t('schedule.calendar.notUpdatedYet', 'Not updated yet'));
-    const panelUsesCompactLayout = getCalendarDrawerWidth() < 720;
-    const selectedProfileDescription = getCalendarProfileDescription(selectedProfile, { compact: panelUsesCompactLayout });
+    const panelWidth = getCalendarDrawerWidth();
+    const panelUsesCompactLayout = panelWidth < 430;
+    const panelUsesWideLayout = panelWidth >= 460;
+    const panelCardPaddingClass = panelUsesWideLayout ? 'p-6' : 'p-5';
+    const profileTextCompact = panelWidth < 560;
+    const selectedProfileDescription = getCalendarProfileDescription(selectedProfile, { compact: profileTextCompact });
     const profileKindLabel = getCalendarProfileKindLabel(selectedProfile);
     const lessonModeLabel = getCalendarLessonModeLabel(selectedProfile);
     const modulesLabel = getCalendarModulesLabel(selectedProfile);
@@ -544,18 +550,21 @@ function renderCalendarSubscription() {
     const moduleDraft = getCalendarProfileModuleDraft(selectedProfile);
     const moduleDraftCount = moduleDraft.size;
     const moduleEditorCanSave = Boolean(selectedProfile?.kind === 'custom' && canUpdateModulesFromCurrentView && availableProfileModules.length);
-    const splitPanelClass = panelUsesCompactLayout ? 'flex flex-col gap-4' : 'flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between';
-    const splitActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 sm:flex sm:shrink-0 sm:items-center';
-    const sectionHeaderClass = panelUsesCompactLayout ? 'flex flex-col gap-3' : 'flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between';
-    const sectionActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 sm:flex sm:flex-wrap';
-    const metadataGridClass = panelUsesCompactLayout ? 'sm:grid-cols-2' : 'sm:grid-cols-2 xl:grid-cols-4';
-    const moduleDraftGridClass = panelUsesCompactLayout ? 'sm:grid-cols-2' : 'sm:grid-cols-2 xl:grid-cols-3';
-    const diagnosticsGridClass = panelUsesCompactLayout ? 'sm:grid-cols-2' : 'sm:grid-cols-2 lg:grid-cols-5';
-    const connectionUrlGridClass = panelUsesCompactLayout ? 'grid gap-2' : 'grid gap-2 xl:grid-cols-[minmax(0,1fr)_auto]';
-    const connectionTabGridClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'flex flex-wrap gap-2';
-    const connectionActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 sm:flex sm:shrink-0 sm:flex-wrap';
-    const bodyHeaderClass = panelUsesCompactLayout ? 'flex flex-col gap-4' : 'flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between';
-    const bodyHeaderActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end xl:shrink-0';
+    const splitPanelClass = panelUsesCompactLayout ? 'flex flex-col gap-4' : 'grid gap-3 grid-cols-[minmax(0,1fr)_auto] items-start';
+    const splitActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 grid-cols-2';
+    const sectionHeaderClass = panelUsesCompactLayout ? 'flex flex-col gap-3' : 'grid gap-3 grid-cols-[minmax(0,1fr)_auto] items-start';
+    const sectionActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'flex flex-wrap justify-end gap-2';
+    const metadataGridClass = panelUsesCompactLayout ? 'sm:grid-cols-2' : 'grid-cols-2';
+    const moduleDraftGridClass = panelUsesCompactLayout ? 'sm:grid-cols-2' : 'grid-cols-2';
+    const diagnosticsGridClass = panelUsesCompactLayout ? 'sm:grid-cols-2' : 'grid-cols-2';
+    const connectionUrlGridClass = panelUsesCompactLayout ? 'grid gap-2' : 'grid gap-3 grid-cols-[minmax(0,1fr)_auto] items-start';
+    const connectionTabGridClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 grid-cols-3';
+    const connectionLinkActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 grid-cols-2';
+    const platformActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 grid-cols-2';
+    const destructiveActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 grid-cols-2';
+    const bodyHeaderClass = panelUsesCompactLayout ? 'flex flex-col gap-4' : 'grid gap-4 grid-cols-[minmax(0,1fr)_auto] items-start';
+    const bodyHeaderActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'flex max-w-[22rem] flex-wrap items-center justify-end gap-2';
+    const summaryGridClass = panelUsesCompactLayout ? 'sm:grid-cols-2' : 'grid-cols-2';
     const profileButtons = profiles.map((profile) => {
         const active = profile.selected;
         return `
@@ -569,7 +578,7 @@ function renderCalendarSubscription() {
                             <div class="truncate text-sm font-black">${escapeHtml(profile.name)}</div>
                             <span class="rounded-full bg-white/80 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.16em] text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(getCalendarProfileKindLabel(profile))}</span>
                         </div>
-                        <p class="mt-1 line-clamp-2 text-xs font-medium opacity-80">${escapeHtml(getCalendarProfileDescription(profile, { compact: panelUsesCompactLayout }))}</p>
+                        <p class="mt-1 line-clamp-2 text-xs font-medium opacity-80">${escapeHtml(getCalendarProfileDescription(profile, { compact: profileTextCompact }))}</p>
                         <div class="mt-2 flex flex-wrap gap-1.5">
                             <span class="rounded-full bg-white/80 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(getCalendarLessonModeLabel(profile))}</span>
                             <span class="rounded-full bg-white/80 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(getCalendarModulesLabel(profile))}</span>
@@ -612,15 +621,17 @@ function renderCalendarSubscription() {
         [t('schedule.calendar.health.next', 'Next'), nextEventLabel],
         [t('schedule.calendar.health.updated', 'Cache updated'), updatedAtLabel]
     ] : [];
-    const compactSummary = selectedProfile
+    const summaryOverview = selectedProfile
         ? `
-            <div class="mt-4 grid gap-2 sm:grid-cols-3">
+            <div class="grid gap-2 ${summaryGridClass}">
                 ${renderCalendarValueCard(t('schedule.calendar.activePreset', 'Active preset'), escapeHtml(selectedProfile.name), 'bg-slate-50 dark:bg-slate-900/40')}
                 ${renderCalendarValueCard(t('schedule.calendar.health.events', 'Events'), escapeHtml(eventCountLabel), 'bg-slate-50 dark:bg-slate-900/40')}
                 ${renderCalendarValueCard(t('schedule.calendar.health.next', 'Next'), nextEventLabel, 'bg-slate-50 dark:bg-slate-900/40')}
+                ${renderCalendarValueCard(t('schedule.calendar.health.updated', 'Cache updated'), updatedAtLabel, 'bg-slate-50 dark:bg-slate-900/40')}
             </div>
         `
         : '';
+    const compactSummary = summaryOverview ? `<div class="mt-4">${summaryOverview}</div>` : '';
 
     const moduleDetailsPanel = selectedProfile
         ? `
@@ -760,7 +771,7 @@ function renderCalendarSubscription() {
                     <div class="mt-4 ${connectionUrlGridClass}">
                         <input readonly value="${escapeHtml(shownUrl)}"
                             class="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-600 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                        <div class="${connectionActionsClass}">
+                        <div class="${connectionLinkActionsClass}">
                             ${renderCalendarButton(isRevealed ? 'schedule.calendar.hide' : 'schedule.calendar.reveal', isRevealed ? 'Hide' : 'Show', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="toggleCalendarProfileReveal('${escapeJsString(selectedProfile.id)}')"`) }
                             ${renderCalendarButton('schedule.calendar.copy', 'Copy link', 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500', 'onclick="copyCalendarSubscriptionLink(event)"')}
                         </div>
@@ -773,7 +784,7 @@ function renderCalendarSubscription() {
                         </div>
                         <div class="${splitPanelClass} mt-3">
                             <p class="text-sm font-medium text-slate-600 dark:text-slate-300">${escapeHtml(t(platformGuideKey, platformGuideFallback))}</p>
-                            <div class="${connectionActionsClass}">
+                            <div class="${platformActionsClass}">
                                 ${platformPrimaryAction}
                                 ${renderCalendarButton('schedule.calendar.preview', 'Preview feed', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="openCalendarProfileLink('preview')"`) }
                                 ${renderCalendarButton('schedule.calendar.download', 'Download ICS', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="openCalendarProfileLink('download')"`) }
@@ -810,7 +821,7 @@ function renderCalendarSubscription() {
                             <div class="text-xs font-black uppercase tracking-[0.16em] text-rose-500 dark:text-rose-300">${escapeHtml(t('schedule.calendar.dangerZone', 'Danger zone'))}</div>
                             <p class="mt-1 text-sm font-medium text-rose-700 dark:text-rose-200">${escapeHtml(t('schedule.calendar.dangerDescription', 'Resetting or disabling affects all external calendar apps using this link.'))}</p>
                         </div>
-                        <div class="${connectionActionsClass}">
+                        <div class="${destructiveActionsClass}">
                             ${renderCalendarButton('schedule.calendar.reset', 'Reset link', 'border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 dark:border-rose-900/70 dark:bg-slate-800 dark:text-rose-300 dark:hover:bg-rose-950/30', 'onclick="resetCalendarSubscription()"')}
                             ${renderCalendarButton(state.sync_enabled ? 'schedule.calendar.disable' : 'schedule.calendar.enable', state.sync_enabled ? 'Disable' : 'Enable', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="toggleCalendarSync(${state.sync_enabled ? 'false' : 'true'})"`)}
                             ${selectedProfile.can_delete ? renderCalendarButton('schedule.calendar.delete', 'Delete preset', 'border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 dark:border-rose-900/70 dark:bg-slate-800 dark:text-rose-300 dark:hover:bg-rose-950/30', `onclick="deleteCalendarSubscriptionProfile('${escapeJsString(selectedProfile.id)}')"`) : ''}
@@ -827,6 +838,7 @@ function renderCalendarSubscription() {
         ? ''
         : `
             <div id="calendarSubscriptionBody" class="mt-5 space-y-4">
+                ${summaryOverview}
                 ${connectionPanel}
                 ${currentViewSave}
                 ${profileSettings}
@@ -845,7 +857,7 @@ function renderCalendarSubscription() {
         `;
 
     container.innerHTML = `
-        <div class="calendar-sync-card rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="calendar-sync-card rounded-3xl border border-slate-200 bg-white ${panelCardPaddingClass} shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div class="${bodyHeaderClass}">
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">

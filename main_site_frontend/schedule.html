@@ -12,9 +12,9 @@
     <link rel="icon" sizes="192x192" href="/android-chrome-192x192.png">
     <link rel="icon" sizes="512x512" href="/android-chrome-512x512.png">
     <link rel="manifest" href="/site.webmanifest">
-    <script src="/js/theme_bootstrap.js?v=1"></script>
+    <script src="/js/theme_bootstrap.js?v=20260506-1"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="/css/tailwind.css?v=6">
+    <link rel="stylesheet" href="/css/tailwind.css?v=20260506-1">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -448,7 +448,7 @@
             right: 1rem;
             bottom: 1rem;
             z-index: 80;
-            width: min(30rem, calc(100vw - 1rem));
+            width: min(34rem, calc(100vw - 1rem));
             overflow-y: auto;
             padding: 0;
             pointer-events: auto;
@@ -541,7 +541,7 @@
             top: calc(env(safe-area-inset-top) + 0.5rem);
             right: 0.5rem;
             bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
-            width: min(30rem, calc(100vw - 1rem));
+            width: min(34rem, calc(100vw - 1rem));
         }
         html.tg-webapp #offlineDropdown,
         html.tg-webapp #searchResults {
@@ -570,7 +570,7 @@
         @media (min-width: 1280px) {
             .schedule-shell--calendar-open .schedule-workspace {
                 display: grid;
-                grid-template-columns: minmax(0, 1fr) minmax(22rem, 24rem);
+                grid-template-columns: minmax(0, 1fr) clamp(26rem, 34vw, 32rem);
                 align-items: start;
             }
             .schedule-shell--calendar-open #calendarSubscriptionSection.calendar-sync-drawer {
@@ -836,16 +836,16 @@
         </div>
     </main>
 
-    <script src="/js/runtime_config.js?v=2"></script>
-    <script src="/js/ui_utils.js?v=1"></script>
-    <script src="/js/telegram_webapp.js?v=4"></script>
-    <script src="/js/navbar.js?v=32"></script>
-    <script src="/js/schedule_state.js?v=2"></script>
-    <script src="/js/schedule_api.js?v=1"></script>
-    <script src="/js/schedule_filters.js?v=1"></script>
-    <script src="/js/schedule_render.js?v=1"></script>
-    <script src="/js/schedule.js?v=28"></script>
-    <script src="/js/calendar_sync.js?v=15"></script>
-    <script src="/js/schedule_ux.js?v=9"></script>
+    <script src="/js/runtime_config.js?v=20260506-1"></script>
+    <script src="/js/ui_utils.js?v=20260506-1"></script>
+    <script src="/js/telegram_webapp.js?v=20260506-1"></script>
+    <script src="/js/navbar.js?v=20260506-1"></script>
+    <script src="/js/schedule_state.js?v=20260506-1"></script>
+    <script src="/js/schedule_api.js?v=20260506-1"></script>
+    <script src="/js/schedule_filters.js?v=20260506-1"></script>
+    <script src="/js/schedule_render.js?v=20260506-1"></script>
+    <script src="/js/schedule.js?v=20260506-1"></script>
+    <script src="/js/calendar_sync.js?v=20260506-1"></script>
+    <script src="/js/schedule_ux.js?v=20260506-1"></script>
 </body>
 </html>

@@ -620,6 +620,7 @@ What it does:
 - Shows eligibility based on Telegram linkage. Bot subscriptions are no longer required for website-owned iCal profiles.
 - Opens from the `Calendar` button in the schedule toolbar; `/schedule?calendar=1` still opens the panel directly.
 - On desktop, the panel is embedded as a right rail inside the schedule shell and scrolls internally instead of stretching the full page. On mobile and narrow widths it falls back to a dismissible drawer with backdrop and `Esc`/outside-click close.
+- The desktop rail and shared drawer are wider than before, so the connection flow, summary cards, and preset controls no longer feel cramped in the right column.
 - Internal panel sections adapt to the actual rail/drawer width instead of global viewport breakpoints, so tablet drawers and the desktop rail keep compact stacked controls instead of overflowing into wide multi-column layouts.
 - Manages profile-based iCal feeds:
 - built-in `All classes`
@@ -630,9 +631,11 @@ What it does:
 - Warms the semester schedule cache when a website profile is saved, then the background scheduler keeps these web-only sources refreshed.
 - Supports:
 - expand/collapse panel state
-- collapsed summary with active preset, event count, next event, and fast actions
+- collapsed summary with active preset, event count, next event, cache-updated time, and fast actions
+- expanded top overview cards for active preset, event count, next event, and last cache update, so everyday status is visible without opening diagnostics
 - compact selected-state preset rows for built-in and custom profiles
 - separate connection, current-page preset save, preset settings, and diagnostics/management sections ordered by everyday usage priority
+- shorter preset description copy in the rail header/settings when the panel is still relatively narrow, so key actions stay above the fold instead of being pushed down by wrapped metadata
 - visible selected-module chips for every preset, including the `All modules` state
 - custom preset module checklist on the matching schedule page
 - copy/reveal/hide URL
@@ -655,7 +658,7 @@ How to use:
 1. Sign in and open `/schedule`.
 2. Link the website account to Telegram to generate the private secret link.
 3. Click `Calendar` in the schedule toolbar to open the rail/drawer.
-4. Use the drawer header and `Connection` section for the normal flow: check the active preset, copy the link, open the feed in the target calendar app, or jump to bot management.
+4. Use the top overview cards and `Connection` section for the normal flow: confirm the active preset and feed health, then copy the link, open the feed in the target calendar app, or jump to bot management.
 5. In `Presets`, switch between built-in feeds and custom website presets. Built-in presets update the current lesson mode, and custom presets also reopen their saved schedule entity/modules on the page while keeping the currently selected week.
 6. Open any group, lecturer, or room schedule and use `Save current view` to create a website-only iCal profile.
 7. In `Profile settings`, inspect which modules are included in the selected preset. For custom presets, open the matching schedule from the module notice when needed, then use the checklist to add/remove modules and save the preset.
