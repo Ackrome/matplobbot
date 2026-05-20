@@ -14,7 +14,6 @@ greenlet>=3.1.1,<4
 httpx>=0.28.1,<1
 ics>=0.7.2,<1
 ipython>=8.32.0,<9
-markdown>=3.8.1,<4
 markdown-it-py>=3.0.0,<4
 matplotlib>=3.9.2,<4
 matplobblib==0.3.21

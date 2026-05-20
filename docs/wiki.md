@@ -1171,20 +1171,26 @@ Source:
 
 - `requirements.in`
 - `requirements.txt`
+- `fastapi_stats_app/requirements.txt`
 - `scheduler_app/requirements.txt`
+- `.github/workflows/ci-cd.yml`
 - `setup.py`
 
 What it does:
 
 - Pins `Pillow` to a non-vulnerable release range (`>=12.2.0,<13`) and locks `requirements.txt` to `12.2.0`.
 - Pins `python-dotenv` to a non-vulnerable release range (`>=1.2.2,<2`) and locks `requirements.txt` to `1.2.2`.
-- Keeps CI `pip-audit --strict` green for the currently reported `GHSA-whj4-6x5x-4v2j` and `GHSA-mf9w-mj56-hr94` advisories.
+- Uses an in-repo HS256 JWT implementation for FastAPI access tokens, avoiding the no-fix `python-jose` JWE advisory while keeping existing bearer-token behavior.
+- Removes unused `markdown` from the bot/worker requirements; Markdown rendering uses `markdown-it-py`.
+- Pins `python-multipart` to `0.0.27` for the multipart parser DoS fix.
+- Keeps CI `pip-audit --strict` green with a documented ignore for `PYSEC-2024-277` only. That finding is a disputed, no-fixed-version `joblib` advisory pulled transitively by `matplobblib` via scikit-learn; this project does not load untrusted joblib pickle files.
 
 How to use:
 
 1. If CI reports a new dependency advisory, update the minimum safe version in `requirements.in`.
-2. Refresh the lock in `requirements.txt`.
-3. Keep `setup.py` aligned for editable/local installs so dev and CI environments do not drift.
+2. Refresh the lock in `requirements.txt` and update service-specific pins such as `fastapi_stats_app/requirements.txt`.
+3. Use `--ignore-vuln` only for advisories with no fixed release or a verified non-applicable code path, and document the reason next to the CI command.
+4. Keep `setup.py` aligned for editable/local installs so dev and CI environments do not drift.
 
 ### Production Frontend Proxy Startup
 

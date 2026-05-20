@@ -14,7 +14,6 @@ greenlet==3.1.1
 httpx==0.28.1
 ics==0.7.2
 ipython==8.32.0
-markdown==3.8.1
 markdown-it-py==3.0.0
 matplotlib==3.9.2
 matplobblib==0.3.21

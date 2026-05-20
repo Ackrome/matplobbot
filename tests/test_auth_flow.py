@@ -4,7 +4,7 @@ import json
 import os
 import time
 import unittest
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 from urllib.parse import urlencode
@@ -13,7 +13,6 @@ FASTAPI_AVAILABLE = True
 try:
     from fastapi import Depends, FastAPI, HTTPException
     from fastapi.testclient import TestClient
-    from jose import jwt
 
     os.environ.setdefault("JWT_SECRET_KEY", "test-secret-for-unit-tests")
     os.environ.setdefault("BOT_TOKEN", "123456:test-token")
@@ -96,11 +95,7 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertEqual(body["token_type"], "bearer")
-        decoded = jwt.decode(
-            body["access_token"],
-            fastapi_auth.SECRET_KEY,
-            algorithms=[fastapi_auth.ALGORITHM],
-        )
+        decoded = fastapi_auth.decode_access_token(body["access_token"])
         self.assertEqual(decoded["sub"], "7")
         self.assertEqual(decoded["role"], "user")
 
@@ -147,7 +142,7 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
     def test_telegram_webapp_init_data_verifier_rejects_stale_payload(self):
         init_data = self._build_webapp_init_data(
             {"id": 12345, "first_name": "Ivan"},
-            auth_date=int((datetime.utcnow() - timedelta(days=2)).timestamp()),
+            auth_date=int((datetime.now(UTC) - timedelta(days=2)).timestamp()),
         )
 
         parsed = fastapi_auth.parse_verified_telegram_webapp_init_data(init_data)
@@ -258,14 +253,12 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.json()["preferences"], locked_account.preferences)
 
     async def test_expired_jwt_is_rejected_by_get_current_user(self):
-        expired_token = jwt.encode(
+        expired_token = fastapi_auth.create_access_token(
             {
                 "sub": "1",
                 "role": "user",
-                "exp": datetime.utcnow() - timedelta(seconds=5),
             },
-            fastapi_auth.SECRET_KEY,
-            algorithm=fastapi_auth.ALGORITHM,
+            expires_delta=timedelta(seconds=-5),
         )
         account = SimpleNamespace(
             id=1,
