@@ -1,6 +1,6 @@
 ﻿# TODO
 
-Last updated: 2026-04-17
+Last updated: 2026-05-20
 
 ## Active Backlog (In-Repo)
 
@@ -33,8 +33,8 @@ Last updated: 2026-04-17
 ### P2 - API, Dashboard & Architecture
 - [ ] Fix `/api/schedule/cached_list` duplicates by returning only latest row per (`entity_type`, `entity_id`) and add API test.
 - [x] Add backend validation for `/api/schedule/search` term length (reject empty/1-char queries).
-- [ ] Move CORS allowed origins to env-driven config (`fastapi_stats_app/config.py`).
-- [ ] **Rate Limiting:** Add Redis-based rate limiting to heavy endpoints (e.g., PDF rendering, API searches) to prevent abuse.
+- [x] Move CORS allowed origins to env-driven config (`fastapi_stats_app/config.py`).
+- [x] **Rate Limiting:** Add Redis-based rate limiting to heavy endpoints (e.g., PDF rendering, API searches) to prevent abuse.
 
 ### P2 - Killer Features & Integrations (The "Cool" Factor)
 - [x] **Telegram Mini App (TMA):** Integrate `/schedule` and `/studio` as seamless Web Apps inside Telegram.

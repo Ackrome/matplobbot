@@ -8,7 +8,7 @@ import os
 import zipfile
 
 import aiohttp
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import delete, select, update
@@ -36,6 +36,8 @@ from shared_lib.tasks import (
 from shared_lib.telegram_http import build_telegram_http_client_config
 
 from ..auth import get_current_user
+from ..config import RATE_LIMIT_STUDIO_COMPILE
+from ..rate_limit import enforce_rate_limit
 
 router = APIRouter(prefix="/studio", tags=["studio"])
 logger = logging.getLogger(__name__)
@@ -118,11 +120,21 @@ class CompileRequest(BaseModel):
     summary="Compile an ad-hoc document payload",
     description="Compiles one-off LaTeX, Markdown, or Mermaid content through the worker pipeline.",
 )
-async def compile_document(req: CompileRequest, current_user: dict = Depends(get_current_user)):
+async def compile_document(
+    req: CompileRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Отправляет документ на компиляцию в Celery и дожидается результата.
     Для Фазы 1 реализовано синхронное ожидание (до 60 сек).
     """
+    await enforce_rate_limit(
+        request,
+        scope="studio_compile",
+        settings=RATE_LIMIT_STUDIO_COMPILE,
+        current_user=current_user,
+    )
     try:
         if req.type == "latex":
             task = dispatch_traced_task(compile_full_latex_task, req.content)
@@ -293,10 +305,17 @@ async def upload_asset(
 )
 async def compile_project(
     project_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db_session_dependency),
     current_user: dict = Depends(get_current_user),
 ):
     # Получаем проект, чтобы достать старый кэш
+    await enforce_rate_limit(
+        request,
+        scope="studio_compile",
+        settings=RATE_LIMIT_STUDIO_COMPILE,
+        current_user=current_user,
+    )
     project = await get_owned_project_or_404(db, project_id, current_user["id"])
 
     build_cache_b64 = (
@@ -496,10 +515,17 @@ async def get_project_asset(
 )
 async def send_project_to_telegram(
     project_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db_session_dependency),
     current_user: dict = Depends(get_current_user),
 ):
     # 1. Проверяем, привязан ли Telegram
+    await enforce_rate_limit(
+        request,
+        scope="studio_compile",
+        settings=RATE_LIMIT_STUDIO_COMPILE,
+        current_user=current_user,
+    )
     telegram_id = current_user["db_obj"].telegram_id
     if not telegram_id:
         raise HTTPException(

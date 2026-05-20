@@ -43,6 +43,7 @@ This page is a full feature map of the project: bot, website, API, scheduler, wo
 | Feature | Entry point | Purpose |
 | --- | --- | --- |
 | [OpenAPI docs](#openapi-docs) | `/docs` | Branded interactive API docs with auth-aware try-it-out |
+| [API CORS and rate limits](#api-cors-and-rate-limits) | FastAPI env + Redis | CORS origin allowlist and abuse limits for heavy routes |
 | [Auth API](#auth-api) | `/api/auth/*` | Registration, login, Telegram auth, profile, preferences |
 | [Schedule API](#schedule-api) | `/api/schedule/*` | Search entities, fetch schedule windows, fallback counters |
 | [Stats API](#stats-api) | `/api/stats/*` | Health, profiles, exports, admin messaging, dashboards |
@@ -774,6 +775,37 @@ How to use:
 3. For Telegram auth, call `/api/auth/telegram`, copy `access_token`, then paste that JWT into `Authorize`.
 4. Use the schema panels to inspect payload fields before trying schedule, stats, studio, or calendar endpoints.
 
+### API CORS And Rate Limits
+
+Source:
+
+- `fastapi_stats_app/config.py`
+- `fastapi_stats_app/rate_limit.py`
+- `fastapi_stats_app/main.py`
+- `fastapi_stats_app/routers/schedule_router.py`
+- `fastapi_stats_app/routers/studio_router.py`
+- `fastapi_stats_app/routers/stats_router.py`
+
+What it does:
+
+- Loads CORS allowed origins from `FASTAPI_CORS_ALLOWED_ORIGINS`, with `CORS_ALLOWED_ORIGINS` as a compatibility fallback.
+- Accepts comma, semicolon, or newline separated origins; if unset, the public `ivantishchenko.ru` origins remain the default allowlist.
+- Applies Redis fixed-window limits to heavy API routes:
+- `GET /api/schedule/search` by client IP.
+- `POST /api/studio/compile`, `POST /api/studio/projects/{project_id}/compile`, and `POST /api/studio/projects/{project_id}/send_telegram` by authenticated website user.
+- `GET /api/stats/users/{user_id}/export_actions?format=weekly_pdf` by authenticated admin.
+- Returns `429` with `Retry-After` when a bucket is exhausted.
+- Fails open by default if Redis is briefly unavailable, so the API keeps serving traffic; set `FASTAPI_RATE_LIMIT_FAIL_OPEN=false` to fail closed with `503`.
+
+How to use:
+
+1. Set `FASTAPI_CORS_ALLOWED_ORIGINS=https://example.com,https://api.example.com` in the FastAPI environment when deploying under new domains.
+2. Keep Redis reachable from `mpb-fastapi-stats`; the limiter uses the shared Redis backend.
+3. Tune limits with `FASTAPI_RATE_LIMIT_SCHEDULE_SEARCH_LIMIT`, `FASTAPI_RATE_LIMIT_STUDIO_COMPILE_LIMIT`, and `FASTAPI_RATE_LIMIT_STATS_PDF_EXPORT_LIMIT`.
+4. Tune windows with `FASTAPI_RATE_LIMIT_SCHEDULE_SEARCH_WINDOW_SECONDS`, `FASTAPI_RATE_LIMIT_STUDIO_COMPILE_WINDOW_SECONDS`, and `FASTAPI_RATE_LIMIT_STATS_PDF_EXPORT_WINDOW_SECONDS`.
+5. Use `FASTAPI_RATE_LIMIT_ENABLED=false` only for controlled local debugging or load testing.
+6. If Redis latency is expected to be high, adjust `FASTAPI_RATE_LIMIT_REDIS_TIMEOUT_SECONDS`; the default is intentionally short to avoid tying up request handlers.
+
 ### Auth API
 
 Router:
@@ -819,6 +851,7 @@ Feature details:
 - Search terms must contain at least 2 non-whitespace characters; shorter terms return `422`.
 - For mixed entity types with equal relevance, response ordering is deterministic: `group` -> `person` -> `auditorium`, then stable lexical tie-break by label/id.
 - Search automatically falls back to local cache if upstream RUZ fails.
+- Search is Redis rate-limited to reduce abusive upstream API fan-out.
 - Cached list returns recently cached groups, lecturers, and rooms with `updated_at` so the offline drawer can show data freshness.
 - Schedule data returns:
 - `schedule`
@@ -871,6 +904,7 @@ Feature details:
 
 - Sort allowlists are strict and validated.
 - Export supports `json|csv|weekly_pdf`, `date_from`, `date_to`, `timezone`.
+- `weekly_pdf` export is Redis rate-limited because it renders a PDF in-process.
 - Admin send-message has Redis-backed per-admin rate limit and structured audit logs.
 - Legacy alias can be hard-disabled with `ENABLE_LEGACY_ACTION_USERS_ALIAS=false`.
 
@@ -907,6 +941,7 @@ Feature details:
 - Project ownership is enforced on all project routes.
 - `upload` supports binary assets up to 5 MB.
 - Compile pipeline supports build cache reuse for project compile.
+- Worker-backed compile and send-to-Telegram routes share the Studio compile rate limit.
 
 How to use:
 

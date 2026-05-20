@@ -36,6 +36,7 @@ from fastapi.templating import Jinja2Templates
 from shared_lib.database import close_db_pool, init_db_pool
 
 from .auth import get_current_user  # Import auth dependency
+from .config import CORS_ALLOWED_ORIGINS
 from .middleware import CorrelationIdMiddleware
 from .openapi_docs import configure_openapi
 from .routers import (
@@ -82,11 +83,7 @@ configure_fastapi_telemetry(app)
 # Настройка CORS для фронтенда
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://ivantishchenko.ru",
-        "http://ivantishchenko.ru",
-        "https://api.ivantishchenko.ru",
-    ],
+    allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

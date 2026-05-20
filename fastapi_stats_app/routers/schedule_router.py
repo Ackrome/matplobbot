@@ -29,6 +29,8 @@ from shared_lib.services.schedule_service import (
 from shared_lib.services.university_api import RuzAPIError, create_ruz_api_client
 
 from ..auth import require_admin
+from ..config import RATE_LIMIT_SCHEDULE_SEARCH
+from ..rate_limit import enforce_rate_limit
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 logger = logging.getLogger(__name__)
@@ -185,6 +187,7 @@ def _merge_search_results(results_by_type: dict[str, list[dict]]) -> list[dict]:
     ),
 )
 async def search_entity(
+    request: Request,
     term: str = Query(
         ...,
         min_length=SEARCH_TERM_MIN_LENGTH,
@@ -201,6 +204,11 @@ async def search_entity(
     db: AsyncSession = Depends(get_db_session_dependency),
     http_session: aiohttp.ClientSession = Depends(get_shared_http_session),
 ):
+    await enforce_rate_limit(
+        request,
+        scope="schedule_search",
+        settings=RATE_LIMIT_SCHEDULE_SEARCH,
+    )
     term = _normalize_search_term(term)
     search_type = _normalize_search_type(type)
     client = create_ruz_api_client(http_session)

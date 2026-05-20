@@ -43,6 +43,8 @@ from shared_lib.schemas import (
 from shared_lib.telegram_http import build_telegram_http_client_config
 
 from ..auth import require_admin
+from ..config import RATE_LIMIT_STATS_PDF_EXPORT
+from ..rate_limit import enforce_rate_limit
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 logger = logging.getLogger(__name__)
@@ -233,7 +235,7 @@ def _build_weekly_pdf_html(
         action_type_counts[action_type] = action_type_counts.get(action_type, 0) + 1
 
     summary_rows = "".join(
-        ("<tr>" f"<td>{html.escape(action_type)}</td>" f"<td>{count}</td>" "</tr>")
+        (f"<tr><td>{html.escape(action_type)}</td><td>{count}</td></tr>")
         for action_type, count in sorted(
             action_type_counts.items(), key=lambda item: (-item[1], item[0])
         )
@@ -670,7 +672,6 @@ async def get_action_users_legacy_alias(
         "Optional date range and timezone filters are applied before export."
     ),
     response_model=ExportActionsResponse,
-    dependencies=[Depends(require_admin)],
     responses={
         200: {
             "description": "JSON export payload by default, or a downloadable CSV/PDF when requested.",
@@ -684,6 +685,7 @@ async def get_action_users_legacy_alias(
 )
 async def export_user_actions(
     user_id: int,
+    request: Request,
     format: str = Query(
         "json",
         description="Supported formats: json, csv, weekly_pdf",
@@ -705,12 +707,21 @@ async def export_user_actions(
         description="IANA timezone used when applying date range filters.",
     ),
     db: AsyncSession = Depends(get_db_session_dependency),
+    current_user: dict = Depends(require_admin),
 ) -> Any | Response:
     normalized_format = format.strip().lower()
     if normalized_format not in SUPPORTED_USER_EXPORT_FORMATS:
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported export format '{format}'. Use one of: {sorted(SUPPORTED_USER_EXPORT_FORMATS)}",
+        )
+
+    if normalized_format == "weekly_pdf":
+        await enforce_rate_limit(
+            request,
+            scope="stats_pdf_export",
+            settings=RATE_LIMIT_STATS_PDF_EXPORT,
+            current_user=current_user,
         )
 
     if date_from and date_to and date_from > date_to:
@@ -765,8 +776,10 @@ async def export_user_actions(
     period_end = effective_date_to or period_start
     weekly_actions = list(filtered_actions)
     weekly_actions.sort(
-        key=lambda action: _parse_export_timestamp(str(action.get("timestamp") or ""))
-        or datetime.min.replace(tzinfo=UTC),
+        key=lambda action: (
+            _parse_export_timestamp(str(action.get("timestamp") or ""))
+            or datetime.min.replace(tzinfo=UTC)
+        ),
         reverse=True,
     )
     weekly_html = _build_weekly_pdf_html(
