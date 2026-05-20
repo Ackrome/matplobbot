@@ -236,9 +236,10 @@ async def get_current_user(
 
     try:
         payload = decode_access_token(token)
-        sub_id: str = payload.get("sub")
-        if not sub_id:
+        raw_sub_id = payload.get("sub")
+        if not isinstance(raw_sub_id, str) or not raw_sub_id:
             raise credentials_exception
+        sub_id = raw_sub_id
     except JWTError:
         raise credentials_exception
 
@@ -285,9 +286,10 @@ async def get_ws_user(websocket: WebSocket) -> dict:
 
     try:
         payload = decode_access_token(token)
-        sub_id: str = payload.get("sub")
-        if not sub_id:
+        raw_sub_id = payload.get("sub")
+        if not isinstance(raw_sub_id, str) or not raw_sub_id:
             raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
+        sub_id = raw_sub_id
 
         async with get_session() as db:
             result = await db.execute(select(WebAccount).where(WebAccount.id == int(sub_id)))
