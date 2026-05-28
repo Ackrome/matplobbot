@@ -7,3 +7,6 @@ ivantishchenko.ru {
 api.ivantishchenko.ru {
     reverse_proxy 127.0.0.1:9583
 }
+kg.ivantishchenko.ru {
+    reverse_proxy 192.168.1.30:3000
+}
