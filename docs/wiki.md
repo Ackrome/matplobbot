@@ -1180,6 +1180,7 @@ What it does:
 
 - Pins `Pillow` to a non-vulnerable release range (`>=12.2.0,<13`) and locks `requirements.txt` to `12.2.0`.
 - Pins `python-dotenv` to a non-vulnerable release range (`>=1.2.2,<2`) and locks `requirements.txt` to `1.2.2`.
+- Pins FastAPI to `0.136.3` and Starlette to `1.0.1` in `fastapi_stats_app/requirements.txt` so the stats service uses the Starlette release line containing the `PYSEC-2026-161` fix.
 - Uses an in-repo HS256 JWT implementation for FastAPI access tokens, avoiding the no-fix `python-jose` JWE advisory while keeping existing bearer-token behavior.
 - Removes unused `markdown` from the bot/worker requirements; Markdown rendering uses `markdown-it-py`.
 - Pins `python-multipart` to `0.0.27` for the multipart parser DoS fix.
