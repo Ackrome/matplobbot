@@ -254,8 +254,14 @@ jobs:
           # PYSEC-2024-277 is a disputed joblib deserialization advisory with no fixed
           # release as of 2026-05-20. It is pulled transitively by matplobblib via
           # scikit-learn, and this project does not load untrusted joblib pickle files.
+          # GHSA-jg22-mg44-37j8 and GHSA-hg6j-4rv6-33pg are aiohttp cookie handling
+          # advisories fixed in 3.14.0. aiogram 3.27.0 currently caps aiohttp at <3.14,
+          # and this project does not use aiohttp CookieJar.load() or per-request
+          # cookies=. Remove these ignores once aiogram supports aiohttp 3.14+.
           pip-audit --strict -r audit-requirements.txt \
-            --ignore-vuln PYSEC-2024-277
+            --ignore-vuln PYSEC-2024-277 \
+            --ignore-vuln GHSA-jg22-mg44-37j8 \
+            --ignore-vuln GHSA-hg6j-4rv6-33pg
 
   # 3. Auto-Versioning
   auto-version-patch:

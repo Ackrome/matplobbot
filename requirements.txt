@@ -1,6 +1,6 @@
 # Generated from requirements.in; update with pip-compile when dependency versions change.
 aiogram==3.27.0
-aiohttp==3.13.4
+aiohttp==3.13.5
 aiohttp-socks==0.10.1
 aiosqlite==0.20.0
 alembic==1.13.2

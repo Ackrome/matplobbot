@@ -1,5 +1,5 @@
 matplobbot-shared==0.1.312
-aiohttp==3.13.4
+aiohttp==3.13.5
 aiohttp-socks==0.10.1
 aiogram==3.27.0
 apscheduler==3.10.4
