@@ -760,12 +760,16 @@ window.mpbPopup("Saved", { type: "success" });
 Entry point:
 
 - `/docs`
+- `/redoc`
 
 Feature details:
 
 - Swagger UI is branded for Matplobbot instead of using the stock FastAPI styling.
+- ReDoc is available as a styled read-only API reference for schema browsing and sharing.
 - The info block includes auth instructions for both username/password login and Telegram-issued JWTs.
-- JSON endpoints expose concrete request/response schemas, while ZIP/PDF/iCal routes document their content types explicitly.
+- JSON endpoints expose concrete request/response schemas, shared error schemas, validation-error examples, and rate-limit response metadata.
+- ZIP/PDF/iCal routes document their content types explicitly.
+- Operation descriptions use Markdown sections for auth behavior, schedule fallback semantics, admin exports, Studio compile outputs, and calendar feed behavior.
 - Protected HTML pages are excluded from the schema so the docs stay API-focused.
 
 How to use:
@@ -774,6 +778,7 @@ How to use:
 2. For password auth, click `Authorize` and enter website credentials; Swagger UI will fetch a token from `/api/auth/login`.
 3. For Telegram auth, call `/api/auth/telegram`, copy `access_token`, then paste that JWT into `Authorize`.
 4. Use the schema panels to inspect payload fields before trying schedule, stats, studio, or calendar endpoints.
+5. Open `/redoc` when you need a cleaner reference view with grouped tags, Markdown descriptions, and response schema examples.
 
 ### API CORS And Rate Limits
 

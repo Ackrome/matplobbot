@@ -55,7 +55,7 @@ Last updated: 2026-05-20
 - [ ] Integrate OpenTelemetry (Tracing + Metrics) with Jaeger/Grafana to trace requests across FastAPI, Bot, and Celery workers.
 - [ ] Upgrade frotend to nfull PWA: Add Service Worker for offline asset caching and "Install App" prompt.
 - [ ] User Achievements/Badges system (e.g., "Late Night Coder", "LaTeX Master") displayed in /profile or /stats.
-- [ ] Enhance FastAPI OpenAPI docs: Add Markdown descriptions, response schemas, and ReDoc styling.
+- [x] Enhance FastAPI OpenAPI docs: Add Markdown descriptions, response schemas, and ReDoc styling.
 
 
 ## Completed In This Iteration

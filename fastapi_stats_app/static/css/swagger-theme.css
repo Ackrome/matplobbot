@@ -20,6 +20,14 @@ body,
     font-family: "Manrope", "Segoe UI", sans-serif;
 }
 
+body.mpb-redoc-docs {
+    min-height: 100vh;
+    color: var(--mpb-ink);
+    background:
+        radial-gradient(circle at top left, rgba(49, 181, 231, 0.18), transparent 34%),
+        linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
+}
+
 .swagger-ui .topbar {
     background: linear-gradient(120deg, #0d3a63 0%, var(--mpb-sky) 55%, var(--mpb-cyan) 100%);
     border-bottom: 1px solid rgba(255, 255, 255, 0.18);
@@ -164,4 +172,78 @@ body,
 .mpb-docs-note strong {
     display: block;
     margin-bottom: 4px;
+}
+
+.mpb-redoc-docs redoc {
+    display: block;
+    min-height: 100vh;
+}
+
+.mpb-redoc-docs .menu-content {
+    background: rgba(255, 255, 255, 0.92) !important;
+    border-right: 1px solid var(--mpb-line);
+    box-shadow: 12px 0 32px rgba(19, 34, 56, 0.07);
+}
+
+.mpb-redoc-docs .menu-content img {
+    max-width: 42px;
+}
+
+.mpb-redoc-docs .api-info {
+    margin: 0 0 28px;
+    padding: 28px 32px;
+    border: 1px solid var(--mpb-line);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 18px 44px rgba(19, 34, 56, 0.08);
+}
+
+.mpb-redoc-docs h1,
+.mpb-redoc-docs h2,
+.mpb-redoc-docs h3,
+.mpb-redoc-docs h4,
+.mpb-redoc-docs label,
+.mpb-redoc-docs .api-content,
+.mpb-redoc-docs .menu-content {
+    font-family: "Manrope", "Segoe UI", sans-serif !important;
+}
+
+.mpb-redoc-docs h1,
+.mpb-redoc-docs h2,
+.mpb-redoc-docs h3 {
+    color: var(--mpb-ink) !important;
+    letter-spacing: 0;
+}
+
+.mpb-redoc-docs a {
+    color: #0d5d94;
+}
+
+.mpb-redoc-docs .operation-type {
+    border-radius: 6px;
+    font-weight: 800;
+    letter-spacing: 0;
+}
+
+.mpb-redoc-docs .http-verb {
+    border-radius: 6px;
+}
+
+.mpb-redoc-docs pre,
+.mpb-redoc-docs code {
+    border-radius: 8px;
+}
+
+@media (max-width: 800px) {
+    .swagger-ui .info {
+        margin: 0 12px 16px;
+        padding: 22px 20px;
+        border-radius: 16px;
+    }
+
+    .mpb-redoc-docs .api-info {
+        margin: 0 0 18px;
+        padding: 22px 20px;
+        border-radius: 14px;
+    }
 }
