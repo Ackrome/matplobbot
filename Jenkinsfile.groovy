@@ -67,7 +67,6 @@ required_modules = [
     "aiogram",
     "fastapi",
     "fastapi.testclient",
-    "jose",
     "passlib",
     "sqlalchemy",
 ]
