@@ -19,6 +19,14 @@ immich.ivantishchenko.ru {
     reverse_proxy 192.168.1.33:2283
 }
 
+auth.ivantishchenko.ru {
+    reverse_proxy 192.168.1.33:9091
+}
+
 dl.ivantishchenko.ru {
+    forward_auth 192.168.1.33:9091 {
+        uri /api/verify?rd=https://auth.ivantishchenko.ru/
+        copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+    }
     reverse_proxy 192.168.1.33:8080
 }
