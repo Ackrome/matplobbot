@@ -14,3 +14,7 @@ kg.ivantishchenko.ru {
 ftv.ivantishchenko.ru {
     reverse_proxy 192.168.1.16:8765
 }
+
+immich.ivantishchenko.ru {
+    reverse_proxy 192.168.1.33:2283
+}
