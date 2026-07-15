@@ -18,3 +18,7 @@ ftv.ivantishchenko.ru {
 immich.ivantishchenko.ru {
     reverse_proxy 192.168.1.33:2283
 }
+
+dl.ivantishchenko.ru {
+    reverse_proxy 192.168.1.33:8080
+}
