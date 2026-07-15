@@ -1183,12 +1183,15 @@ Source:
 
 What it does:
 
-- Pins `Pillow` to a non-vulnerable release range (`>=12.2.0,<13`) and locks `requirements.txt` to `12.2.0`.
+- Pins `Pillow` to a non-vulnerable release range (`>=12.3.0,<13`) and locks `requirements.txt` to `12.3.0`.
 - Pins `python-dotenv` to a non-vulnerable release range (`>=1.2.2,<2`) and locks `requirements.txt` to `1.2.2`.
-- Pins FastAPI to `0.136.3` and Starlette to `1.0.1` in `fastapi_stats_app/requirements.txt` so the stats service uses the Starlette release line containing the `PYSEC-2026-161` fix.
+- Pins `aiogram` to `3.29.1` so the bot and scheduler can use `aiohttp 3.14.1` without the old `<3.14` resolver cap.
+- Pins `aiohttp` to the non-vulnerable `3.14.1` release line across bot, scheduler, and shared package metadata.
+- Pins FastAPI to `0.136.3` and Starlette to `1.3.1` in `fastapi_stats_app/requirements.txt` so the stats service stays on a Starlette release line with the current multipart and request parsing fixes.
 - Uses an in-repo HS256 JWT implementation for FastAPI access tokens, avoiding the no-fix `python-jose` JWE advisory while keeping existing bearer-token behavior.
 - Removes unused `markdown` from the bot/worker requirements; Markdown rendering uses `markdown-it-py`.
-- Pins `python-multipart` to `0.0.27` for the multipart parser DoS fix.
+- Pins `python-multipart` to `0.0.31` for multipart parser DoS fixes.
+- Pins `setuptools` to `83.0.0` and `weasyprint` to `69.0` in the root requirements lock for the current audit gate.
 - Keeps CI `pip-audit --strict` green with a documented ignore for `PYSEC-2024-277` only. That finding is a disputed, no-fixed-version `joblib` advisory pulled transitively by `matplobblib` via scikit-learn; this project does not load untrusted joblib pickle files.
 
 How to use:
