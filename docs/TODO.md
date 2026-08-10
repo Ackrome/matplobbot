@@ -1,6 +1,23 @@
-﻿# TODO
+---
+type: Backlog
+title: Matplobbot Roadmap And Backlog
+description: Prioritized release, reliability, API, dashboard, product, and DevEx work items.
+resource: /TODO.md
+tags: [roadmap, backlog, release, reliability]
+status: draft
+generated: { by: codex/gpt-5, at: "2026-08-11T00:47:31+03:00" }
+stale_after: 2026-11-11
+sources:
+  - id: okf-spec
+    resource: https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
+    title: Open Knowledge Format v0.2 specification
+---
+
+# Matplobbot Roadmap And Backlog
 
 Last updated: 2026-05-20
+
+This backlog is an OKF draft concept. Completed checkboxes record delivered work; open checkboxes remain candidates for planning and release gating.
 
 ## Active Backlog (In-Repo)
 

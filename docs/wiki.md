@@ -1,6 +1,22 @@
+---
+type: Feature Catalog
+title: Matplobbot Full Feature Wiki
+description: Full feature map for the bot, website, API, scheduler, worker, and delivery pipeline.
+resource: /wiki.md
+tags: [features, architecture, api, bot, operations]
+status: stable
+generated: { by: codex/gpt-5, at: "2026-08-11T00:47:31+03:00" }
+sources:
+  - id: okf-spec
+    resource: https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
+    title: Open Knowledge Format v0.2 specification
+---
+
 # Matplobbot Full Feature Wiki
 
 This page is a full feature map of the project: bot, website, API, scheduler, worker, and delivery pipeline.
+
+This document is an OKF concept inside the [documentation bundle](index.md). It is kept as the global project wiki source and is mirrored to GitHub Wiki by the existing wiki sync workflow.
 
 ## Quick Index
 

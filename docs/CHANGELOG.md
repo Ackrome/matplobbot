@@ -1,3 +1,19 @@
+---
+type: Changelog
+title: Matplobbot Release Changelog
+description: Release history from early 0.x versions through v0.7.1 with summarized product and infrastructure changes.
+resource: /CHANGELOG.md
+tags: [changelog, releases, history]
+status: stable
+generated: { by: codex/gpt-5, at: "2026-08-11T00:47:31+03:00" }
+sources:
+  - id: okf-spec
+    resource: https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
+    title: Open Knowledge Format v0.2 specification
+---
+
+# Matplobbot Release Changelog
+
 # 0.1.0
 
 Начинаем вести журнал обновлений версии
@@ -6,68 +22,68 @@
 
 Сообщение меняется взависимости от выбранных настроек.
 
-![1750598291838](image/notes/1750598291838.png)
+![1750598291838](../image/notes/1750598291838.png)
 
-![1750598309730](image/notes/1750598309730.png)
+![1750598309730](../image/notes/1750598309730.png)
 
 # 0.1.2
 
 Добавлена Inline клавиатура для help. Теперь админ команды показываются только админу
 
-![1750600770843](image/notes/1750600770843.png)
+![1750600770843](../image/notes/1750600770843.png)
 
 # 0.1.3
 
 Добавлена команда `/execute`, позволяющая администратору запускать код на python внутри бота
-![1750676332480](image/notes/1750676332480.png)
+![1750676332480](../image/notes/1750676332480.png)
 
 # 0.1.4
 
 Обновлена команда `/help` теперь она выводит весь список доступных пользователю команд
-![1750676703198](image/notes/1750676703198.png)
+![1750676703198](../image/notes/1750676703198.png)
 
 Не администратору не выводятся команды с подписью (admin)
 
 # 0.1.5
 
 Теперь, если код в `/execute` сохраняет файл в формате изображения, то бот выдаст это изображение.
-![1750676800617](image/notes/1750676800617.png)
+![1750676800617](../image/notes/1750676800617.png)
 
 Причем выдаст все изображения, создаваемые кодом:
 
-![1750676980376](image/notes/1750676980376.png)
+![1750676980376](../image/notes/1750676980376.png)
 
 # 0.1.6
 
 Добавлена поддержка Markdown Разметки вывода:
 
-![1750677082825](image/notes/1750677082825.png)
+![1750677082825](../image/notes/1750677082825.png)
 
 # 0.1.7
 
 Добавлена возможность поиска по всем функциям библиотеки:
 
-![0.1.7.1](image/notes/0.1.7.1.png)
+![0.1.7.1](../image/notes/0.1.7.1.png)
 
 Если найдено больше 10 вариантов, то показывается пагинация:
 
-![0.1.7.2](image/notes/0.1.7.2.png)
+![0.1.7.2](../image/notes/0.1.7.2.png)
 
 # 0.1.8
 
 Добавлена возможность добавлять найденные через `/ask` и `/search` функции в избранное.
 
-![0.1.8](image/notes/0.1.8.png)
+![0.1.8](../image/notes/0.1.8.png)
 
 # 0.1.9
 
 Добавлена возможность рендеринга текста в LaTeX
 
-![0.1.9.1](image/notes/0.1.9.1.png)
+![0.1.9.1](../image/notes/0.1.9.1.png)
 
 Также добавлены настройки этого рендеринга:
 
-![0.1.9.2](image/notes/0.1.9.2.png)
+![0.1.9.2](../image/notes/0.1.9.2.png)
 
 # 0.3.0
 

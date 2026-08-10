@@ -1,3 +1,17 @@
+---
+type: Changelog Supplement
+title: Changes After v0.7.1
+description: Normalized summary of product, API, backend, and infrastructure changes after the v0.7.1 snapshot.
+resource: /changelog-from-0.7.1.md
+tags: [changelog, releases, web-platform, infrastructure]
+status: stable
+generated: { by: codex/gpt-5, at: "2026-08-11T00:47:31+03:00" }
+sources:
+  - id: okf-spec
+    resource: https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
+    title: Open Knowledge Format v0.2 specification
+---
+
 # Изменения после снимка `v0.7.1`
 
 Сравнение сделано между Repomix-снимком `e025a2fbeec3ba9a474af573c6a28013c3fadeef` от 6 марта 2026 года и текущим состоянием ветки `main` на 5 апреля 2026 года. Сам снимок идет сразу после тега `v0.7.1`, поэтому ниже собраны изменения, появившиеся уже после этой точки.
