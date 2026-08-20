@@ -35,8 +35,9 @@ class TestTelemetry(unittest.TestCase):
         fake_task = _FakeCeleryTask()
         tracer = trace.get_tracer(__name__)
 
-        with correlation_scope(correlation_id="cid-123"), tracer.start_as_current_span(
-            "parent-span"
+        with (
+            correlation_scope(correlation_id="cid-123"),
+            tracer.start_as_current_span("parent-span"),
         ):
             result = dispatch_traced_task(fake_task, "payload", format="pdf")
 

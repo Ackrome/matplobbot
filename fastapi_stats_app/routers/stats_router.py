@@ -861,9 +861,10 @@ async def send_message_to_user(
             get_telegram_proxy_url(),
             log_context="stats Telegram send",
         )
-        async with aiohttp.ClientSession(**session_kwargs) as session, session.post(
-            tg_url, json=payload, **request_kwargs
-        ) as response:
+        async with (
+            aiohttp.ClientSession(**session_kwargs) as session,
+            session.post(tg_url, json=payload, **request_kwargs) as response,
+        ):
             if response.status != 200:
                 error_text = await response.text()
                 _emit_admin_send_audit(
