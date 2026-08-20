@@ -40,10 +40,23 @@
         return requestJson(`${getBaseUrl()}/schedule/data/${type}/${encodeURIComponent(id)}${suffix}`);
     }
 
+    function refreshSemesterCache({ type, id, token }) {
+        const headers = {};
+        if (token) headers.Authorization = `Bearer ${token}`;
+        return requestJson(
+            `${getBaseUrl()}/schedule/cache/${type}/${encodeURIComponent(id)}/refresh_semester`,
+            {
+                method: "POST",
+                headers,
+            }
+        );
+    }
+
     window.ScheduleApi = {
         getCachedSchedules,
         loadScheduleData,
         requestJson,
+        refreshSemesterCache,
         searchEntities,
     };
 })();

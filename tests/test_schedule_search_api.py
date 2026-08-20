@@ -14,6 +14,7 @@ try:
 
     fake_schedule_service = types.ModuleType("shared_lib.services.schedule_service")
     fake_schedule_service.get_module_name = lambda *_args, **_kwargs: None
+    fake_schedule_service.get_semester_bounds = lambda: ("2026-08-25", "2027-01-31")
     fake_schedule_service.get_schedule_with_cache_fallback = AsyncMock(return_value=([], False))
     fake_schedule_service.get_schedule_fallback_counters = AsyncMock(return_value={})
     fake_schedule_service.get_unique_modules_hybrid = AsyncMock(return_value=[])
@@ -242,6 +243,127 @@ class TestScheduleSearchAPI(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["source_updated_at"], parsed_at.isoformat())
 
+    def test_schedule_data_refresh_resolves_group_label_id(self):
+        fake_schedule = [
+            {
+                "date": "2026-08-27",
+                "discipline": "Math",
+                "group": "ПМ23-1",
+                "beginLesson": "10:10",
+                "endLesson": "11:40",
+                "auditorium": "A-101",
+                "kindOfWork": "Lecture",
+            }
+        ]
+        parsed_at = datetime(2026, 8, 21, 10, 30, tzinfo=UTC)
+        fake_client = types.SimpleNamespace(
+            search=AsyncMock(return_value=[{"id": "162426", "label": "ПМ23-1"}])
+        )
+
+        with (
+            patch.object(schedule_router, "create_ruz_api_client", return_value=fake_client),
+            patch.object(
+                schedule_router,
+                "get_schedule_with_cache_fallback",
+                AsyncMock(return_value=(fake_schedule, False)),
+            ) as schedule_fetch,
+            patch.object(schedule_router, "get_all_short_names", AsyncMock(return_value={})),
+            patch.object(schedule_router, "get_discipline_modules_map", AsyncMock(return_value={})),
+            patch.object(schedule_router, "get_unique_modules_hybrid", AsyncMock(return_value=[])),
+            patch.object(
+                schedule_router,
+                "get_cached_schedule_updated_at",
+                AsyncMock(return_value=parsed_at),
+            ) as get_updated_at,
+        ):
+            response = self.client.get(
+                "/api/schedule/data/group/%D0%9F%D0%9C23-1",
+                params={"base_date": "2026-08-21", "refresh": "1"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        fake_client.search.assert_awaited_once_with("ПМ23-1", "group")
+        schedule_fetch.assert_awaited_once()
+        args, kwargs = schedule_fetch.await_args
+        self.assertEqual(args[:4], (fake_client, "group", "162426", "2026-08-07"))
+        self.assertEqual(args[4], "2026-09-04")
+        self.assertEqual(kwargs["max_cache_age_hours"], 0)
+        get_updated_at.assert_awaited_once_with("group", "162426")
+        self.assertEqual(response.json()["source_updated_at"], parsed_at.isoformat())
+
+    def test_schedule_semester_refresh_resolves_group_label_and_updates_cache(self):
+        self.app.dependency_overrides[schedule_router.require_admin] = lambda: {
+            "id": 1,
+            "role": "admin",
+        }
+        fake_schedule = [
+            {
+                "date": "2026-08-27",
+                "discipline": "Math",
+                "group": "ПМ23-1",
+                "beginLesson": "10:10",
+                "endLesson": "11:40",
+                "auditorium": "A-101",
+                "kindOfWork": "Lecture",
+            }
+        ]
+        parsed_at = datetime(2026, 8, 21, 11, 15, tzinfo=UTC)
+        fake_client = types.SimpleNamespace(
+            search=AsyncMock(return_value=[{"id": "162426", "label": "ПМ23-1"}]),
+            get_schedule=AsyncMock(return_value=fake_schedule),
+        )
+
+        with (
+            patch.object(schedule_router, "create_ruz_api_client", return_value=fake_client),
+            patch.object(schedule_router, "upsert_cached_schedule", AsyncMock()) as upsert_cache,
+            patch.object(
+                schedule_router,
+                "get_cached_schedule_updated_at",
+                AsyncMock(return_value=parsed_at),
+            ) as get_updated_at,
+        ):
+            response = self.client.post(
+                "/api/schedule/cache/group/%D0%9F%D0%9C23-1/refresh_semester"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        fake_client.search.assert_awaited_once_with("ПМ23-1", "group")
+        fake_client.get_schedule.assert_awaited_once_with(
+            "group", "162426", start="2026-08-25", finish="2027-01-31"
+        )
+        upsert_cache.assert_awaited_once_with("group", "162426", fake_schedule)
+        get_updated_at.assert_awaited_once_with("group", "162426")
+        self.assertEqual(
+            response.json(),
+            {
+                "entity_type": "group",
+                "entity_id": "162426",
+                "requested_id": "ПМ23-1",
+                "lesson_count": 1,
+                "semester_bounds": {
+                    "start": "2026-08-25",
+                    "end": "2027-01-31",
+                },
+                "updated_at": parsed_at.isoformat(),
+            },
+        )
+
+    def test_schedule_semester_refresh_does_not_overwrite_empty_upstream_response(self):
+        self.app.dependency_overrides[schedule_router.require_admin] = lambda: {
+            "id": 1,
+            "role": "admin",
+        }
+        fake_client = types.SimpleNamespace(get_schedule=AsyncMock(return_value=[]))
+
+        with (
+            patch.object(schedule_router, "create_ruz_api_client", return_value=fake_client),
+            patch.object(schedule_router, "upsert_cached_schedule", AsyncMock()) as upsert_cache,
+        ):
+            response = self.client.post("/api/schedule/cache/group/162426/refresh_semester")
+
+        self.assertEqual(response.status_code, 502)
+        upsert_cache.assert_not_awaited()
+
     def test_schedule_fallback_counters_endpoint(self):
         self.app.dependency_overrides[schedule_router.require_admin] = lambda: {
             "id": 1,
@@ -317,3 +439,16 @@ class TestScheduleSearchAPI(unittest.TestCase):
         lesson_schema = schema["components"]["schemas"]["ScheduleLessonSchema"]
         self.assertIn("discipline_short", lesson_schema["properties"])
         self.assertIn("module", lesson_schema["properties"])
+
+    def test_schedule_semester_refresh_openapi_documents_response_shape(self):
+        schema = self.app.openapi()
+        operation = schema["paths"]["/api/schedule/cache/{type}/{id}/refresh_semester"]["post"]
+        response_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+
+        self.assertEqual(
+            response_schema["$ref"], "#/components/schemas/ScheduleSemesterRefreshResponse"
+        )
+
+        refresh_schema = schema["components"]["schemas"]["ScheduleSemesterRefreshResponse"]
+        self.assertIn("semester_bounds", refresh_schema["properties"])
+        self.assertIn("lesson_count", refresh_schema["properties"])

@@ -408,6 +408,24 @@ class LoadedBoundsSchema(BaseModel):
     model_config = BASE_CONFIG
 
 
+class ScheduleSemesterRefreshResponse(BaseModel):
+    entity_type: Literal["group", "person", "auditorium"] = Field(
+        ..., description="Normalized schedule entity type."
+    )
+    entity_id: str = Field(..., description="Resolved RUZ entity identifier stored in cache.")
+    requested_id: str = Field(..., description="Identifier originally requested by the client.")
+    lesson_count: int = Field(..., ge=0, description="Number of lessons written to cache.")
+    semester_bounds: LoadedBoundsSchema = Field(
+        ..., description="Semester date range fetched from RUZ."
+    )
+    updated_at: str | None = Field(
+        None,
+        description="Timestamp when the cache row was updated after the forced refresh.",
+    )
+
+    model_config = BASE_CONFIG
+
+
 class ScheduleDataResponse(BaseModel):
     schedule: list[ScheduleLessonSchema] = Field(default_factory=list)
     available_modules: list[str] = Field(default_factory=list)

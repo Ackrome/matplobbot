@@ -38,6 +38,7 @@ let modulePresets = [];
 let scheduleChangeSummary = null;
 let lessonActionMap = new Map();
 let isRefreshingScheduleCache = false;
+let isRefreshingSemesterCache = false;
 
 function createDefaultSchedulePageState() {
     return {
@@ -272,6 +273,14 @@ function t(key, fallback = '', params = {}) {
     return window.mpbI18n?.t?.(key, fallback, params) || fallback || key;
 }
 
+function showScheduleNotice(type, title, message) {
+    if (window.mpbPopup) {
+        window.mpbPopup(message, { type, title });
+        return;
+    }
+    console[type === 'error' ? 'error' : 'info'](`${title}: ${message}`);
+}
+
 function formatUiDate(date, options) {
     return new Intl.DateTimeFormat(getUiLocale(), options).format(date);
 }
@@ -332,6 +341,7 @@ function getPreferredLecturerName(value) {
 
 window.addEventListener('mpb-auth-ready', (event) => {
     window.scheduleAuthUser = event.detail?.user || null;
+    renderOfflineHistory();
     renderScheduleHome();
     // Вызываем функцию из calendar_sync.js, если она уже загрузилась
     if (window.refreshCalendarSubscription) {
@@ -419,7 +429,9 @@ function renderOfflineHistory(list = cachedOfflineEntities) {
         );
     });
     const staleCache = isScheduleCacheStale(currentUpdatedAt);
-    const refreshDisabled = !currentEntity?.id || isRefreshingScheduleCache;
+    const isAdmin = window.scheduleAuthUser?.role === 'admin';
+    const refreshDisabled = !currentEntity?.id || isRefreshingScheduleCache || isRefreshingSemesterCache;
+    const semesterRefreshDisabled = !currentEntity?.id || isRefreshingScheduleCache || isRefreshingSemesterCache;
     const headerBadge = staleCache
         ? `<span class="schedule-offline-chip schedule-offline-chip--warn">${escapeHtml(t('schedule.offline.stale', 'Stale'))}</span>`
         : `<span class="schedule-offline-chip schedule-offline-chip--ok">${escapeHtml(t('schedule.offline.ready', 'Ready'))}</span>`;
@@ -434,6 +446,10 @@ function renderOfflineHistory(list = cachedOfflineEntities) {
         : (currentEntity?.id
             ? t('schedule.offline.refreshCurrent', 'Refresh current schedule')
             : t('schedule.offline.refresh', 'Refresh cache'));
+    const semesterRefreshLabel = isRefreshingSemesterCache
+        ? t('schedule.offline.refreshingSemester', 'Refreshing semester...')
+        : t('schedule.offline.refreshSemester', 'Refresh full semester');
+    const disabledButtonClasses = 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-600';
     const headerHtml = `
         <div class="space-y-2.5 p-2.5">
             <div class="flex flex-wrap items-center gap-2">
@@ -455,10 +471,19 @@ function renderOfflineHistory(list = cachedOfflineEntities) {
             <button type="button" onclick="refreshCurrentScheduleCache()"
                 ${refreshDisabled ? 'disabled' : ''}
                 class="w-full rounded-2xl border px-3.5 py-2.5 text-xs font-black transition-colors ${refreshDisabled
-                    ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-600'
+                    ? disabledButtonClasses
                     : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50'}">
                 ${escapeHtml(refreshLabel)}
             </button>
+            ${isAdmin ? `
+                <button type="button" onclick="refreshCurrentScheduleSemesterCache()"
+                    ${semesterRefreshDisabled ? 'disabled' : ''}
+                    class="w-full rounded-2xl border px-3.5 py-2.5 text-xs font-black transition-colors ${semesterRefreshDisabled
+                        ? disabledButtonClasses
+                        : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200 dark:hover:bg-amber-950/50'}">
+                    ${escapeHtml(semesterRefreshLabel)}
+                </button>
+            ` : ''}
         </div>
     `;
     if (normalizedList.length === 0) {
@@ -1934,7 +1959,7 @@ window.clearAllModules = function() {
 }
 
 window.refreshCurrentScheduleCache = async function() {
-    if (!currentEntity?.id || isRefreshingScheduleCache) return;
+    if (!currentEntity?.id || isRefreshingScheduleCache || isRefreshingSemesterCache) return;
     isRefreshingScheduleCache = true;
     renderOfflineHistory();
     try {
@@ -1946,6 +1971,54 @@ window.refreshCurrentScheduleCache = async function() {
         await initOfflineHistory();
     } finally {
         isRefreshingScheduleCache = false;
+        renderOfflineHistory();
+    }
+}
+
+window.refreshCurrentScheduleSemesterCache = async function() {
+    if (!currentEntity?.id || isRefreshingScheduleCache || isRefreshingSemesterCache) return;
+    const token = localStorage.getItem('jwt_token');
+    if (!token || window.scheduleAuthUser?.role !== 'admin') {
+        showScheduleNotice(
+            'error',
+            t('schedule.offline.semesterRefreshFailedTitle', 'Semester refresh failed'),
+            t('schedule.offline.adminAuthRequired', 'Admin sign-in is required.')
+        );
+        return;
+    }
+
+    isRefreshingSemesterCache = true;
+    renderOfflineHistory();
+    try {
+        const refreshSemesterCache = window.ScheduleApi?.refreshSemesterCache;
+        if (typeof refreshSemesterCache !== 'function') {
+            throw new Error(t('schedule.offline.semesterRefreshFailed', 'Could not refresh semester cache.'));
+        }
+        const result = await refreshSemesterCache({
+            type: currentEntity.type,
+            id: currentEntity.id,
+            token
+        });
+        await loadSchedule(currentEntity.type, currentEntity.id, currentEntity.name, getISODateStr(currentWeekStart), {
+            preserveModules: true,
+            urlMode: 'replace'
+        });
+        await initOfflineHistory();
+        showScheduleNotice(
+            'success',
+            t('schedule.offline.semesterRefreshDoneTitle', 'Semester cache refreshed'),
+            t('schedule.offline.semesterRefreshDone', 'Semester cache refreshed: {count} lessons.', {
+                count: result?.lesson_count ?? 0
+            })
+        );
+    } catch (error) {
+        showScheduleNotice(
+            'error',
+            t('schedule.offline.semesterRefreshFailedTitle', 'Semester refresh failed'),
+            error?.message || t('schedule.offline.semesterRefreshFailed', 'Could not refresh semester cache.')
+        );
+    } finally {
+        isRefreshingSemesterCache = false;
         renderOfflineHistory();
     }
 }

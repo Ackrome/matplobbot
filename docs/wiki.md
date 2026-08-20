@@ -471,6 +471,7 @@ What it does:
 - Pre-caches the main static pages, shared scripts/styles, icons, Schedule assets, Studio assets, and offline fallback.
 - Uses network-first navigation so fresh pages win, then cached pages/offline fallback are used when the network is unavailable.
 - Avoids intercepting same-origin `/api/*` requests so authenticated API calls are not cached by the service worker.
+- Schedule frontend asset URLs use `?v=20260821-2`, and the service worker cache is `mpb-site-v20`; bump both when changing cached Schedule scripts so installed/PWA clients do not keep stale button behavior.
 
 How to use: (or not use)
 
@@ -881,6 +882,8 @@ Feature details:
 - `source_updated_at`
 - `loaded_bounds`
 - `GET /api/schedule/data/{type}/{id}` accepts `refresh=1` to force a live refresh attempt even when the local cache is still fresh.
+- If a legacy Schedule URL or local state passes a group label such as `ПМ23-1` as `{id}`, the API resolves it through live RUZ search before fetching schedule data, so refresh uses the numeric RUZ group id.
+- `POST /api/schedule/cache/{type}/{id}/refresh_semester` is admin-only and forces an immediate current-semester RUZ fetch for one schedule entity. It resolves group labels to numeric RUZ ids, writes the semester payload to `cached_schedules`, and fails instead of silently serving old cache when the upstream refresh cannot be completed.
 
 #### Schedule Search Offline Fallback Semantics (Frontend)
 
@@ -1041,7 +1044,7 @@ Source:
 Configured jobs:
 
 - `send_daily_schedules` (cron, every minute): sends next-day schedules at subscriber-selected times.
-- `check_for_schedule_updates` (interval, every 2h): detects diffs and sends change notifications.
+- `check_for_schedule_updates` (interval, every 2h): detects diffs, sends change notifications, and refreshes `cached_schedules.updated_at` after every successful unchanged API poll for subscribed entities.
 - `update_schedule_cache` (cron at 04:00 and 16:00): warm cache refresh.
 - `prune_inactive_subscriptions` (cron at 03:00): cleanup inactive subscriptions.
 - `send_admin_summary` (cron, every minute): checks summary schedule and sends due summaries.
@@ -1053,6 +1056,7 @@ Other scheduler features:
 - Scheduler Telegram delivery uses the same normalized proxy selection as the bot, so the local mixed `proxy` listener is used as `http://proxy:20170` when applicable.
 - RUZ calls are forced direct and bypass proxy.
 - Correlation IDs in scheduler stdout logs.
+- Semester-wide scheduler jobs use the shared `get_semester_bounds()` helper instead of duplicated date windows, keeping RUZ requests under the upstream date-range limit.
 
 ### Container Logging And Disk Limits
 

@@ -13,17 +13,20 @@ from shared_lib.database import (
     get_db_session_dependency,
     get_discipline_modules_map,
     search_cached_entities,
+    upsert_cached_schedule,
 )
 from shared_lib.schemas import (
     CachedScheduleEntitySchema,
     ScheduleDataResponse,
     ScheduleFallbackCountersResponse,
     ScheduleSearchResultSchema,
+    ScheduleSemesterRefreshResponse,
 )
 from shared_lib.services.schedule_service import (
     get_module_name,
     get_schedule_fallback_counters,
     get_schedule_with_cache_fallback,
+    get_semester_bounds,
     get_unique_modules_hybrid,
 )
 from shared_lib.services.university_api import RuzAPIError, create_ruz_api_client
@@ -86,6 +89,16 @@ def _normalize_search_term(term: str) -> str:
     return normalized
 
 
+def _normalize_schedule_entity_type(entity_type: str) -> str:
+    normalized = str(entity_type or "").strip().lower()
+    if normalized not in SEARCH_ENTITY_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported schedule entity type. Use group, person, or auditorium.",
+        )
+    return normalized
+
+
 def _normalize_search_results(
     raw_results: list[dict] | None, entity_type: str, *, is_offline: bool = False
 ) -> list[dict]:
@@ -109,6 +122,46 @@ def _normalize_search_results(
         )
 
     return normalized_results
+
+
+async def _resolve_schedule_entity_id(client, entity_type: str, entity_id: str) -> str:
+    normalized_id = str(entity_id or "").strip()
+    if entity_type != "group" or not normalized_id or normalized_id.isdigit():
+        return normalized_id
+
+    search = getattr(client, "search", None)
+    if not callable(search):
+        return normalized_id
+
+    try:
+        results = await search(normalized_id, entity_type)
+    except Exception:
+        logger.warning(
+            "RUZ lookup failed while resolving schedule entity id '%s' (%s).",
+            normalized_id,
+            entity_type,
+            exc_info=True,
+        )
+        return normalized_id
+
+    exact_match = next(
+        (
+            item
+            for item in results
+            if str(item.get("label") or "").strip().casefold() == normalized_id.casefold()
+        ),
+        None,
+    )
+    match = exact_match or (results[0] if results else None)
+    resolved_id = str(match.get("id") or "").strip() if match else ""
+    if resolved_id:
+        logger.info(
+            "Resolved schedule group label '%s' to RUZ id '%s'.",
+            normalized_id,
+            resolved_id,
+        )
+        return resolved_id
+    return normalized_id
 
 
 async def _search_single_entity_type(
@@ -306,6 +359,60 @@ async def get_fallback_counters():
     return await get_schedule_fallback_counters()
 
 
+@router.post(
+    "/cache/{type}/{id}/refresh_semester",
+    response_model=ScheduleSemesterRefreshResponse,
+    dependencies=[Depends(require_admin)],
+    summary="Force refresh full-semester schedule cache",
+    description=(
+        "Admin-only endpoint that fetches the current semester directly from RUZ and "
+        "overwrites the local cache for the requested schedule entity."
+    ),
+)
+async def refresh_schedule_semester_cache(
+    type: str,
+    id: str,
+    http_session: aiohttp.ClientSession = Depends(get_shared_http_session),
+):
+    entity_type = _normalize_schedule_entity_type(type)
+    requested_id = str(id or "").strip()
+    if not requested_id:
+        raise HTTPException(status_code=422, detail="Schedule entity id is required.")
+
+    start, finish = get_semester_bounds()
+    client = create_ruz_api_client(http_session)
+    try:
+        resolved_id = await _resolve_schedule_entity_id(client, entity_type, requested_id)
+        schedule = await client.get_schedule(entity_type, resolved_id, start=start, finish=finish)
+        if not schedule:
+            raise HTTPException(
+                status_code=502,
+                detail="RUZ returned an empty semester schedule; cache was not overwritten.",
+            )
+
+        await upsert_cached_schedule(entity_type, resolved_id, schedule)
+        source_updated_at = await get_cached_schedule_updated_at(entity_type, resolved_id)
+
+        return {
+            "entity_type": entity_type,
+            "entity_id": resolved_id,
+            "requested_id": requested_id,
+            "lesson_count": len(schedule),
+            "semester_bounds": {
+                "start": start,
+                "end": finish,
+            },
+            "updated_at": source_updated_at.isoformat() if source_updated_at else None,
+        }
+    except HTTPException:
+        raise
+    except RuzAPIError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        logger.error("Failed to force-refresh semester schedule cache: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
 @router.get(
     "/data/{type}/{id}",
     response_model=ScheduleDataResponse,
@@ -340,8 +447,9 @@ async def get_schedule_data(
 
     client = create_ruz_api_client(http_session)
     try:
+        resolved_id = await _resolve_schedule_entity_id(client, type, id)
         schedule, is_offline = await get_schedule_with_cache_fallback(
-            client, type, id, start, finish, max_cache_age_hours=0 if refresh else 6
+            client, type, resolved_id, start, finish, max_cache_age_hours=0 if refresh else 6
         )
 
         short_names = await get_all_short_names()
@@ -359,7 +467,7 @@ async def get_schedule_data(
             lesson["module"] = mapped_mod if mapped_mod else explicit_mod
 
         modules = await get_unique_modules_hybrid(schedule)
-        source_updated_at = await get_cached_schedule_updated_at(type, id)
+        source_updated_at = await get_cached_schedule_updated_at(type, resolved_id)
 
         return {
             "schedule": schedule,

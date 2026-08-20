@@ -1,4 +1,6 @@
+import hashlib
 import importlib
+import json
 import sys
 import types
 import unittest
@@ -11,6 +13,7 @@ import aiohttp
 
 fake_schedule_service = types.ModuleType("shared_lib.services.schedule_service")
 fake_schedule_service.diff_schedules = lambda *args, **kwargs: ""
+fake_schedule_service.get_semester_bounds = lambda: ("2026-08-25", "2027-01-31")
 
 
 async def _fake_format_schedule(*args, **kwargs):
@@ -160,3 +163,61 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             self.assertRaises(RuntimeError),
         ):
             await jobs.send_admin_summary(object())
+
+    async def test_check_for_schedule_updates_refreshes_cache_when_hash_is_unchanged(self):
+        schedule_data = [{"date": "2026.08.21", "discipline": "Math"}]
+        existing_hash = hashlib.sha256(
+            json.dumps(schedule_data, sort_keys=True).encode()
+        ).hexdigest()
+        subscriptions = [
+            {
+                "id": 1,
+                "user_id": 10,
+                "chat_id": 100,
+                "message_thread_id": None,
+                "entity_type": "group",
+                "entity_id": "123",
+                "entity_name": "M80-101",
+                "last_schedule_hash": existing_hash,
+            }
+        ]
+        ruz_api_client = SimpleNamespace(get_schedule=AsyncMock(return_value=schedule_data))
+
+        with (
+            patch.object(
+                jobs, "get_all_active_subscriptions", AsyncMock(return_value=subscriptions)
+            ),
+            patch.object(jobs, "get_all_short_names", AsyncMock(return_value={})),
+            patch.object(jobs, "batch_update_subscription_hashes", AsyncMock()) as update_hashes,
+            patch.object(jobs, "upsert_cached_schedule", AsyncMock()) as upsert_cache,
+            patch.object(jobs.asyncio, "sleep", AsyncMock()),
+        ):
+            await jobs.check_for_schedule_updates(object(), ruz_api_client)
+
+        upsert_cache.assert_awaited_once_with("group", "123", schedule_data)
+        update_hashes.assert_not_awaited()
+
+    async def test_update_schedule_cache_uses_shared_semester_bounds(self):
+        schedule_data = [{"date": "2026.08.27", "discipline": "Math"}]
+        entities = [
+            {
+                "entity_type": "group",
+                "entity_id": "162426",
+                "entity_name": "ПМ23-1",
+            }
+        ]
+        ruz_api_client = SimpleNamespace(get_schedule=AsyncMock(return_value=schedule_data))
+
+        with (
+            patch.object(
+                jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=entities)
+            ),
+            patch.object(jobs, "upsert_cached_schedule", AsyncMock()) as upsert_cache,
+            patch.object(jobs.asyncio, "sleep", AsyncMock()),
+        ):
+            await jobs.update_schedule_cache(object(), ruz_api_client)
+
+        ruz_api_client.get_schedule.assert_awaited_once_with(
+            "group", "162426", start="2026-08-25", finish="2027-01-31"
+        )
+        upsert_cache.assert_awaited_once_with("group", "162426", schedule_data)
