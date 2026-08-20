@@ -23,9 +23,10 @@ class TestTelegramPolling(unittest.IsolatedAsyncioTestCase):
     async def test_run_polling_with_retry_propagates_non_retryable_errors(self):
         start_polling = AsyncMock(side_effect=ValueError("boom"))
 
-        with patch(
-            "shared_lib.telegram_polling.asyncio.sleep", new=AsyncMock()
-        ) as mocked_sleep, self.assertRaises(ValueError):
+        with (
+            patch("shared_lib.telegram_polling.asyncio.sleep", new=AsyncMock()) as mocked_sleep,
+            self.assertRaises(ValueError),
+        ):
             await run_polling_with_retry(
                 start_polling,
                 retry_delay_seconds=5,

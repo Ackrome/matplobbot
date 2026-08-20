@@ -414,17 +414,13 @@ def diff_schedules(
     old_lessons = {
         lesson["lessonOid"]: lesson
         for lesson in old_data
-        if min_relevant_date
-        <= lesson["date_obj"]
-        <= max_relevant_date
+        if min_relevant_date <= lesson["date_obj"] <= max_relevant_date
         and lesson["date_obj"] >= today
     }
     new_lessons = {
         lesson["lessonOid"]: lesson
         for lesson in new_data
-        if min_relevant_date
-        <= lesson["date_obj"]
-        <= max_relevant_date
+        if min_relevant_date <= lesson["date_obj"] <= max_relevant_date
         and lesson["date_obj"] >= today
     }
 

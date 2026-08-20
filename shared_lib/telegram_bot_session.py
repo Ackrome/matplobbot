@@ -112,9 +112,7 @@ class TelegramBotSession(AiohttpSession):
                 if attempt < self._request_retry_attempts and not response_started:
                     await self._sleep_before_retry(method, attempt + 1)
                     continue
-                raise TelegramNetworkError(
-                    method=method, message="Request timeout error"
-                ) from exc
+                raise TelegramNetworkError(method=method, message="Request timeout error") from exc
             except (ClientError, OSError) as exc:
                 if attempt < self._request_retry_attempts and not response_started:
                     await self._sleep_before_retry(method, attempt + 1, exc)
@@ -152,8 +150,9 @@ class TelegramBotSession(AiohttpSession):
             return
         try:
             timeout = aiohttp.ClientTimeout(total=5)
-            async with aiohttp.ClientSession(timeout=timeout) as session, session.get(
-                self._proxy_recheck_url
+            async with (
+                aiohttp.ClientSession(timeout=timeout) as session,
+                session.get(self._proxy_recheck_url),
             ):
                 pass
         except Exception:
