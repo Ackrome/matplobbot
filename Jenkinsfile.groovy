@@ -56,7 +56,7 @@ pipeline {
                         python -m pip install --upgrade pip
                         python -m pip install -e .
                         python -m pip install -r requirements.txt -r fastapi_stats_app/requirements.txt -r scheduler_app/requirements.txt
-                        python -m pip install ruff==0.8.6
+                        python -m pip install ruff==0.8.6 pip-audit==2.10.1
 
                         python - <<'PY'
 import importlib
@@ -85,6 +85,13 @@ if missing:
 PY
 
                         ruff check . --select E9,F63,F7,F82
+
+                        python scripts/build_audit_requirements.py
+                        # PYSEC-2024-277 is a disputed joblib deserialization advisory with no fixed
+                        # release as of 2026-05-20. It is pulled transitively by matplobblib via
+                        # scikit-learn, and this project does not load untrusted joblib pickle files.
+                        python -m pip_audit --strict -r audit-requirements.txt \
+                          --ignore-vuln PYSEC-2024-277
 
                         export JWT_SECRET_KEY="jenkins-test-secret"
                         export BOT_TOKEN="123456:test-token"

@@ -237,6 +237,18 @@ python -m pip install --upgrade pip pip-tools
 pip-compile --resolver=backtracking --output-file requirements.txt requirements.in
 ```
 
+Run the same dependency audit input builder used by CI before merging
+requirement changes:
+
+```bash
+python scripts/build_audit_requirements.py
+python -m pip install pip-audit==2.10.1
+python -m pip_audit --strict -r audit-requirements.txt --ignore-vuln PYSEC-2024-277
+```
+
+`PYSEC-2024-277` is the only documented audit ignore; keep any new ignore next
+to the CI/Jenkins audit command with a concrete rationale.
+
 ### Auto-Lint (Remote + Local)
 
 `.github/workflows/autolint-autofix.yml` runs on:

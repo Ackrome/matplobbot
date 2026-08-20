@@ -1,0 +1,32 @@
+name: Dependency Audit
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit Locked Python Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install audit tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pip-audit==2.10.1
+      - name: Build audit requirements
+        run: python scripts/build_audit_requirements.py
+      - name: Audit dependencies
+        run: |
+          # PYSEC-2024-277 is a disputed joblib deserialization advisory with no fixed
+          # release as of 2026-05-20. It is pulled transitively by matplobblib via
+          # scikit-learn, and this project does not load untrusted joblib pickle files.
+          python -m pip_audit --strict -r audit-requirements.txt \
+            --ignore-vuln PYSEC-2024-277

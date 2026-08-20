@@ -9,7 +9,7 @@ setup(
     author_email="ivansergeyevich@gmail.com",
     install_requires=[
         "asyncpg",
-        "aiohttp>=3.14.1,<3.15",
+        "aiohttp>=3.14.3,<3.15",
         "certifi",
         "redis",
         "cachetools",

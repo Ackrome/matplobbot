@@ -1195,27 +1195,33 @@ Source:
 - `fastapi_stats_app/requirements.txt`
 - `scheduler_app/requirements.txt`
 - `.github/workflows/ci-cd.yml`
+- `.github/workflows/dependency-audit.yml`
+- `Jenkinsfile.groovy`
+- `scripts/build_audit_requirements.py`
 - `setup.py`
 
 What it does:
 
 - Pins `Pillow` to a non-vulnerable release range (`>=12.3.0,<13`) and locks `requirements.txt` to `12.3.0`.
 - Pins `python-dotenv` to a non-vulnerable release range (`>=1.2.2,<2`) and locks `requirements.txt` to `1.2.2`.
-- Pins `aiogram` to `3.29.1` so the bot and scheduler can use `aiohttp 3.14.1` without the old `<3.14` resolver cap.
-- Pins `aiohttp` to the non-vulnerable `3.14.1` release line across bot, scheduler, and shared package metadata.
+- Pins `aiogram` to `3.29.1` so the bot and scheduler can use the current `aiohttp 3.14.x` release line without the old `<3.14` resolver cap.
+- Pins `aiohttp` to the non-vulnerable `3.14.3` release across bot, scheduler, and shared package metadata. This is the minimum version that clears `PYSEC-2026-3545`; `PYSEC-2026-3546` and `PYSEC-2026-3547` are fixed by `3.14.2`, but the lock must stay at least `3.14.3`.
 - Pins FastAPI to `0.136.3` and Starlette to `1.3.1` in `fastapi_stats_app/requirements.txt` so the stats service stays on a Starlette release line with the current multipart and request parsing fixes.
 - Uses an in-repo HS256 JWT implementation for FastAPI access tokens, avoiding the no-fix `python-jose` JWE advisory while keeping existing bearer-token behavior.
 - Removes unused `markdown` from the bot/worker requirements; Markdown rendering uses `markdown-it-py`.
 - Pins `python-multipart` to `0.0.31` for multipart parser DoS fixes.
 - Pins `setuptools` to `83.0.0` and `weasyprint` to `69.0` in the root requirements lock for the current audit gate.
-- Keeps CI `pip-audit --strict` green with a documented ignore for `PYSEC-2024-277` only. That finding is a disputed, no-fixed-version `joblib` advisory pulled transitively by `matplobblib` via scikit-learn; this project does not load untrusted joblib pickle files.
+- Uses `scripts/build_audit_requirements.py` to build the same filtered `audit-requirements.txt` in GitHub Actions, Jenkins, and local checks. The builder excludes editable installs and the local `matplobbot-shared` package, deduplicates matching pins, and fails on conflicting pins.
+- Keeps GitHub Actions and Jenkins `python -m pip_audit --strict` green with a documented ignore for `PYSEC-2024-277` only. That finding is a disputed, no-fixed-version `joblib` advisory pulled transitively by `matplobblib` via scikit-learn; this project does not load untrusted joblib pickle files.
+- Runs a separate scheduled Dependency Audit workflow every day at `03:17 UTC`, so new advisories that appear after the last dependency change still fail CI.
 
 How to use:
 
 1. If CI reports a new dependency advisory, update the minimum safe version in `requirements.in`.
 2. Refresh the lock in `requirements.txt` and update service-specific pins such as `fastapi_stats_app/requirements.txt`.
-3. Use `--ignore-vuln` only for advisories with no fixed release or a verified non-applicable code path, and document the reason next to the CI command.
-4. Keep `setup.py` aligned for editable/local installs so dev and CI environments do not drift.
+3. Run `python scripts/build_audit_requirements.py` and then `python -m pip_audit --strict -r audit-requirements.txt --ignore-vuln PYSEC-2024-277` locally before merging dependency changes.
+4. Use `--ignore-vuln` only for advisories with no fixed release or a verified non-applicable code path, and document the reason next to every CI/Jenkins command that carries the ignore.
+5. Keep `setup.py` aligned for editable/local installs so dev and CI environments do not drift.
 
 ### Production Frontend Proxy Startup
 
