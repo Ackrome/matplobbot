@@ -36,6 +36,7 @@ const state = {
     lastSyncSource: "-",
     failedRequests: 0,
     lastError: "-",
+    isScheduleCacheRefreshing: false,
     apiLatencies: [],
     lastLatencyMs: null,
     chart: null,
@@ -56,6 +57,8 @@ const elements = {
     retryActivityBtn: document.getElementById("retryActivityBtn"),
     retryAllBtn: document.getElementById("retryAllBtn"),
     retryAllBtnMobile: document.getElementById("retryAllBtnMobile"),
+    refreshScheduleCacheBtn: document.getElementById("refreshScheduleCacheBtn"),
+    refreshScheduleCacheBtnMobile: document.getElementById("refreshScheduleCacheBtnMobile"),
     mobileActionDiagnostics: document.getElementById("mobileActionDiagnostics"),
     leaderboardMeta: document.getElementById("leaderboardMeta"),
     leaderboardPrev: document.getElementById("leaderboardPrev"),
@@ -889,13 +892,16 @@ function setLoading(isLoading) {
     }
 }
 
-async function fetchWithAuth(endpoint) {
+async function fetchWithAuth(endpoint, options = {}) {
     const startTime = performance.now();
+    const headers = {
+        ...(options.headers || {}),
+        Authorization: `Bearer ${token}`,
+    };
 
     const response = await fetch(`${API_BASE}${endpoint}`, {
-        headers: {
-            Authorization: `Bearer ${token}`,
-        },
+        ...options,
+        headers,
     });
 
     recordLatency(startTime);
@@ -918,6 +924,56 @@ async function fetchWithAuth(endpoint) {
     }
 
     return body;
+}
+
+function setScheduleCacheRefreshVisible(isVisible) {
+    [elements.refreshScheduleCacheBtn, elements.refreshScheduleCacheBtnMobile].forEach((button) => {
+        button?.classList.toggle("hidden", !isVisible);
+    });
+}
+
+function setScheduleCacheRefreshLoading(isLoading) {
+    state.isScheduleCacheRefreshing = isLoading;
+    [elements.refreshScheduleCacheBtn, elements.refreshScheduleCacheBtnMobile].forEach((button) => {
+        if (!button) return;
+        button.disabled = isLoading;
+        button.textContent = isLoading
+            ? "Refreshing..."
+            : button.id === "refreshScheduleCacheBtnMobile"
+                ? "Schedule cache"
+                : "Refresh schedule cache";
+    });
+}
+
+function formatScheduleCacheRefreshSummary(payload) {
+    if (!payload || typeof payload !== "object") return "Schedule cache refresh finished.";
+    const parts = [
+        `${Number(payload.refreshed) || 0} refreshed`,
+        `${Number(payload.remapped) || 0} ids remapped`,
+    ];
+    const failed = Number(payload.failed) || 0;
+    const skipped = Number(payload.skipped) || 0;
+    if (failed > 0) parts.push(`${failed} failed`);
+    if (skipped > 0) parts.push(`${skipped} skipped`);
+    return `Schedule cache refresh finished: ${parts.join(", ")}.`;
+}
+
+async function refreshAllScheduleSemesterCache() {
+    if (state.isScheduleCacheRefreshing) return;
+    setScheduleCacheRefreshLoading(true);
+    try {
+        const payload = await fetchWithAuth("/schedule/cache/refresh_all_semester", {
+            method: "POST",
+        });
+        const hasFailures = (Number(payload?.failed) || 0) > 0;
+        showToast(hasFailures ? "warning" : "success", formatScheduleCacheRefreshSummary(payload));
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Schedule cache refresh failed";
+        registerBackgroundFailure(message);
+        showToast("error", `Schedule cache refresh failed: ${message}`);
+    } finally {
+        setScheduleCacheRefreshLoading(false);
+    }
 }
 
 function registerBackgroundFailure(errorMessage) {
@@ -1223,6 +1279,9 @@ function wireEvents() {
         showToast("info", "Retry requested");
     });
 
+    elements.refreshScheduleCacheBtn?.addEventListener("click", refreshAllScheduleSemesterCache);
+    elements.refreshScheduleCacheBtnMobile?.addEventListener("click", refreshAllScheduleSemesterCache);
+
     elements.retryActivityBtn?.addEventListener("click", async () => {
         await refreshFromRest({ silent: false });
         showToast("info", "Activity reload requested");
@@ -1242,6 +1301,10 @@ function wireEvents() {
 
     elements.mobileActionDiagnostics?.addEventListener("click", () => {
         elements.diagnosticsPanel?.classList.toggle("hidden");
+    });
+
+    window.addEventListener("mpb-auth-ready", (event) => {
+        setScheduleCacheRefreshVisible(event.detail?.user?.role === "admin");
     });
 
     window.addEventListener("mpb-theme-change", () => {

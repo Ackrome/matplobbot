@@ -426,6 +426,39 @@ class ScheduleSemesterRefreshResponse(BaseModel):
     model_config = BASE_CONFIG
 
 
+class ScheduleCacheRefreshItemSchema(BaseModel):
+    entity_type: Literal["group", "person", "auditorium"]
+    entity_name: str
+    old_entity_id: str
+    new_entity_id: str
+    status: Literal["updated", "refreshed", "skipped", "failed"]
+    lesson_count: int = Field(0, ge=0)
+    subscriptions_updated: int = Field(0, ge=0)
+    subscriptions_merged: int = Field(0, ge=0)
+    web_profiles_updated: int = Field(0, ge=0)
+    web_accounts_updated: int = Field(0, ge=0)
+    error: str | None = None
+
+    model_config = BASE_CONFIG
+
+
+class ScheduleCacheBulkRefreshResponse(BaseModel):
+    semester_bounds: LoadedBoundsSchema
+    total: int = Field(..., ge=0)
+    processed: int = Field(..., ge=0)
+    refreshed: int = Field(..., ge=0)
+    remapped: int = Field(..., ge=0)
+    skipped: int = Field(..., ge=0)
+    failed: int = Field(..., ge=0)
+    subscriptions_updated: int = Field(0, ge=0)
+    subscriptions_merged: int = Field(0, ge=0)
+    web_profiles_updated: int = Field(0, ge=0)
+    web_accounts_updated: int = Field(0, ge=0)
+    items: list[ScheduleCacheRefreshItemSchema] = Field(default_factory=list)
+
+    model_config = BASE_CONFIG
+
+
 class ScheduleDataResponse(BaseModel):
     schedule: list[ScheduleLessonSchema] = Field(default_factory=list)
     available_modules: list[str] = Field(default_factory=list)

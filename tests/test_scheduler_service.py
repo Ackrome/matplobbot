@@ -14,6 +14,19 @@ import aiohttp
 fake_schedule_service = types.ModuleType("shared_lib.services.schedule_service")
 fake_schedule_service.diff_schedules = lambda *args, **kwargs: ""
 fake_schedule_service.get_semester_bounds = lambda: ("2026-08-25", "2027-01-31")
+fake_schedule_service.refresh_cached_schedule_entity_ids_and_semester_cache = AsyncMock(
+    return_value={
+        "total": 0,
+        "processed": 0,
+        "refreshed": 0,
+        "remapped": 0,
+        "skipped": 0,
+        "failed": 0,
+        "subscriptions_updated": 0,
+        "subscriptions_merged": 0,
+        "web_profiles_updated": 0,
+    }
+)
 
 
 async def _fake_format_schedule(*args, **kwargs):
@@ -221,3 +234,26 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             "group", "162426", start="2026-08-25", finish="2027-01-31"
         )
         upsert_cache.assert_awaited_once_with("group", "162426", schedule_data)
+
+    async def test_refresh_schedule_entity_ids_delegates_to_cache_refresh_service(self):
+        ruz_api_client = SimpleNamespace()
+        service_result = {
+            "total": 1,
+            "processed": 1,
+            "refreshed": 1,
+            "remapped": 1,
+            "skipped": 0,
+            "failed": 0,
+            "subscriptions_updated": 2,
+            "subscriptions_merged": 0,
+            "web_profiles_updated": 1,
+        }
+
+        with patch.object(
+            jobs,
+            "refresh_cached_schedule_entity_ids_and_semester_cache",
+            AsyncMock(return_value=service_result),
+        ) as refresh_service:
+            await jobs.refresh_schedule_entity_ids(ruz_api_client)
+
+        refresh_service.assert_awaited_once_with(ruz_api_client)

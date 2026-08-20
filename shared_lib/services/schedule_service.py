@@ -1,5 +1,7 @@
 # shared_lib/services/schedule_service.py
+import asyncio
 import hashlib
+import json
 import logging
 import re
 from collections import defaultdict
@@ -12,11 +14,17 @@ from cachetools import TTLCache
 from ics import Calendar, Event
 
 from shared_lib.database import (
+    batch_update_subscription_hashes,
+    delete_cached_schedule,
     get_all_short_names_with_ids,
+    get_cached_schedule_entities_for_id_refresh,
     get_disabled_short_names_for_user,
     get_discipline_modules_map,
     get_subscription_modules,
+    get_unique_active_subscription_entities,
     get_user_settings,
+    reassign_schedule_entity_id_references,
+    upsert_cached_schedule,
 )
 from shared_lib.i18n import translator
 from shared_lib.redis_client import redis_client
@@ -25,6 +33,7 @@ from shared_lib.redis_client import redis_client
 short_name_cache = TTLCache(maxsize=1, ttl=300)  # Cache for 5 minutes
 SCHEDULE_FALLBACK_METRIC_KEY = "metrics:schedule_fallback_usage"
 SCHEDULE_FALLBACK_METRIC_FIELDS = ("ruz_api_success", "cache_fallback", "no_cache")
+SCHEDULE_ENTITY_TYPES = ("group", "person", "auditorium")
 
 
 async def _record_schedule_fallback_metric(outcome: str) -> None:
@@ -50,6 +59,264 @@ async def get_schedule_fallback_counters() -> dict[str, int]:
         except (TypeError, ValueError):
             counters[key] = 0
     return counters
+
+
+def _normalize_schedule_search_value(value: Any) -> str:
+    return str(value or "").strip().casefold()
+
+
+def _get_schedule_search_item_label(item: dict[str, Any] | None) -> str:
+    if not isinstance(item, dict):
+        return ""
+    return str(item.get("label") or item.get("name") or "").strip()
+
+
+async def resolve_schedule_entity_id_by_name(
+    ruz_api_client,
+    entity_type: str,
+    entity_name: str,
+    current_entity_id: str | None = None,
+) -> dict[str, str | bool]:
+    """Resolve the current RUZ id for a cached group, lecturer, or room display name."""
+    normalized_type = str(entity_type or "").strip().lower()
+    normalized_name = str(entity_name or "").strip()
+    fallback_id = str(current_entity_id or "").strip()
+    if normalized_type not in SCHEDULE_ENTITY_TYPES or len(normalized_name) < 2:
+        return {
+            "entity_id": fallback_id,
+            "entity_name": normalized_name,
+            "matched": False,
+        }
+
+    search = getattr(ruz_api_client, "search", None)
+    if not callable(search):
+        return {
+            "entity_id": fallback_id,
+            "entity_name": normalized_name,
+            "matched": False,
+        }
+
+    results = await search(normalized_name, normalized_type)
+    normalized_lookup = _normalize_schedule_search_value(normalized_name)
+    exact_match = next(
+        (
+            item
+            for item in results or []
+            if any(
+                _normalize_schedule_search_value(value) == normalized_lookup
+                for value in (item.get("label"), item.get("name"), item.get("id"))
+            )
+        ),
+        None,
+    )
+    if exact_match:
+        match = exact_match
+    elif len(results or []) == 1:
+        match = results[0]
+    else:
+        match = None
+    resolved_id = str(match.get("id") or "").strip() if match else ""
+    if not resolved_id:
+        return {
+            "entity_id": fallback_id,
+            "entity_name": normalized_name,
+            "matched": False,
+        }
+
+    return {
+        "entity_id": resolved_id,
+        "entity_name": _get_schedule_search_item_label(match) or normalized_name,
+        "matched": True,
+    }
+
+
+def _merge_schedule_entity_sources(
+    cached_entities: list[dict[str, Any]],
+    subscription_entities: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    merged: dict[tuple[str, str], dict[str, Any]] = {}
+
+    for source, priority in ((cached_entities, 0), (subscription_entities, 1)):
+        for item in source or []:
+            entity_type = str(item.get("entity_type") or "").strip().lower()
+            entity_id = str(item.get("entity_id") or "").strip()
+            entity_name = str(item.get("entity_name") or "").strip()
+            if entity_type not in SCHEDULE_ENTITY_TYPES or not entity_id:
+                continue
+
+            key = (entity_type, entity_id)
+            previous = merged.get(key)
+            if not previous:
+                merged[key] = {
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "entity_name": entity_name,
+                    "_priority": priority,
+                }
+                continue
+
+            previous_name = str(previous.get("entity_name") or "").strip()
+            candidate_has_label = bool(entity_name and entity_name != entity_id)
+            previous_has_label = bool(previous_name and previous_name != entity_id)
+            if entity_name and (
+                not previous_name
+                or (
+                    candidate_has_label
+                    and (not previous_has_label or priority >= previous.get("_priority", 0))
+                )
+            ):
+                previous["entity_name"] = entity_name
+                previous["_priority"] = priority
+
+    return [
+        {key: value for key, value in item.items() if key != "_priority"}
+        for item in merged.values()
+    ]
+
+
+async def refresh_cached_schedule_entity_ids_and_semester_cache(
+    ruz_api_client,
+    *,
+    sleep_seconds: float = 0.5,
+) -> dict[str, Any]:
+    """
+    Resolve current RUZ ids for cached/subscribed schedule entities and refresh semester cache.
+
+    The university changes numeric ids between semesters. This maintenance path searches by
+    the human-readable entity name, writes cache under the current id, and moves active
+    subscriptions plus website calendar profiles away from stale ids.
+    """
+    start_date_str, end_date_str = get_semester_bounds()
+    cached_entities = await get_cached_schedule_entities_for_id_refresh()
+    subscription_entities = await get_unique_active_subscription_entities()
+    entities = _merge_schedule_entity_sources(cached_entities, subscription_entities)
+
+    summary: dict[str, Any] = {
+        "semester_bounds": {"start": start_date_str, "end": end_date_str},
+        "total": len(entities),
+        "processed": 0,
+        "refreshed": 0,
+        "remapped": 0,
+        "skipped": 0,
+        "failed": 0,
+        "subscriptions_updated": 0,
+        "subscriptions_merged": 0,
+        "web_profiles_updated": 0,
+        "web_accounts_updated": 0,
+        "items": [],
+    }
+
+    for entity in entities:
+        entity_type = entity["entity_type"]
+        old_entity_id = str(entity["entity_id"])
+        entity_name = str(entity.get("entity_name") or "").strip()
+        item: dict[str, Any] = {
+            "entity_type": entity_type,
+            "entity_name": entity_name,
+            "old_entity_id": old_entity_id,
+            "new_entity_id": old_entity_id,
+            "status": "skipped",
+            "lesson_count": 0,
+            "subscriptions_updated": 0,
+            "subscriptions_merged": 0,
+            "web_profiles_updated": 0,
+            "web_accounts_updated": 0,
+            "error": None,
+        }
+
+        if not entity_name or entity_name == old_entity_id:
+            summary["skipped"] += 1
+            item["error"] = "Entity name is unavailable for RUZ search."
+            summary["items"].append(item)
+            continue
+
+        summary["processed"] += 1
+        try:
+            resolved = await resolve_schedule_entity_id_by_name(
+                ruz_api_client,
+                entity_type,
+                entity_name,
+                old_entity_id,
+            )
+            new_entity_id = str(resolved.get("entity_id") or old_entity_id)
+            resolved_name = str(resolved.get("entity_name") or entity_name)
+            item["new_entity_id"] = new_entity_id
+            item["entity_name"] = resolved_name
+
+            if not resolved.get("matched") or not new_entity_id:
+                summary["failed"] += 1
+                item["status"] = "failed"
+                item["error"] = "RUZ search did not return a matching entity."
+                continue
+
+            schedule_data = await ruz_api_client.get_schedule(
+                entity_type,
+                new_entity_id,
+                start=start_date_str,
+                finish=end_date_str,
+            )
+            if not schedule_data:
+                summary["failed"] += 1
+                item["status"] = "failed"
+                item["error"] = "RUZ returned an empty semester schedule."
+                continue
+
+            await upsert_cached_schedule(entity_type, new_entity_id, schedule_data)
+            schedule_hash = hashlib.sha256(
+                json.dumps(schedule_data, sort_keys=True, default=str).encode()
+            ).hexdigest()
+
+            if new_entity_id != old_entity_id:
+                reassign_counts = await reassign_schedule_entity_id_references(
+                    entity_type,
+                    old_entity_id,
+                    new_entity_id,
+                    resolved_name,
+                )
+                await delete_cached_schedule(entity_type, old_entity_id)
+                summary["remapped"] += 1
+                item["status"] = "updated"
+                for key in (
+                    "subscriptions_updated",
+                    "subscriptions_merged",
+                    "web_profiles_updated",
+                    "web_accounts_updated",
+                ):
+                    summary[key] += reassign_counts.get(key, 0)
+                item["subscriptions_updated"] = reassign_counts.get(
+                    "subscriptions_updated", 0
+                )
+                item["subscriptions_merged"] = reassign_counts.get("subscriptions_merged", 0)
+                item["web_profiles_updated"] = reassign_counts.get("web_profiles_updated", 0)
+                item["web_accounts_updated"] = reassign_counts.get("web_accounts_updated", 0)
+            else:
+                item["status"] = "refreshed"
+
+            await batch_update_subscription_hashes(entity_type, new_entity_id, schedule_hash)
+            item["lesson_count"] = (
+                len(schedule_data)
+                if isinstance(schedule_data, list)
+                else int(bool(schedule_data))
+            )
+            summary["refreshed"] += 1
+        except Exception as exc:
+            logging.warning(
+                "Failed to refresh schedule entity %s:%s (%s): %s",
+                entity_type,
+                old_entity_id,
+                entity_name,
+                exc,
+                exc_info=True,
+            )
+            summary["failed"] += 1
+            item["status"] = "failed"
+            item["error"] = str(exc)
+        finally:
+            summary["items"].append(item)
+            if sleep_seconds > 0:
+                await asyncio.sleep(sleep_seconds)
+
+    return summary
 
 
 # --- Configuration for Lesson Styles ---

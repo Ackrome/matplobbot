@@ -14,6 +14,7 @@ from scheduler_app.http_client import build_telegram_http_client_config
 from scheduler_app.jobs import (
     check_for_schedule_updates,
     prune_inactive_subscriptions,
+    refresh_schedule_entity_ids,
     send_admin_summary,
     send_daily_schedules,
     update_schedule_cache,
@@ -82,6 +83,16 @@ async def main():
                 kwargs={
                     "http_session": telegram_session,
                     "telegram_request_kwargs": telegram_request_kwargs,
+                    "ruz_api_client": ruz_api_client_instance,
+                },
+            )
+            scheduler.add_job(
+                refresh_schedule_entity_ids,
+                trigger="cron",
+                day_of_week="sun",
+                hour=2,
+                minute=30,
+                kwargs={
                     "ruz_api_client": ruz_api_client_instance,
                 },
             )

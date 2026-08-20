@@ -19,6 +19,9 @@ try:
     fake_schedule_service.get_schedule_with_cache_fallback = AsyncMock(return_value=([], False))
     fake_schedule_service.get_schedule_fallback_counters = AsyncMock(return_value={})
     fake_schedule_service.get_unique_modules_hybrid = AsyncMock(return_value=[])
+    fake_schedule_service.refresh_cached_schedule_entity_ids_and_semester_cache = AsyncMock(
+        return_value={}
+    )
 
     with patch.dict(
         sys.modules,
@@ -379,6 +382,55 @@ class TestScheduleSearchAPI(unittest.TestCase):
         self.assertEqual(response.status_code, 502)
         upsert_cache.assert_not_awaited()
 
+    def test_schedule_bulk_semester_refresh_endpoint_uses_service(self):
+        self.app.dependency_overrides[schedule_router.require_admin] = lambda: {
+            "id": 1,
+            "role": "admin",
+        }
+        fake_client = object()
+        service_payload = {
+            "semester_bounds": {"start": "2026-08-25", "end": "2027-01-31"},
+            "total": 1,
+            "processed": 1,
+            "refreshed": 1,
+            "remapped": 1,
+            "skipped": 0,
+            "failed": 0,
+            "subscriptions_updated": 2,
+            "subscriptions_merged": 0,
+            "web_profiles_updated": 1,
+            "web_accounts_updated": 1,
+            "items": [
+                {
+                    "entity_type": "group",
+                    "entity_name": "PM23-1",
+                    "old_entity_id": "old-id",
+                    "new_entity_id": "new-id",
+                    "status": "updated",
+                    "lesson_count": 3,
+                    "subscriptions_updated": 2,
+                    "subscriptions_merged": 0,
+                    "web_profiles_updated": 1,
+                    "web_accounts_updated": 1,
+                    "error": None,
+                }
+            ],
+        }
+
+        with (
+            patch.object(schedule_router, "create_ruz_api_client", return_value=fake_client),
+            patch.object(
+                schedule_router,
+                "refresh_cached_schedule_entity_ids_and_semester_cache",
+                AsyncMock(return_value=service_payload),
+            ) as refresh_service,
+        ):
+            response = self.client.post("/api/schedule/cache/refresh_all_semester")
+
+        self.assertEqual(response.status_code, 200)
+        refresh_service.assert_awaited_once_with(fake_client)
+        self.assertEqual(response.json(), service_payload)
+
     def test_schedule_fallback_counters_endpoint(self):
         self.app.dependency_overrides[schedule_router.require_admin] = lambda: {
             "id": 1,
@@ -467,3 +519,16 @@ class TestScheduleSearchAPI(unittest.TestCase):
         refresh_schema = schema["components"]["schemas"]["ScheduleSemesterRefreshResponse"]
         self.assertIn("semester_bounds", refresh_schema["properties"])
         self.assertIn("lesson_count", refresh_schema["properties"])
+
+    def test_schedule_bulk_semester_refresh_openapi_documents_response_shape(self):
+        schema = self.app.openapi()
+        operation = schema["paths"]["/api/schedule/cache/refresh_all_semester"]["post"]
+        response_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+
+        self.assertEqual(
+            response_schema["$ref"], "#/components/schemas/ScheduleCacheBulkRefreshResponse"
+        )
+
+        refresh_schema = schema["components"]["schemas"]["ScheduleCacheBulkRefreshResponse"]
+        self.assertIn("remapped", refresh_schema["properties"])
+        self.assertIn("items", refresh_schema["properties"])

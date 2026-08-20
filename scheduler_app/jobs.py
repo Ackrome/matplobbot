@@ -27,6 +27,7 @@ from shared_lib.services.schedule_service import (
     diff_schedules,
     format_schedule,
     get_semester_bounds,
+    refresh_cached_schedule_entity_ids_and_semester_cache,
 )
 
 # We need to import these from the bot's services.
@@ -430,6 +431,31 @@ async def update_schedule_cache(http_session: aiohttp.ClientSession, ruz_api_cli
 
     except Exception as e:
         logger.error(f"Critical error in update_schedule_cache job: {e}", exc_info=True)
+
+
+async def refresh_schedule_entity_ids(ruz_api_client: RuzAPIClient):
+    """
+    Weekly maintenance for semester-specific RUZ ids.
+
+    RUZ numeric ids can change between semesters, so this job searches cached and subscribed
+    schedule entities by display name, moves stale references, and refreshes semester cache.
+    """
+    logger.info("Starting schedule entity id refresh job...")
+    try:
+        summary = await refresh_cached_schedule_entity_ids_and_semester_cache(ruz_api_client)
+        logger.info(
+            "Schedule entity id refresh finished. total=%s processed=%s refreshed=%s remapped=%s skipped=%s failed=%s subscriptions_updated=%s web_profiles_updated=%s",
+            summary.get("total", 0),
+            summary.get("processed", 0),
+            summary.get("refreshed", 0),
+            summary.get("remapped", 0),
+            summary.get("skipped", 0),
+            summary.get("failed", 0),
+            summary.get("subscriptions_updated", 0) + summary.get("subscriptions_merged", 0),
+            summary.get("web_profiles_updated", 0),
+        )
+    except Exception as e:
+        logger.error(f"Critical error in refresh_schedule_entity_ids job: {e}", exc_info=True)
 
 
 async def prune_inactive_subscriptions():

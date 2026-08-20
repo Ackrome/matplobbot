@@ -17,6 +17,7 @@ from shared_lib.database import (
 )
 from shared_lib.schemas import (
     CachedScheduleEntitySchema,
+    ScheduleCacheBulkRefreshResponse,
     ScheduleDataResponse,
     ScheduleFallbackCountersResponse,
     ScheduleSearchResultSchema,
@@ -28,6 +29,7 @@ from shared_lib.services.schedule_service import (
     get_schedule_with_cache_fallback,
     get_semester_bounds,
     get_unique_modules_hybrid,
+    refresh_cached_schedule_entity_ids_and_semester_cache,
 )
 from shared_lib.services.university_api import RuzAPIError, create_ruz_api_client
 
@@ -362,6 +364,28 @@ async def get_cached_list(db: AsyncSession = Depends(get_db_session_dependency))
 async def get_fallback_counters():
     """Returns counters for schedule source outcomes: API success, cache fallback, and no cache."""
     return await get_schedule_fallback_counters()
+
+
+@router.post(
+    "/cache/refresh_all_semester",
+    response_model=ScheduleCacheBulkRefreshResponse,
+    dependencies=[Depends(require_admin)],
+    summary="Refresh all semester schedule caches",
+    description=(
+        "Admin-only endpoint that searches every cached/subscribed schedule entity by "
+        "name, remaps stale RUZ ids, updates subscription/calendar references, and "
+        "refreshes the current semester cache."
+    ),
+)
+async def refresh_all_schedule_cache_semester(
+    http_session: aiohttp.ClientSession = Depends(get_shared_http_session),
+):
+    client = create_ruz_api_client(http_session)
+    try:
+        return await refresh_cached_schedule_entity_ids_and_semester_cache(client)
+    except Exception as e:
+        logger.error("Failed to refresh all schedule caches: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post(

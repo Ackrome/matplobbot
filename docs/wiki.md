@@ -708,6 +708,7 @@ What it does:
 - Supports pagination and sorting on user profile/action-users tables.
 - Supports exports (JSON/CSV/PDF weekly) with date range and timezone.
 - Includes partial-degradation state when one widget fails.
+- Shows an admin-only `Refresh schedule cache` action that force-runs the full semester cache remap/refresh workflow from `/stats`; non-admin accounts never see the button, and the API still enforces admin access.
 
 How to use:
 
@@ -715,6 +716,7 @@ How to use:
 2. Open `/stats`.
 3. Open a user profile from tables/charts.
 4. Export user actions in needed format and filter window.
+5. Use `Refresh schedule cache` after semester id changes to remap cached schedule entities and refresh current-semester data immediately.
 
 ### Studio Page
 
@@ -863,6 +865,8 @@ Endpoints:
 - `GET /api/schedule/cached_list`
 - `GET /api/schedule/fallback_counters` (admin)
 - `GET /api/schedule/data/{type}/{id}`
+- `POST /api/schedule/cache/{type}/{id}/refresh_semester` (admin)
+- `POST /api/schedule/cache/refresh_all_semester` (admin)
 
 Feature details:
 
@@ -884,6 +888,7 @@ Feature details:
 - `GET /api/schedule/data/{type}/{id}` accepts `refresh=1` to force a live refresh attempt even when the local cache is still fresh.
 - If a legacy Schedule URL or local state passes a non-numeric group, lecturer, or auditorium label such as `ПМ23-1` as `{id}`, the API resolves it through live RUZ search before fetching schedule data, so refresh uses the numeric RUZ entity id.
 - `POST /api/schedule/cache/{type}/{id}/refresh_semester` is admin-only and forces an immediate current-semester RUZ fetch for one schedule entity. It resolves non-numeric group, lecturer, and auditorium labels to numeric RUZ ids, writes the semester payload to `cached_schedules`, and fails instead of silently serving old cache when the upstream refresh cannot be completed.
+- `POST /api/schedule/cache/refresh_all_semester` is admin-only and runs the semester maintenance workflow for cached and subscribed schedule entities: it searches each entity by display name, writes fresh semester data under the current RUZ id, deletes stale cache rows after successful remap, moves active Telegram subscriptions, updates website calendar custom profiles, and returns counters for refreshed, remapped, skipped, and failed entities.
 
 #### Schedule Search Offline Fallback Semantics (Frontend)
 
@@ -1045,6 +1050,7 @@ Configured jobs:
 
 - `send_daily_schedules` (cron, every minute): sends next-day schedules at subscriber-selected times.
 - `check_for_schedule_updates` (interval, every 2h): detects diffs, sends change notifications, and refreshes `cached_schedules.updated_at` after every successful unchanged API poll for subscribed entities.
+- `refresh_schedule_entity_ids` (cron Sunday 02:30): searches cached/subscribed schedule entities by name to resolve current semester RUZ ids, moves stale subscription/calendar references, and refreshes current-semester cache.
 - `update_schedule_cache` (cron at 04:00 and 16:00): warm cache refresh.
 - `prune_inactive_subscriptions` (cron at 03:00): cleanup inactive subscriptions.
 - `send_admin_summary` (cron, every minute): checks summary schedule and sends due summaries.

@@ -925,6 +925,53 @@ async def get_unique_active_subscription_entities() -> list:
         ]
 
 
+async def get_cached_schedule_entities_for_id_refresh() -> list[dict]:
+    """Return cached schedule entities with a best-effort display name for RUZ id remaps."""
+    async with get_session() as session:
+        stmt = text(
+            """
+            WITH cached AS (
+                SELECT
+                    cs.entity_type,
+                    cs.entity_id,
+                    cs.updated_at,
+                    CASE cs.entity_type
+                        WHEN 'group' THEN elem.value ->> 'group'
+                        WHEN 'person' THEN elem.value ->> 'lecturer_title'
+                        WHEN 'auditorium' THEN elem.value ->> 'auditorium'
+                    END AS entity_name
+                FROM cached_schedules AS cs
+                LEFT JOIN LATERAL jsonb_array_elements(
+                    CASE
+                        WHEN jsonb_typeof(CAST(cs.schedule_data AS jsonb)) = 'array'
+                        THEN CAST(cs.schedule_data AS jsonb)
+                        ELSE CAST('[]' AS jsonb)
+                    END
+                ) AS elem(value) ON TRUE
+                WHERE cs.entity_type IN ('group', 'person', 'auditorium')
+            )
+            SELECT
+                entity_type,
+                entity_id,
+                COALESCE(NULLIF(MAX(NULLIF(entity_name, '')), ''), entity_id) AS entity_name,
+                MAX(updated_at) AS updated_at
+            FROM cached
+            GROUP BY entity_type, entity_id
+            ORDER BY MAX(updated_at) ASC NULLS FIRST, entity_type, entity_id
+            """
+        )
+        result = await session.execute(stmt)
+        return [
+            {
+                "entity_type": r.entity_type,
+                "entity_id": str(r.entity_id),
+                "entity_name": r.entity_name,
+                "updated_at": r.updated_at,
+            }
+            for r in result.all()
+        ]
+
+
 async def update_subscription_hash(subscription_id: int, new_hash: str):
     async with get_session() as session:
         await session.execute(
@@ -988,6 +1035,123 @@ async def get_cached_schedule(entity_type: str, entity_id: str) -> list | None:
             )
         )
         return result.scalar()
+
+
+async def delete_cached_schedule(entity_type: str, entity_id: str) -> int:
+    async with get_session() as session:
+        result = await session.execute(
+            delete(CachedSchedule).where(
+                and_(
+                    CachedSchedule.entity_type == entity_type,
+                    CachedSchedule.entity_id == str(entity_id),
+                )
+            )
+        )
+        await session.commit()
+        return result.rowcount or 0
+
+
+async def reassign_schedule_entity_id_references(
+    entity_type: str,
+    old_entity_id: str,
+    new_entity_id: str,
+    entity_name: str | None = None,
+) -> dict[str, int]:
+    """Move active schedule subscriptions and website calendar profiles to a new RUZ id."""
+    old_id = str(old_entity_id)
+    new_id = str(new_entity_id)
+    if old_id == new_id:
+        return {
+            "subscriptions_updated": 0,
+            "subscriptions_merged": 0,
+            "web_profiles_updated": 0,
+            "web_accounts_updated": 0,
+        }
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(UserScheduleSubscription).where(
+                and_(
+                    UserScheduleSubscription.entity_type == entity_type,
+                    UserScheduleSubscription.entity_id == old_id,
+                    UserScheduleSubscription.is_active.is_(True),
+                )
+            )
+        )
+        old_subscriptions = result.scalars().all()
+        subscriptions_updated = 0
+        subscriptions_merged = 0
+
+        for subscription in old_subscriptions:
+            target_result = await session.execute(
+                select(UserScheduleSubscription).where(
+                    and_(
+                        UserScheduleSubscription.chat_id == subscription.chat_id,
+                        UserScheduleSubscription.entity_type == entity_type,
+                        UserScheduleSubscription.entity_id == new_id,
+                        UserScheduleSubscription.notification_time
+                        == subscription.notification_time,
+                        UserScheduleSubscription.id != subscription.id,
+                    )
+                )
+            )
+            target = target_result.scalar_one_or_none()
+            if target:
+                target.is_active = True
+                target.deactivated_at = None
+                if entity_name:
+                    target.entity_name = entity_name
+                if not target.last_schedule_hash and subscription.last_schedule_hash:
+                    target.last_schedule_hash = subscription.last_schedule_hash
+                if not target.selected_modules and subscription.selected_modules:
+                    target.selected_modules = subscription.selected_modules
+                await session.delete(subscription)
+                subscriptions_merged += 1
+                continue
+
+            subscription.entity_id = new_id
+            if entity_name:
+                subscription.entity_name = entity_name
+            subscriptions_updated += 1
+
+        accounts_result = await session.execute(select(WebAccount))
+        web_profiles_updated = 0
+        web_accounts_updated = 0
+        for account in accounts_result.scalars().all():
+            preferences = json.loads(json.dumps(account.preferences or {}, default=str))
+            calendar_sync = preferences.get("calendar_sync")
+            if not isinstance(calendar_sync, dict):
+                continue
+            custom_profiles = calendar_sync.get("custom_profiles")
+            if not isinstance(custom_profiles, list):
+                continue
+
+            account_changed = False
+            for profile in custom_profiles:
+                if not isinstance(profile, dict):
+                    continue
+                if (
+                    profile.get("entity_type") == entity_type
+                    and str(profile.get("entity_id") or "") == old_id
+                ):
+                    profile["entity_id"] = new_id
+                    if entity_name:
+                        profile["entity_name"] = entity_name
+                    web_profiles_updated += 1
+                    account_changed = True
+
+            if account_changed:
+                account.preferences = preferences
+                session.add(account)
+                web_accounts_updated += 1
+
+        await session.commit()
+        return {
+            "subscriptions_updated": subscriptions_updated,
+            "subscriptions_merged": subscriptions_merged,
+            "web_profiles_updated": web_profiles_updated,
+            "web_accounts_updated": web_accounts_updated,
+        }
 
 
 async def get_cached_schedule_updated_at(

@@ -134,6 +134,7 @@ OPERATION_MARKDOWN_BY_TAG = {
 
 - Search endpoints may blend live RUZ results with local cache fallback results.
 - Schedule data responses include offline flags and loaded date bounds so clients can label degraded data.
+- Admin cache refresh endpoints can force a current-semester reload and remap stale semester-specific RUZ ids.
 - Invalid query values return typed validation errors in the `422` response schema.
 """,
     "stats": """
@@ -188,6 +189,14 @@ OPERATION_MARKDOWN_BY_ROUTE = {
 - Fetches the current semester directly from RUZ and writes the result to `cached_schedules`.
 - Resolves non-numeric group, lecturer, and auditorium labels through live RUZ search before fetching.
 - Fails the request when the upstream refresh cannot be completed instead of masking it with old cache data.
+""",
+    ("post", "/api/schedule/cache/refresh_all_semester"): """
+### Admin bulk refresh semantics
+
+- Requires an authenticated admin account.
+- Searches cached and subscribed schedule entities by display name to find their current RUZ ids.
+- Moves active Telegram subscriptions and website calendar profiles from stale ids to resolved ids.
+- Refreshes the current semester cache and reports remapped, skipped, and failed entities.
 """,
     ("get", "/api/stats/users/{user_id}/export_actions"): """
 ### Export formats
