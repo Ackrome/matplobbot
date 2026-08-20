@@ -17,8 +17,8 @@ try:
     os.environ.setdefault("JWT_SECRET_KEY", "test-secret-for-unit-tests")
     os.environ.setdefault("BOT_TOKEN", "123456:test-token")
 
-    from fastapi_stats_app import auth as fastapi_auth  # noqa: E402
-    from fastapi_stats_app.routers import auth_router  # noqa: E402
+    from fastapi_stats_app import auth as fastapi_auth
+    from fastapi_stats_app.routers import auth_router
 except ModuleNotFoundError:
     FASTAPI_AVAILABLE = False
 

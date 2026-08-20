@@ -42,11 +42,11 @@ class TestVersionBumper(unittest.TestCase):
         with (
             patch.object(Path, "exists", return_value=True),
             patch.object(Path, "read_text", return_value="no-match-here\n"),
+            self.assertRaises(SystemExit),
         ):
-            with self.assertRaises(SystemExit):
-                update_file(
-                    file_path=file_path,
-                    pattern=VERSION_PATTERN,
-                    replacement_template="\\g<1>0.1.2\\g<3>",
-                    min_replacements=1,
-                )
+            update_file(
+                file_path=file_path,
+                pattern=VERSION_PATTERN,
+                replacement_template="\\g<1>0.1.2\\g<3>",
+                min_replacements=1,
+            )

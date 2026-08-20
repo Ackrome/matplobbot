@@ -822,7 +822,8 @@ class SettingsManager:
     async def cq_toggle_personal_subscription(
         self, callback: CallbackQuery, state: FSMContext
     ):  # Keep this handler
-        user_id, lang = callback.from_user.id, await translator.get_language(callback.from_user.id)
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id)
         try:
             _, subscription_id_str, page_str = callback.data.split(":")
             toggle_result = await toggle_subscription_status(
@@ -849,10 +850,8 @@ class SettingsManager:
     async def cq_toggle_chat_subscription(
         self, callback: CallbackQuery, state: FSMContext
     ):  # Keep this handler
-        user_id, lang = (
-            callback.from_user.id,
-            await translator.get_language(callback.from_user.id, callback.message.chat.id),
-        )
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id, callback.message.chat.id)
         try:
             _, subscription_id_str, page_str = callback.data.split(":")
             toggle_result = await toggle_subscription_status(
@@ -881,7 +880,7 @@ class SettingsManager:
     async def cq_change_personal_subscription_time_prompt(
         self, callback: CallbackQuery, state: FSMContext
     ):
-        user_id, lang = callback.from_user.id, await translator.get_language(callback.from_user.id)
+        lang = await translator.get_language(callback.from_user.id)
         try:
             _, subscription_id_str, page_str = callback.data.split(":")
             await state.set_state(SettingsStates.awaiting_new_sub_time)  # Set state first
@@ -890,6 +889,7 @@ class SettingsManager:
                 page=int(page_str),
                 is_chat_admin=False,
                 original_chat_id=callback.message.chat.id,
+                original_chat_type=callback.message.chat.type,
                 original_message_id=callback.message.message_id,
             )
             await callback.message.edit_text(
@@ -904,15 +904,17 @@ class SettingsManager:
     async def cq_change_chat_subscription_time_prompt(
         self, callback: CallbackQuery, state: FSMContext
     ):
-        user_id, lang = (
-            callback.from_user.id,
-            await translator.get_language(callback.from_user.id, callback.message.chat.id),
-        )
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         try:
             _, subscription_id_str, page_str = callback.data.split(":")
             await state.set_state(SettingsStates.awaiting_new_sub_time)
             await state.update_data(
-                sub_id=int(subscription_id_str), page=int(page_str), is_chat_admin=True
+                sub_id=int(subscription_id_str),
+                page=int(page_str),
+                is_chat_admin=True,
+                original_chat_id=callback.message.chat.id,
+                original_chat_type=callback.message.chat.type,
+                original_message_id=callback.message.message_id,
             )
             await callback.message.edit_text(
                 translator.gettext(lang, "subscription_change_time_prompt")
@@ -967,6 +969,7 @@ class SettingsManager:
             await translator.get_language(message.from_user.id, message.chat.id),
         )
         time_str = message.text.strip()
+        sub_id = None
 
         if not re.match(r"^\d{1,2}:\d{2}$", time_str):
             await message.reply(translator.gettext(lang, "schedule_invalid_time_format"))
@@ -975,12 +978,12 @@ class SettingsManager:
         try:
             new_time = datetime.datetime.strptime(time_str, "%H:%M").time()
             state_data = await state.get_data()
-            sub_id, page, is_chat_admin = (
+            sub_id, is_chat_admin = (
                 state_data["sub_id"],
-                state_data["page"],
                 state_data["is_chat_admin"],
             )
             original_chat_id = state_data["original_chat_id"]
+            original_chat_type = state_data.get("original_chat_type", "private")
             original_message_id = state_data["original_message_id"]
 
             updated_entity_name = await update_subscription_notification_time(
@@ -1007,18 +1010,24 @@ class SettingsManager:
                 # This is necessary because the target handlers expect a CallbackQuery object, not a Message.
                 # Создаем объект сообщения вручную
                 mock_msg = types.Message(
-                    chat=types.Chat(id=original_chat_id, type="private"),
+                    chat=types.Chat(id=original_chat_id, type=original_chat_type),
                     message_id=original_message_id,
                     date=datetime.datetime.now(),
                 )
                 # ВАЖНО: Привязываем бота к сообщению, чтобы работали методы .edit_text()
                 mock_msg = mock_msg.as_(bot)
 
+                async def noop_callback_answer(*_args, **_kwargs):
+                    return None
+
                 mock_callback = SimpleNamespace(
                     message=mock_msg,
                     from_user=message.from_user,
                     # bot=bot, # Это поле в SimpleNamespace не помогает методам внутри message
-                    data=f"sub_open:{sub_id}",
+                    data=f"csub_page:{state_data.get('page', 0)}"
+                    if is_chat_admin
+                    else f"sub_open:{sub_id}",
+                    answer=noop_callback_answer,
                 )
 
                 if is_chat_admin:
@@ -1144,10 +1153,7 @@ class SettingsManager:
             )
 
     async def cq_delete_chat_subscription_prompt(self, callback: CallbackQuery):
-        user_id, lang = (
-            callback.from_user.id,
-            await translator.get_language(callback.from_user.id, callback.message.chat.id),
-        )
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         chat_id = callback.message.chat.id
         try:
             _, subscription_id_str, page_str = callback.data.split(":")
@@ -1328,6 +1334,7 @@ class SettingsManager:
         _, short_name_id_str, page_str = callback.data.split(":")
         await toggle_short_name_for_user(user_id, int(short_name_id_str))
         await callback.answer()
+        callback.data = f"sname_page:{page_str}"
         await self.cq_manage_short_names(callback, state)  # Refresh the menu
 
     async def cq_sub_card(self, callback: CallbackQuery):

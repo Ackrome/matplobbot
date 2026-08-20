@@ -117,9 +117,9 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             patch.object(jobs.translator, "get_language", AsyncMock(return_value="en")),
             patch.object(jobs, "format_schedule", AsyncMock(return_value="Schedule text")),
             patch.object(jobs, "send_telegram_message", AsyncMock(return_value=None)),
+            self.assertRaises(RuntimeError),
         ):
-            with self.assertRaises(RuntimeError):
-                await jobs.send_daily_schedules(object(), ruz_api_client)
+            await jobs.send_daily_schedules(object(), ruz_api_client)
 
     async def test_send_admin_summary_raises_when_matching_admin_delivery_fails(self):
         now_in_moscow = datetime.now(ZoneInfo("Europe/Moscow"))
@@ -157,6 +157,6 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             ),
             patch.object(jobs.redis_client.client, "lrange", AsyncMock(return_value=[])),
             patch.object(jobs, "send_telegram_message", AsyncMock(return_value=None)),
+            self.assertRaises(RuntimeError),
         ):
-            with self.assertRaises(RuntimeError):
-                await jobs.send_admin_summary(object())
+            await jobs.send_admin_summary(object())

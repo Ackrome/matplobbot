@@ -1,6 +1,6 @@
 import json
-import shutil
 import sys
+import tempfile
 import types
 import unittest
 from pathlib import Path
@@ -33,10 +33,8 @@ class TestLocalizationCompleteness(unittest.TestCase):
         self.assertEqual(set(en_data.keys()), set(ru_data.keys()))
 
     def test_translator_fallback_behavior(self):
-        tmp_path = Path("tests/.tmp_localization_test")
-        shutil.rmtree(tmp_path, ignore_errors=True)
-        tmp_path.mkdir(parents=True, exist_ok=True)
-        try:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
             (tmp_path / "en.json").write_text(
                 json.dumps({"hello": "Hello", "fallback_only": "Default value"}),
                 encoding="utf-8",
@@ -52,5 +50,3 @@ class TestLocalizationCompleteness(unittest.TestCase):
             self.assertEqual(translator.gettext("ru", "fallback_only"), "Default value")
             self.assertEqual(translator.gettext("es", "fallback_only"), "Default value")
             self.assertEqual(translator.gettext("ru", "missing_key"), "_missing_key_")
-        finally:
-            shutil.rmtree(tmp_path, ignore_errors=True)

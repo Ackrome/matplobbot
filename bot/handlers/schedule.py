@@ -13,12 +13,11 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import BufferedInputFile, CallbackQuery, Message
-from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton
+from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, Message
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot import database
 from bot.keyboards import (
-    InlineKeyboardButton,
     build_calendar_keyboard,
     build_search_results_keyboard,
     code_path_cache,
@@ -78,7 +77,21 @@ class ScheduleManager:
     def __init__(self, ruz_api_client: RuzAPIClient):
         self.router = Router()
         self.api_client = ruz_api_client
+        self._background_tasks: set[asyncio.Task] = set()
         self._register_handlers()
+
+    def _track_background_task(self, task: asyncio.Task) -> None:
+        self._background_tasks.add(task)
+        task.add_done_callback(self._finalize_background_task)
+
+    def _finalize_background_task(self, task: asyncio.Task) -> None:
+        self._background_tasks.discard(task)
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            logging.info("Schedule background task %s was cancelled.", task.get_name())
+        except Exception:
+            logging.exception("Schedule background task %s failed.", task.get_name())
 
     def _register_handlers(self):
         self.router.message(Command("schedule"))(self.cmd_schedule)
@@ -282,7 +295,11 @@ class ScheduleManager:
         await state.clear()
 
         status_msg = await message.answer(translator.gettext(lang, "schedule_search_started"))
-        asyncio.create_task(self._perform_search_and_reply(message, status_msg, query, search_type))
+        task = asyncio.create_task(
+            self._perform_search_and_reply(message, status_msg, query, search_type),
+            name=f"schedule-search:{user_id}",
+        )
+        self._track_background_task(task)
 
     async def handle_result_selection(self, callback: CallbackQuery, state: FSMContext):
         await callback.answer()
@@ -476,7 +493,7 @@ class ScheduleManager:
         entity_id: str,
         entity_name: str,
         view_type: str,
-        date_info: dict = None,
+        date_info: dict | None = None,
     ):
         keyboard = self._build_schedule_actions_keyboard(
             lang, entity_type, entity_id, entity_name, view_type, date_info
@@ -827,9 +844,11 @@ class ScheduleManager:
             end_date = start_date + timedelta(weeks=3)
 
             schedule_data_for_hash = [
-                l
-                for l in full_semester_schedule
-                if start_date.strftime("%Y-%m-%d") <= l["date"] <= end_date.strftime("%Y-%m-%d")
+                lesson
+                for lesson in full_semester_schedule
+                if start_date.strftime("%Y-%m-%d")
+                <= lesson["date"]
+                <= end_date.strftime("%Y-%m-%d")
             ]
 
             new_hash = hashlib.sha256(
@@ -1064,8 +1083,9 @@ class ScheduleManager:
 
         try:
             await callback.message.edit_reply_markup(reply_markup=new_keyboard)
-        except Exception:
-            pass
+        except TelegramBadRequest as e:
+            if "message is not modified" not in e.message:
+                raise
 
         await callback.answer(
             translator.gettext(
@@ -1181,10 +1201,7 @@ class ScheduleManager:
                 l_date = datetime.strptime(lesson["date"], "%Y-%m-%d").date()
                 day = l_date.day
 
-                kind = lesson.get("kindOfWork", "").lower()
-                is_exam = "экзамен" in kind or "аттестация" in kind or "зачет" in kind
-
-                kind = kind.replace("\u0451", "\u0435")
+                kind = lesson.get("kindOfWork", "").lower().replace("\u0451", "\u0435")
                 is_exam = (
                     "экзам" in kind
                     or "аттест" in kind
@@ -1206,8 +1223,8 @@ class ScheduleManager:
                     busy_days[day] = "❗️"
                 elif day not in busy_days:
                     busy_days[day] = "•"
-            except:
-                pass
+            except (KeyError, TypeError, ValueError):
+                logging.warning("Skipping malformed schedule lesson in calendar: %r", lesson)
 
         keyboard = get_myschedule_calendar_keyboard(year, month, lang, busy_days)
 
@@ -1221,8 +1238,9 @@ class ScheduleManager:
                 translator.gettext(lang, "myschedule_calendar_title", month_year=month_year),
                 reply_markup=keyboard,
             )
-        except:
-            pass
+        except TelegramBadRequest as e:
+            if "message is not modified" not in e.message:
+                raise
 
     async def handle_myschedule_open(self, callback: CallbackQuery):
         now = datetime.now()
@@ -1271,10 +1289,10 @@ class ScheduleManager:
             )
 
         formatted_lessons = []
-        for l in schedule:
-            l_copy = l.copy()
+        for lesson in schedule:
+            l_copy = lesson.copy()
             l_copy["lecturer_title"] = (
-                f"{l_copy.get('lecturer_title','')} ({l.get('source_entity')})"
+                f"{l_copy.get('lecturer_title','')} ({lesson.get('source_entity')})"
             )
             formatted_lessons.append(l_copy)
 
@@ -1353,8 +1371,9 @@ class ScheduleManager:
 
         try:
             await callback.message.edit_reply_markup(reply_markup=kb)
-        except:
-            pass
+        except TelegramBadRequest as e:
+            if "message is not modified" not in e.message:
+                raise
         await callback.answer()
 
     async def handle_myschedule_apply_builtin_preset(self, callback: CallbackQuery):
@@ -1462,10 +1481,10 @@ class ScheduleManager:
         )
 
         formatted_lessons = []
-        for l in schedule:
-            l_copy = l.copy()
+        for lesson in schedule:
+            l_copy = lesson.copy()
             l_copy["lecturer_title"] = (
-                f"{l_copy.get('lecturer_title','')} ({l.get('source_entity')})"
+                f"{l_copy.get('lecturer_title','')} ({lesson.get('source_entity')})"
             )
             formatted_lessons.append(l_copy)
 
@@ -1555,7 +1574,7 @@ class ScheduleManager:
         )
 
     async def _resolve_entity_name(
-        self, user_id: int, entity_type: str, entity_id: str, schedule_data: list = None
+        self, user_id: int, entity_type: str, entity_id: str, schedule_data: list | None = None
     ) -> str:
         cached_search = await redis_client.get_user_cache(user_id, "schedule_search")
         if cached_search and cached_search.get("results"):
@@ -1575,7 +1594,7 @@ class ScheduleManager:
                     and item.get("entity_type") == entity_type
                 ):
                     return item["entity_name"]
-            except:
+            except (json.JSONDecodeError, KeyError, TypeError):
                 continue
 
         subs, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)

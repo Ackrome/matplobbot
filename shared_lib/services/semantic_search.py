@@ -16,7 +16,7 @@ class TextSearchEngine:
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(TextSearchEngine, cls).__new__(cls)
+            cls._instance = super().__new__(cls)
         return cls._instance
 
     async def upsert_document(self, source_type: str, path: str, content: str, metadata: dict):
@@ -40,7 +40,9 @@ class TextSearchEngine:
             await session.execute(stmt)
             await session.commit()
 
-    async def search(self, query: str, source_type: str = None, top_k: int = 10) -> list[dict]:
+    async def search(
+        self, query: str, source_type: str | None = None, top_k: int = 10
+    ) -> list[dict]:
         """
         Выполняет быстрый полнотекстовый поиск (FTS) средствами PostgreSQL + SQLAlchemy.
         """
@@ -96,7 +98,7 @@ class TextSearchEngine:
 
         return results
 
-    async def clear_index(self, source_type: str = None):
+    async def clear_index(self, source_type: str | None = None):
         async with get_session() as session:
             if source_type:
                 await session.execute(

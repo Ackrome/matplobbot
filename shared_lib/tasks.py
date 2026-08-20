@@ -88,7 +88,7 @@ def render_latex(self, latex_string: str, padding: int, dpi: int, is_display: bo
             with open(tex_path, "w", encoding="utf-8") as f:
                 f.write(full_latex_code)
 
-            proc = subprocess.run(
+            subprocess.run(
                 [
                     "latex",
                     "-no-shell-escape",
@@ -262,7 +262,7 @@ def render_pdf_task(self, markdown_string: str, title: str, author_string: str, 
                 if os.path.exists(log_file):
                     with open(log_file, encoding="utf-8", errors="ignore") as f:
                         lines = f.readlines()
-                    error_lines = [l.strip() for l in lines if l.startswith("!")]
+                    error_lines = [line.strip() for line in lines if line.startswith("!")]
                     log_content = (
                         "\n".join(error_lines[:5]) if error_lines else "\n".join(lines[-20:])
                     )
@@ -527,7 +527,9 @@ def _safe_extract_zip(zf: zipfile.ZipFile, destination: str):
 
 
 @app.task(bind=True, soft_time_limit=60, name="shared_lib.tasks.compile_project")
-def compile_project_task(self, project_files: list, main_file: str, build_cache_b64: str = None):
+def compile_project_task(
+    self, project_files: list, main_file: str, build_cache_b64: str | None = None
+):
     """Многофайловая компиляция с поддержкой Инкрементальной сборки и SyncTeX"""
     try:
         with tempfile.TemporaryDirectory() as temp_dir:

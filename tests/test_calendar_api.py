@@ -26,7 +26,7 @@ try:
         sys.modules,
         {"shared_lib.services.schedule_service": fake_schedule_service},
     ):
-        from fastapi_stats_app.routers import calendar_router_v2 as calendar_router  # noqa: E402
+        from fastapi_stats_app.routers import calendar_router_v2 as calendar_router
 except ModuleNotFoundError:
     FASTAPI_AVAILABLE = False
 

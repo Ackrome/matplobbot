@@ -9,9 +9,9 @@ try:
     # Ensure module import works with mandatory secret check.
     os.environ.setdefault("JWT_SECRET_KEY", "test-secret-for-unit-tests")
 
-    from fastapi_stats_app.auth import _get_jwt_secret_key, require_admin  # noqa: E402
-    from fastapi_stats_app.routers.studio_router import get_owned_project_or_404  # noqa: E402
-    from fastapi_stats_app.routers.ws_router import can_subscribe_user_updates  # noqa: E402
+    from fastapi_stats_app.auth import _get_jwt_secret_key, require_admin
+    from fastapi_stats_app.routers.studio_router import get_owned_project_or_404
+    from fastapi_stats_app.routers.ws_router import can_subscribe_user_updates
 except ModuleNotFoundError:
     FASTAPI_AVAILABLE = False
 
@@ -61,9 +61,8 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(can_subscribe_user_updates({"role": "user", "telegram_id": 1}, 2))
 
     def test_get_jwt_secret_key_raises_if_missing(self):
-        with patch.dict(os.environ, {}, clear=True):
-            with self.assertRaises(RuntimeError):
-                _get_jwt_secret_key()
+        with patch.dict(os.environ, {}, clear=True), self.assertRaises(RuntimeError):
+            _get_jwt_secret_key()
 
     def test_get_jwt_secret_key_returns_value(self):
         with patch.dict(os.environ, {"JWT_SECRET_KEY": "abc"}, clear=True):

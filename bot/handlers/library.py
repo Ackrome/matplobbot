@@ -21,7 +21,7 @@ from shared_lib.redis_client import redis_client
 
 from .. import database
 from .. import keyboards as kb
-from ..config import *
+from ..config import SEARCH_RESULTS_PER_PAGE
 from ..services import library_display
 from ..services.search_center import search_library_examples
 

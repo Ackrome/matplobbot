@@ -1130,7 +1130,7 @@ async def get_webcal_schedule(
             error,
             exc_info=True,
         )
-        raise HTTPException(status_code=500, detail="Internal Error")
+        raise HTTPException(status_code=500, detail="Internal Error") from error
 
 
 @router.api_route(
@@ -1162,7 +1162,7 @@ async def get_webcal_schedule_telegram_filtered(
             error,
             exc_info=True,
         )
-        raise HTTPException(status_code=500, detail="Internal Error")
+        raise HTTPException(status_code=500, detail="Internal Error") from error
 
 
 @router.api_route(
@@ -1202,4 +1202,4 @@ async def get_webcal_schedule_profile(
             error,
             exc_info=True,
         )
-        raise HTTPException(status_code=500, detail="Internal Error")
+        raise HTTPException(status_code=500, detail="Internal Error") from error

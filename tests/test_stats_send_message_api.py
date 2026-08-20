@@ -8,7 +8,7 @@ try:
     from fastapi.testclient import TestClient
 
     os.environ.setdefault("JWT_SECRET_KEY", "test-secret-for-unit-tests")
-    from fastapi_stats_app.routers import stats_router  # noqa: E402
+    from fastapi_stats_app.routers import stats_router
 except ModuleNotFoundError:
     FASTAPI_AVAILABLE = False
 

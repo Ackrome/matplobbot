@@ -130,4 +130,4 @@ async def get_webcal_schedule(secret_token: str):
 
     except Exception as e:
         logger.error(f"Error generating webcal for user {user_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal Error")
+        raise HTTPException(status_code=500, detail="Internal Error") from e

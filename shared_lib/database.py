@@ -796,8 +796,8 @@ async def update_subscription_notification_time(
             result = await session.execute(stmt)
             await session.commit()
             return result.scalar()
-        except Exception:
-            raise SubscriptionConflictError()
+        except Exception as exc:
+            raise SubscriptionConflictError() from exc
 
 
 async def delete_old_inactive_subscriptions(days_inactive: int = 30):
@@ -1287,17 +1287,16 @@ async def get_user_profile_data_from_db(
     )
 
     rows = await session.execute(stmt)
-    actions = []
-    for r in rows:
-        actions.append(
-            {
-                "id": r.id,
-                "action_type": r.action_type,
-                "action_details": r.action_details,
-                # Formatting manually or in SQL? Let's do in Python to keep SA usage clean
-                "timestamp": r.timestamp.strftime("%Y-%m-%d %H:%M:%S"),  # simplistic TZ handling
-            }
-        )
+    actions = [
+        {
+            "id": r.id,
+            "action_type": r.action_type,
+            "action_details": r.action_details,
+            # Formatting manually or in SQL? Let's do in Python to keep SA usage clean
+            "timestamp": r.timestamp.strftime("%Y-%m-%d %H:%M:%S"),  # simplistic TZ handling
+        }
+        for r in rows
+    ]
 
     user_details = {
         "user_id": user.user_id,

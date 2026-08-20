@@ -240,8 +240,8 @@ async def get_current_user(
         if not isinstance(raw_sub_id, str) or not raw_sub_id:
             raise credentials_exception
         sub_id = raw_sub_id
-    except JWTError:
-        raise credentials_exception
+    except JWTError as exc:
+        raise credentials_exception from exc
 
     result = await db.execute(select(WebAccount).where(WebAccount.id == int(sub_id)))
     account = result.scalar_one_or_none()
@@ -304,5 +304,5 @@ async def get_ws_user(websocket: WebSocket) -> dict:
                 "db_obj": account,
             }
 
-    except JWTError:
-        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
+    except JWTError as exc:
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION) from exc

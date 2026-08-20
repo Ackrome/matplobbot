@@ -456,7 +456,7 @@ async def health_check(db: AsyncSession = Depends(get_db_session_dependency)) ->
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"status": "error", "database": "disconnected", "reason": str(e)},
-        )
+        ) from e
 
 
 @router.get(
@@ -522,7 +522,7 @@ async def get_user_profile(
 
     except Exception as e:
         logger.error(f"Database error fetching user profile {user_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal Database Error")
+        raise HTTPException(status_code=500, detail="Internal Database Error") from e
 
 
 async def _get_action_users_impl(
@@ -578,7 +578,7 @@ async def _get_action_users_impl(
 
     except Exception as e:
         logger.error(f"Database error fetching action users: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal Database Error")
+        raise HTTPException(status_code=500, detail="Internal Database Error") from e
 
 
 @router.get(
@@ -736,7 +736,7 @@ async def export_user_actions(
         actions = await get_all_user_actions(db, user_id)
     except Exception as e:
         logger.error(f"Database error exporting actions for user {user_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal Database Error")
+        raise HTTPException(status_code=500, detail="Internal Database Error") from e
 
     effective_date_from = date_from
     effective_date_to = date_to
@@ -861,20 +861,21 @@ async def send_message_to_user(
             get_telegram_proxy_url(),
             log_context="stats Telegram send",
         )
-        async with aiohttp.ClientSession(**session_kwargs) as session:
-            async with session.post(tg_url, json=payload, **request_kwargs) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    _emit_admin_send_audit(
-                        admin_id=admin_id,
-                        target_id=user_id,
-                        correlation_id=correlation_id,
-                        timestamp=request_timestamp,
-                        result="telegram_error",
-                        error=error_text[:500],
-                    )
-                    logger.error(f"Failed to send message to {user_id}: {error_text}")
-                    raise HTTPException(status_code=400, detail=f"Telegram API Error: {error_text}")
+        async with aiohttp.ClientSession(**session_kwargs) as session, session.post(
+            tg_url, json=payload, **request_kwargs
+        ) as response:
+            if response.status != 200:
+                error_text = await response.text()
+                _emit_admin_send_audit(
+                    admin_id=admin_id,
+                    target_id=user_id,
+                    correlation_id=correlation_id,
+                    timestamp=request_timestamp,
+                    result="telegram_error",
+                    error=error_text[:500],
+                )
+                logger.error(f"Failed to send message to {user_id}: {error_text}")
+                raise HTTPException(status_code=400, detail=f"Telegram API Error: {error_text}")
 
     except aiohttp.ClientError as e:
         _emit_admin_send_audit(
@@ -888,7 +889,7 @@ async def send_message_to_user(
         logger.error(f"Network error sending message to {user_id}: {e}")
         raise HTTPException(
             status_code=500, detail="Network error while sending message to Telegram"
-        )
+        ) from e
 
     try:
         await log_user_action(
@@ -924,7 +925,7 @@ async def get_leaderboard(current_user: dict = Depends(require_admin)):
             return await get_leaderboard_data_from_db(db)
     except Exception as e:
         logger.error(f"Database error fetching leaderboard: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal Database Error")
+        raise HTTPException(status_code=500, detail="Internal Database Error") from e
 
 
 @router.get(
@@ -939,7 +940,7 @@ async def get_activity(current_user: dict = Depends(require_admin)):
             return await get_activity_over_time_data_from_db(db, period="day")
     except Exception as e:
         logger.error(f"Database error fetching activity: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal Database Error")
+        raise HTTPException(status_code=500, detail="Internal Database Error") from e
 
 
 @router.get(

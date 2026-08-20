@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import tempfile
+from contextlib import suppress
 from urllib.parse import quote
 
 import aiofiles
@@ -57,13 +58,12 @@ async def send_as_document_from_url(message: Message, user_id: int, file_url: st
         with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file_name}") as tmp_file:
             temp_file_path = tmp_file.name
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(file_url) as response:
-                response.raise_for_status()
+        async with aiohttp.ClientSession() as session, session.get(file_url) as response:
+            response.raise_for_status()
 
-                async with aiofiles.open(temp_file_path, "wb") as f:
-                    async for chunk in response.content.iter_chunked(8192):
-                        await f.write(chunk)
+            async with aiofiles.open(temp_file_path, "wb") as f:
+                async for chunk in response.content.iter_chunked(8192):
+                    await f.write(chunk)
 
         # Send the downloaded file with the main keyboard
         await message.answer_document(
@@ -140,18 +140,17 @@ async def display_github_file(
         else:
             logger.info(f"Cache miss for file content: {file_path}. Fetching from GitHub.")
             try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(raw_url) as response:
-                        if response.status == 200:
-                            content = await response.text(encoding="utf-8", errors="ignore")
-                            github_service.github_content_cache[file_path] = content
-                        else:
-                            await message.answer(
-                                translator.gettext(
-                                    lang, "github_fetch_error", status_code=response.status
-                                )
+                async with aiohttp.ClientSession() as session, session.get(raw_url) as response:
+                    if response.status == 200:
+                        content = await response.text(encoding="utf-8", errors="ignore")
+                        github_service.github_content_cache[file_path] = content
+                    else:
+                        await message.answer(
+                            translator.gettext(
+                                lang, "github_fetch_error", status_code=response.status
                             )
-                            return
+                        )
+                        return
             except Exception as e:
                 await message.answer(translator.gettext(lang, "github_fetch_exception", error=e))
                 return
@@ -255,10 +254,8 @@ async def display_github_file(
         await send_as_document_from_url(message, user_id, raw_url, file_path)
 
     if status_msg_to_delete:
-        try:
+        with suppress(TelegramBadRequest):
             await status_msg_to_delete.delete()
-        except TelegramBadRequest:
-            pass
 
 
 async def display_lec_all_path(

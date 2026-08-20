@@ -35,9 +35,10 @@ class TestTelemetry(unittest.TestCase):
         fake_task = _FakeCeleryTask()
         tracer = trace.get_tracer(__name__)
 
-        with correlation_scope(correlation_id="cid-123"):
-            with tracer.start_as_current_span("parent-span"):
-                result = dispatch_traced_task(fake_task, "payload", format="pdf")
+        with correlation_scope(correlation_id="cid-123"), tracer.start_as_current_span(
+            "parent-span"
+        ):
+            result = dispatch_traced_task(fake_task, "payload", format="pdf")
 
         self.assertEqual(result, "queued-task")
         call = fake_task.apply_async.call_args

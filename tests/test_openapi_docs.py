@@ -8,8 +8,8 @@ try:
     from fastapi import Depends, FastAPI, Query
     from fastapi.testclient import TestClient
 
-    from fastapi_stats_app import auth as fastapi_auth  # noqa: E402
-    from fastapi_stats_app.openapi_docs import configure_openapi  # noqa: E402
+    from fastapi_stats_app import auth as fastapi_auth
+    from fastapi_stats_app.openapi_docs import configure_openapi
 except ModuleNotFoundError:
     FASTAPI_AVAILABLE = False
 

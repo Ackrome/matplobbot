@@ -81,7 +81,7 @@ async def render_latex_to_image(
             raise ValueError(f"LaTeX Worker Error: {result.get('error')}")
     except Exception as e:
         logger.error(f"LaTeX render failed: {e}")
-        raise ValueError(f"Ошибка рендеринга LaTeX: {e}")
+        raise ValueError(f"Ошибка рендеринга LaTeX: {e}") from e
 
 
 async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
@@ -101,7 +101,7 @@ async def render_mermaid_to_image(mermaid_code: str) -> io.BytesIO:
             raise ValueError(f"Mermaid Worker Error: {result.get('error')}")
     except Exception as e:
         logger.error(f"Mermaid render failed: {e}")
-        raise ValueError(f"Ошибка рендеринга Mermaid: {e}")
+        raise ValueError(f"Ошибка рендеринга Mermaid: {e}") from e
 
 
 async def convert_md_to_pdf_pandoc(
@@ -149,7 +149,7 @@ async def convert_md_to_pdf_pandoc(
         err_msg = str(e)
         if len(err_msg) > 200:
             err_msg = err_msg[:200] + "..."
-        raise ValueError(f"Ошибка создания PDF: {err_msg}")
+        raise ValueError(f"Ошибка создания PDF: {err_msg}") from e
 
 
 async def _prepare_html_with_katex(content: str, page_title: str) -> str:
@@ -169,4 +169,4 @@ async def _prepare_html_with_katex(content: str, page_title: str) -> str:
             raise ValueError(f"HTML Worker Error: {result.get('error')}")
     except Exception as e:
         logger.error(f"HTML render failed: {e}")
-        raise ValueError(f"Ошибка создания HTML: {e}")
+        raise ValueError(f"Ошибка создания HTML: {e}") from e

@@ -184,7 +184,7 @@ class AdminManager:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await process.communicate()
+            _stdout, stderr = await process.communicate()
 
             if process.returncode == 0:
                 # 3. Сбрасываем кэши поиска модулей (замена reload(pkg_resources))

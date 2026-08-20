@@ -122,7 +122,7 @@ async def _search_single_entity_type(
     try:
         api_results = await client.search(term, entity_type)
         return _normalize_search_results(api_results, entity_type), False
-    except RuzAPIError:
+    except RuzAPIError as exc:
         logger.warning(
             "RUZ API search failed for '%s' (%s). Falling back to local cache.",
             term,
@@ -136,7 +136,7 @@ async def _search_single_entity_type(
             raise HTTPException(
                 status_code=503,
                 detail="University search is unavailable and no cached matches were found.",
-            )
+            ) from exc
         return [], True
     except HTTPException:
         raise
@@ -149,7 +149,7 @@ async def _search_single_entity_type(
             exc_info=True,
         )
         if strict_unavailable:
-            raise HTTPException(status_code=500, detail="Internal server error")
+            raise HTTPException(status_code=500, detail="Internal server error") from e
         return [], True
 
 
@@ -374,7 +374,7 @@ async def get_schedule_data(
     except HTTPException:
         raise
     except ConnectionError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Failed to fetch schedule for website: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error") from e

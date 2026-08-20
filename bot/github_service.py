@@ -4,7 +4,7 @@ import logging
 import aiohttp
 from cachetools import TTLCache
 
-from .config import *
+from .config import GITHUB_TOKEN, MD_SEARCH_BRANCH
 
 logger = logging.getLogger(__name__)
 
@@ -38,27 +38,29 @@ async def get_github_repo_contents(repo_path: str, path: str = "") -> list[dict]
     params = {"ref": MD_SEARCH_BRANCH}
 
     try:
-        async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.get(url, params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    # Sort items: folders first, then files, all alphabetically
-                    if isinstance(data, list):
-                        data.sort(key=lambda x: (x["type"] != "dir", x["name"].lower()))
-                    # Store in cache on success
-                    github_dir_cache[cache_key] = data
-                    return data
-                elif response.status == 401:
-                    logger.critical(
-                        "GitHub API request failed with 401 Unauthorized. The GITHUB_TOKEN is likely invalid, expired, or missing 'repo' scope."
-                    )
-                    return None
-                else:
-                    error_text = await response.text()
-                    logger.error(
-                        f"GitHub API contents fetch failed for path '{path}' with status {response.status}: {error_text}"
-                    )
-                    return None
+        async with (
+            aiohttp.ClientSession(headers=headers) as session,
+            session.get(url, params=params) as response,
+        ):
+            if response.status == 200:
+                data = await response.json()
+                # Sort items: folders first, then files, all alphabetically
+                if isinstance(data, list):
+                    data.sort(key=lambda x: (x["type"] != "dir", x["name"].lower()))
+                # Store in cache on success
+                github_dir_cache[cache_key] = data
+                return data
+            elif response.status == 401:
+                logger.critical(
+                    "GitHub API request failed with 401 Unauthorized. The GITHUB_TOKEN is likely invalid, expired, or missing 'repo' scope."
+                )
+                return None
+            else:
+                error_text = await response.text()
+                logger.error(
+                    f"GitHub API contents fetch failed for path '{path}' with status {response.status}: {error_text}"
+                )
+                return None
     except Exception as e:
         logger.error(
             f"Error during GitHub API contents request for path '{path}': {e}", exc_info=True

@@ -163,11 +163,13 @@ async def compile_document(
 
         return result
 
-    except TimeoutError:
-        raise HTTPException(status_code=504, detail="Compilation timed out.")
+    except HTTPException:
+        raise
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="Compilation timed out.") from exc
     except Exception as e:
         logger.error(f"Studio Compile Error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get(
@@ -358,8 +360,8 @@ async def compile_project(
 
         return res
 
-    except TimeoutError:
-        raise HTTPException(status_code=504, detail="Compilation timed out.")
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="Compilation timed out.") from exc
 
 
 @router.delete(
@@ -420,8 +422,10 @@ async def rename_file(
         return {"status": "success"}
     except HTTPException:
         raise
-    except Exception:
-        raise HTTPException(status_code=400, detail="Filename might already exist or invalid")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400, detail="Filename might already exist or invalid"
+        ) from exc
 
 
 @router.get(
@@ -484,8 +488,8 @@ async def get_project_asset(
     # Верификация токена вручную, т.к. img src не поддерживает заголовки
     try:
         user = await get_current_user(token, db)
-    except HTTPException:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except HTTPException as exc:
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
     await get_owned_project_or_404(db, project_id, user["id"])
 
     result = await db.execute(
@@ -598,8 +602,10 @@ async def send_project_to_telegram(
                     raise HTTPException(
                         status_code=500, detail="Ошибка при отправке файла в Telegram."
                     )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Network error during Telegram send: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка сети: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка сети: {str(e)}") from e
 
     return {"status": "success", "message": "Файл успешно отправлен в Telegram!"}

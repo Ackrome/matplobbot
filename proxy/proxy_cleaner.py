@@ -20,8 +20,8 @@ def safe_dict(d):
     return d if isinstance(d, dict) else {}
 
 
-def safe_list(l):
-    return l if isinstance(l, list) else []
+def safe_list(value):
+    return value if isinstance(value, list) else []
 
 
 def append_yaml_field(lines, key, value, indent="    "):
@@ -519,7 +519,7 @@ def process_something_json(raw_data):
                             f"    username: {json.dumps(str(s_usr.get('user')))}\n    password: {json.dumps(str(s_usr.get('pass')))}"
                         )
                     has_socks = True
-            except:
+            except (IndexError, TypeError, AttributeError):
                 pass
 
         try:
@@ -614,7 +614,7 @@ def process_something_json(raw_data):
 
             yaml_lines.extend(proxy_lines)
             valid_nodes += 1
-        except:
+        except (IndexError, KeyError, TypeError, AttributeError):
             continue
     return "\n".join(yaml_lines) if valid_nodes > 0 else None
 

@@ -33,12 +33,32 @@ from .tracing import BotTracingMiddleware
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 TELEGRAM_PROXY_URL = get_telegram_proxy_url()
 POLLING_RETRY_DELAY_SECONDS = float(os.getenv("BOT_POLLING_RETRY_DELAY_SECONDS", "15"))
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 configure_process_http_proxy_env(
     get_global_http_proxy_url(),
     no_proxy_hosts=("ruz.fa.ru",),
 )
 configure_service_telemetry("matplobbot-bot")
+
+
+def _log_background_task_result(task: asyncio.Task) -> None:
+    _BACKGROUND_TASKS.discard(task)
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        logging.info("Background task %s was cancelled.", task.get_name())
+    except Exception:
+        logging.exception("Background task %s failed.", task.get_name())
+    else:
+        logging.info("Background task %s finished.", task.get_name())
+
+
+def _start_background_task(coro, name: str) -> asyncio.Task:
+    task = asyncio.create_task(coro, name=name)
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_log_background_task_result)
+    return task
 
 
 def get_cmd_desc(lang: str, key: str) -> str:
@@ -172,9 +192,8 @@ async def run_bot_once(ruz_api_client_instance) -> None:
 async def main():
     await init_db_pool()
 
-    logging.info("Building semantic search index...")
-    asyncio.create_task(index_matplobblib_library())
-    logging.info("Semantic index built.")
+    logging.info("Scheduling semantic search index build...")
+    _start_background_task(index_matplobblib_library(), "matplobblib-index")
 
     timeout_client = aiohttp.ClientTimeout(total=600)
     async with aiohttp.ClientSession(timeout=timeout_client, trust_env=False) as ruz_session:

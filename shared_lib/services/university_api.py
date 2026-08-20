@@ -46,11 +46,11 @@ class RuzAPIClient:
                         try:
                             json_response = await response.json()
                             return json_response if isinstance(json_response, list) else []
-                        except aiohttp.ContentTypeError:
+                        except aiohttp.ContentTypeError as exc:
                             # ВУЗ вернул HTML вместо JSON (падает прокси)
                             raise RuzAPIError(
                                 "API returned invalid JSON (possibly an HTML error page)"
-                            )
+                            ) from exc
 
                     if 400 <= response.status < 500:
                         error_text = await response.text()

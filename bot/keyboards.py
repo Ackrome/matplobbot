@@ -357,7 +357,9 @@ async def get_repo_management_keyboard(
     return builder.as_markup()
 
 
-async def get_schedule_type_keyboard(lang: str, history_items: list = None) -> InlineKeyboardMarkup:
+async def get_schedule_type_keyboard(
+    lang: str, history_items: list | None = None
+) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(

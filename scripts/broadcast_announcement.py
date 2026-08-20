@@ -12,16 +12,16 @@ if str(ROOT) not in sys.path:
 
 load_dotenv(ROOT / ".env")
 
-from aiogram import Bot  # noqa: E402
-from aiogram.exceptions import TelegramRetryAfter  # noqa: E402
+from aiogram import Bot
+from aiogram.exceptions import TelegramRetryAfter
 
-from shared_lib.database import (  # noqa: E402
+from shared_lib.database import (
     close_db_pool,
     get_active_broadcast_user_ids,
     init_db_pool,
 )
-from shared_lib.egress import get_telegram_proxy_url  # noqa: E402
-from shared_lib.services.broadcast_service import (  # noqa: E402
+from shared_lib.egress import get_telegram_proxy_url
+from shared_lib.services.broadcast_service import (
     DEFAULT_BROADCAST_ACTIVE_DAYS,
     DEFAULT_BROADCAST_RATE_PER_SECOND,
     DEFAULT_BROADCAST_TITLE,
@@ -32,7 +32,7 @@ from shared_lib.services.broadcast_service import (  # noqa: E402
     load_broadcast_text,
     split_telegram_message,
 )
-from shared_lib.telegram_bot_session import TelegramBotSession  # noqa: E402
+from shared_lib.telegram_bot_session import TelegramBotSession
 
 
 def build_parser() -> argparse.ArgumentParser:

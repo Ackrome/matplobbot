@@ -26,12 +26,13 @@ from shared_lib.redis_client import redis_client
 
 from .. import database
 from .. import keyboards as kb
-from ..config import *
+from ..config import SEARCH_RESULTS_PER_PAGE
 from ..services import github_display
 from ..services.repo_indexer import index_github_repository
 from ..services.search_center import search_repository_markdown
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 
 class MarkdownSearch(StatesGroup):
@@ -52,7 +53,21 @@ github_search_cache = TTLCache(maxsize=100, ttl=600)  # Cache search results for
 class GitHubManager:
     def __init__(self):
         self.router = Router()
+        self._background_tasks: set[asyncio.Task] = set()
         self._register_handlers()
+
+    def _track_background_task(self, task: asyncio.Task) -> None:
+        self._background_tasks.add(task)
+        task.add_done_callback(self._finalize_background_task)
+
+    def _finalize_background_task(self, task: asyncio.Task) -> None:
+        self._background_tasks.discard(task)
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            logger.info("GitHub background task %s was cancelled.", task.get_name())
+        except Exception:
+            logger.exception("GitHub background task %s failed.", task.get_name())
 
     def _register_handlers(self):
         # Browse
@@ -246,18 +261,20 @@ class GitHubManager:
         params = {"q": search_query, "per_page": 100}
 
         try:
-            async with aiohttp.ClientSession(headers=headers) as session:
-                async with session.get(url, params=params) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        results = data.get("items", [])
-                        github_search_cache[query] = results
-                        return results
-                    else:
-                        logging.error(
-                            f"GitHub API search failed with status {response.status}: {await response.text()}"
-                        )
-                        return None
+            async with (
+                aiohttp.ClientSession(headers=headers) as session,
+                session.get(url, params=params) as response,
+            ):
+                if response.status == 200:
+                    data = await response.json()
+                    results = data.get("items", [])
+                    github_search_cache[query] = results
+                    return results
+                else:
+                    logging.error(
+                        f"GitHub API search failed with status {response.status}: {await response.text()}"
+                    )
+                    return None
         except Exception as e:
             logging.error(f"Error during GitHub API request: {e}", exc_info=True)
             return None
@@ -336,7 +353,6 @@ class GitHubManager:
         user_data = await state.get_data()
         repo_to_search = user_data.get("repo_to_search")
         user_id = message.from_user.id
-        lang = await translator.get_language(user_id, message.chat.id)
         query = message.text
 
         status_msg = await message.answer(
@@ -357,25 +373,6 @@ class GitHubManager:
         # Формируем результаты для кэша и клавиатуры
         # Нам нужно адаптировать формат результатов под то, что ждет _get_md_search_results_keyboard
         # Ожидается список dict c ключом 'path'
-
-        await self._handle_md_search_success(
-            status_msg, user_id, query, repo_to_search, formatted_results
-        )
-        return
-
-        formatted_results = []
-        seen_files = set()
-
-        for r in results:
-            # r['path'] выглядит как "folder/file.md#chunk_0"
-            # Нам для открытия файла нужен чистый путь
-            file_path = r["metadata"]["file_path"]
-
-            # Дедупликация: если нашли 5 чанков из одного файла, показываем файл один раз
-            # (Или можно показывать с якорями, если реализуешь навигацию по чанкам)
-            if file_path not in seen_files:
-                formatted_results.append({"path": file_path, "score": r["score"]})
-                seen_files.add(file_path)
 
         await self._handle_md_search_success(
             status_msg, user_id, query, repo_to_search, formatted_results
@@ -563,8 +560,11 @@ class GitHubManager:
 
         await callback.answer("Запущена индексация... Я сообщу по завершении.")
 
-        # Запускаем в фоне
-        asyncio.create_task(self._run_indexing_task(callback.message, repo_path))
+        task = asyncio.create_task(
+            self._run_indexing_task(callback.message, repo_path),
+            name=f"github-index:{repo_path}",
+        )
+        self._track_background_task(task)
 
     async def _run_indexing_task(self, message: Message, repo_path: str):
         status_msg = await message.answer(

@@ -214,7 +214,7 @@ async def format_schedule(
     user_id: int,
     start_date: date,
     is_week_view: bool = False,
-    subscription_id: int = None,
+    subscription_id: int | None = None,
 ) -> str:
     """Formats a list of lessons into a readable daily schedule using Variant B (Subgroup Hierarchy)."""
     if not schedule_data:
@@ -326,21 +326,19 @@ async def format_schedule(
 
                 # --- CASE 1: Single Lesson (Standard View) ---
                 if len(group_lessons) == 1:
-                    l = group_lessons[0]
+                    lesson = group_lessons[0]
                     # Format: Time | Room \n Name | Type \n Teacher
-                    header_line = hcode(f"{start_time} - {end_time} | {l['auditorium']}")
+                    header_line = hcode(f"{start_time} - {end_time} | {lesson['auditorium']}")
                     body_line = f"{emoji_prefix}{d_name} | {type_name}"
 
                     # Teacher / Group info logic
-                    extra_info = l["lecturer_title"].replace("_", " ")
-                    if entity_type == "group" and l.get("lecturerEmail"):
+                    extra_info = lesson["lecturer_title"].replace("_", " ")
+                    if entity_type == "group" and lesson.get("lecturerEmail"):
                         pass  # Keep concise
-                    if show_emails and l.get("lecturerEmail"):
-                        extra_info += f" ({l['lecturerEmail']})"
-                    elif entity_type == "person":
-                        extra_info = f"{l.get('group', '???')} | {extra_info}"
-                    elif entity_type == "auditorium":
-                        extra_info = f"{l.get('group', '???')} | {extra_info}"
+                    if show_emails and lesson.get("lecturerEmail"):
+                        extra_info += f" ({lesson['lecturerEmail']})"
+                    elif entity_type in {"person", "auditorium"}:
+                        extra_info = f"{lesson.get('group', '???')} | {extra_info}"
 
                     block = f"{header_line}\n{body_line}\n{extra_info}"
                     day_content_lines.append(block)
@@ -359,23 +357,27 @@ async def format_schedule(
                     sub_lines = []
                     # Deduplicate exact matches (e.g. if API sends duplicates)
                     unique_sub_lessons = {
-                        (l["auditorium"], l["lecturer_title"], l.get("group", "")): l
-                        for l in group_lessons
+                        (
+                            lesson["auditorium"],
+                            lesson["lecturer_title"],
+                            lesson.get("group", ""),
+                        ): lesson
+                        for lesson in group_lessons
                     }.values()
                     sorted_subs = sorted(unique_sub_lessons, key=lambda x: x["auditorium"])
 
-                    for i, l in enumerate(sorted_subs):
+                    for i, lesson in enumerate(sorted_subs):
                         is_last = i == len(sorted_subs) - 1
                         tree_char = "└─" if is_last else "├─"
 
-                        room = l["auditorium"]
-                        who = l["lecturer_title"].replace("_", " ")
+                        room = lesson["auditorium"]
+                        who = lesson["lecturer_title"].replace("_", " ")
 
-                        if show_emails and l.get("lecturerEmail"):
-                            who += f" ({l['lecturerEmail']})"
+                        if show_emails and lesson.get("lecturerEmail"):
+                            who += f" ({lesson['lecturerEmail']})"
                         # Adjust "who" based on context
                         if entity_type == "person":
-                            who = l.get("group", "???")
+                            who = lesson.get("group", "???")
 
                         sub_lines.append(f"  {tree_char} {room} | {who}")
 
@@ -410,14 +412,20 @@ def diff_schedules(
         min_relevant_date, max_relevant_date = date.min, date.max
 
     old_lessons = {
-        l["lessonOid"]: l
-        for l in old_data
-        if min_relevant_date <= l["date_obj"] <= max_relevant_date and l["date_obj"] >= today
+        lesson["lessonOid"]: lesson
+        for lesson in old_data
+        if min_relevant_date
+        <= lesson["date_obj"]
+        <= max_relevant_date
+        and lesson["date_obj"] >= today
     }
     new_lessons = {
-        l["lessonOid"]: l
-        for l in new_data
-        if min_relevant_date <= l["date_obj"] <= max_relevant_date and l["date_obj"] >= today
+        lesson["lessonOid"]: lesson
+        for lesson in new_data
+        if min_relevant_date
+        <= lesson["date_obj"]
+        <= max_relevant_date
+        and lesson["date_obj"] >= today
     }
 
     all_oids = old_lessons.keys() | new_lessons.keys()
@@ -455,17 +463,21 @@ def diff_schedules(
         day_parts = [day_header]
 
         if changes["added"]:
-            for lesson in changes["added"]:
-                # Revert to default behavior for Diff view as grouping here is too complex and less readable for diffs
-                day_parts.append(
+            # Revert to default behavior for diff view: grouping is too complex here.
+            day_parts.extend(
+                (
                     f"\n✅ {translator.gettext(lang, 'schedule_change_added')}:\n{_format_lesson_details_sync(lesson, lang, use_short_names, short_names_map)}"
                 )
+                for lesson in changes["added"]
+            )
 
         if changes["removed"]:
-            for lesson in changes["removed"]:
-                day_parts.append(
+            day_parts.extend(
+                (
                     f"\n❌ {translator.gettext(lang, 'schedule_change_removed')}:\n{_format_lesson_details_sync(lesson, lang, use_short_names, short_names_map)}"
                 )
+                for lesson in changes["removed"]
+            )
 
         if changes["modified"]:
             for mod in changes["modified"]:
@@ -821,11 +833,7 @@ def get_semester_bounds() -> tuple[str, str]:
         start_date = date(year, 2, 1)
         end_date = date(year, 7, 15)
     # Летние каникулы (переход к осеннему)
-    elif today.month == 7 and today.day >= 15:
-        start_date = date(year, 8, 25)
-        end_date = date(year + 1, 1, 31)
-    # Осенний семестр (Сентябрь - Январь)
-    elif today.month >= 8:
+    elif today.month >= 8 or (today.month == 7 and today.day >= 15):
         start_date = date(year, 8, 25)
         end_date = date(year + 1, 1, 31)
     # Январь (конец осеннего)
@@ -867,7 +875,7 @@ async def get_aggregated_schedule(
     subscriptions: list[dict],
     start_date: date,
     end_date: date,
-    filter_config: dict = None,
+    filter_config: dict | None = None,
 ) -> list[dict]:
     """
     Собирает расписание со всех подписок, применяет фильтры и возвращает плоский список пар.
