@@ -179,12 +179,14 @@ OPERATION_MARKDOWN_BY_ROUTE = {
 - `schedule` contains a centered 29-day window around `base_date` or today's date.
 - `loaded_bounds` tells the frontend which dates were actually loaded.
 - `source_updated_at` is populated when the response came from cached schedule data.
+- Non-numeric group, lecturer, and auditorium labels are resolved through live RUZ search before schedule loading.
 """,
     ("post", "/api/schedule/cache/{type}/{id}/refresh_semester"): """
 ### Admin refresh semantics
 
 - Requires an authenticated admin account.
 - Fetches the current semester directly from RUZ and writes the result to `cached_schedules`.
+- Resolves non-numeric group, lecturer, and auditorium labels through live RUZ search before fetching.
 - Fails the request when the upstream refresh cannot be completed instead of masking it with old cache data.
 """,
     ("get", "/api/stats/users/{user_id}/export_actions"): """

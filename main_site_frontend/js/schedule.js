@@ -281,6 +281,10 @@ function showScheduleNotice(type, title, message) {
     console[type === 'error' ? 'error' : 'info'](`${title}: ${message}`);
 }
 
+function isScheduleAdmin() {
+    return window.scheduleAuthUser?.role === 'admin';
+}
+
 function formatUiDate(date, options) {
     return new Intl.DateTimeFormat(getUiLocale(), options).format(date);
 }
@@ -429,7 +433,6 @@ function renderOfflineHistory(list = cachedOfflineEntities) {
         );
     });
     const staleCache = isScheduleCacheStale(currentUpdatedAt);
-    const isAdmin = window.scheduleAuthUser?.role === 'admin';
     const refreshDisabled = !currentEntity?.id || isRefreshingScheduleCache || isRefreshingSemesterCache;
     const semesterRefreshDisabled = !currentEntity?.id || isRefreshingScheduleCache || isRefreshingSemesterCache;
     const headerBadge = staleCache
@@ -475,7 +478,7 @@ function renderOfflineHistory(list = cachedOfflineEntities) {
                     : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50'}">
                 ${escapeHtml(refreshLabel)}
             </button>
-            ${isAdmin ? `
+            ${isScheduleAdmin() ? `
                 <button type="button" onclick="refreshCurrentScheduleSemesterCache()"
                     ${semesterRefreshDisabled ? 'disabled' : ''}
                     class="w-full rounded-2xl border px-3.5 py-2.5 text-xs font-black transition-colors ${semesterRefreshDisabled
@@ -1978,7 +1981,7 @@ window.refreshCurrentScheduleCache = async function() {
 window.refreshCurrentScheduleSemesterCache = async function() {
     if (!currentEntity?.id || isRefreshingScheduleCache || isRefreshingSemesterCache) return;
     const token = localStorage.getItem('jwt_token');
-    if (!token || window.scheduleAuthUser?.role !== 'admin') {
+    if (!token || !isScheduleAdmin()) {
         showScheduleNotice(
             'error',
             t('schedule.offline.semesterRefreshFailedTitle', 'Semester refresh failed'),

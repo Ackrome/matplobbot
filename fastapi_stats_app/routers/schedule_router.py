@@ -126,7 +126,7 @@ def _normalize_search_results(
 
 async def _resolve_schedule_entity_id(client, entity_type: str, entity_id: str) -> str:
     normalized_id = str(entity_id or "").strip()
-    if entity_type != "group" or not normalized_id or normalized_id.isdigit():
+    if entity_type not in SEARCH_ENTITY_TYPES or not normalized_id or normalized_id.isdigit():
         return normalized_id
 
     search = getattr(client, "search", None)
@@ -144,11 +144,15 @@ async def _resolve_schedule_entity_id(client, entity_type: str, entity_id: str) 
         )
         return normalized_id
 
+    normalized_lookup = normalized_id.casefold()
     exact_match = next(
         (
             item
-            for item in results
-            if str(item.get("label") or "").strip().casefold() == normalized_id.casefold()
+            for item in results or []
+            if any(
+                str(value or "").strip().casefold() == normalized_lookup
+                for value in (item.get("label"), item.get("name"), item.get("id"))
+            )
         ),
         None,
     )
@@ -156,7 +160,8 @@ async def _resolve_schedule_entity_id(client, entity_type: str, entity_id: str) 
     resolved_id = str(match.get("id") or "").strip() if match else ""
     if resolved_id:
         logger.info(
-            "Resolved schedule group label '%s' to RUZ id '%s'.",
+            "Resolved schedule %s identifier '%s' to RUZ id '%s'.",
+            entity_type,
             normalized_id,
             resolved_id,
         )
@@ -366,7 +371,8 @@ async def get_fallback_counters():
     summary="Force refresh full-semester schedule cache",
     description=(
         "Admin-only endpoint that fetches the current semester directly from RUZ and "
-        "overwrites the local cache for the requested schedule entity."
+        "overwrites the local cache for the requested schedule entity. Non-numeric "
+        "group, lecturer, and auditorium identifiers are resolved through RUZ search."
     ),
 )
 async def refresh_schedule_semester_cache(

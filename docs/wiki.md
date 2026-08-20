@@ -471,7 +471,7 @@ What it does:
 - Pre-caches the main static pages, shared scripts/styles, icons, Schedule assets, Studio assets, and offline fallback.
 - Uses network-first navigation so fresh pages win, then cached pages/offline fallback are used when the network is unavailable.
 - Avoids intercepting same-origin `/api/*` requests so authenticated API calls are not cached by the service worker.
-- Schedule frontend asset URLs use `?v=20260821-2`, and the service worker cache is `mpb-site-v20`; bump both when changing cached Schedule scripts so installed/PWA clients do not keep stale button behavior.
+- Schedule frontend asset URLs use `?v=20260821-3`, and the service worker cache is `mpb-site-v21`; bump both when changing cached Schedule scripts so installed/PWA clients do not keep stale button behavior.
 
 How to use: (or not use)
 
@@ -611,7 +611,7 @@ What it does:
 - In desktop `Table`, the `Actions` toggle shows a compact action launcher inside each timetable cell instead of a full six-button strip. This keeps long lesson titles visible while still exposing room/teacher/calendar/module actions from a small overlay menu.
 - Shows source update timestamp and offline/fallback states.
 - Search UX includes recent schedules, favorites, quick type categories, local fuzzy matching, and separate loading/empty/network-error states.
-- Offline drawer shows cached schedules, cache update time, and a refresh action for the current schedule.
+- Offline drawer shows cached schedules, cache update time, and a refresh action for the current schedule. Admin users also see `Refresh full semester`, which force-refreshes the whole current semester cache for the selected schedule entity.
 - The offline drawer is rendered as a floating overlay layer above the schedule grid, so opening cached schedules never pushes the timetable or control rows down.
 - Highlights exam-like lessons, including `Семинар+зачет` and `Экзамены`, with the dedicated exam color instead of the regular seminar color.
 - Treats `Консультации перед экзаменом` as a consultation, not as a mislabeled exam: the page gives it its own consultation badge/color, but still keeps it in `Exams` / `exams-only` views because it is exam-related.
@@ -632,7 +632,7 @@ How to use:
 9. Use `Cards`, `Compact`, `Table`, or `Exams` to choose display density. The choice is saved and reflected in the URL; `Table` is treated as a desktop mode and automatically falls back to cards on phones.
 10. In `Table`, read long or off-slot exams by their vertical span inside the grid: the card position shows where the event starts and ends relative to the standard rows, and the compact time chip shows the exact real time when it does not align to the default slot boundaries.
 11. Turn on `Actions` if you want quick actions in timetable cells. In desktop `Table`, each cell shows a compact action launcher that opens the room/teacher/calendar/module menu above the card without hiding the lesson title.
-12. Open the offline drawer to see cached schedules and refresh the current schedule cache. It opens above the timetable as an overlay, not as an expanding layout block.
+12. Open the offline drawer to see cached schedules and refresh the current schedule cache. Admin users can also refresh the selected entity's whole semester cache from this drawer; non-admin users do not see that action. It opens above the timetable as an overlay, not as an expanding layout block.
 
 ### Calendar Sync Panel
 
@@ -882,8 +882,8 @@ Feature details:
 - `source_updated_at`
 - `loaded_bounds`
 - `GET /api/schedule/data/{type}/{id}` accepts `refresh=1` to force a live refresh attempt even when the local cache is still fresh.
-- If a legacy Schedule URL or local state passes a group label such as `ПМ23-1` as `{id}`, the API resolves it through live RUZ search before fetching schedule data, so refresh uses the numeric RUZ group id.
-- `POST /api/schedule/cache/{type}/{id}/refresh_semester` is admin-only and forces an immediate current-semester RUZ fetch for one schedule entity. It resolves group labels to numeric RUZ ids, writes the semester payload to `cached_schedules`, and fails instead of silently serving old cache when the upstream refresh cannot be completed.
+- If a legacy Schedule URL or local state passes a non-numeric group, lecturer, or auditorium label such as `ПМ23-1` as `{id}`, the API resolves it through live RUZ search before fetching schedule data, so refresh uses the numeric RUZ entity id.
+- `POST /api/schedule/cache/{type}/{id}/refresh_semester` is admin-only and forces an immediate current-semester RUZ fetch for one schedule entity. It resolves non-numeric group, lecturer, and auditorium labels to numeric RUZ ids, writes the semester payload to `cached_schedules`, and fails instead of silently serving old cache when the upstream refresh cannot be completed.
 
 #### Schedule Search Offline Fallback Semantics (Frontend)
 
