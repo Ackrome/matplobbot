@@ -56,7 +56,9 @@ def build_audit_requirements(
     ordered_lines: list[str] = []
 
     for req_path in requirement_files:
-        for line_number, raw_line in enumerate(req_path.read_text(encoding="utf-8").splitlines(), 1):
+        for line_number, raw_line in enumerate(
+            req_path.read_text(encoding="utf-8").splitlines(), 1
+        ):
             line = _strip_inline_comment(raw_line.strip())
             if not line or line.startswith("#"):
                 continue

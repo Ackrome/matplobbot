@@ -5,7 +5,6 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "build_audit_requirements.py"
 SPEC = importlib.util.spec_from_file_location("build_audit_requirements", SCRIPT_PATH)
 assert SPEC is not None
