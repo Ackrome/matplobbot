@@ -205,7 +205,7 @@ class TestScheduleEntityIdRefresh(unittest.IsolatedAsyncioTestCase):
                             "entity_type": "person",
                             "entity_id": "person-id",
                             "entity_name": "Ivanov I.I.",
-                        }
+                        },
                     ]
                 ),
             ),
@@ -252,9 +252,7 @@ class TestScheduleEntityIdRefresh(unittest.IsolatedAsyncioTestCase):
                 call("person", "person-id", person_schedule),
             ]
         )
-        reassign_refs.assert_awaited_once_with(
-            "group", "old-group-id", "new-group-id", "PM23-1"
-        )
+        reassign_refs.assert_awaited_once_with("group", "old-group-id", "new-group-id", "PM23-1")
         delete_cache.assert_awaited_once_with("group", "old-group-id")
 
         expected_group_hash = hashlib.sha256(

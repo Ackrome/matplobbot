@@ -283,9 +283,7 @@ async def refresh_cached_schedule_entity_ids_and_semester_cache(
                     "web_accounts_updated",
                 ):
                     summary[key] += reassign_counts.get(key, 0)
-                item["subscriptions_updated"] = reassign_counts.get(
-                    "subscriptions_updated", 0
-                )
+                item["subscriptions_updated"] = reassign_counts.get("subscriptions_updated", 0)
                 item["subscriptions_merged"] = reassign_counts.get("subscriptions_merged", 0)
                 item["web_profiles_updated"] = reassign_counts.get("web_profiles_updated", 0)
                 item["web_accounts_updated"] = reassign_counts.get("web_accounts_updated", 0)
@@ -294,9 +292,7 @@ async def refresh_cached_schedule_entity_ids_and_semester_cache(
 
             await batch_update_subscription_hashes(entity_type, new_entity_id, schedule_hash)
             item["lesson_count"] = (
-                len(schedule_data)
-                if isinstance(schedule_data, list)
-                else int(bool(schedule_data))
+                len(schedule_data) if isinstance(schedule_data, list) else int(bool(schedule_data))
             )
             summary["refreshed"] += 1
         except Exception as exc:
