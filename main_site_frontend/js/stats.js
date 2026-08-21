@@ -5,12 +5,423 @@ if (!token) {
     window.location.href = "/login";
 }
 
-const RANGE_LABELS = {
-    today: "Today",
-    "7d": "Last 7 days",
-    "30d": "Last 30 days",
-    custom: "Custom",
+const STATS_I18N = {
+    en: {
+        "stats.meta.title": "Stats Dashboard | ITISHCHENKO",
+        "stats.connection.connecting": "Connecting...",
+        "stats.connection.connected": "Live updates",
+        "stats.connection.disconnected": "Disconnected",
+        "stats.connection.rest": "REST mode",
+        "stats.connection.warning": "Connection error",
+        "stats.connection.partial": "Partial degradation",
+        "stats.lastUpdated": "Last updated:",
+        "stats.timezone": "Timezone",
+        "stats.timezone.local": "Local",
+        "stats.density.default": "Density: Default",
+        "stats.density.compact": "Density: Compact",
+        "stats.columns": "Columns",
+        "stats.columns.visible": "Visible columns",
+        "stats.resetFilters": "Reset filters",
+        "stats.refreshScheduleCache": "Refresh schedule cache",
+        "stats.refreshScheduleCache.mobile": "Schedule cache",
+        "stats.refreshing": "Refreshing...",
+        "stats.retry": "Retry",
+        "stats.diagnostics": "Diagnostics",
+        "stats.filters": "Filters",
+        "stats.refresh": "Refresh",
+        "stats.clear": "Clear",
+        "stats.close": "Close",
+        "stats.dismiss": "Dismiss",
+        "stats.hide": "Hide",
+        "stats.docs": "Docs",
+        "stats.reset": "Reset",
+        "stats.range.presets": "Date range presets",
+        "stats.range.today": "Today",
+        "stats.range.last7": "Last 7 days",
+        "stats.range.last30": "Last 30 days",
+        "stats.range.custom": "Custom",
+        "stats.range.from": "From date",
+        "stats.range.to": "To date",
+        "stats.range.apply": "Apply",
+        "stats.tabs.aria": "Stats dashboard sections",
+        "stats.views.dashboard": "Dashboard",
+        "stats.views.modules": "Modules",
+        "stats.errors.requestFailed": "Request failed.",
+        "stats.errors.partial": "Some dashboard widgets are unavailable.",
+        "stats.diagnostics.title": "Admin Diagnostics",
+        "stats.diagnostics.lastApiLatency": "Last API latency",
+        "stats.diagnostics.avgApiLatency": "Avg API latency",
+        "stats.diagnostics.failedRequests": "Failed requests",
+        "stats.diagnostics.retriesUsed": "Retries used",
+        "stats.diagnostics.failedWidgets": "Failed widget loads",
+        "stats.diagnostics.ttfd": "Time to first data",
+        "stats.diagnostics.wsReconnects": "WS reconnects",
+        "stats.diagnostics.lastSyncSource": "Last sync source",
+        "stats.diagnostics.lastSyncError": "Last sync error",
+        "stats.proxy.title": "Proxy Diagnostics",
+        "stats.proxy.loading": "Loading proxy summary...",
+        "stats.proxy.notRequested": "Proxy summary has not been requested yet.",
+        "stats.proxy.lastFetched": "Last fetched:",
+        "stats.proxy.telegramNode": "Telegram selected node",
+        "stats.proxy.openaiNode": "OpenAI selected node",
+        "stats.proxy.inventory": "Build inventory",
+        "stats.proxy.source": "Summary source",
+        "stats.proxy.route": "Route",
+        "stats.proxy.server": "Server",
+        "stats.proxy.latency": "Latency",
+        "stats.proxy.alive": "Alive",
+        "stats.proxy.selected": "Selected",
+        "stats.proxy.waiting": "Waiting for proxy summary...",
+        "stats.proxy.noActiveNode": "No active node",
+        "stats.proxy.availableNoCandidates": "Proxy summary is available, but there are no ranked candidates yet.",
+        "stats.proxy.unavailable": "Proxy summary unavailable",
+        "stats.proxy.rowsLoaded": "{count} proxy candidate rows loaded from {source}.",
+        "stats.proxy.current": "Current",
+        "stats.proxy.yes": "Yes",
+        "stats.proxy.no": "No",
+        "stats.proxy.unknown": "Unknown",
+        "stats.proxy.route.telegram": "Telegram",
+        "stats.proxy.route.openai": "OpenAI",
+        "stats.kpi.totalActions": "Total actions",
+        "stats.kpi.visibleUsers": "Visible leaderboard users",
+        "stats.kpi.currentRange": "Current range",
+        "stats.activity.title": "User activity",
+        "stats.activity.zoomIn": "Zoom +",
+        "stats.activity.zoomOut": "Zoom -",
+        "stats.activity.resetZoom": "Reset zoom",
+        "stats.activity.loading": "Loading...",
+        "stats.activity.noData": "No activity in selected range",
+        "stats.activity.points": "Points: {count}",
+        "stats.activity.empty": "No activity data for current filters.",
+        "stats.activity.chartAria": "Activity chart",
+        "stats.activity.dataset": "Actions",
+        "stats.activity.tooltip": "Actions: {count}",
+        "stats.activity.tooltipDelta": "Actions: {count} ({delta} vs prev)",
+        "stats.leaderboard.title": "Leaderboard",
+        "stats.leaderboard.caption": "Leaderboard with sorting and pagination",
+        "stats.leaderboard.user": "User",
+        "stats.leaderboard.actions": "Actions",
+        "stats.leaderboard.lastActive": "Last active",
+        "stats.leaderboard.rows": "Rows",
+        "stats.leaderboard.prev": "Prev",
+        "stats.leaderboard.next": "Next",
+        "stats.leaderboard.loading": "Loading...",
+        "stats.leaderboard.noData": "No leaderboard data for current filters.",
+        "stats.leaderboard.noStatus": "No data",
+        "stats.leaderboard.loaded": "Loaded {count} users",
+        "stats.leaderboard.results": "{count} results",
+        "stats.leaderboard.showing": "Showing {start}-{end} of {total}",
+        "stats.user.unknown": "Unknown user",
+        "stats.modules.eyebrow": "Schedule modules",
+        "stats.modules.title": "Manual module mappings",
+        "stats.modules.description": "Create and maintain discipline-to-module rules used by schedule filters. These rules mirror `/set_module Discipline | Module`.",
+        "stats.modules.form.title": "Create or update",
+        "stats.modules.form.new": "New mapping",
+        "stats.modules.form.editing": "Editing: {discipline}",
+        "stats.modules.discipline": "Discipline",
+        "stats.modules.module": "Module",
+        "stats.modules.actions": "Actions",
+        "stats.modules.search": "Search",
+        "stats.modules.searchPlaceholder": "Discipline or module",
+        "stats.modules.filter": "Module filter",
+        "stats.modules.all": "All modules",
+        "stats.modules.save": "Save mapping",
+        "stats.modules.saveChanges": "Save changes",
+        "stats.modules.openToLoad": "Open the Modules tab to load mappings.",
+        "stats.modules.status.notLoaded": "Not loaded",
+        "stats.modules.status.loading": "Loading mappings...",
+        "stats.modules.status.loaded": "Loaded {count} mappings",
+        "stats.modules.status.failed": "Failed to load mappings",
+        "stats.modules.status.saving": "Saving mapping...",
+        "stats.modules.status.saved": "Mapping saved",
+        "stats.modules.status.saveFailed": "Save failed",
+        "stats.modules.empty": "No manual mappings match current filters.",
+        "stats.modules.meta.adminOnly": "Mappings are loaded only for admins.",
+        "stats.modules.meta.partial": "Showing {shown} of {total} matching mappings. Narrow the search to find older rows.",
+        "stats.modules.meta.loaded": "{count} mappings loaded.",
+        "stats.modules.edit": "Edit",
+        "stats.modules.delete": "Delete",
+        "stats.modules.confirmDelete": "Delete mapping for \"{discipline}\"?",
+        "stats.modules.deleted": "Mapping deleted",
+        "stats.modules.failed": "Module mappings failed: {message}",
+        "stats.modules.deleteFailed": "Delete failed: {message}",
+        "stats.modules.fillBoth": "Fill both discipline and module",
+        "stats.modules.oldNotRemoved": "Saved new mapping, but old discipline name was not removed.",
+        "stats.modules.savedToast": "Saved: {discipline}",
+        "stats.modules.saveFailedToast": "Save failed: {message}",
+        "stats.mobileFilters.title": "Mobile filters",
+        "stats.mobileFilters.range": "Range",
+        "stats.mobileFilters.sort": "Sort",
+        "stats.mobileFilters.rowsPerPage": "Rows per page",
+        "stats.sort.actionsDesc": "Actions desc",
+        "stats.sort.actionsAsc": "Actions asc",
+        "stats.sort.userAsc": "User A-Z",
+        "stats.sort.userDesc": "User Z-A",
+        "stats.sort.lastActiveDesc": "Last active desc",
+        "stats.sort.lastActiveAsc": "Last active asc",
+        "stats.toast.retryRequested": "Retry requested",
+        "stats.toast.activityReload": "Activity reload requested",
+        "stats.toast.leaderboardReload": "Leaderboard reload requested",
+        "stats.toast.liveConnected": "Live stats connected",
+        "stats.toast.liveIssue": "Live data issue. Retrying...",
+        "stats.toast.liveLost": "Live connection lost. Reconnecting...",
+        "stats.toast.pickDates": "Pick both custom dates",
+        "stats.toast.dateOrder": "From date must be earlier than To date",
+        "stats.dashboard.failed": "Failed to load dashboard: {message}",
+        "stats.dashboard.loadFailed": "Dashboard load failed: {message}",
+        "stats.dashboard.loadingFailed": "Failed. Retry required.",
+        "stats.dashboard.partial": "Partial degradation detected. {message}",
+        "stats.scheduleCache.done": "Schedule cache refresh finished.",
+        "stats.scheduleCache.summary": "Schedule cache refresh finished: {parts}.",
+        "stats.scheduleCache.refreshed": "{count} refreshed",
+        "stats.scheduleCache.remapped": "{count} ids remapped",
+        "stats.scheduleCache.failed": "{count} failed",
+        "stats.scheduleCache.skipped": "{count} skipped",
+        "stats.scheduleCache.error": "Schedule cache refresh failed: {message}",
+        "stats.column.rank": "Rank",
+        "stats.column.full_name": "User",
+        "stats.column.actions_count": "Actions",
+        "stats.column.last_action_time": "Last active",
+    },
+    ru: {
+        "stats.meta.title": "Статистика | ITISHCHENKO",
+        "stats.connection.connecting": "Подключение...",
+        "stats.connection.connected": "Live-обновления",
+        "stats.connection.disconnected": "Отключено",
+        "stats.connection.rest": "REST-режим",
+        "stats.connection.warning": "Ошибка соединения",
+        "stats.connection.partial": "Частичная деградация",
+        "stats.lastUpdated": "Обновлено:",
+        "stats.timezone": "Часовой пояс",
+        "stats.timezone.local": "Локально",
+        "stats.density.default": "Плотность: обычная",
+        "stats.density.compact": "Плотность: компактная",
+        "stats.columns": "Колонки",
+        "stats.columns.visible": "Видимые колонки",
+        "stats.resetFilters": "Сбросить фильтры",
+        "stats.refreshScheduleCache": "Обновить кеш расписаний",
+        "stats.refreshScheduleCache.mobile": "Кеш расписаний",
+        "stats.refreshing": "Обновляю...",
+        "stats.retry": "Повторить",
+        "stats.diagnostics": "Диагностика",
+        "stats.filters": "Фильтры",
+        "stats.refresh": "Обновить",
+        "stats.clear": "Очистить",
+        "stats.close": "Закрыть",
+        "stats.dismiss": "Скрыть",
+        "stats.hide": "Скрыть",
+        "stats.docs": "Документация",
+        "stats.reset": "Сброс",
+        "stats.range.presets": "Быстрый выбор периода",
+        "stats.range.today": "Сегодня",
+        "stats.range.last7": "Последние 7 дней",
+        "stats.range.last30": "Последние 30 дней",
+        "stats.range.custom": "Свой",
+        "stats.range.from": "Дата начала",
+        "stats.range.to": "Дата конца",
+        "stats.range.apply": "Применить",
+        "stats.tabs.aria": "Разделы статистики",
+        "stats.views.dashboard": "Дашборд",
+        "stats.views.modules": "Модули",
+        "stats.errors.requestFailed": "Запрос не выполнен.",
+        "stats.errors.partial": "Часть виджетов временно недоступна.",
+        "stats.diagnostics.title": "Диагностика админа",
+        "stats.diagnostics.lastApiLatency": "Последняя задержка API",
+        "stats.diagnostics.avgApiLatency": "Средняя задержка API",
+        "stats.diagnostics.failedRequests": "Ошибок запросов",
+        "stats.diagnostics.retriesUsed": "Повторов",
+        "stats.diagnostics.failedWidgets": "Ошибок виджетов",
+        "stats.diagnostics.ttfd": "Время до первых данных",
+        "stats.diagnostics.wsReconnects": "WS-переподключений",
+        "stats.diagnostics.lastSyncSource": "Последний источник синхронизации",
+        "stats.diagnostics.lastSyncError": "Последняя ошибка",
+        "stats.proxy.title": "Диагностика прокси",
+        "stats.proxy.loading": "Загружаю сводку прокси...",
+        "stats.proxy.notRequested": "Сводка прокси еще не запрашивалась.",
+        "stats.proxy.lastFetched": "Получено:",
+        "stats.proxy.telegramNode": "Узел Telegram",
+        "stats.proxy.openaiNode": "Узел OpenAI",
+        "stats.proxy.inventory": "Состав сборки",
+        "stats.proxy.source": "Источник сводки",
+        "stats.proxy.route": "Маршрут",
+        "stats.proxy.server": "Сервер",
+        "stats.proxy.latency": "Задержка",
+        "stats.proxy.alive": "Живой",
+        "stats.proxy.selected": "Выбран",
+        "stats.proxy.waiting": "Ожидаю сводку прокси...",
+        "stats.proxy.noActiveNode": "Нет активного узла",
+        "stats.proxy.availableNoCandidates": "Сводка прокси доступна, но кандидатов в рейтинге пока нет.",
+        "stats.proxy.unavailable": "Сводка прокси недоступна",
+        "stats.proxy.rowsLoaded": "Загружено строк прокси: {count}. Источник: {source}.",
+        "stats.proxy.current": "Текущий",
+        "stats.proxy.yes": "Да",
+        "stats.proxy.no": "Нет",
+        "stats.proxy.unknown": "Неизвестно",
+        "stats.proxy.route.telegram": "Telegram",
+        "stats.proxy.route.openai": "OpenAI",
+        "stats.kpi.totalActions": "Всего действий",
+        "stats.kpi.visibleUsers": "Пользователей в рейтинге",
+        "stats.kpi.currentRange": "Текущий период",
+        "stats.activity.title": "Активность пользователей",
+        "stats.activity.zoomIn": "Приблизить",
+        "stats.activity.zoomOut": "Отдалить",
+        "stats.activity.resetZoom": "Сбросить зум",
+        "stats.activity.loading": "Загрузка...",
+        "stats.activity.noData": "Нет активности в выбранном периоде",
+        "stats.activity.points": "Точек: {count}",
+        "stats.activity.empty": "Нет данных активности для текущих фильтров.",
+        "stats.activity.chartAria": "График активности",
+        "stats.activity.dataset": "Действия",
+        "stats.activity.tooltip": "Действий: {count}",
+        "stats.activity.tooltipDelta": "Действий: {count} ({delta} к предыдущей точке)",
+        "stats.leaderboard.title": "Рейтинг",
+        "stats.leaderboard.caption": "Рейтинг с сортировкой и пагинацией",
+        "stats.leaderboard.user": "Пользователь",
+        "stats.leaderboard.actions": "Действия",
+        "stats.leaderboard.lastActive": "Последняя активность",
+        "stats.leaderboard.rows": "Строк",
+        "stats.leaderboard.prev": "Назад",
+        "stats.leaderboard.next": "Вперед",
+        "stats.leaderboard.loading": "Загрузка...",
+        "stats.leaderboard.noData": "Нет данных рейтинга для текущих фильтров.",
+        "stats.leaderboard.noStatus": "Нет данных",
+        "stats.leaderboard.loaded": "Загружено пользователей: {count}",
+        "stats.leaderboard.results": "Результатов: {count}",
+        "stats.leaderboard.showing": "Показано {start}-{end} из {total}",
+        "stats.user.unknown": "Неизвестный пользователь",
+        "stats.modules.eyebrow": "Модули расписания",
+        "stats.modules.title": "Ручные правила модулей",
+        "stats.modules.description": "Создание и поддержка правил «дисциплина -> модуль», которые используют фильтры расписания. Это тот же источник данных, что и `/set_module Discipline | Module`.",
+        "stats.modules.form.title": "Создать или изменить",
+        "stats.modules.form.new": "Новое правило",
+        "stats.modules.form.editing": "Редактируется: {discipline}",
+        "stats.modules.discipline": "Дисциплина",
+        "stats.modules.module": "Модуль",
+        "stats.modules.actions": "Действия",
+        "stats.modules.search": "Поиск",
+        "stats.modules.searchPlaceholder": "Дисциплина или модуль",
+        "stats.modules.filter": "Фильтр по модулю",
+        "stats.modules.all": "Все модули",
+        "stats.modules.save": "Сохранить правило",
+        "stats.modules.saveChanges": "Сохранить изменения",
+        "stats.modules.openToLoad": "Откройте вкладку модулей, чтобы загрузить правила.",
+        "stats.modules.status.notLoaded": "Не загружено",
+        "stats.modules.status.loading": "Загружаю правила...",
+        "stats.modules.status.loaded": "Загружено правил: {count}",
+        "stats.modules.status.failed": "Не удалось загрузить правила",
+        "stats.modules.status.saving": "Сохраняю правило...",
+        "stats.modules.status.saved": "Правило сохранено",
+        "stats.modules.status.saveFailed": "Не удалось сохранить",
+        "stats.modules.empty": "Под текущие фильтры ручных правил нет.",
+        "stats.modules.meta.adminOnly": "Правила загружаются только для админов.",
+        "stats.modules.meta.partial": "Показано {shown} из {total}. Уточните поиск, чтобы найти старые строки.",
+        "stats.modules.meta.loaded": "Загружено правил: {count}.",
+        "stats.modules.edit": "Изменить",
+        "stats.modules.delete": "Удалить",
+        "stats.modules.confirmDelete": "Удалить правило для «{discipline}»?",
+        "stats.modules.deleted": "Правило удалено",
+        "stats.modules.failed": "Ошибка правил модулей: {message}",
+        "stats.modules.deleteFailed": "Удаление не выполнено: {message}",
+        "stats.modules.fillBoth": "Заполните дисциплину и модуль",
+        "stats.modules.oldNotRemoved": "Новое правило сохранено, но старое имя дисциплины не удалилось.",
+        "stats.modules.savedToast": "Сохранено: {discipline}",
+        "stats.modules.saveFailedToast": "Сохранение не выполнено: {message}",
+        "stats.mobileFilters.title": "Фильтры",
+        "stats.mobileFilters.range": "Период",
+        "stats.mobileFilters.sort": "Сортировка",
+        "stats.mobileFilters.rowsPerPage": "Строк на странице",
+        "stats.sort.actionsDesc": "Действия по убыванию",
+        "stats.sort.actionsAsc": "Действия по возрастанию",
+        "stats.sort.userAsc": "Пользователь А-Я",
+        "stats.sort.userDesc": "Пользователь Я-А",
+        "stats.sort.lastActiveDesc": "Недавние сначала",
+        "stats.sort.lastActiveAsc": "Давние сначала",
+        "stats.toast.retryRequested": "Повторный запрос отправлен",
+        "stats.toast.activityReload": "Обновляю активность",
+        "stats.toast.leaderboardReload": "Обновляю рейтинг",
+        "stats.toast.liveConnected": "Live-статистика подключена",
+        "stats.toast.liveIssue": "Проблема с live-данными. Переподключаюсь...",
+        "stats.toast.liveLost": "Live-соединение потеряно. Переподключаюсь...",
+        "stats.toast.pickDates": "Выберите обе даты",
+        "stats.toast.dateOrder": "Дата начала должна быть раньше даты конца",
+        "stats.dashboard.failed": "Не удалось загрузить дашборд: {message}",
+        "stats.dashboard.loadFailed": "Ошибка загрузки дашборда: {message}",
+        "stats.dashboard.loadingFailed": "Ошибка. Нужен повтор.",
+        "stats.dashboard.partial": "Обнаружена частичная деградация. {message}",
+        "stats.scheduleCache.done": "Обновление кеша расписаний завершено.",
+        "stats.scheduleCache.summary": "Обновление кеша расписаний завершено: {parts}.",
+        "stats.scheduleCache.refreshed": "обновлено: {count}",
+        "stats.scheduleCache.remapped": "пересопоставлено id: {count}",
+        "stats.scheduleCache.failed": "ошибок: {count}",
+        "stats.scheduleCache.skipped": "пропущено: {count}",
+        "stats.scheduleCache.error": "Ошибка обновления кеша расписаний: {message}",
+        "stats.column.rank": "Место",
+        "stats.column.full_name": "Пользователь",
+        "stats.column.actions_count": "Действия",
+        "stats.column.last_action_time": "Последняя активность",
+    },
 };
+
+const RANGE_LABEL_KEYS = {
+    today: "stats.range.today",
+    "7d": "stats.range.last7",
+    "30d": "stats.range.last30",
+    custom: "stats.range.custom",
+};
+
+function interpolateText(template, params = {}) {
+    return String(template || "").replace(/\{(\w+)\}/g, (_, key) => String(params[key] ?? ""));
+}
+
+function getStatsLanguage() {
+    const source =
+        window.mpbI18n?.getLanguage?.() ||
+        localStorage.getItem("mpb_ui_lang") ||
+        document.documentElement.lang ||
+        "ru";
+    return String(source).toLowerCase().startsWith("ru") ? "ru" : "en";
+}
+
+function getStatsLocale() {
+    return getStatsLanguage() === "ru" ? "ru-RU" : "en-US";
+}
+
+function t(key, fallback = "", params = {}) {
+    const fromNavbar = window.mpbI18n?.t?.(key, "", params);
+    if (fromNavbar && fromNavbar !== key) return fromNavbar;
+    const lang = getStatsLanguage();
+    const template = STATS_I18N[lang]?.[key] || STATS_I18N.en[key] || fallback || key;
+    return interpolateText(template, params);
+}
+
+function getRangeLabel(range) {
+    return t(RANGE_LABEL_KEYS[range] || "stats.range.custom", "Custom");
+}
+
+function applyStatsTranslations() {
+    document.documentElement.lang = getStatsLanguage();
+    document.title = t("stats.meta.title", "Stats Dashboard | ITISHCHENKO");
+    document.querySelectorAll("[data-stats-i18n]").forEach((element) => {
+        const key = element.getAttribute("data-stats-i18n");
+        if (!key) return;
+        element.textContent = t(key, element.textContent || "");
+    });
+    document.querySelectorAll("[data-stats-placeholder]").forEach((element) => {
+        const key = element.getAttribute("data-stats-placeholder");
+        if (!key) return;
+        element.setAttribute("placeholder", t(key, element.getAttribute("placeholder") || ""));
+    });
+    document.querySelectorAll("[data-stats-title]").forEach((element) => {
+        const key = element.getAttribute("data-stats-title");
+        if (!key) return;
+        element.setAttribute("title", t(key, element.getAttribute("title") || ""));
+    });
+    document.querySelectorAll("[data-stats-aria-label]").forEach((element) => {
+        const key = element.getAttribute("data-stats-aria-label");
+        if (!key) return;
+        element.setAttribute("aria-label", t(key, element.getAttribute("aria-label") || ""));
+    });
+}
 
 const DEFAULT_STATE = {
     sortBy: "actions_count",
@@ -44,6 +455,10 @@ const state = {
     moduleMappingsLoaded: false,
     moduleMappingsLoading: false,
     moduleMappingsPendingReload: false,
+    moduleMappingsStatusKey: "stats.modules.status.notLoaded",
+    moduleMappingsStatusFallback: "Not loaded",
+    moduleMappingsStatusParams: {},
+    moduleMappingsStatusKind: "info",
     moduleMappingsQuery: "",
     moduleMappingsModule: "",
     moduleMappingEditingDiscipline: "",
@@ -190,7 +605,7 @@ function formatDateTime(value) {
     if (!value) return "-";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "-";
-    return date.toLocaleString();
+    return new Intl.DateTimeFormat(getStatsLocale(), { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
 function formatLatency(ms) {
@@ -322,7 +737,7 @@ function renderProxyDiagnostics() {
     const payload = state.proxyDiagnostics;
 
     if (!payload) {
-        setProxyDiagnosticsStatus("Proxy summary has not been requested yet.", "info");
+        setProxyDiagnosticsStatus(t("stats.proxy.notRequested", "Proxy summary has not been requested yet."), "info");
         return;
     }
 
@@ -332,10 +747,10 @@ function renderProxyDiagnostics() {
             : "-";
     }
     if (elements.proxyTelegramSelected) {
-        elements.proxyTelegramSelected.textContent = payload.telegram.selected || "No active node";
+        elements.proxyTelegramSelected.textContent = payload.telegram.selected || t("stats.proxy.noActiveNode", "No active node");
     }
     if (elements.proxyOpenaiSelected) {
-        elements.proxyOpenaiSelected.textContent = payload.openai.selected || "No active node";
+        elements.proxyOpenaiSelected.textContent = payload.openai.selected || t("stats.proxy.noActiveNode", "No active node");
     }
     if (elements.proxyBuildInventory) {
         const merged = payload.last_build.merged_entries ?? "-";
@@ -354,8 +769,8 @@ function renderProxyDiagnostics() {
     }
 
     const rows = [
-        ...(payload.telegram.top_candidates || []).map((candidate) => ({ route: "Telegram", ...candidate })),
-        ...(payload.openai.top_candidates || []).map((candidate) => ({ route: "OpenAI", ...candidate })),
+        ...(payload.telegram.top_candidates || []).map((candidate) => ({ route: t("stats.proxy.route.telegram", "Telegram"), ...candidate })),
+        ...(payload.openai.top_candidates || []).map((candidate) => ({ route: t("stats.proxy.route.openai", "OpenAI"), ...candidate })),
     ];
 
     if (elements.proxyDiagnosticsTableBody) {
@@ -363,7 +778,9 @@ function renderProxyDiagnostics() {
             elements.proxyDiagnosticsTableBody.innerHTML = `
                 <tr>
                     <td colspan="5" class="px-4 py-4 text-sm text-slate-500">
-                        ${payload.available ? "Proxy summary is available, but there are no ranked candidates yet." : "Proxy summary is unavailable right now."}
+                        ${payload.available
+                            ? t("stats.proxy.availableNoCandidates", "Proxy summary is available, but there are no ranked candidates yet.")
+                            : t("stats.proxy.unavailable", "Proxy summary unavailable")}
                     </td>
                 </tr>
             `;
@@ -371,13 +788,17 @@ function renderProxyDiagnostics() {
             elements.proxyDiagnosticsTableBody.innerHTML = rows
                 .map((row) => {
                     const delayLabel = row.delay === null ? "-" : `${Math.round(row.delay)} ms`;
-                    const aliveLabel = row.alive === true ? "Yes" : row.alive === false ? "No" : "Unknown";
+                    const aliveLabel = row.alive === true
+                        ? t("stats.proxy.yes", "Yes")
+                        : row.alive === false
+                            ? t("stats.proxy.no", "No")
+                            : t("stats.proxy.unknown", "Unknown");
                     const aliveClass = row.alive === true
                         ? "text-emerald-700"
                         : row.alive === false
                             ? "text-red-700"
                             : "text-slate-500";
-                    const selectedLabel = row.selected ? "Current" : "-";
+                    const selectedLabel = row.selected ? t("stats.proxy.current", "Current") : "-";
                     const rowClass = row.selected ? "bg-blue-50/60" : "";
 
                     return `
@@ -395,14 +816,17 @@ function renderProxyDiagnostics() {
     }
 
     if (!payload.available) {
-        setProxyDiagnosticsStatus("Proxy summary unavailable", payload.error ? "warning" : "info");
+        setProxyDiagnosticsStatus(t("stats.proxy.unavailable", "Proxy summary unavailable"), payload.error ? "warning" : "info");
         return;
     }
 
     const routeCount = rows.length;
     const sourceLabel = formatProxySourceLabel(payload.source_url);
     setProxyDiagnosticsStatus(
-        `${routeCount} proxy candidate row${routeCount === 1 ? "" : "s"} loaded from ${sourceLabel}.`,
+        t("stats.proxy.rowsLoaded", "{count} proxy candidate rows loaded from {source}.", {
+            count: routeCount,
+            source: sourceLabel,
+        }),
         "ok"
     );
 }
@@ -460,20 +884,24 @@ function updateDashboardHealthState() {
     if (failedWidgets.length === 0) {
         hidePartialDegradation();
         if (state.wsConnected) {
-            setConnectionState("online", "Live updates");
+            setConnectionState("online", t("stats.connection.connected", "Live updates"));
         } else {
-            setConnectionState("warning", "REST mode");
+            setConnectionState("warning", t("stats.connection.rest", "REST mode"));
         }
         return;
     }
 
-    const labels = failedWidgets.map((widget) => (widget === "leaderboard" ? "Leaderboard" : "Activity"));
+    const labels = failedWidgets.map((widget) => (
+        widget === "leaderboard"
+            ? t("stats.leaderboard.title", "Leaderboard")
+            : t("stats.activity.title", "Activity")
+    ));
     const healthyCount = Object.keys(state.widgetHealth).length - failedWidgets.length;
     const message = healthyCount > 0
         ? `Partial degradation: failed widget(s): ${labels.join(", ")}. Showing available data for the rest.`
         : `Dashboard degraded: all widgets failed (${labels.join(", ")}).`;
     showPartialDegradation(message);
-    setConnectionState("warning", "Partial degradation");
+    setConnectionState("warning", t("stats.connection.partial", "Partial degradation"));
 }
 
 function applyDegradedWidgetStatuses() {
@@ -576,7 +1004,7 @@ function normalizeLeaderboard(list) {
     return list.map((user, index) => ({
         rank: index + 1,
         user_id: user.user_id,
-        full_name: (user.full_name || "Unknown user").trim(),
+        full_name: (user.full_name || t("stats.user.unknown", "Unknown user")).trim(),
         username: user.username || "",
         actions_count: Number(user.actions_count) || 0,
         last_action_time: user.last_action_time || "",
@@ -610,7 +1038,35 @@ function normalizeModuleMapping(item) {
 }
 
 function setModuleMappingsStatus(message, kind = "info") {
+    state.moduleMappingsStatusKey = "";
+    state.moduleMappingsStatusFallback = message;
+    state.moduleMappingsStatusParams = {};
+    state.moduleMappingsStatusKind = kind;
     setBlockStatus(elements.moduleMappingsStatus, message, kind);
+}
+
+function setModuleMappingsStatusText(key, fallback, params = {}, kind = "info") {
+    state.moduleMappingsStatusKey = key;
+    state.moduleMappingsStatusFallback = fallback;
+    state.moduleMappingsStatusParams = params;
+    state.moduleMappingsStatusKind = kind;
+    setBlockStatus(elements.moduleMappingsStatus, t(key, fallback, params), kind);
+}
+
+function refreshModuleMappingsStatus() {
+    if (state.moduleMappingsStatusKey) {
+        setBlockStatus(
+            elements.moduleMappingsStatus,
+            t(
+                state.moduleMappingsStatusKey,
+                state.moduleMappingsStatusFallback,
+                state.moduleMappingsStatusParams
+            ),
+            state.moduleMappingsStatusKind
+        );
+        return;
+    }
+    setBlockStatus(elements.moduleMappingsStatus, state.moduleMappingsStatusFallback, state.moduleMappingsStatusKind);
 }
 
 function setModuleMappingsLoading(isLoading) {
@@ -618,7 +1074,9 @@ function setModuleMappingsLoading(isLoading) {
 
     if (elements.moduleMappingsRefreshBtn) {
         elements.moduleMappingsRefreshBtn.disabled = isLoading;
-        elements.moduleMappingsRefreshBtn.textContent = isLoading ? "Refreshing..." : "Refresh";
+        elements.moduleMappingsRefreshBtn.textContent = isLoading
+            ? t("stats.refreshing", "Refreshing...")
+            : t("stats.refresh", "Refresh");
     }
     if (elements.moduleMappingSaveBtn) {
         elements.moduleMappingSaveBtn.disabled = isLoading;
@@ -638,7 +1096,7 @@ function renderModuleMappingFilters() {
 
     const previousValue = state.moduleMappingsModule;
     elements.moduleMappingFilterSelect.innerHTML = `
-        <option value="">All modules</option>
+        <option value="">${escapeHtml(t("stats.modules.all", "All modules"))}</option>
         ${modules
             .map((moduleName) => `<option value="${escapeHtml(moduleName)}">${escapeHtml(moduleName)}</option>`)
             .join("")}
@@ -665,8 +1123,8 @@ function renderModuleMappings() {
             `).join("");
         } else if (state.moduleMappings.length === 0) {
             const message = state.moduleMappingsLoaded
-                ? "No manual mappings match current filters."
-                : "Open the Modules tab to load mappings.";
+                ? t("stats.modules.empty", "No manual mappings match current filters.")
+                : t("stats.modules.openToLoad", "Open the Modules tab to load mappings.");
             elements.moduleMappingsTableBody.innerHTML = `
                 <tr>
                     <td colspan="3" class="px-4 py-5 text-sm text-slate-500">${message}</td>
@@ -686,8 +1144,8 @@ function renderModuleMappings() {
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex justify-end gap-2">
-                                <button type="button" data-module-action="edit" data-index="${index}" class="focus-ring rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100">Edit</button>
-                                <button type="button" data-module-action="delete" data-index="${index}" class="focus-ring rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-700 hover:bg-red-100">Delete</button>
+                                <button type="button" data-module-action="edit" data-index="${index}" class="focus-ring rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100">${escapeHtml(t("stats.modules.edit", "Edit"))}</button>
+                                <button type="button" data-module-action="delete" data-index="${index}" class="focus-ring rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-700 hover:bg-red-100">${escapeHtml(t("stats.modules.delete", "Delete"))}</button>
                             </div>
                         </td>
                     </tr>
@@ -699,11 +1157,17 @@ function renderModuleMappings() {
     if (elements.moduleMappingsMeta) {
         const loadedCount = state.moduleMappings.length;
         if (!state.moduleMappingsLoaded) {
-            elements.moduleMappingsMeta.textContent = "Mappings are loaded only for admins.";
+            elements.moduleMappingsMeta.textContent = t("stats.modules.meta.adminOnly", "Mappings are loaded only for admins.");
         } else if (loadedCount < state.moduleMappingsTotal) {
-            elements.moduleMappingsMeta.textContent = `Showing ${loadedCount} of ${state.moduleMappingsTotal} matching mappings. Narrow the search to find older rows.`;
+            elements.moduleMappingsMeta.textContent = t(
+                "stats.modules.meta.partial",
+                "Showing {shown} of {total} matching mappings. Narrow the search to find older rows.",
+                { shown: loadedCount, total: state.moduleMappingsTotal }
+            );
         } else {
-            elements.moduleMappingsMeta.textContent = `${loadedCount} mapping${loadedCount === 1 ? "" : "s"} loaded.`;
+            elements.moduleMappingsMeta.textContent = t("stats.modules.meta.loaded", "{count} mappings loaded.", {
+                count: loadedCount,
+            });
         }
     }
 }
@@ -724,7 +1188,7 @@ async function loadModuleMappings({ silent = false } = {}) {
     state.moduleMappingsModule = normalizePlainText(moduleFilterValue);
 
     if (!silent) {
-        setModuleMappingsStatus("Loading mappings...", "info");
+        setModuleMappingsStatusText("stats.modules.status.loading", "Loading mappings...", {}, "info");
     }
     setModuleMappingsLoading(true);
     renderModuleMappings();
@@ -743,13 +1207,18 @@ async function loadModuleMappings({ silent = false } = {}) {
             : [];
         state.moduleMappingsTotal = Number(payload?.total) || state.moduleMappings.length;
         state.moduleMappingsLoaded = true;
-        setModuleMappingsStatus(`Loaded ${state.moduleMappingsTotal} mapping${state.moduleMappingsTotal === 1 ? "" : "s"}`, "ok");
+        setModuleMappingsStatusText(
+            "stats.modules.status.loaded",
+            "Loaded {count} mappings",
+            { count: state.moduleMappingsTotal },
+            "ok"
+        );
     } catch (error) {
         const message = error instanceof Error ? error.message : "Module mappings request failed";
         registerBackgroundFailure(message);
         state.moduleMappingsLoaded = true;
-        setModuleMappingsStatus("Failed to load mappings", "error");
-        showToast("error", `Module mappings failed: ${message}`);
+        setModuleMappingsStatusText("stats.modules.status.failed", "Failed to load mappings", {}, "error");
+        showToast("error", t("stats.modules.failed", "Module mappings failed: {message}", { message }));
     } finally {
         setModuleMappingsLoading(false);
         renderModuleMappings();
@@ -796,10 +1265,10 @@ function resetModuleMappingForm() {
     if (elements.moduleDisciplineInput) elements.moduleDisciplineInput.value = "";
     if (elements.moduleNameInput) elements.moduleNameInput.value = "";
     if (elements.moduleMappingFormMode) {
-        elements.moduleMappingFormMode.textContent = "New mapping";
+        elements.moduleMappingFormMode.textContent = t("stats.modules.form.new", "New mapping");
     }
     if (elements.moduleMappingSaveBtn) {
-        elements.moduleMappingSaveBtn.textContent = "Save mapping";
+        elements.moduleMappingSaveBtn.textContent = t("stats.modules.save", "Save mapping");
     }
 }
 
@@ -816,10 +1285,12 @@ function editModuleMapping(index) {
         elements.moduleNameInput.value = mapping.module_name;
     }
     if (elements.moduleMappingFormMode) {
-        elements.moduleMappingFormMode.textContent = `Editing: ${mapping.discipline_name}`;
+        elements.moduleMappingFormMode.textContent = t("stats.modules.form.editing", "Editing: {discipline}", {
+            discipline: mapping.discipline_name,
+        });
     }
     if (elements.moduleMappingSaveBtn) {
-        elements.moduleMappingSaveBtn.textContent = "Save changes";
+        elements.moduleMappingSaveBtn.textContent = t("stats.modules.saveChanges", "Save changes");
     }
 }
 
@@ -829,7 +1300,9 @@ async function deleteModuleMappingByDiscipline(
 ) {
     const discipline = normalizePlainText(disciplineName);
     if (!discipline) return false;
-    if (confirmDelete && !window.confirm(`Delete mapping for "${discipline}"?`)) {
+    if (confirmDelete && !window.confirm(t("stats.modules.confirmDelete", "Delete mapping for \"{discipline}\"?", {
+        discipline,
+    }))) {
         return false;
     }
 
@@ -838,7 +1311,7 @@ async function deleteModuleMappingByDiscipline(
             method: "DELETE",
         });
         if (notify) {
-            showToast("success", "Mapping deleted");
+            showToast("success", t("stats.modules.deleted", "Mapping deleted"));
         }
         if (state.moduleMappingEditingDiscipline === discipline) {
             resetModuleMappingForm();
@@ -850,7 +1323,7 @@ async function deleteModuleMappingByDiscipline(
     } catch (error) {
         const message = error instanceof Error ? error.message : "Delete failed";
         registerBackgroundFailure(message);
-        showToast("error", `Delete failed: ${message}`);
+        showToast("error", t("stats.modules.deleteFailed", "Delete failed: {message}", { message }));
         return false;
     }
 }
@@ -861,13 +1334,13 @@ async function saveModuleMapping(event) {
     const disciplineName = normalizePlainText(elements.moduleDisciplineInput?.value);
     const moduleName = normalizePlainText(elements.moduleNameInput?.value);
     if (!disciplineName || !moduleName) {
-        showToast("warning", "Fill both discipline and module");
+        showToast("warning", t("stats.modules.fillBoth", "Fill both discipline and module"));
         return;
     }
 
     const previousDiscipline = state.moduleMappingEditingDiscipline;
     setModuleMappingsLoading(true);
-    setModuleMappingsStatus("Saving mapping...", "info");
+    setModuleMappingsStatusText("stats.modules.status.saving", "Saving mapping...", {}, "info");
 
     try {
         const saved = await fetchWithAuth("/stats/modules", {
@@ -886,7 +1359,7 @@ async function saveModuleMapping(event) {
                 notify: false,
             });
             if (!deletedPrevious) {
-                showToast("warning", "Saved new mapping, but old discipline name was not removed.");
+                showToast("warning", t("stats.modules.oldNotRemoved", "Saved new mapping, but old discipline name was not removed."));
             }
         }
 
@@ -894,13 +1367,15 @@ async function saveModuleMapping(event) {
         setModuleMappingsLoading(false);
         await loadModuleMappings({ silent: true });
         const savedMapping = normalizeModuleMapping(saved);
-        showToast("success", `Saved: ${savedMapping.discipline_name || disciplineName}`);
-        setModuleMappingsStatus("Mapping saved", "ok");
+        showToast("success", t("stats.modules.savedToast", "Saved: {discipline}", {
+            discipline: savedMapping.discipline_name || disciplineName,
+        }));
+        setModuleMappingsStatusText("stats.modules.status.saved", "Mapping saved", {}, "ok");
     } catch (error) {
         const message = error instanceof Error ? error.message : "Save failed";
         registerBackgroundFailure(message);
-        setModuleMappingsStatus("Save failed", "error");
-        showToast("error", `Save failed: ${message}`);
+        setModuleMappingsStatusText("stats.modules.status.saveFailed", "Save failed", {}, "error");
+        showToast("error", t("stats.modules.saveFailedToast", "Save failed: {message}", { message }));
     } finally {
         setModuleMappingsLoading(false);
         renderModuleMappings();
@@ -1046,10 +1521,10 @@ function renderLeaderboard() {
     if (pageData.totalRows === 0) {
         elements.leaderboardBody.innerHTML = `
             <tr>
-                <td colspan="4" class="px-4 py-6 text-sm text-slate-500">No leaderboard data for current filters.</td>
+                <td colspan="4" class="px-4 py-6 text-sm text-slate-500">${escapeHtml(t("stats.leaderboard.noData", "No leaderboard data for current filters."))}</td>
             </tr>
         `;
-        setBlockStatus(elements.leaderboardStatus, "No data", "warning");
+        setBlockStatus(elements.leaderboardStatus, t("stats.leaderboard.noStatus", "No data"), "warning");
     } else {
         elements.leaderboardBody.innerHTML = pageData.rows
             .map((user, index) => {
@@ -1077,14 +1552,20 @@ function renderLeaderboard() {
             })
             .join("");
 
-        setBlockStatus(elements.leaderboardStatus, `Loaded ${pageData.totalRows} users`, "ok");
+        setBlockStatus(elements.leaderboardStatus, t("stats.leaderboard.loaded", "Loaded {count} users", {
+            count: pageData.totalRows,
+        }), "ok");
     }
 
     if (elements.leaderboardMeta) {
         elements.leaderboardMeta.textContent =
             pageData.totalRows === 0
-                ? "0 results"
-                : `Showing ${pageData.startIndex}-${pageData.endIndex} of ${pageData.totalRows}`;
+                ? t("stats.leaderboard.results", "{count} results", { count: 0 })
+                : t("stats.leaderboard.showing", "Showing {start}-{end} of {total}", {
+                    start: pageData.startIndex,
+                    end: pageData.endIndex,
+                    total: pageData.totalRows,
+                });
     }
 
     if (elements.leaderboardPageInfo) {
@@ -1110,9 +1591,11 @@ function renderActivityChart() {
     const filtered = getFilteredActivity();
 
     if (filtered.length === 0) {
-        setBlockStatus(elements.activityStatus, "No activity in selected range", "warning");
+        setBlockStatus(elements.activityStatus, t("stats.activity.noData", "No activity in selected range"), "warning");
     } else {
-        setBlockStatus(elements.activityStatus, `Points: ${filtered.length}`, "ok");
+        setBlockStatus(elements.activityStatus, t("stats.activity.points", "Points: {count}", {
+            count: filtered.length,
+        }), "ok");
     }
 
     const labels = filtered.map((entry) => entry.period);
@@ -1130,7 +1613,7 @@ function renderActivityChart() {
             labels,
             datasets: [
                 {
-                    label: "Actions",
+                    label: t("stats.activity.dataset", "Actions"),
                     data: values,
                     borderColor: chartPalette.line,
                     backgroundColor: chartPalette.fill,
@@ -1190,7 +1673,7 @@ function renderKpis() {
     if (elements.totalActions) {
         const fallbackTotal = state.leaderboard.reduce((sum, item) => sum + (item.actions_count || 0), 0);
         const total = state.totalActions > 0 ? state.totalActions : fallbackTotal;
-        elements.totalActions.textContent = total.toLocaleString();
+        elements.totalActions.textContent = total.toLocaleString(getStatsLocale());
     }
 
     if (elements.visibleUsers) {
@@ -1198,7 +1681,7 @@ function renderKpis() {
     }
 
     if (elements.currentRangeLabel) {
-        elements.currentRangeLabel.textContent = RANGE_LABELS[state.range] || "Custom";
+        elements.currentRangeLabel.textContent = getRangeLabel(state.range);
     }
 }
 
@@ -1281,24 +1764,26 @@ function setScheduleCacheRefreshLoading(isLoading) {
         if (!button) return;
         button.disabled = isLoading;
         button.textContent = isLoading
-            ? "Refreshing..."
+            ? t("stats.refreshing", "Refreshing...")
             : button.id === "refreshScheduleCacheBtnMobile"
-                ? "Schedule cache"
-                : "Refresh schedule cache";
+                ? t("stats.refreshScheduleCache.mobile", "Schedule cache")
+                : t("stats.refreshScheduleCache", "Refresh schedule cache");
     });
 }
 
 function formatScheduleCacheRefreshSummary(payload) {
-    if (!payload || typeof payload !== "object") return "Schedule cache refresh finished.";
+    if (!payload || typeof payload !== "object") return t("stats.scheduleCache.done", "Schedule cache refresh finished.");
     const parts = [
-        `${Number(payload.refreshed) || 0} refreshed`,
-        `${Number(payload.remapped) || 0} ids remapped`,
+        t("stats.scheduleCache.refreshed", "{count} refreshed", { count: Number(payload.refreshed) || 0 }),
+        t("stats.scheduleCache.remapped", "{count} ids remapped", { count: Number(payload.remapped) || 0 }),
     ];
     const failed = Number(payload.failed) || 0;
     const skipped = Number(payload.skipped) || 0;
-    if (failed > 0) parts.push(`${failed} failed`);
-    if (skipped > 0) parts.push(`${skipped} skipped`);
-    return `Schedule cache refresh finished: ${parts.join(", ")}.`;
+    if (failed > 0) parts.push(t("stats.scheduleCache.failed", "{count} failed", { count: failed }));
+    if (skipped > 0) parts.push(t("stats.scheduleCache.skipped", "{count} skipped", { count: skipped }));
+    return t("stats.scheduleCache.summary", "Schedule cache refresh finished: {parts}.", {
+        parts: parts.join(", "),
+    });
 }
 
 async function refreshAllScheduleSemesterCache() {
@@ -1313,7 +1798,7 @@ async function refreshAllScheduleSemesterCache() {
     } catch (error) {
         const message = error instanceof Error ? error.message : "Schedule cache refresh failed";
         registerBackgroundFailure(message);
-        showToast("error", `Schedule cache refresh failed: ${message}`);
+        showToast("error", t("stats.scheduleCache.error", "Schedule cache refresh failed: {message}", { message }));
     } finally {
         setScheduleCacheRefreshLoading(false);
     }
@@ -1327,7 +1812,7 @@ function registerBackgroundFailure(errorMessage) {
 
 async function refreshProxyDiagnostics({ silent = false } = {}) {
     if (!silent) {
-        setProxyDiagnosticsStatus("Loading proxy summary...", "info");
+        setProxyDiagnosticsStatus(t("stats.proxy.loading", "Loading proxy summary..."), "info");
     }
 
     try {
@@ -1356,8 +1841,8 @@ async function refreshFromRest({ silent = false } = {}) {
 
     if (!silent) {
         setLoading(true);
-        setBlockStatus(elements.leaderboardStatus, "Loading...", "info");
-        setBlockStatus(elements.activityStatus, "Loading...", "info");
+        setBlockStatus(elements.leaderboardStatus, t("stats.leaderboard.loading", "Loading..."), "info");
+        setBlockStatus(elements.activityStatus, t("stats.activity.loading", "Loading..."), "info");
     }
 
     const [leaderboardResult, activityResult] = await Promise.allSettled([
@@ -1380,7 +1865,7 @@ async function refreshFromRest({ silent = false } = {}) {
             : "Leaderboard request failed";
         registerFailure(message);
         state.widgetHealth.leaderboard = "error";
-        failureMessages.push(`Leaderboard: ${message}`);
+        failureMessages.push(`${t("stats.leaderboard.title", "Leaderboard")}: ${message}`);
         failureCount += 1;
     }
 
@@ -1394,7 +1879,7 @@ async function refreshFromRest({ silent = false } = {}) {
             : "Activity request failed";
         registerFailure(message);
         state.widgetHealth.activity = "error";
-        failureMessages.push(`Activity: ${message}`);
+        failureMessages.push(`${t("stats.activity.title", "Activity")}: ${message}`);
         failureCount += 1;
     }
 
@@ -1407,15 +1892,21 @@ async function refreshFromRest({ silent = false } = {}) {
         updateDashboardHealthState();
 
         if (failureCount > 0) {
-            showToast("warning", `Partial degradation detected. ${failureMessages.join(" | ")}`);
+            showToast("warning", t("stats.dashboard.partial", "Partial degradation detected. {message}", {
+                message: failureMessages.join(" | "),
+            }));
         }
     } else {
         const combinedError = failureMessages.join(" | ") || "Unknown REST error";
-        showGlobalError(`Failed to load dashboard: ${combinedError}`);
+        showGlobalError(t("stats.dashboard.failed", "Failed to load dashboard: {message}", {
+            message: combinedError,
+        }));
         setRetryButtonsVisible(true);
-        setBlockStatus(elements.leaderboardStatus, "Failed. Retry required.", "error");
-        setBlockStatus(elements.activityStatus, "Failed. Retry required.", "error");
-        showToast("error", `Dashboard load failed: ${combinedError}`);
+        setBlockStatus(elements.leaderboardStatus, t("stats.dashboard.loadingFailed", "Failed. Retry required."), "error");
+        setBlockStatus(elements.activityStatus, t("stats.dashboard.loadingFailed", "Failed. Retry required."), "error");
+        showToast("error", t("stats.dashboard.loadFailed", "Dashboard load failed: {message}", {
+            message: combinedError,
+        }));
         updateDashboardHealthState();
     }
 
@@ -1472,7 +1963,7 @@ function connectWebSocket() {
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
     const wsUrl = `${protocol}://${window.location.host}/ws/stats/total_actions?token=${encodeURIComponent(token)}`;
 
-    setConnectionState("connecting", "Connecting...");
+    setConnectionState("connecting", t("stats.connection.connecting", "Connecting..."));
 
     const socket = new WebSocket(wsUrl);
     state.ws = socket;
@@ -1482,7 +1973,7 @@ function connectWebSocket() {
         state.wsBackoffMs = 1000;
         updateDashboardHealthState();
         if (state.activeStatsView === "dashboard") {
-            showToast("success", "Live stats connected");
+            showToast("success", t("stats.toast.liveConnected", "Live stats connected"));
         }
     });
 
@@ -1496,11 +1987,11 @@ function connectWebSocket() {
         } catch (error) {
             const message = error instanceof Error ? error.message : "Invalid live payload";
             registerFailure(message);
-            showGlobalError(`Live data error: ${message}`);
+            showGlobalError(t("stats.dashboard.failed", "Live data error: {message}", { message }));
             setRetryButtonsVisible(true);
-            setConnectionState("warning", "Live payload warning");
+            setConnectionState("warning", t("stats.connection.warning", "Connection error"));
             if (state.activeStatsView === "dashboard") {
-                showToast("warning", "Live data issue. Retrying... ");
+                showToast("warning", t("stats.toast.liveIssue", "Live data issue. Retrying..."));
             }
         }
     });
@@ -1509,16 +2000,16 @@ function connectWebSocket() {
         if (state.ws !== socket) return;
 
         state.wsConnected = false;
-        setConnectionState("offline", "Disconnected");
+        setConnectionState("offline", t("stats.connection.disconnected", "Disconnected"));
         setRetryButtonsVisible(true);
         if (state.activeStatsView === "dashboard") {
-            showToast("warning", "Live connection lost. Reconnecting...");
+            showToast("warning", t("stats.toast.liveLost", "Live connection lost. Reconnecting..."));
         }
         scheduleWsReconnect();
     });
 
     socket.addEventListener("error", () => {
-        setConnectionState("warning", "Connection error");
+        setConnectionState("warning", t("stats.connection.warning", "Connection error"));
     });
 }
 
@@ -1555,12 +2046,12 @@ function applyCustomRange() {
     const to = elements.rangeTo.value;
 
     if (!from || !to) {
-        showToast("warning", "Pick both custom dates");
+        showToast("warning", t("stats.toast.pickDates", "Pick both custom dates"));
         return;
     }
 
     if (new Date(from) > new Date(to)) {
-        showToast("warning", "From date must be earlier than To date");
+        showToast("warning", t("stats.toast.dateOrder", "From date must be earlier than To date"));
         return;
     }
 
@@ -1586,6 +2077,48 @@ function changeSort(field) {
     state.page = 1;
     syncStateToUrl();
     renderLeaderboard();
+}
+
+function refreshModuleMappingFormLabels() {
+    if (elements.moduleMappingFormMode) {
+        elements.moduleMappingFormMode.textContent = state.moduleMappingEditingDiscipline
+            ? t("stats.modules.form.editing", "Editing: {discipline}", {
+                discipline: state.moduleMappingEditingDiscipline,
+            })
+            : t("stats.modules.form.new", "New mapping");
+    }
+    if (elements.moduleMappingSaveBtn) {
+        elements.moduleMappingSaveBtn.textContent = state.moduleMappingEditingDiscipline
+            ? t("stats.modules.saveChanges", "Save changes")
+            : t("stats.modules.save", "Save mapping");
+    }
+}
+
+function refreshStatsLanguage() {
+    applyStatsTranslations();
+    setScheduleCacheRefreshLoading(state.isScheduleCacheRefreshing);
+    refreshModuleMappingFormLabels();
+    refreshModuleMappingsStatus();
+    updateRangeControls();
+    renderKpis();
+    renderModuleMappings();
+    renderProxyDiagnostics();
+    if (state.leaderboard.length > 0 || state.widgetHealth.leaderboard !== "idle") {
+        renderLeaderboard();
+    }
+    if (state.activity.length > 0 || state.widgetHealth.activity !== "idle") {
+        renderActivityChart();
+    }
+    updateDiagnostics();
+}
+
+function registerStatsTranslations() {
+    applyStatsTranslations();
+    if (window.mpbI18n?.registerTranslator) {
+        window.mpbI18n.registerTranslator(() => refreshStatsLanguage());
+    } else {
+        window.addEventListener("mpb-language-change", refreshStatsLanguage);
+    }
 }
 
 function wireEvents() {
@@ -1620,12 +2153,12 @@ function wireEvents() {
 
     elements.retryAllBtn?.addEventListener("click", async () => {
         await refreshFromRest({ silent: false });
-        showToast("info", "Retry requested");
+        showToast("info", t("stats.toast.retryRequested", "Retry requested"));
     });
 
     elements.retryAllBtnMobile?.addEventListener("click", async () => {
         await refreshFromRest({ silent: false });
-        showToast("info", "Retry requested");
+        showToast("info", t("stats.toast.retryRequested", "Retry requested"));
     });
 
     elements.refreshScheduleCacheBtn?.addEventListener("click", refreshAllScheduleSemesterCache);
@@ -1633,12 +2166,12 @@ function wireEvents() {
 
     elements.retryActivityBtn?.addEventListener("click", async () => {
         await refreshFromRest({ silent: false });
-        showToast("info", "Activity reload requested");
+        showToast("info", t("stats.toast.activityReload", "Activity reload requested"));
     });
 
     elements.retryLeaderboardBtn?.addEventListener("click", async () => {
         await refreshFromRest({ silent: false });
-        showToast("info", "Leaderboard reload requested");
+        showToast("info", t("stats.toast.leaderboardReload", "Leaderboard reload requested"));
     });
 
     elements.dismissGlobalError?.addEventListener("click", hideGlobalError);
@@ -1720,13 +2253,14 @@ function applyInitialControls() {
 document.addEventListener("DOMContentLoaded", async () => {
     parseStateFromUrl();
     applyInitialControls();
+    registerStatsTranslations();
     wireEvents();
     setStatsView(state.activeStatsView, { updateUrl: false });
 
     setLoading(true);
-    setConnectionState("connecting", "Connecting...");
-    setBlockStatus(elements.activityStatus, "Loading...", "info");
-    setBlockStatus(elements.leaderboardStatus, "Loading...", "info");
+    setConnectionState("connecting", t("stats.connection.connecting", "Connecting..."));
+    setBlockStatus(elements.activityStatus, t("stats.activity.loading", "Loading..."), "info");
+    setBlockStatus(elements.leaderboardStatus, t("stats.leaderboard.loading", "Loading..."), "info");
     renderProxyDiagnostics();
 
     await refreshFromRest({ silent: false });

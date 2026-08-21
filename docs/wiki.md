@@ -470,10 +470,11 @@ What it does:
 
 - Makes the static frontend installable with app name, icons, theme colors, start URL, and shortcuts for Schedule and Studio.
 - Registers a service worker from shared `navbar.js` on pages that load the common frontend shell.
-- Pre-caches the main static pages, shared scripts/styles, icons, Schedule assets, Studio assets, and offline fallback.
-- Uses network-first navigation so fresh pages win, then cached pages/offline fallback are used when the network is unavailable.
+- Pre-caches the main static pages, shared scripts/styles, icons, Schedule, Stats, Studio assets, and offline fallback.
+- Uses no-cache network-first navigation so fresh pages win, then cached pages/offline fallback are used when the network is unavailable.
+- Uses network-first for same-origin JS/CSS assets so deployed frontend fixes are not served stale once before appearing on the next reload.
 - Avoids intercepting same-origin `/api/*` requests so authenticated API calls are not cached by the service worker.
-- Schedule frontend asset URLs use `?v=20260821-6`, and the service worker cache is `mpb-site-v25`; bump both when changing cached Schedule scripts or shared cached auth/navbar pages so installed/PWA clients do not keep stale behavior.
+- Schedule frontend asset URLs use `?v=20260821-7`, Stats uses `stats.js?v=19` and `stats_ux.js?v=2`, shared navbar uses `?v=20260821-8`, and the service worker cache is `mpb-site-v26`; bump changed asset URLs and the service worker cache when changing cached frontend behavior.
 
 How to use: (or not use)
 
@@ -716,6 +717,7 @@ What it does:
 - Supports exports (JSON/CSV/PDF weekly) with date range and timezone.
 - Includes partial-degradation state when one widget fails.
 - Shows an admin-only `Refresh schedule cache` action that force-runs the full semester cache remap/refresh workflow from `/stats`; non-admin accounts never see the button, and the API still enforces admin access.
+- Owns page-specific EN/RU translations for static labels, dynamic REST/WebSocket statuses, module-management statuses, mobile filters, and empty states. Language changes are applied through the shared navbar i18n API without requiring a page reload.
 
 How to use:
 
@@ -1309,6 +1311,7 @@ What it does:
 - Lets admins create, update, search, filter, and delete mappings from the website.
 - Uses the same mapping table as the Telegram `/set_module Discipline | Module` command, so schedule module filters consume one shared source of truth.
 - Keeps the selected tab in the URL with `/stats#modules`.
+- Participates in the Stats page local i18n refresh loop, so tab labels, form controls, table actions, and loaded/saving/error statuses switch EN/RU without a reload.
 
 How to use:
 

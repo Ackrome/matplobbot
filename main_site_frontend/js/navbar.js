@@ -1296,9 +1296,11 @@ function exposePublicI18nApi() {
 function registerServiceWorker() {
     if (!("serviceWorker" in navigator) || window.location.protocol === "file:") return;
     window.addEventListener("load", () => {
-        navigator.serviceWorker.register("/service-worker.js").catch((error) => {
-            console.warn("Service worker registration failed", error);
-        });
+        navigator.serviceWorker.register("/service-worker.js")
+            .then((registration) => registration.update())
+            .catch((error) => {
+                console.warn("Service worker registration failed", error);
+            });
     });
 }
 window.mpbRefreshAuth = checkAuthAndRenderNavbar;

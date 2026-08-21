@@ -9,6 +9,8 @@
     };
     const COLUMNS = ["rank", "full_name", "actions_count", "last_action_time"];
     const columnToIndex = { rank: 1, full_name: 2, actions_count: 3, last_action_time: 4 };
+    const tr = (key, fallback = "", params = {}) =>
+        typeof t === "function" ? t(key, fallback, params) : fallback || key;
 
     const refs = {
         table: document.getElementById("leaderboardTable"),
@@ -124,11 +126,11 @@
                 <tr>
                     <td colspan="4" class="px-4 py-4">
                         <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
-                            <p class="mb-2 text-sm font-semibold text-slate-700">No leaderboard data for current filters.</p>
+                            <p class="mb-2 text-sm font-semibold text-slate-700">${tr("stats.leaderboard.noData", "No leaderboard data for current filters.")}</p>
                             <div class="flex items-center justify-center gap-2">
-                                <button type="button" data-empty-action="retry" class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700">Retry</button>
-                                <button type="button" data-empty-action="reset" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">Reset filters</button>
-                                <a href="https://github.com/Ackrome/matplobbot#readme" target="_blank" rel="noreferrer" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">Docs</a>
+                                <button type="button" data-empty-action="retry" class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700">${tr("stats.retry", "Retry")}</button>
+                                <button type="button" data-empty-action="reset" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">${tr("stats.resetFilters", "Reset filters")}</button>
+                                <a href="https://github.com/Ackrome/matplobbot#readme" target="_blank" rel="noreferrer" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">${tr("stats.docs", "Docs")}</a>
                             </div>
                         </div>
                     </td>
@@ -157,9 +159,14 @@
                 label(context) {
                     const current = context.parsed.y;
                     const prev = context.dataIndex > 0 ? context.dataset.data[context.dataIndex - 1] : null;
-                    if (typeof prev !== "number") return `Actions: ${current}`;
+                    if (typeof prev !== "number") {
+                        return tr("stats.activity.tooltip", "Actions: {count}", { count: current });
+                    }
                     const delta = current - prev;
-                    return `Actions: ${current} (${delta >= 0 ? "+" : ""}${delta} vs prev)`;
+                    return tr("stats.activity.tooltipDelta", "Actions: {count} ({delta} vs prev)", {
+                        count: current,
+                        delta: `${delta >= 0 ? "+" : ""}${delta}`,
+                    });
                 },
             };
         }
@@ -187,9 +194,27 @@
         refs.columnVisibilityList.innerHTML = COLUMNS.map((column) => `
             <label class="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" data-col="${column}" ${state.visibleColumns.includes(column) ? "checked" : ""}>
-                <span>${column.replace("_", " ")}</span>
+                <span>${tr(`stats.column.${column}`, column.replace("_", " "))}</span>
             </label>
         `).join("");
+    }
+
+    function updateDensityButtonLabel() {
+        if (!refs.tableDensityBtn) return;
+        refs.tableDensityBtn.textContent = state.tableDensity === "compact"
+            ? tr("stats.density.compact", "Density: Compact")
+            : tr("stats.density.default", "Density: Default");
+    }
+
+    function refreshUxTranslations() {
+        updateDensityButtonLabel();
+        renderColumnControls();
+        if (state.leaderboard.length > 0 || state.widgetHealth?.leaderboard !== "idle") {
+            renderLeaderboard();
+        }
+        if (state.activity.length > 0 || state.widgetHealth?.activity !== "idle") {
+            renderActivityChart();
+        }
     }
 
     function syncMobileSheet() {
@@ -241,6 +266,7 @@
     document.addEventListener("DOMContentLoaded", () => {
         persistPrefs();
         renderColumnControls();
+        updateDensityButtonLabel();
         applyColumnVisibility();
         syncMobileSheet();
         refs.timezoneSelect && (refs.timezoneSelect.value = state.timezone);
@@ -251,7 +277,7 @@
 
         refs.tableDensityBtn?.addEventListener("click", () => {
             state.tableDensity = state.tableDensity === "compact" ? "default" : "compact";
-            refs.tableDensityBtn.textContent = state.tableDensity === "compact" ? "Density: Compact" : "Density: Default";
+            updateDensityButtonLabel();
             persistPrefs();
             renderLeaderboard();
         });
@@ -331,5 +357,10 @@
             if (event.detail?.direction === "next") elements.leaderboardNext?.click();
             if (event.detail?.direction === "prev") elements.leaderboardPrev?.click();
         });
+        if (window.mpbI18n?.registerTranslator) {
+            window.mpbI18n.registerTranslator(() => refreshUxTranslations());
+        } else {
+            window.addEventListener("mpb-language-change", refreshUxTranslations);
+        }
     });
 })();

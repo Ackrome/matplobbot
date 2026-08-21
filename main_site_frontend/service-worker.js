@@ -1,4 +1,4 @@
-const CACHE_VERSION = "mpb-site-v25";
+const CACHE_VERSION = "mpb-site-v26";
 const CORE_CACHE = `${CACHE_VERSION}-core`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const OFFLINE_URL = "/offline.html";
@@ -8,6 +8,8 @@ const CORE_ASSETS = [
     "/index.html",
     "/schedule",
     "/schedule.html",
+    "/stats",
+    "/stats.html",
     "/studio",
     "/studio.html",
     "/login",
@@ -19,16 +21,18 @@ const CORE_ASSETS = [
     "/css/tailwind.css?v=20260821-6",
     "/js/runtime_config.js?v=20260821-6",
     "/js/ui_utils.js?v=20260821-6",
-    "/js/navbar.js?v=20260821-7",
+    "/js/navbar.js?v=20260821-8",
     "/js/theme_bootstrap.js?v=20260821-6",
     "/js/telegram_webapp.js?v=20260821-6",
     "/js/schedule_state.js?v=20260821-6",
     "/js/schedule_api.js?v=20260821-6",
     "/js/schedule_filters.js?v=20260821-6",
     "/js/schedule_render.js?v=20260821-6",
-    "/js/schedule.js?v=20260821-6",
+    "/js/schedule.js?v=20260821-7",
     "/js/calendar_sync.js?v=20260821-6",
-    "/js/schedule_ux.js?v=20260821-6",
+    "/js/schedule_ux.js?v=20260821-7",
+    "/js/stats.js?v=19",
+    "/js/stats_ux.js?v=2",
     "/js/studio.js?v=10",
     "/js/auth.js?v=6",
     "/favicon.ico",
@@ -64,7 +68,7 @@ self.addEventListener("activate", (event) => {
 
 async function networkFirstNavigation(request) {
     try {
-        const response = await fetch(request);
+        const response = await fetch(new Request(request, { cache: "no-cache" }));
         const cache = await caches.open(RUNTIME_CACHE);
         cache.put(request, response.clone());
         return response;
@@ -91,6 +95,19 @@ async function staleWhileRevalidate(request) {
     return cached || fetchPromise;
 }
 
+async function networkFirstCodeAsset(request) {
+    try {
+        const response = await fetch(new Request(request, { cache: "no-cache" }));
+        if (response && response.ok) {
+            const cache = await caches.open(RUNTIME_CACHE);
+            cache.put(request, response.clone());
+        }
+        return response;
+    } catch (_error) {
+        return caches.match(request);
+    }
+}
+
 self.addEventListener("fetch", (event) => {
     const { request } = event;
     if (request.method !== "GET") return;
@@ -102,6 +119,17 @@ self.addEventListener("fetch", (event) => {
 
     if (request.mode === "navigate") {
         event.respondWith(networkFirstNavigation(request));
+        return;
+    }
+
+    const isSameOriginCodeAsset =
+        url.origin === self.location.origin &&
+        (url.pathname.startsWith("/js/") ||
+            url.pathname.startsWith("/css/") ||
+            url.pathname.endsWith(".js") ||
+            url.pathname.endsWith(".css"));
+    if (isSameOriginCodeAsset) {
+        event.respondWith(networkFirstCodeAsset(request));
         return;
     }
 
