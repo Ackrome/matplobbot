@@ -37,6 +37,50 @@ class SendMessageRequest(BaseModel):
     text: str = Field(..., min_length=1, description="Текст сообщения для отправки пользователю")
 
 
+class DisciplineModuleMapping(BaseModel):
+    """Manual mapping from a discipline name to a schedule module name."""
+
+    discipline_name: str = Field(
+        ...,
+        min_length=1,
+        description="Full discipline name as it appears in the university schedule.",
+        example="Военная подготовка",
+    )
+    module_name: str = Field(
+        ...,
+        min_length=1,
+        description="Module label used by schedule filtering.",
+        example="Военная кафедра",
+    )
+
+    model_config = BASE_CONFIG
+
+
+class DisciplineModuleUpsertRequest(DisciplineModuleMapping):
+    """Payload for creating or updating a discipline-to-module mapping."""
+
+
+class DisciplineModuleListResponse(BaseModel):
+    """Response for manual schedule module mappings."""
+
+    items: list[DisciplineModuleMapping] = Field(default_factory=list)
+    modules: list[str] = Field(
+        default_factory=list,
+        description="Unique module names currently present in manual mappings.",
+    )
+    total: int = Field(0, ge=0, description="Total mappings after filters are applied.")
+
+    model_config = BASE_CONFIG
+
+
+class DisciplineModuleDeleteResponse(BaseModel):
+    status: Literal["success"] = "success"
+    discipline_name: str
+    deleted: bool
+
+    model_config = BASE_CONFIG
+
+
 # --- Модели Пользователей ---
 
 

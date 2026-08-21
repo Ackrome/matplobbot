@@ -26,8 +26,8 @@ Most `/api/*` routes require a bearer token.
 
 ### Username/password flow
 
-1. Create an account with `POST /api/auth/register`.
-2. Click **Authorize** in Swagger UI and sign in with the same username/password.
+1. Use an already issued password account, usually an admin account managed out-of-band.
+2. Click **Authorize** in Swagger UI and sign in with the username/password.
 3. Swagger UI will call `POST /api/auth/login` and attach the returned bearer token automatically.
 
 ### Telegram flow
@@ -40,13 +40,14 @@ Most `/api/*` routes require a bearer token.
 
 - Public iCal feed routes under `/api/cal/{secret}*` are intentionally tokenless and rely on the secret URL.
 - Admin-only routes require an authenticated account whose resolved role is `admin`.
+- `POST /api/auth/register` is disabled by default. It only creates non-admin accounts when `AUTH_PASSWORD_REGISTRATION_ENABLED=true`.
 - Protected HTML pages are excluded from this schema so `/docs` stays API-focused.
 """
 
 OPENAPI_TAGS = [
     {
         "name": "auth",
-        "description": "Account registration, password login, Telegram login, and user preferences.",
+        "description": "Password login, optional disabled-by-default account registration, Telegram login, and user preferences.",
     },
     {
         "name": "schedule",

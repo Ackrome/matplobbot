@@ -6,7 +6,7 @@ import time
 import unittest
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 from urllib.parse import urlencode
 
 FASTAPI_AVAILABLE = True
@@ -63,7 +63,7 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
         ).hexdigest()
         return urlencode(params)
 
-    def test_register_creates_non_admin_user(self):
+    def test_register_is_disabled_by_default(self):
         db = self._mock_db(account=None)
         self.app.dependency_overrides[auth_router.get_db_session_dependency] = lambda: db
 
@@ -71,6 +71,20 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
             "/api/auth/register",
             json={"username": "newuser", "password": "StrongPass123"},
         )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"], "Password registration is disabled.")
+        self.assertFalse(db.add.called)
+
+    def test_register_creates_non_admin_user_when_enabled(self):
+        db = self._mock_db(account=None)
+        self.app.dependency_overrides[auth_router.get_db_session_dependency] = lambda: db
+
+        with patch.object(auth_router, "AUTH_PASSWORD_REGISTRATION_ENABLED", True):
+            response = self.client.post(
+                "/api/auth/register",
+                json={"username": "newuser", "password": "StrongPass123"},
+            )
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json(), {"status": "success"})

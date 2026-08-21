@@ -134,7 +134,8 @@
         }
 
         html.dark input,
-        html.dark select {
+        html.dark select,
+        html.dark textarea {
             background-color: #0f172a;
             border-color: #475569;
             color: #e2e8f0;
@@ -228,6 +229,36 @@
             background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
             background-size: 200% 100%;
             animation: shimmer 1.2s infinite;
+        }
+
+        .modules-admin-layout {
+            display: grid;
+            gap: 1.25rem;
+            padding: 1.25rem;
+        }
+
+        .module-mapping-filter-grid {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        @media (min-width: 640px) {
+            .modules-admin-layout {
+                padding: 1.5rem;
+            }
+        }
+
+        @media (min-width: 768px) {
+            .module-mapping-filter-grid {
+                grid-template-columns: minmax(0, 1fr) 14rem;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .modules-admin-layout {
+                align-items: start;
+                grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr);
+            }
         }
 
         .sr-only {
@@ -345,6 +376,11 @@
                     <button id="applyCustomRange" type="button" class="focus-ring px-3 py-2 text-sm rounded-xl bg-slate-800 text-white hover:bg-slate-700" disabled>Apply</button>
                 </div>
 
+                <div class="mt-4 flex flex-wrap items-center gap-2" role="tablist" aria-label="Stats dashboard sections">
+                    <button id="statsViewDashboardBtn" type="button" data-stats-view="dashboard" class="focus-ring rounded-xl bg-slate-900 px-3 py-2 text-sm font-bold text-white" role="tab" aria-selected="true" aria-controls="statsDashboardSection">Dashboard</button>
+                    <button id="statsViewModulesBtn" type="button" data-stats-view="modules" class="focus-ring rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100" role="tab" aria-selected="false" aria-controls="modulesAdminSection">Modules</button>
+                </div>
+
                 <div id="globalErrorBanner" class="hidden mt-4 flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
                     <span id="globalErrorText">Request failed.</span>
                     <button type="button" id="dismissGlobalError" class="focus-ring text-red-700 underline">Dismiss</button>
@@ -420,7 +456,8 @@
             </div>
         </section>
 
-        <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6" id="kpi-container">
+        <section id="statsDashboardSection" class="space-y-6" role="tabpanel" aria-labelledby="statsViewDashboardBtn">
+            <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" id="kpi-container">
             <article class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                 <p class="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Total actions</p>
                 <h2 class="text-3xl sm:text-4xl font-black text-slate-900" id="totalActions">...</h2>
@@ -433,9 +470,9 @@
                 <p class="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Current range</p>
                 <h2 class="text-2xl sm:text-3xl font-black text-slate-900" id="currentRangeLabel">Today</h2>
             </article>
-        </section>
+            </section>
 
-        <section class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+            <section class="grid grid-cols-1 xl:grid-cols-2 gap-5">
             <article class="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                     <h3 class="text-lg font-bold">User activity</h3>
@@ -515,6 +552,82 @@
                     </div>
                 </div>
             </article>
+            </section>
+        </section>
+
+        <section id="modulesAdminSection" class="hidden" role="tabpanel" aria-labelledby="statsViewModulesBtn">
+            <article class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="border-b border-slate-100 p-5 sm:p-6">
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                            <p class="text-xs font-black uppercase tracking-widest text-blue-600">Schedule modules</p>
+                            <h2 class="mt-1 text-xl font-black text-slate-900">Manual module mappings</h2>
+                            <p class="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+                                Create and maintain discipline-to-module rules used by schedule filters. These rules mirror `/set_module Discipline | Module`.
+                            </p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span id="moduleMappingsStatus" class="text-xs font-semibold text-slate-500" role="status" aria-live="polite">Not loaded</span>
+                            <button id="moduleMappingsRefreshBtn" type="button" class="focus-ring rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100">Refresh</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modules-admin-layout">
+                    <form id="moduleMappingForm" class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div>
+                            <h3 class="text-sm font-black text-slate-900">Create or update</h3>
+                            <p id="moduleMappingFormMode" class="mt-1 text-xs text-slate-500">New mapping</p>
+                        </div>
+                        <label class="block text-xs font-bold uppercase tracking-wide text-slate-500" for="moduleDisciplineInput">
+                            Discipline
+                            <textarea id="moduleDisciplineInput" rows="4" required class="focus-ring mt-1 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm normal-case tracking-normal text-slate-800" placeholder="Военная подготовка"></textarea>
+                        </label>
+                        <label class="block text-xs font-bold uppercase tracking-wide text-slate-500" for="moduleNameInput">
+                            Module
+                            <input id="moduleNameInput" list="moduleNameOptions" required class="focus-ring mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm normal-case tracking-normal text-slate-800" placeholder="Военная кафедра">
+                            <datalist id="moduleNameOptions"></datalist>
+                        </label>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button id="moduleMappingSaveBtn" type="submit" class="focus-ring rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">Save mapping</button>
+                            <button id="moduleMappingResetBtn" type="button" class="focus-ring rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100">Clear</button>
+                        </div>
+                    </form>
+
+                    <div class="space-y-4">
+                        <div class="module-mapping-filter-grid">
+                            <label class="block text-xs font-bold uppercase tracking-wide text-slate-500" for="moduleMappingSearchInput">
+                                Search
+                                <input id="moduleMappingSearchInput" class="focus-ring mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm normal-case tracking-normal text-slate-800" placeholder="Discipline or module">
+                            </label>
+                            <label class="block text-xs font-bold uppercase tracking-wide text-slate-500" for="moduleMappingFilterSelect">
+                                Module filter
+                                <select id="moduleMappingFilterSelect" class="focus-ring mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm normal-case tracking-normal">
+                                    <option value="">All modules</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div class="overflow-auto rounded-2xl border border-slate-200">
+                            <table class="min-w-full text-left text-sm">
+                                <thead class="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
+                                    <tr>
+                                        <th class="px-4 py-3">Discipline</th>
+                                        <th class="px-4 py-3">Module</th>
+                                        <th class="px-4 py-3 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="moduleMappingsTableBody">
+                                    <tr>
+                                        <td colspan="3" class="px-4 py-5 text-sm text-slate-500">Open the Modules tab to load mappings.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p id="moduleMappingsMeta" class="text-xs text-slate-500">-</p>
+                    </div>
+                </div>
+            </article>
         </section>
     </main>
 
@@ -580,8 +693,8 @@
 
     <script src="/js/runtime_config.js?v=2"></script>
     <script src="/js/ui_utils.js?v=1"></script>
-    <script src="/js/navbar.js?v=31"></script>
-    <script src="/js/stats.js?v=17"></script>
+    <script src="/js/navbar.js?v=20260821-7"></script>
+    <script src="/js/stats.js?v=18"></script>
     <script src="/js/stats_ux.js?v=1"></script>
 </body>
 </html>

@@ -4,6 +4,7 @@ const SCHEDULE_SNAPSHOTS_KEY = "mpb_schedule_snapshots";
 const SCHEDULE_ENTITY_TYPES = new Set(['group', 'person', 'auditorium']);
 const SCHEDULE_VIEW_MODES = new Set(['auto', 'table', 'cards', 'compact', 'exams']);
 const SCHEDULE_LESSON_MODES = new Set(['all', 'exams_only']);
+const DEFAULT_SCHEDULE_VIEW_MODE = 'table';
 const MODULE_PRESET_LIMIT = 12;
 const FIXED_TIMES =[
     { start: '08:30', end: '10:00' },
@@ -15,9 +16,15 @@ const FIXED_TIMES =[
     { start: '18:55', end: '20:25' },
     { start: '20:30', end: '22:00' }
 ];
-const TABLE_SLOT_ROW_HEIGHT_PX = 144;
+const TABLE_SLOT_ROW_HEIGHT_PX = 132;
 const TABLE_TIMELINE_VERTICAL_INSET_PX = 6;
 const TABLE_TIMELINE_LANE_GAP_PX = 8;
+const SPECIAL_MODULE_FALLBACKS = [
+    {
+        module: 'Военная кафедра',
+        pattern: /военн[а-яa-z]*(?:\s+подготовк|\s+кафедр)/iu
+    }
+];
 let fixedTimeSlotRangesCache = null;
 
 let fullSchedule =[];
@@ -44,7 +51,7 @@ function createDefaultSchedulePageState() {
     return {
         entity: { type: null, id: null, name: null },
         date: getISODateStr(new Date()),
-        viewMode: 'cards',
+        viewMode: DEFAULT_SCHEDULE_VIEW_MODE,
         selectedModules: [],
         lessonMode: 'all',
         offline: false,
@@ -82,9 +89,53 @@ function normalizeScheduleModules(value) {
     return Array.from(new Set(value.map((module) => String(module).trim()).filter(Boolean)));
 }
 
+function normalizeLessonModuleName(value) {
+    return String(value || '').trim();
+}
+
+function canonicalizeSpecialModuleName(value) {
+    const cleanValue = normalizeLessonModuleName(value);
+    if (!cleanValue) return '';
+    const normalizedValue = cleanValue.replace(/\u0451/g, '\u0435').replace(/\u0401/g, '\u0415');
+    const match = SPECIAL_MODULE_FALLBACKS.find((item) => item.pattern.test(normalizedValue));
+    return match?.module || cleanValue;
+}
+
+function getSpecialLessonModuleFallback(lesson) {
+    const haystack = [
+        lesson?.discipline,
+        lesson?.discipline_full,
+        lesson?.discipline_short,
+        lesson?.kindOfWork,
+        lesson?.group
+    ].map((value) => String(value || '').trim()).filter(Boolean).join(' ');
+    if (!haystack) return '';
+
+    const normalizedHaystack = haystack.replace(/\u0451/g, '\u0435').replace(/\u0401/g, '\u0415');
+    const match = SPECIAL_MODULE_FALLBACKS.find((item) => item.pattern.test(normalizedHaystack));
+    return match?.module || '';
+}
+
+function normalizeScheduleLesson(lesson) {
+    if (!lesson || typeof lesson !== 'object') return lesson;
+    const existingModule = canonicalizeSpecialModuleName(lesson.module);
+    const moduleName = existingModule || getSpecialLessonModuleFallback(lesson);
+    if (!moduleName || lesson.module === moduleName) return lesson;
+    return { ...lesson, module: moduleName };
+}
+
+function buildAvailableModules(apiModules, lessons) {
+    const modules = new Set(normalizeScheduleModules(apiModules).map(canonicalizeSpecialModuleName).filter(Boolean));
+    (Array.isArray(lessons) ? lessons : []).forEach((lesson) => {
+        const moduleName = canonicalizeSpecialModuleName(lesson?.module);
+        if (moduleName) modules.add(moduleName);
+    });
+    return Array.from(modules).sort((left, right) => String(left).localeCompare(String(right), undefined, { sensitivity: 'base' }));
+}
+
 function normalizeScheduleViewMode(value) {
     const mode = String(value || '').trim();
-    return SCHEDULE_VIEW_MODES.has(mode) ? mode : 'cards';
+    return SCHEDULE_VIEW_MODES.has(mode) ? mode : DEFAULT_SCHEDULE_VIEW_MODE;
 }
 
 function normalizeScheduleLessonMode(value) {
@@ -184,7 +235,7 @@ function syncScheduleUrl(mode = 'replace') {
     } else {
         params.delete('modules');
     }
-    if (schedulePageState.viewMode !== 'cards') params.set('view', schedulePageState.viewMode);
+    if (schedulePageState.viewMode !== DEFAULT_SCHEDULE_VIEW_MODE) params.set('view', schedulePageState.viewMode);
     else params.delete('view');
     if (schedulePageState.lessonMode !== 'all') params.set('mode', schedulePageState.lessonMode);
     else params.delete('mode');
@@ -648,6 +699,7 @@ function syncCurrentFavoriteModules() {
 window.setModuleFilterQuery = function(value) {
     moduleFilterQuery = String(value || '');
     renderModuleFilters();
+    requestAnimationFrame(() => window.scheduleResizeDesktopTableViewport?.());
 }
 
 window.selectOnlyModule = function(moduleName) {
@@ -1427,6 +1479,35 @@ function getLessonTimelinePlacement(lesson) {
     };
 }
 
+function getMinimumLessonStartMinutes(lessons) {
+    const starts = (Array.isArray(lessons) ? lessons : [])
+        .map((lesson) => parseTimeToMinutes(lesson?.beginLesson))
+        .filter((minute) => Number.isFinite(minute));
+    return starts.length ? Math.min(...starts) : null;
+}
+
+function getTableInitialScrollTop(lessons) {
+    const minStart = getMinimumLessonStartMinutes(lessons);
+    if (!Number.isFinite(minStart)) return 0;
+    const slotIndex = findFixedSlotIndexForMinute(minStart, 'start');
+    if (slotIndex < 0) return 0;
+    const offsetPx = getFixedSlotOffsetPx(minStart, slotIndex);
+    return Math.max(0, Math.round((slotIndex * TABLE_SLOT_ROW_HEIGHT_PX) + offsetPx));
+}
+
+function getScheduleTableRenderKey(lessons) {
+    const selectedModuleKey = Array.from(selectedModules).sort().join('|');
+    const firstStart = getMinimumLessonStartMinutes(lessons);
+    return [
+        getScheduleEntityKey(currentEntity),
+        getISODateStr(currentWeekStart),
+        schedulePageState.lessonMode,
+        selectedModuleKey,
+        Array.isArray(lessons) ? lessons.length : 0,
+        Number.isFinite(firstStart) ? firstStart : 'empty'
+    ].join('::');
+}
+
 function usesOffSlotTimeLabel(lesson) {
     const begin = String(lesson?.beginLesson || '').trim();
     const end = String(lesson?.endLesson || '').trim();
@@ -1761,8 +1842,8 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
             if (!res.ok) throw new Error('API Error');
             return res.json();
         }));
-        fullSchedule = data.schedule ||[];
-        allAvailableModules = data.available_modules ||[];
+        fullSchedule = (data.schedule || []).map(normalizeScheduleLesson);
+        allAvailableModules = buildAvailableModules(data.available_modules || [], fullSchedule);
         loadedBounds = data.loaded_bounds || {start: "2000-01-01", end: "2099-01-01"};
         sourceUpdatedAt = data.source_updated_at || null;
         window.ScheduleState?.addRecent?.(currentEntity);
@@ -1770,6 +1851,7 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         const previousSnapshot = loadScheduleSnapshots()[snapshotKey];
         scheduleChangeSummary = buildScheduleChangeSummary(previousSnapshot, fullSchedule, sourceUpdatedAt);
         persistScheduleSnapshot(snapshotKey, fullSchedule, sourceUpdatedAt);
+        selectedModules = new Set(Array.from(selectedModules).map(canonicalizeSpecialModuleName).filter(Boolean));
         if (selectedModules.size > 0) {
             const availableSet = new Set(allAvailableModules);
             selectedModules = new Set(Array.from(selectedModules).filter((module) => availableSet.has(module)));
@@ -1831,6 +1913,10 @@ function renderModuleFilters() {
     const quickControls = document.getElementById('moduleQuickControls');
     const selectionStatus = document.getElementById('moduleSelectionStatus');
     if (!container || !section) return;
+    const activeElement = document.activeElement;
+    const shouldRestoreSearchFocus = activeElement?.id === 'moduleSearchInput';
+    const searchSelectionStart = shouldRestoreSearchFocus ? activeElement.selectionStart : null;
+    const searchSelectionEnd = shouldRestoreSearchFocus ? activeElement.selectionEnd : null;
     if (allAvailableModules.length === 0) {
         if (summary) summary.textContent = '';
         if (selectionStatus) selectionStatus.textContent = '';
@@ -1903,7 +1989,7 @@ function renderModuleFilters() {
             <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
                 <label class="relative block">
                     <span class="sr-only">${escapeHtml(t('schedule.modules.search', 'Search modules'))}</span>
-                    <input value="${escapeHtml(moduleFilterQuery)}" oninput="setModuleFilterQuery(this.value)"
+                    <input id="moduleSearchInput" value="${escapeHtml(moduleFilterQuery)}" oninput="setModuleFilterQuery(this.value)"
                         placeholder="${escapeHtml(t('schedule.modules.searchPlaceholder', 'Search modules...'))}"
                         class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
                 </label>
@@ -1942,6 +2028,16 @@ function renderModuleFilters() {
             ${renderModuleGroup('schedule.filters.available', 'Available', available, 'border-blue-100 bg-blue-50/40 dark:border-blue-900/60 dark:bg-blue-950/20')}
         </div>
     `;
+    if (shouldRestoreSearchFocus) {
+        const input = document.getElementById('moduleSearchInput');
+        if (input) {
+            input.focus({ preventScroll: true });
+            const valueLength = input.value.length;
+            const nextStart = Math.min(searchSelectionStart ?? valueLength, valueLength);
+            const nextEnd = Math.min(searchSelectionEnd ?? nextStart, valueLength);
+            input.setSelectionRange(nextStart, nextEnd);
+        }
+    }
 }
 
 // Делаем функции глобальными, чтобы onClick из HTML мог их дергать
@@ -2084,20 +2180,50 @@ function renderDesktopGrid(lessons) {
 
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const weekEnd = getCurrentWeekEnd();
+    const dayCounts = weekDates.map((date) => {
+        const dateStr = getISODateStr(date);
+        return (dayLessonsMap[dateStr] || []).length;
+    });
+    const activeDayCount = dayCounts.filter(Boolean).length;
+    const loadedText = loadedBounds.start && loadedBounds.end
+        ? `${formatUiDate(parseDate(loadedBounds.start), { day: 'numeric', month: 'short' })} - ${formatUiDate(parseDate(loadedBounds.end), { day: 'numeric', month: 'short' })}`
+        : t('schedule.table.loadedUnknown', 'диапазон не загружен');
+    const moduleText = allAvailableModules.length
+        ? `${selectedModules.size}/${allAvailableModules.length}`
+        : t('schedule.table.noModules', 'нет');
+    const tableInitialScrollTop = getTableInitialScrollTop(lessons);
+    const tableRenderKey = getScheduleTableRenderKey(lessons);
 
     let html = `
-    <div class="schedule-table-wrap overflow-hidden relative" style="--schedule-slot-row-height: ${TABLE_SLOT_ROW_HEIGHT_PX}px;">
+    <div class="schedule-table-shell">
+        <div class="schedule-table-summary" role="status">
+            <div class="schedule-table-summary-main">
+                <span class="schedule-table-mode-label">${escapeHtml(t('schedule.view.table', 'Таблица'))}</span>
+                <strong>${escapeHtml(currentEntity?.name || t('schedule.context.none', 'Расписание'))}</strong>
+                <span>${escapeHtml(`${formatUiDate(currentWeekStart, { day: 'numeric', month: 'short' })} - ${formatUiDate(weekEnd, { day: 'numeric', month: 'short' })}`)}</span>
+            </div>
+            <div class="schedule-table-summary-meta">
+                <span>${escapeHtml(t('schedule.table.lessonsCount', '{count} занятий', { count: lessons.length }))}</span>
+                <span>${escapeHtml(t('schedule.table.daysCount', '{count} дней', { count: activeDayCount }))}</span>
+                <span>${escapeHtml(t('schedule.table.modulesCount', 'Модули: {count}', { count: moduleText }))}</span>
+                <span>${escapeHtml(t('schedule.table.loadedRange', 'Загружено: {range}', { range: loadedText }))}</span>
+            </div>
+        </div>
+        <div class="schedule-table-wrap schedule-table-viewport overflow-hidden relative" data-initial-scroll-top="${tableInitialScrollTop}" data-render-key="${escapeHtml(tableRenderKey)}" style="--schedule-slot-row-height: ${TABLE_SLOT_ROW_HEIGHT_PX}px;">
         <table class="schedule-desktop-table w-full table-fixed border-collapse text-left">
             <thead class="schedule-table-head">
                 <tr>
-                    <th class="w-16 sm:w-20 p-3 text-center text-xs font-bold border-r">${escapeHtml(t('schedule.table.time', 'Время'))}</th>`;
-    weekDates.forEach(d => {
+                    <th class="schedule-sticky-corner w-16 sm:w-20 p-3 text-center text-xs font-bold border-r">${escapeHtml(t('schedule.table.time', 'Время'))}</th>`;
+    weekDates.forEach((d, index) => {
         const isToday = isSameDay(d, now);
-        html += `<th class="schedule-day-head p-3 border-r last:border-r-0 ${isToday ? 'is-today' : ''} relative">
+        const count = dayCounts[index];
+        html += `<th class="schedule-day-head schedule-sticky-day p-3 border-r last:border-r-0 ${isToday ? 'is-today' : ''} relative">
             ${isToday ? '<div class="schedule-today-marker absolute top-0 left-0 w-full h-1"></div>' : ''}
-            <div class="flex flex-col items-center gap-0.5">
+            <div class="schedule-day-head-inner">
                 <span class="schedule-day-label text-xs uppercase tracking-widest font-bold">${escapeHtml(formatUiDate(d, {weekday: 'short'}))}</span>
                 <span class="schedule-day-number text-xl font-black">${d.getDate()}</span>
+                <span class="schedule-day-count">${escapeHtml(count ? t('schedule.table.dayLessons', '{count} пар', { count }) : t('schedule.table.dayEmpty', 'нет пар'))}</span>
             </div>
         </th>`;
     });
@@ -2112,7 +2238,7 @@ function renderDesktopGrid(lessons) {
         const isCurrentSlot = (currentMinutes >= slotStartMins && currentMinutes <= slotEndMins);
 
         html += `<tr class="schedule-slot-row border-t">
-            <td class="schedule-time-cell p-2 border-r align-top text-center relative">
+            <td class="schedule-time-cell schedule-sticky-time p-2 border-r align-top text-center relative">
                 <div class="schedule-time-start text-xs font-black ${isCurrentSlot ? 'text-red-500' : ''}">${timeSlot.start}</div>
                 <div class="schedule-time-end text-[10px] font-medium">${timeSlot.end}</div>
                 ${isCurrentSlot ? '<div class="absolute top-1/2 right-[-5px] w-2 h-2 rounded-full bg-red-500 z-20 transform -translate-y-1/2 shadow-[0_0_8px_rgba(239,68,68,0.8)]"></div>' : ''}
@@ -2125,10 +2251,14 @@ function renderDesktopGrid(lessons) {
                 ${isToday && isCurrentSlot ? '<div class="absolute top-1/2 left-0 w-full h-[2px] bg-red-400 z-10 pointer-events-none opacity-50"></div>' : ''}
                 <div class="schedule-slot-surface h-full relative">
                     ${slotLessons.map(({ lesson, placement, lane, laneCount }) => {
-                        const laneWidth = 100 / Math.max(1, laneCount || 1);
+                        const safeLaneCount = Math.max(1, laneCount || 1);
+                        const laneWidth = 100 / safeLaneCount;
                         const leftPercent = lane * laneWidth;
+                        const densityClass = safeLaneCount >= 4
+                            ? 'is-pinched'
+                            : (safeLaneCount >= 3 ? 'is-narrow' : (safeLaneCount >= 2 ? 'is-split' : 'is-single'));
                         return `
-                            <div class="schedule-timeline-card absolute z-20"
+                            <div class="schedule-timeline-card ${densityClass} absolute z-20" data-lane-count="${safeLaneCount}"
                                  style="top:${placement.topPx}px;height:${placement.heightPx}px;left:calc(${leftPercent}% + ${TABLE_TIMELINE_LANE_GAP_PX / 2}px);width:calc(${laneWidth}% - ${TABLE_TIMELINE_LANE_GAP_PX}px);">
                                 ${renderCard(lesson, true)}
                             </div>
@@ -2139,7 +2269,7 @@ function renderDesktopGrid(lessons) {
         });
         html += `</tr>`;
     });
-    html += `</tbody></table></div>`;
+    html += `</tbody></table></div></div>`;
     container.innerHTML = html;
 }
 
@@ -2346,7 +2476,6 @@ function renderCard(l, isDesktop) {
     const discName = getPreferredDisciplineName(l);
     const teacherLabel = getPreferredLecturerName(l.lecturer_title);
     const showLessonActions = areLessonActionsVisible();
-    const useShortNames = areShortDisciplineNamesEnabled();
     const safeKind = escapeHtml(getShortKind(l.kindOfWork));
     const safeModule = escapeHtml(l.module || '');
     const safeDiscipline = escapeHtml(discName || '');
@@ -2356,10 +2485,6 @@ function renderCard(l, isDesktop) {
     const safeLecturerJs = escapeJsString(l.lecturer_title || '');
     const safeTimeRange = escapeHtml(`${l.beginLesson || ''}${l.endLesson ? ` - ${l.endLesson}` : ''}`.trim());
     const showOffSlotTimeLabel = isDesktop && usesOffSlotTimeLabel(l);
-    const titleClampClass = showLessonActions
-        ? (useShortNames ? 'line-clamp-3 min-h-[2.85rem]' : 'line-clamp-3 min-h-[3.3rem]')
-        : (useShortNames ? 'line-clamp-3 min-h-[2.85rem]' : 'line-clamp-4 min-h-[4.1rem]');
-    const metaTextClass = showLessonActions ? 'text-[9px]' : 'text-[10px]';
     const roomTitle = escapeHtml(t('schedule.copy.room', 'Копировать аудиторию'));
     const teacherTitle = escapeHtml(t('schedule.copy.teacher', 'Копировать преподавателя'));
     const actionHtml = showLessonActions
@@ -2376,34 +2501,35 @@ function renderCard(l, isDesktop) {
     if (isDesktop) {
     const safeTeacherLabel = escapeHtml(teacherLabel || '');
     return `
-        <div class="lesson-card ${color.bg} relative p-2.5 sm:p-3 rounded-2xl border transition-transform hover:-translate-y-0.5 hover:shadow-md flex flex-col h-full min-h-[110px]">
-            <div class="mb-1.5 flex items-start justify-between gap-1.5">
-                <div class="lesson-kind min-w-0 flex-1 text-[10px] font-black uppercase tracking-wider truncate" title="${safeKind}">
+        <div class="lesson-card lesson-card--table ${color.bg} relative flex h-full min-h-[96px] flex-col rounded-2xl border transition-transform hover:-translate-y-0.5 hover:shadow-md">
+            <div class="lesson-table-accent" aria-hidden="true"></div>
+            <div class="lesson-table-topline">
+                <div class="lesson-kind lesson-table-kind min-w-0 flex-1 truncate" title="${safeKind}">
                     ${safeKind}
                 </div>
                 ${l.module ? `
-                    <span class="lesson-module shrink-0 max-w-[64px] rounded border px-1.5 py-0.5 text-[8px] font-bold truncate shadow-sm" title="${safeModule}">
+                    <span class="lesson-module lesson-table-module shrink-0 truncate" title="${safeModule}">
                         ${safeModule}
                     </span>` : ''}
             </div>
-            <div class="lesson-title mb-2 shrink-0 overflow-hidden pr-1 font-bold ${useShortNames ? 'text-[13px]' : 'text-[12px]'} leading-[1.22] ${titleClampClass}" title="${safeDiscipline}">
+            <div class="lesson-title lesson-table-title" title="${safeDiscipline}">
                 ${safeDiscipline}
             </div>
             ${showOffSlotTimeLabel ? `
-            <div class="mb-2 inline-flex w-fit items-center gap-1 rounded-full border border-white/15 bg-slate-950/20 px-2 py-1 text-[9px] font-black tracking-[0.18em] text-slate-100/85">
+            <div class="lesson-table-time">
                 <span>${safeTimeRange}</span>
             </div>` : ''}
-            <div class="mt-auto flex flex-col gap-1 ${showLessonActions ? 'pr-9' : ''}">
+            <div class="lesson-table-meta ${showLessonActions ? 'has-actions' : ''}">
                 ${safeAuditorium ? `
-                <div class="lesson-meta flex items-center gap-1 ${metaTextClass} font-medium hover:text-blue-600 cursor-pointer transition-colors"
+                <div class="lesson-meta lesson-table-meta-item cursor-pointer"
                      onclick="copyToClipboard('${safeAuditoriumJs}', event)" title="${roomTitle}">
-                    <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    <svg class="lesson-table-meta-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     <span class="truncate">${safeAuditorium}</span>
                 </div>` : ''}
                 ${teacherLabel ? `
-                <div class="lesson-meta flex items-center gap-1 ${metaTextClass} font-medium hover:text-blue-600 cursor-pointer transition-colors"
+                <div class="lesson-meta lesson-table-meta-item cursor-pointer"
                      onclick="copyToClipboard('${safeLecturerJs}', event)" title="${teacherTitle}">
-                    <svg class="w-3 h-3 shrink-0 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                    <svg class="lesson-table-meta-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
                     <span class="truncate">${safeTeacherLabel}</span>
                 </div>` : ''}
             </div>

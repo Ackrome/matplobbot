@@ -25,7 +25,7 @@ from ..auth import (
     verify_password,
     verify_telegram_authorization,
 )
-from ..config import ADMIN_USER_IDS
+from ..config import ADMIN_USER_IDS, AUTH_PASSWORD_REGISTRATION_ENABLED
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -85,11 +85,20 @@ async def _issue_telegram_account_token(
     response_model=StatusResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Register a website account",
-    description="Creates a password-based website account for Swagger UI and the website login flow.",
+    description=(
+        "Creates a non-admin password-based website account only when "
+        "AUTH_PASSWORD_REGISTRATION_ENABLED is enabled."
+    ),
 )
 async def register(
     user_data: WebAccountCreate, db: AsyncSession = Depends(get_db_session_dependency)
 ):
+    if not AUTH_PASSWORD_REGISTRATION_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Password registration is disabled.",
+        )
+
     result = await db.execute(select(WebAccount).where(WebAccount.username == user_data.username))
     if result.scalar_one_or_none():
         raise HTTPException(

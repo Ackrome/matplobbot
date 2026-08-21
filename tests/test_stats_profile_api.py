@@ -1,5 +1,6 @@
 import os
 import unittest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 FASTAPI_AVAILABLE = True
@@ -99,3 +100,73 @@ class TestStatsProfileAPI(unittest.TestCase):
             params={"sort_order": "sideways"},
         )
         self.assertEqual(response.status_code, 422)
+
+    def test_module_mappings_list_filters_rows(self):
+        rows = [
+            SimpleNamespace(
+                discipline_name="Военная подготовка",
+                module_name="Военная кафедра",
+            ),
+            SimpleNamespace(
+                discipline_name="Семантические технологии",
+                module_name="Машинное обучение",
+            ),
+        ]
+        with patch.object(
+            stats_router,
+            "_fetch_module_mapping_rows",
+            new=AsyncMock(return_value=rows),
+        ):
+            response = self.client.get(
+                "/api/stats/modules",
+                params={"query": "воен", "limit": 1000},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["items"][0]["discipline_name"], "Военная подготовка")
+        self.assertEqual(
+            payload["modules"],
+            ["Военная кафедра", "Машинное обучение"],
+        )
+
+    def test_module_mappings_post_normalizes_payload(self):
+        with patch.object(
+            stats_router,
+            "_upsert_module_mapping",
+            new=AsyncMock(
+                return_value=stats_router.DisciplineModuleMapping(
+                    discipline_name="Военная подготовка",
+                    module_name="Военная кафедра",
+                )
+            ),
+        ) as mocked_upsert:
+            response = self.client.post(
+                "/api/stats/modules",
+                json={
+                    "discipline_name": "  Военная   подготовка  ",
+                    "module_name": " Военная   кафедра ",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["module_name"], "Военная кафедра")
+        mocked_upsert.assert_awaited_once()
+        _, kwargs = mocked_upsert.await_args
+        self.assertEqual(kwargs["discipline_name"], "Военная подготовка")
+        self.assertEqual(kwargs["module_name"], "Военная кафедра")
+
+    def test_module_mappings_delete_returns_not_found(self):
+        with patch.object(
+            stats_router,
+            "_delete_module_mapping",
+            new=AsyncMock(return_value=False),
+        ):
+            response = self.client.delete(
+                "/api/stats/modules",
+                params={"discipline_name": "Unknown discipline"},
+            )
+
+        self.assertEqual(response.status_code, 404)

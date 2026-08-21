@@ -37,6 +37,16 @@ const state = {
     failedRequests: 0,
     lastError: "-",
     isScheduleCacheRefreshing: false,
+    activeStatsView: window.location.hash === "#modules" ? "modules" : "dashboard",
+    moduleMappings: [],
+    moduleMappingModules: [],
+    moduleMappingsTotal: 0,
+    moduleMappingsLoaded: false,
+    moduleMappingsLoading: false,
+    moduleMappingsPendingReload: false,
+    moduleMappingsQuery: "",
+    moduleMappingsModule: "",
+    moduleMappingEditingDiscipline: "",
     apiLatencies: [],
     lastLatencyMs: null,
     chart: null,
@@ -98,7 +108,25 @@ const elements = {
     proxyDiagnosticsSource: document.getElementById("proxyDiagnosticsSource"),
     proxyDiagnosticsTableBody: document.getElementById("proxyDiagnosticsTableBody"),
     proxyDiagnosticsError: document.getElementById("proxyDiagnosticsError"),
+    statsViewButtons: Array.from(document.querySelectorAll("[data-stats-view]")),
+    statsDashboardSection: document.getElementById("statsDashboardSection"),
+    modulesAdminSection: document.getElementById("modulesAdminSection"),
+    moduleMappingsStatus: document.getElementById("moduleMappingsStatus"),
+    moduleMappingsRefreshBtn: document.getElementById("moduleMappingsRefreshBtn"),
+    moduleMappingForm: document.getElementById("moduleMappingForm"),
+    moduleDisciplineInput: document.getElementById("moduleDisciplineInput"),
+    moduleNameInput: document.getElementById("moduleNameInput"),
+    moduleNameOptions: document.getElementById("moduleNameOptions"),
+    moduleMappingFormMode: document.getElementById("moduleMappingFormMode"),
+    moduleMappingSaveBtn: document.getElementById("moduleMappingSaveBtn"),
+    moduleMappingResetBtn: document.getElementById("moduleMappingResetBtn"),
+    moduleMappingSearchInput: document.getElementById("moduleMappingSearchInput"),
+    moduleMappingFilterSelect: document.getElementById("moduleMappingFilterSelect"),
+    moduleMappingsTableBody: document.getElementById("moduleMappingsTableBody"),
+    moduleMappingsMeta: document.getElementById("moduleMappingsMeta"),
 };
+
+let moduleMappingsSearchTimer = 0;
 
 function parseStateFromUrl() {
     const params = new URLSearchParams(window.location.search);
@@ -132,6 +160,11 @@ function parseStateFromUrl() {
     const to = params.get("to");
     if (from) state.from = from;
     if (to) state.to = to;
+
+    const hashView = window.location.hash.replace("#", "");
+    if (["dashboard", "modules"].includes(hashView)) {
+        state.activeStatsView = hashView;
+    }
 }
 
 function syncStateToUrl() {
@@ -148,7 +181,8 @@ function syncStateToUrl() {
     }
 
     const query = params.toString();
-    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}`;
+    const hash = state.activeStatsView === "modules" ? "#modules" : "";
+    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}${hash}`;
     window.history.replaceState({}, "", nextUrl);
 }
 
@@ -562,6 +596,315 @@ function normalizeActivity(list) {
             };
         })
         .filter((item) => item.period);
+}
+
+function normalizePlainText(value) {
+    return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeModuleMapping(item) {
+    return {
+        discipline_name: normalizePlainText(item?.discipline_name),
+        module_name: normalizePlainText(item?.module_name),
+    };
+}
+
+function setModuleMappingsStatus(message, kind = "info") {
+    setBlockStatus(elements.moduleMappingsStatus, message, kind);
+}
+
+function setModuleMappingsLoading(isLoading) {
+    state.moduleMappingsLoading = isLoading;
+
+    if (elements.moduleMappingsRefreshBtn) {
+        elements.moduleMappingsRefreshBtn.disabled = isLoading;
+        elements.moduleMappingsRefreshBtn.textContent = isLoading ? "Refreshing..." : "Refresh";
+    }
+    if (elements.moduleMappingSaveBtn) {
+        elements.moduleMappingSaveBtn.disabled = isLoading;
+    }
+}
+
+function renderModuleMappingFilters() {
+    const modules = [...state.moduleMappingModules].sort((a, b) => a.localeCompare(b));
+
+    if (elements.moduleNameOptions) {
+        elements.moduleNameOptions.innerHTML = modules
+            .map((moduleName) => `<option value="${escapeHtml(moduleName)}"></option>`)
+            .join("");
+    }
+
+    if (!elements.moduleMappingFilterSelect) return;
+
+    const previousValue = state.moduleMappingsModule;
+    elements.moduleMappingFilterSelect.innerHTML = `
+        <option value="">All modules</option>
+        ${modules
+            .map((moduleName) => `<option value="${escapeHtml(moduleName)}">${escapeHtml(moduleName)}</option>`)
+            .join("")}
+    `;
+    elements.moduleMappingFilterSelect.value = previousValue;
+}
+
+function renderModuleMappings() {
+    renderModuleMappingFilters();
+
+    if (elements.moduleMappingSearchInput && elements.moduleMappingSearchInput.value !== state.moduleMappingsQuery) {
+        elements.moduleMappingSearchInput.value = state.moduleMappingsQuery;
+    }
+    if (elements.moduleMappingFilterSelect && elements.moduleMappingFilterSelect.value !== state.moduleMappingsModule) {
+        elements.moduleMappingFilterSelect.value = state.moduleMappingsModule;
+    }
+
+    if (elements.moduleMappingsTableBody) {
+        if (state.moduleMappingsLoading && !state.moduleMappingsLoaded) {
+            elements.moduleMappingsTableBody.innerHTML = Array.from({ length: 4 }, () => `
+                <tr>
+                    <td colspan="3" class="px-4 py-4"><div class="h-4 w-full skeleton rounded"></div></td>
+                </tr>
+            `).join("");
+        } else if (state.moduleMappings.length === 0) {
+            const message = state.moduleMappingsLoaded
+                ? "No manual mappings match current filters."
+                : "Open the Modules tab to load mappings.";
+            elements.moduleMappingsTableBody.innerHTML = `
+                <tr>
+                    <td colspan="3" class="px-4 py-5 text-sm text-slate-500">${message}</td>
+                </tr>
+            `;
+        } else {
+            elements.moduleMappingsTableBody.innerHTML = state.moduleMappings
+                .map((mapping, index) => `
+                    <tr class="border-b border-slate-100 align-top last:border-b-0 hover:bg-slate-50">
+                        <td class="px-4 py-3">
+                            <div class="max-w-2xl font-semibold leading-5 text-slate-900">${escapeHtml(mapping.discipline_name)}</div>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="inline-flex max-w-xs items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
+                                ${escapeHtml(mapping.module_name)}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="flex justify-end gap-2">
+                                <button type="button" data-module-action="edit" data-index="${index}" class="focus-ring rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100">Edit</button>
+                                <button type="button" data-module-action="delete" data-index="${index}" class="focus-ring rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-700 hover:bg-red-100">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                `)
+                .join("");
+        }
+    }
+
+    if (elements.moduleMappingsMeta) {
+        const loadedCount = state.moduleMappings.length;
+        if (!state.moduleMappingsLoaded) {
+            elements.moduleMappingsMeta.textContent = "Mappings are loaded only for admins.";
+        } else if (loadedCount < state.moduleMappingsTotal) {
+            elements.moduleMappingsMeta.textContent = `Showing ${loadedCount} of ${state.moduleMappingsTotal} matching mappings. Narrow the search to find older rows.`;
+        } else {
+            elements.moduleMappingsMeta.textContent = `${loadedCount} mapping${loadedCount === 1 ? "" : "s"} loaded.`;
+        }
+    }
+}
+
+async function loadModuleMappings({ silent = false } = {}) {
+    if (state.moduleMappingsLoading) {
+        state.moduleMappingsPendingReload = true;
+        return;
+    }
+
+    const searchValue = elements.moduleMappingSearchInput
+        ? elements.moduleMappingSearchInput.value
+        : state.moduleMappingsQuery;
+    const moduleFilterValue = elements.moduleMappingFilterSelect
+        ? elements.moduleMappingFilterSelect.value
+        : state.moduleMappingsModule;
+    state.moduleMappingsQuery = normalizePlainText(searchValue);
+    state.moduleMappingsModule = normalizePlainText(moduleFilterValue);
+
+    if (!silent) {
+        setModuleMappingsStatus("Loading mappings...", "info");
+    }
+    setModuleMappingsLoading(true);
+    renderModuleMappings();
+
+    const params = new URLSearchParams({ limit: "1000" });
+    if (state.moduleMappingsQuery) params.set("query", state.moduleMappingsQuery);
+    if (state.moduleMappingsModule) params.set("module_name", state.moduleMappingsModule);
+
+    try {
+        const payload = await fetchWithAuth(`/stats/modules?${params.toString()}`);
+        state.moduleMappings = Array.isArray(payload?.items)
+            ? payload.items.map(normalizeModuleMapping).filter((mapping) => mapping.discipline_name && mapping.module_name)
+            : [];
+        state.moduleMappingModules = Array.isArray(payload?.modules)
+            ? payload.modules.map(normalizePlainText).filter(Boolean)
+            : [];
+        state.moduleMappingsTotal = Number(payload?.total) || state.moduleMappings.length;
+        state.moduleMappingsLoaded = true;
+        setModuleMappingsStatus(`Loaded ${state.moduleMappingsTotal} mapping${state.moduleMappingsTotal === 1 ? "" : "s"}`, "ok");
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Module mappings request failed";
+        registerBackgroundFailure(message);
+        state.moduleMappingsLoaded = true;
+        setModuleMappingsStatus("Failed to load mappings", "error");
+        showToast("error", `Module mappings failed: ${message}`);
+    } finally {
+        setModuleMappingsLoading(false);
+        renderModuleMappings();
+        if (state.moduleMappingsPendingReload) {
+            state.moduleMappingsPendingReload = false;
+            void loadModuleMappings({ silent: true });
+        }
+    }
+}
+
+function queueModuleMappingsReload() {
+    window.clearTimeout(moduleMappingsSearchTimer);
+    moduleMappingsSearchTimer = window.setTimeout(() => {
+        void loadModuleMappings({ silent: true });
+    }, 180);
+}
+
+function setStatsView(view, { updateUrl = true, load = true } = {}) {
+    const nextView = view === "modules" ? "modules" : "dashboard";
+    state.activeStatsView = nextView;
+
+    elements.statsDashboardSection?.classList.toggle("hidden", nextView !== "dashboard");
+    elements.modulesAdminSection?.classList.toggle("hidden", nextView !== "modules");
+
+    elements.statsViewButtons.forEach((button) => {
+        const selected = button.dataset.statsView === nextView;
+        button.setAttribute("aria-selected", selected ? "true" : "false");
+        button.className = selected
+            ? "focus-ring rounded-xl border border-slate-900 bg-slate-900 px-3 py-2 text-sm font-bold text-white"
+            : "focus-ring rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100";
+    });
+
+    if (updateUrl) {
+        syncStateToUrl();
+    }
+
+    if (nextView === "modules" && load && !state.moduleMappingsLoaded) {
+        void loadModuleMappings({ silent: false });
+    }
+}
+
+function resetModuleMappingForm() {
+    state.moduleMappingEditingDiscipline = "";
+    if (elements.moduleDisciplineInput) elements.moduleDisciplineInput.value = "";
+    if (elements.moduleNameInput) elements.moduleNameInput.value = "";
+    if (elements.moduleMappingFormMode) {
+        elements.moduleMappingFormMode.textContent = "New mapping";
+    }
+    if (elements.moduleMappingSaveBtn) {
+        elements.moduleMappingSaveBtn.textContent = "Save mapping";
+    }
+}
+
+function editModuleMapping(index) {
+    const mapping = state.moduleMappings[index];
+    if (!mapping) return;
+
+    state.moduleMappingEditingDiscipline = mapping.discipline_name;
+    if (elements.moduleDisciplineInput) {
+        elements.moduleDisciplineInput.value = mapping.discipline_name;
+        elements.moduleDisciplineInput.focus();
+    }
+    if (elements.moduleNameInput) {
+        elements.moduleNameInput.value = mapping.module_name;
+    }
+    if (elements.moduleMappingFormMode) {
+        elements.moduleMappingFormMode.textContent = `Editing: ${mapping.discipline_name}`;
+    }
+    if (elements.moduleMappingSaveBtn) {
+        elements.moduleMappingSaveBtn.textContent = "Save changes";
+    }
+}
+
+async function deleteModuleMappingByDiscipline(
+    disciplineName,
+    { confirmDelete = true, reload = true, notify = true } = {}
+) {
+    const discipline = normalizePlainText(disciplineName);
+    if (!discipline) return false;
+    if (confirmDelete && !window.confirm(`Delete mapping for "${discipline}"?`)) {
+        return false;
+    }
+
+    try {
+        await fetchWithAuth(`/stats/modules?discipline_name=${encodeURIComponent(discipline)}`, {
+            method: "DELETE",
+        });
+        if (notify) {
+            showToast("success", "Mapping deleted");
+        }
+        if (state.moduleMappingEditingDiscipline === discipline) {
+            resetModuleMappingForm();
+        }
+        if (reload) {
+            await loadModuleMappings({ silent: true });
+        }
+        return true;
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Delete failed";
+        registerBackgroundFailure(message);
+        showToast("error", `Delete failed: ${message}`);
+        return false;
+    }
+}
+
+async function saveModuleMapping(event) {
+    event.preventDefault();
+
+    const disciplineName = normalizePlainText(elements.moduleDisciplineInput?.value);
+    const moduleName = normalizePlainText(elements.moduleNameInput?.value);
+    if (!disciplineName || !moduleName) {
+        showToast("warning", "Fill both discipline and module");
+        return;
+    }
+
+    const previousDiscipline = state.moduleMappingEditingDiscipline;
+    setModuleMappingsLoading(true);
+    setModuleMappingsStatus("Saving mapping...", "info");
+
+    try {
+        const saved = await fetchWithAuth("/stats/modules", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                discipline_name: disciplineName,
+                module_name: moduleName,
+            }),
+        });
+
+        if (previousDiscipline && previousDiscipline !== disciplineName) {
+            const deletedPrevious = await deleteModuleMappingByDiscipline(previousDiscipline, {
+                confirmDelete: false,
+                reload: false,
+                notify: false,
+            });
+            if (!deletedPrevious) {
+                showToast("warning", "Saved new mapping, but old discipline name was not removed.");
+            }
+        }
+
+        resetModuleMappingForm();
+        setModuleMappingsLoading(false);
+        await loadModuleMappings({ silent: true });
+        const savedMapping = normalizeModuleMapping(saved);
+        showToast("success", `Saved: ${savedMapping.discipline_name || disciplineName}`);
+        setModuleMappingsStatus("Mapping saved", "ok");
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Save failed";
+        registerBackgroundFailure(message);
+        setModuleMappingsStatus("Save failed", "error");
+        showToast("error", `Save failed: ${message}`);
+    } finally {
+        setModuleMappingsLoading(false);
+        renderModuleMappings();
+    }
 }
 
 function getRangeBounds() {
@@ -1138,7 +1481,9 @@ function connectWebSocket() {
         state.wsConnected = true;
         state.wsBackoffMs = 1000;
         updateDashboardHealthState();
-        showToast("success", "Live stats connected");
+        if (state.activeStatsView === "dashboard") {
+            showToast("success", "Live stats connected");
+        }
     });
 
     socket.addEventListener("message", (event) => {
@@ -1154,7 +1499,9 @@ function connectWebSocket() {
             showGlobalError(`Live data error: ${message}`);
             setRetryButtonsVisible(true);
             setConnectionState("warning", "Live payload warning");
-            showToast("warning", "Live data issue. Retrying... ");
+            if (state.activeStatsView === "dashboard") {
+                showToast("warning", "Live data issue. Retrying... ");
+            }
         }
     });
 
@@ -1164,7 +1511,9 @@ function connectWebSocket() {
         state.wsConnected = false;
         setConnectionState("offline", "Disconnected");
         setRetryButtonsVisible(true);
-        showToast("warning", "Live connection lost. Reconnecting...");
+        if (state.activeStatsView === "dashboard") {
+            showToast("warning", "Live connection lost. Reconnecting...");
+        }
         scheduleWsReconnect();
     });
 
@@ -1303,6 +1652,53 @@ function wireEvents() {
         elements.diagnosticsPanel?.classList.toggle("hidden");
     });
 
+    elements.statsViewButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            setStatsView(button.dataset.statsView);
+        });
+    });
+
+    elements.moduleMappingsRefreshBtn?.addEventListener("click", () => {
+        void loadModuleMappings({ silent: false });
+    });
+
+    elements.moduleMappingForm?.addEventListener("submit", saveModuleMapping);
+    elements.moduleMappingResetBtn?.addEventListener("click", resetModuleMappingForm);
+
+    elements.moduleMappingSearchInput?.addEventListener("input", (event) => {
+        state.moduleMappingsQuery = event.target.value;
+        queueModuleMappingsReload();
+    });
+
+    elements.moduleMappingFilterSelect?.addEventListener("change", (event) => {
+        state.moduleMappingsModule = event.target.value;
+        void loadModuleMappings({ silent: true });
+    });
+
+    elements.moduleMappingsTableBody?.addEventListener("click", (event) => {
+        const target = event.target instanceof HTMLElement
+            ? event.target.closest("[data-module-action]")
+            : null;
+        if (!(target instanceof HTMLElement)) return;
+
+        const index = Number(target.getAttribute("data-index"));
+        if (!Number.isInteger(index)) return;
+        const action = target.getAttribute("data-module-action");
+        if (action === "edit") {
+            editModuleMapping(index);
+        } else if (action === "delete") {
+            const mapping = state.moduleMappings[index];
+            if (mapping) {
+                void deleteModuleMappingByDiscipline(mapping.discipline_name);
+            }
+        }
+    });
+
+    window.addEventListener("hashchange", () => {
+        const hashView = window.location.hash.replace("#", "");
+        setStatsView(hashView === "modules" ? "modules" : "dashboard", { updateUrl: false });
+    });
+
     window.addEventListener("mpb-auth-ready", (event) => {
         setScheduleCacheRefreshVisible(event.detail?.user?.role === "admin");
     });
@@ -1325,6 +1721,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     parseStateFromUrl();
     applyInitialControls();
     wireEvents();
+    setStatsView(state.activeStatsView, { updateUrl: false });
 
     setLoading(true);
     setConnectionState("connecting", "Connecting...");

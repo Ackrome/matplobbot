@@ -76,6 +76,10 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # --- Admin Panel Auth ---
 STATS_USER = os.getenv("STATS_USER", "admin")
 STATS_PASS = os.getenv("STATS_PASS", "admin")
+AUTH_PASSWORD_REGISTRATION_ENABLED = _read_bool_env(
+    "AUTH_PASSWORD_REGISTRATION_ENABLED",
+    False,
+)
 
 
 def _parse_admin_user_ids() -> set[int]:

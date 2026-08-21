@@ -405,7 +405,9 @@ Pages and scripts:
 
 What it does:
 
-- Supports password login/register.
+- Supports password login for already issued accounts.
+- Disables public password registration by default; `POST /api/auth/register` returns 403 unless `AUTH_PASSWORD_REGISTRATION_ENABLED=true`.
+- When password registration is explicitly enabled for a controlled environment, it creates only `role="user"` accounts, never admin accounts.
 - Supports Telegram auth handoff.
 - Supports Telegram Mini App `initData` auth exchange for in-Telegram launches.
 - Stores bearer token client-side for API calls.
@@ -416,10 +418,10 @@ What it does:
 How to use:
 
 1. Open `/login`.
-2. Open `/register` to create an account when needed.
+2. Sign in with Telegram for a normal web session, or use an already issued admin username/password.
 3. Use the navbar `EN/RU` switch to change auth page language.
-4. Sign in with Telegram or username/password.
-5. After login, navigate to schedule/studio/stats by role.
+4. After login, navigate to schedule/studio/stats by role.
+5. Enable `AUTH_PASSWORD_REGISTRATION_ENABLED=true` only for controlled development or migration scenarios, then disable it again.
 
 ### Telegram Mini Apps
 
@@ -471,7 +473,7 @@ What it does:
 - Pre-caches the main static pages, shared scripts/styles, icons, Schedule assets, Studio assets, and offline fallback.
 - Uses network-first navigation so fresh pages win, then cached pages/offline fallback are used when the network is unavailable.
 - Avoids intercepting same-origin `/api/*` requests so authenticated API calls are not cached by the service worker.
-- Schedule frontend asset URLs use `?v=20260821-3`, and the service worker cache is `mpb-site-v21`; bump both when changing cached Schedule scripts so installed/PWA clients do not keep stale button behavior.
+- Schedule frontend asset URLs use `?v=20260821-6`, and the service worker cache is `mpb-site-v25`; bump both when changing cached Schedule scripts or shared cached auth/navbar pages so installed/PWA clients do not keep stale behavior.
 
 How to use: (or not use)
 
@@ -577,6 +579,8 @@ What it does:
 - Keeps the three global display toggles (`Short names`, `Full lecturer name`, `Actions`) visible directly under the toolbar instead of burying them in a separate settings block.
 - Keeps `Changes`, `Favorite`, and `Copy link` as a compact utility strip next to the view switcher instead of three large text buttons.
 - Desktop timetable grid + mobile card view.
+- On wide screens, `Table` is now the default Schedule view; URLs omit `view=table` because table is the canonical desktop mode.
+- Desktop `Table` has a sticky summary bar, sticky day headers, a high-priority sticky time column, internal horizontal/vertical scrolling, per-day lesson counts, and compact density-aware timeline cards modeled after the Telegram output hierarchy: kind/module first, discipline as the primary text, room and lecturer as secondary metadata.
 - Lesson cards include a systematic quick-action strip:
 - copy room
 - open lecturer schedule
@@ -592,7 +596,7 @@ What it does:
 - `Exams` for an exam-focused feed with exam filtering enabled
 - Filters and toggles:
 - module filters
-- module search and selected-module counter in the filter header
+- module search and selected-module counter in the filter header; the search field keeps focus while the module list rerenders
 - schedule module presets saved per schedule entity
 - calendar presets can reopen a different schedule entity, lesson mode, and module selection directly on `/schedule`
 - favorite schedules remain lightweight bookmarks for fast reopening from search/local history; they still remember the selected module set when saved from the currently opened schedule
@@ -616,6 +620,9 @@ What it does:
 - Highlights exam-like lessons, including `Семинар+зачет` and `Экзамены`, with the dedicated exam color instead of the regular seminar color.
 - Treats `Консультации перед экзаменом` as a consultation, not as a mislabeled exam: the page gives it its own consultation badge/color, but still keeps it in `Exams` / `exams-only` views because it is exam-related.
 - In desktop `Table` view, lessons whose real begin/end time from the university API no longer fits a single hardcoded slot are rendered proportionally inside the timetable grid instead of disappearing. The card starts and ends inside the matching rows according to the spent fraction of time, and off-slot items get an explicit compact time badge inside the card.
+- Module filters start collapsed, but once opened they stay open while toggling modules or typing in module search, so users can select several modules without reopening the panel.
+- Site-side schedule normalization treats `Военная подготовка` lessons as the selectable `Военная кафедра` module when the university API provides them as regular lessons without `module`, and canonicalizes older military-module labels to that same website label.
+- Desktop `Table` automatically scrolls its internal viewport to the earliest visible lesson start time after each render, and the table viewport is sized to the remaining browser height to avoid dead space below the grid.
 - Persists preference state locally and in account preferences when available.
 - Frontend schedule code is being split into focused helper modules: `schedule_state.js`, `schedule_api.js`, `schedule_filters.js`, and `schedule_render.js`.
 
@@ -630,7 +637,7 @@ How to use:
 7. Use favorites in search/local history when you want pinned entities that reopen fast without switching calendar presets.
 8. Pick another non-favorite schedule from search to reset the module filter to all modules available for that schedule.
 9. Use `Cards`, `Compact`, `Table`, or `Exams` to choose display density. The choice is saved and reflected in the URL; `Table` is treated as a desktop mode and automatically falls back to cards on phones.
-10. In `Table`, read long or off-slot exams by their vertical span inside the grid: the card position shows where the event starts and ends relative to the standard rows, and the compact time chip shows the exact real time when it does not align to the default slot boundaries.
+10. In `Table`, read long or off-slot exams by their vertical span inside the grid: the card position shows where the event starts and ends relative to the standard rows, and the compact time chip shows the exact real time when it does not align to the default slot boundaries. On open or after module filtering, the internal table scroll starts at the first visible lesson time for the current week.
 11. Turn on `Actions` if you want quick actions in timetable cells. In desktop `Table`, each cell shows a compact action launcher that opens the room/teacher/calendar/module menu above the card without hiding the lesson title.
 12. Open the offline drawer to see cached schedules and refresh the current schedule cache. Admin users can also refresh the selected entity's whole semester cache from this drawer; non-admin users do not see that action. It opens above the timetable as an overlay, not as an expanding layout block.
 
@@ -838,7 +845,7 @@ Router:
 
 Endpoints:
 
-- `POST /api/auth/register`
+- `POST /api/auth/register` (disabled by default; controlled by `AUTH_PASSWORD_REGISTRATION_ENABLED`)
 - `POST /api/auth/login`
 - `POST /api/auth/telegram`
 - `POST /api/auth/telegram/webapp`
@@ -1285,6 +1292,31 @@ How to use:
 
 1. Check `GET /api/schedule/fallback_counters` as admin.
 2. Correlate spikes in fallback/no-cache with upstream incidents.
+
+### Stats Manual Module Mappings
+
+Source:
+
+- `fastapi_stats_app/routers/stats_router.py`
+- `shared_lib/schemas.py`
+- `main_site_frontend/stats.html`
+- `main_site_frontend/js/stats.js`
+
+What it does:
+
+- Adds an admin-only `Modules` tab on `/stats`.
+- Lists manual `discipline_name -> module_name` mappings from `discipline_modules`.
+- Lets admins create, update, search, filter, and delete mappings from the website.
+- Uses the same mapping table as the Telegram `/set_module Discipline | Module` command, so schedule module filters consume one shared source of truth.
+- Keeps the selected tab in the URL with `/stats#modules`.
+
+How to use:
+
+1. Sign in as an admin and open `/stats#modules`.
+2. Enter the full discipline name exactly as it appears in the schedule.
+3. Enter or pick a module name such as `Военная кафедра`.
+4. Save the mapping, then refresh the schedule page if it already has loaded module filters.
+5. Use Edit for typo fixes and Delete only when a discipline should no longer be grouped into a manual module.
 
 ### CI, Deploy, And Wiki Sync
 

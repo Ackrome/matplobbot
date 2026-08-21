@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from sqlalchemy import text
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared_lib.database import (
@@ -27,12 +27,17 @@ from shared_lib.database import (
     log_user_action,
 )
 from shared_lib.egress import get_telegram_proxy_url
+from shared_lib.models import DisciplineModule
 from shared_lib.redis_client import redis_client
 from shared_lib.request_context import generate_correlation_id, get_correlation_id
 from shared_lib.schemas import (
     ActionUsersResponse,
     ActivitySeriesEntry,
     CorrelationStatusResponse,
+    DisciplineModuleDeleteResponse,
+    DisciplineModuleListResponse,
+    DisciplineModuleMapping,
+    DisciplineModuleUpsertRequest,
     ExportActionsResponse,
     HealthStatusResponse,
     LeaderboardEntry,
@@ -457,6 +462,155 @@ async def health_check(db: AsyncSession = Depends(get_db_session_dependency)) ->
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"status": "error", "database": "disconnected", "reason": str(e)},
         ) from e
+
+
+def _normalize_module_mapping_text(value: str, field_name: str) -> str:
+    normalized = " ".join(str(value or "").split())
+    if not normalized:
+        raise HTTPException(status_code=400, detail=f"{field_name} cannot be empty.")
+    if len(normalized) > 500:
+        raise HTTPException(status_code=400, detail=f"{field_name} is too long.")
+    return normalized
+
+
+def _module_mapping_to_schema(row: DisciplineModule) -> DisciplineModuleMapping:
+    return DisciplineModuleMapping(
+        discipline_name=row.discipline_name,
+        module_name=row.module_name,
+    )
+
+
+async def _fetch_module_mapping_rows(db: AsyncSession) -> list[DisciplineModule]:
+    result = await db.execute(
+        select(DisciplineModule).order_by(
+            DisciplineModule.module_name.asc(),
+            DisciplineModule.discipline_name.asc(),
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def _upsert_module_mapping(
+    db: AsyncSession,
+    *,
+    discipline_name: str,
+    module_name: str,
+) -> DisciplineModuleMapping:
+    existing_result = await db.execute(
+        select(DisciplineModule).where(DisciplineModule.discipline_name == discipline_name)
+    )
+    mapping = existing_result.scalar_one_or_none()
+    if mapping:
+        mapping.module_name = module_name
+    else:
+        mapping = DisciplineModule(discipline_name=discipline_name, module_name=module_name)
+        db.add(mapping)
+    await db.commit()
+    await db.refresh(mapping)
+    return _module_mapping_to_schema(mapping)
+
+
+async def _delete_module_mapping(db: AsyncSession, discipline_name: str) -> bool:
+    result = await db.execute(
+        delete(DisciplineModule).where(DisciplineModule.discipline_name == discipline_name)
+    )
+    await db.commit()
+    return bool(result.rowcount)
+
+
+@router.get(
+    "/modules",
+    response_model=DisciplineModuleListResponse,
+    summary="List manual schedule module mappings",
+    description=(
+        "Lists admin-defined discipline-to-module mappings used by schedule filtering. "
+        "These mappings are the website equivalent of the Telegram /set_module command."
+    ),
+)
+async def list_module_mappings(
+    query: str = Query("", max_length=200, description="Search in discipline or module name."),
+    module_name: str = Query("", max_length=200, description="Optional exact module filter."),
+    limit: int = Query(250, ge=1, le=1000, description="Maximum rows returned."),
+    current_user: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db_session_dependency),
+) -> DisciplineModuleListResponse:
+    del current_user
+    rows = await _fetch_module_mapping_rows(db)
+    unique_modules = sorted({row.module_name for row in rows if row.module_name})
+
+    normalized_query = query.strip().lower()
+    normalized_module = module_name.strip().lower()
+    filtered_rows = rows
+    if normalized_module:
+        filtered_rows = [
+            row for row in filtered_rows if row.module_name.lower() == normalized_module
+        ]
+    if normalized_query:
+        filtered_rows = [
+            row
+            for row in filtered_rows
+            if normalized_query in row.discipline_name.lower()
+            or normalized_query in row.module_name.lower()
+        ]
+
+    return DisciplineModuleListResponse(
+        items=[_module_mapping_to_schema(row) for row in filtered_rows[:limit]],
+        modules=unique_modules,
+        total=len(filtered_rows),
+    )
+
+
+@router.post(
+    "/modules",
+    response_model=DisciplineModuleMapping,
+    summary="Create or update a manual schedule module mapping",
+    description="Creates or updates a discipline-to-module mapping used by schedule filtering.",
+)
+async def upsert_module_mapping(
+    payload: DisciplineModuleUpsertRequest,
+    current_user: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db_session_dependency),
+) -> DisciplineModuleMapping:
+    discipline_name = _normalize_module_mapping_text(payload.discipline_name, "discipline_name")
+    module_name = _normalize_module_mapping_text(payload.module_name, "module_name")
+    mapping = await _upsert_module_mapping(
+        db,
+        discipline_name=discipline_name,
+        module_name=module_name,
+    )
+    logger.info(
+        "stats_module_mapping_upsert admin_id=%s discipline=%r module=%r",
+        _resolve_admin_id(current_user),
+        discipline_name,
+        module_name,
+    )
+    return mapping
+
+
+@router.delete(
+    "/modules",
+    response_model=DisciplineModuleDeleteResponse,
+    summary="Delete a manual schedule module mapping",
+    description="Deletes a discipline-to-module mapping by exact discipline name.",
+)
+async def delete_module_mapping(
+    discipline_name: str = Query(..., min_length=1, max_length=500),
+    current_user: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db_session_dependency),
+) -> DisciplineModuleDeleteResponse:
+    normalized_discipline = _normalize_module_mapping_text(discipline_name, "discipline_name")
+    deleted = await _delete_module_mapping(db, normalized_discipline)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Module mapping was not found.")
+    logger.info(
+        "stats_module_mapping_delete admin_id=%s discipline=%r",
+        _resolve_admin_id(current_user),
+        normalized_discipline,
+    )
+    return DisciplineModuleDeleteResponse(
+        discipline_name=normalized_discipline,
+        deleted=True,
+    )
 
 
 @router.get(
