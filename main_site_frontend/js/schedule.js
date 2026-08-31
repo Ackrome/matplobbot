@@ -1,6 +1,7 @@
 const API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : "/api";
 const STORAGE_KEY = "mpb_user_preferences";
 const SCHEDULE_SNAPSHOTS_KEY = "mpb_schedule_snapshots";
+const SCHEDULE_DAY_EXPANSION_STORAGE_KEY = "mpb_schedule_day_expansion";
 const SCHEDULE_ENTITY_TYPES = new Set(['group', 'person', 'auditorium']);
 const SCHEDULE_VIEW_MODES = new Set(['auto', 'table', 'cards', 'compact', 'exams']);
 const SCHEDULE_LESSON_MODES = new Set(['all', 'exams_only']);
@@ -76,6 +77,103 @@ function getScheduleEntityKey(entity) {
     const normalized = normalizeScheduleEntity(entity);
     return normalized.type && normalized.id ? `${normalized.type}:${normalized.id}` : '';
 }
+
+function getScheduleDayExpansionScope() {
+    const entityKey = getScheduleEntityKey(currentEntity) || 'unknown';
+    const weekKey = getISODateStr(currentWeekStart);
+    const lessonMode = normalizeScheduleLessonMode(schedulePageState?.lessonMode);
+    return `${entityKey}|${weekKey}|${lessonMode}`;
+}
+
+function readScheduleDayExpansionState() {
+    try {
+        const state = JSON.parse(localStorage.getItem(SCHEDULE_DAY_EXPANSION_STORAGE_KEY) || '{}');
+        return state && typeof state === 'object' && !Array.isArray(state) ? state : {};
+    } catch {
+        return {};
+    }
+}
+
+function writeScheduleDayExpansionState(state) {
+    try {
+        localStorage.setItem(SCHEDULE_DAY_EXPANSION_STORAGE_KEY, JSON.stringify(state));
+    } catch {
+        // The schedule stays usable when storage is unavailable or full.
+    }
+}
+
+function getDefaultExpandedScheduleDay(sortedDates) {
+    if (!sortedDates.length) return '';
+    const requestedDate = normalizeScheduleDate(schedulePageState?.date) || getISODateStr(currentWeekStart);
+    return sortedDates.find((dateStr) => dateStr >= requestedDate) || sortedDates[0];
+}
+
+function formatScheduleDayLessonCount(count) {
+    const normalizedCount = Number.isFinite(Number(count)) ? Number(count) : 0;
+    const pluralForm = new Intl.PluralRules(getUiLocale()).select(normalizedCount);
+    const fallbackByLanguage = getUiLanguage() === 'ru'
+        ? {
+            one: '{count} занятие',
+            few: '{count} занятия',
+            many: '{count} занятий',
+            other: '{count} занятия'
+        }
+        : {
+            one: '{count} class',
+            other: '{count} classes'
+        };
+    const fallback = fallbackByLanguage[pluralForm] || fallbackByLanguage.other;
+    return t(`schedule.day.lessonsCount.${pluralForm}`, fallback, { count: normalizedCount });
+}
+
+function isScheduleDayExpanded(dateStr, sortedDates) {
+    const scopeState = readScheduleDayExpansionState()[getScheduleDayExpansionScope()];
+    if (scopeState && Object.prototype.hasOwnProperty.call(scopeState, dateStr)) {
+        return Boolean(scopeState[dateStr]);
+    }
+    return dateStr === getDefaultExpandedScheduleDay(sortedDates);
+}
+
+function updateScheduleDayExpansionUi(section, expanded) {
+    const button = section?.querySelector('[data-schedule-day-toggle]');
+    const lessons = section?.querySelector('[data-schedule-day-lessons]');
+    if (!button || !lessons) return;
+
+    const dayName = button.dataset.dayName || '';
+    const label = expanded
+        ? t('schedule.day.collapse', 'Collapse {day}', { day: dayName })
+        : t('schedule.day.expand', 'Expand {day}', { day: dayName });
+    button.setAttribute('aria-expanded', String(expanded));
+    button.setAttribute('aria-label', label);
+    button.title = label;
+    lessons.hidden = !expanded;
+    section.classList.toggle('is-collapsed', !expanded);
+}
+
+window.toggleScheduleDay = function(dateStr) {
+    const safeDate = normalizeScheduleDate(dateStr);
+    if (!safeDate) return;
+
+    const section = document.querySelector(`[data-schedule-day="${safeDate}"]`);
+    const button = section?.querySelector('[data-schedule-day-toggle]');
+    if (!section || !button) return;
+
+    const expanded = button.getAttribute('aria-expanded') !== 'true';
+    const state = readScheduleDayExpansionState();
+    const scope = getScheduleDayExpansionScope();
+    state[scope] = { ...(state[scope] || {}), [safeDate]: expanded };
+    writeScheduleDayExpansionState(state);
+    updateScheduleDayExpansionUi(section, expanded);
+};
+
+document.addEventListener('click', (event) => {
+    const button = event.target instanceof Element
+        ? event.target.closest('[data-schedule-day-toggle]')
+        : null;
+    if (!button) return;
+    event.preventDefault();
+    window.toggleScheduleDay(button.dataset.scheduleDay);
+});
 
 function normalizeScheduleDate(value) {
     const raw = String(value || '').trim();
@@ -2292,17 +2390,32 @@ function renderMobileFeed(lessons) {
         const isToday = isSameDay(d, new Date());
         const dayTitle = formatUiDateCapitalized(d, {weekday: 'long'});
         const dayDate = formatUiDate(d, {day: 'numeric', month: 'long'});
+        const dayName = `${dayTitle}, ${dayDate}`;
+        const dayLessons = byDate[dateStr].sort((a, b) => a.beginLesson.localeCompare(b.beginLesson));
+        const isExpanded = isScheduleDayExpanded(dateStr, sortedDates);
+        const dayLessonsId = `schedule-day-lessons-${dateStr}`;
+        const toggleLabel = isExpanded
+            ? t('schedule.day.collapse', 'Collapse {day}', { day: dayName })
+            : t('schedule.day.expand', 'Expand {day}', { day: dayName });
         html += `
-        <section class="schedule-day-section relative">
-            <div class="schedule-day-header ${isToday ? 'schedule-day-header--today' : ''}">
+        <section class="schedule-day-section relative ${isExpanded ? '' : 'is-collapsed'}" data-schedule-day="${dateStr}">
+            <button type="button" class="schedule-day-header ${isToday ? 'schedule-day-header--today' : ''}"
+                    data-schedule-day-toggle data-schedule-day="${dateStr}" data-day-name="${escapeHtml(dayName)}"
+                    aria-controls="${dayLessonsId}" aria-expanded="${isExpanded}" aria-label="${escapeHtml(toggleLabel)}" title="${escapeHtml(toggleLabel)}">
                 <div>
                     <div class="schedule-day-header-label">${escapeHtml(dayDate)}</div>
                     <div class="schedule-day-header-title">${escapeHtml(dayTitle)}</div>
+                    <div class="schedule-day-header-count">${escapeHtml(formatScheduleDayLessonCount(dayLessons.length))}</div>
                 </div>
-                ${isToday ? `<span class="schedule-day-pill">${escapeHtml(t('schedule.day.today', 'Сегодня'))}</span>` : ''}
-            </div>
-            <div class="schedule-day-lessons">
-                ${byDate[dateStr].sort((a,b) => a.beginLesson.localeCompare(b.beginLesson)).map(l => renderCard(l, false)).join('')}
+                <div class="schedule-day-header-end">
+                    ${isToday ? `<span class="schedule-day-pill">${escapeHtml(t('schedule.day.today', 'Сегодня'))}</span>` : ''}
+                    <span class="schedule-day-toggle-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25"><path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"></path></svg>
+                    </span>
+                </div>
+            </button>
+            <div id="${dayLessonsId}" class="schedule-day-lessons" data-schedule-day-lessons ${isExpanded ? '' : 'hidden'}>
+                ${dayLessons.map(l => renderCard(l, false)).join('')}
             </div>
         </section>`;
     });

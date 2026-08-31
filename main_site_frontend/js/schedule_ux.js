@@ -142,11 +142,20 @@
             .schedule-empty-actions button,.schedule-empty-actions a{border:1px solid var(--schedule-panel-border);border-radius:.8rem;padding:.55rem .9rem;font-size:.75rem;font-weight:700;background:var(--schedule-panel);color:var(--schedule-text)}
             .schedule-cards-feed{padding:.75rem;background:var(--schedule-grid-bg)}
             .schedule-day-section{margin-bottom:1rem;border:1px solid var(--schedule-panel-border);border-radius:1.4rem;overflow:hidden;background:var(--schedule-panel);box-shadow:0 24px 40px -34px rgba(37,99,235,.35)}
-            .schedule-day-header{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1rem 1.15rem;border-bottom:1px solid var(--schedule-panel-border);background:var(--schedule-grid-head)}
+            .schedule-day-header{position:relative;display:flex;width:100%;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1rem 1.15rem;border:0;border-bottom:1px solid var(--schedule-panel-border);background:var(--schedule-grid-head);color:inherit;font:inherit;text-align:left;cursor:pointer}
+            .schedule-day-header:hover{background:var(--schedule-panel-soft)}
+            .schedule-day-header:focus-visible{outline:2px solid var(--schedule-grid-today-strong);outline-offset:-3px}
+            .schedule-day-section.is-collapsed .schedule-day-header{border-bottom-color:transparent}
             .schedule-day-header--today{background:var(--schedule-grid-today)}
             .schedule-day-header-label{text-transform:uppercase;letter-spacing:.12em;font-size:.68rem;font-weight:800;color:var(--schedule-muted)}
             .schedule-day-header-title{margin-top:.35rem;font-size:1.35rem;line-height:1.1;font-weight:900;color:var(--schedule-text)}
+            .schedule-day-header-count{margin-top:.35rem;font-size:.75rem;font-weight:750;color:var(--schedule-muted)}
+            .schedule-day-header-end{display:flex;align-items:center;gap:.65rem;padding-top:.1rem}
             .schedule-day-pill{padding:.38rem .7rem;border-radius:999px;background:#1d4ed8;color:#fff;font-size:.72rem;font-weight:700;box-shadow:0 10px 20px -16px rgba(29,78,216,.7)}
+            .schedule-day-toggle-icon{display:grid;place-items:center;width:2rem;height:2rem;border:1px solid var(--schedule-panel-border);border-radius:.7rem;color:var(--schedule-muted);transition:transform .18s ease,background-color .18s ease,color .18s ease}
+            .schedule-day-toggle-icon svg{width:1rem;height:1rem;transition:transform .18s ease}
+            .schedule-day-header[aria-expanded="true"] .schedule-day-toggle-icon{background:var(--schedule-panel);color:var(--schedule-text)}
+            .schedule-day-header[aria-expanded="true"] .schedule-day-toggle-icon svg{transform:rotate(180deg)}
             .schedule-day-lessons{display:flex;flex-direction:column;background:var(--schedule-panel)}
             .schedule-feed-card{display:flex;flex-direction:column;gap:.8rem;padding:1rem;background:var(--schedule-panel);transition:transform .18s ease,box-shadow .18s ease,background-color .18s ease}
             .schedule-feed-card + .schedule-feed-card{border-top:1px solid var(--schedule-panel-border)}
@@ -167,7 +176,10 @@
             .schedule-cards-feed.schedule-cards-compact .schedule-day-header{padding:.65rem .85rem}
             .schedule-cards-feed.schedule-cards-compact .schedule-day-header-label{font-size:.6rem}
             .schedule-cards-feed.schedule-cards-compact .schedule-day-header-title{margin-top:.2rem;font-size:1rem}
+            .schedule-cards-feed.schedule-cards-compact .schedule-day-header-count{margin-top:.2rem;font-size:.66rem}
+            .schedule-cards-feed.schedule-cards-compact .schedule-day-header-end{gap:.45rem}
             .schedule-cards-feed.schedule-cards-compact .schedule-day-pill{padding:.25rem .5rem;font-size:.62rem}
+            .schedule-cards-feed.schedule-cards-compact .schedule-day-toggle-icon{width:1.75rem;height:1.75rem;border-radius:.6rem}
             .schedule-cards-feed.schedule-cards-compact .schedule-feed-card{gap:.45rem;padding:.7rem .85rem}
             .schedule-cards-feed.schedule-cards-compact .schedule-feed-card-head{gap:.5rem}
             .schedule-cards-feed.schedule-cards-compact .schedule-feed-card-start{font-size:1.05rem}
