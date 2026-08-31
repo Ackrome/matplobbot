@@ -166,14 +166,14 @@ window.toggleScheduleDay = function(dateStr) {
     updateScheduleDayExpansionUi(section, expanded);
 };
 
-document.addEventListener('click', (event) => {
-    const button = event.target instanceof Element
-        ? event.target.closest('[data-schedule-day-toggle]')
-        : null;
-    if (!button) return;
-    event.preventDefault();
-    window.toggleScheduleDay(button.dataset.scheduleDay);
-});
+function bindScheduleDayToggleButtons(container) {
+    if (!container) return;
+    container.querySelectorAll('[data-schedule-day-toggle]').forEach((button) => {
+        button.addEventListener('click', () => {
+            window.toggleScheduleDay(button.dataset.scheduleDay);
+        });
+    });
+}
 
 function normalizeScheduleDate(value) {
     const raw = String(value || '').trim();
@@ -2420,6 +2420,7 @@ function renderMobileFeed(lessons) {
         </section>`;
     });
     container.innerHTML = html;
+    bindScheduleDayToggleButtons(container);
 }
 
 function normalizeLessonKind(kind) {

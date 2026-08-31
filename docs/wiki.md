@@ -624,7 +624,7 @@ What it does:
 - Module filters start collapsed, but once opened they stay open while toggling modules or typing in module search, so users can select several modules without reopening the panel.
 - Site-side schedule normalization treats `Военная подготовка` lessons as the selectable `Военная кафедра` module when the university API provides them as regular lessons without `module`, and canonicalizes older military-module labels to that same website label.
 - Desktop `Table` automatically scrolls its internal viewport to the earliest visible lesson start time after each render, and the table viewport is sized to the remaining browser height to avoid dead space below the grid.
-- In `Cards`, `Compact`, and `Exams`, schedule days are collapsible sections. The relevant day is initially open; other days stay as compact headers with their lesson count. The expanded/collapsed choice is kept locally for the selected schedule, week, and lesson mode.
+- In `Cards`, `Compact`, and `Exams`, schedule days are collapsible sections. Clicking any day header or its arrow expands/collapses it; the relevant day is initially open, while other days stay as compact headers with their lesson count. The expanded/collapsed choice is kept locally for the selected schedule, week, and lesson mode.
 - Persists preference state locally and in account preferences when available.
 - Frontend schedule code is being split into focused helper modules: `schedule_state.js`, `schedule_api.js`, `schedule_filters.js`, and `schedule_render.js`.
 

@@ -157,6 +157,7 @@
             .schedule-day-header[aria-expanded="true"] .schedule-day-toggle-icon{background:var(--schedule-panel);color:var(--schedule-text)}
             .schedule-day-header[aria-expanded="true"] .schedule-day-toggle-icon svg{transform:rotate(180deg)}
             .schedule-day-lessons{display:flex;flex-direction:column;background:var(--schedule-panel)}
+            .schedule-day-lessons[hidden]{display:none}
             .schedule-feed-card{display:flex;flex-direction:column;gap:.8rem;padding:1rem;background:var(--schedule-panel);transition:transform .18s ease,box-shadow .18s ease,background-color .18s ease}
             .schedule-feed-card + .schedule-feed-card{border-top:1px solid var(--schedule-panel-border)}
             .schedule-feed-card:hover{background:var(--schedule-panel-soft)}
