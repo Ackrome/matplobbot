@@ -1338,7 +1338,7 @@ Pipeline features:
 - Shared package version consistency checks.
 - Auto version patching.
 - Shared package publish to PyPI.
-- Docker image build/push to GHCR.
+- Docker image build/push to GHCR with CI control and Docker GitHub Actions running on Node 24. Build diagnostics remain available in action logs, while post-build summaries and `.dockerbuild` record uploads are disabled because they are not used by deployment and can stall self-hosted runners after a successful push.
 - Stats visual baseline capture artifact.
 - Wiki sync from `docs/wiki.md` to GitHub Wiki `Home.md`.
 
