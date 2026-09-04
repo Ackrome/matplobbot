@@ -1087,15 +1087,15 @@ def get_semester_bounds() -> tuple[str, str]:
     today = date.today()
     year = today.year
 
-    # Весенний семестр (Февраль - Июль)
-    if 1 < today.month < 7:
+    # Весенний семестр (Февраль - 14 июля)
+    if 2 <= today.month <= 6 or (today.month == 7 and today.day < 15):
         start_date = date(year, 2, 1)
         end_date = date(year, 7, 15)
     # Летние каникулы (переход к осеннему)
     elif today.month >= 8 or (today.month == 7 and today.day >= 15):
         start_date = date(year, 8, 25)
         end_date = date(year + 1, 1, 31)
-    # Январь (конец осеннего)
+    # Январь (конец осеннего семестра прошлого года)
     else:  # today.month == 1
         start_date = date(year - 1, 8, 25)
         end_date = date(year, 1, 31)

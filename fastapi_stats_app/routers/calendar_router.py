@@ -1,5 +1,5 @@
 import logging
-from datetime import date, timedelta
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
@@ -14,6 +14,7 @@ from shared_lib.schemas import CalendarSubscriptionResponse
 from shared_lib.services.schedule_service import (
     generate_ical_from_aggregated_schedule,
     get_aggregated_schedule,
+    get_semester_bounds,
 )
 
 from ..auth import get_current_user
@@ -106,9 +107,9 @@ async def get_webcal_schedule(secret_token: str):
         raw_filters = await redis_client.get_user_cache(user_id, "mysch_filters")
         filters = raw_filters or {"excluded_subs": [], "excluded_types": []}
 
-        today = date.today()
-        start_date = today - timedelta(days=14)  # Чуть больше истории
-        end_date = today + timedelta(days=90)
+        semester_start, semester_end = get_semester_bounds()
+        start_date = date.fromisoformat(semester_start)
+        end_date = date.fromisoformat(semester_end)
 
         schedule = await get_aggregated_schedule(
             user_id, active_subs, start_date, end_date, filters

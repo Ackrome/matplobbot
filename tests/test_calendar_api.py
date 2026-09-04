@@ -2,7 +2,7 @@ import os
 import sys
 import types
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from unittest.mock import AsyncMock, patch
 
 FASTAPI_AVAILABLE = True
@@ -126,6 +126,17 @@ class TestCalendarAPI(unittest.TestCase):
         self.assertGreaterEqual(len(payload["profiles"]), 2)
         self.assertEqual(payload["profiles"][0]["health"]["event_count"], 1)
         get_secret.assert_awaited_once_with(12345)
+
+    def test_calendar_feeds_use_the_full_semester_window(self):
+        with patch.object(
+            calendar_router,
+            "get_semester_bounds",
+            return_value=("2026-08-25", "2027-01-31"),
+        ):
+            start_date, end_date = calendar_router._get_calendar_semester_window()
+
+        self.assertEqual(start_date, date(2026, 8, 25))
+        self.assertEqual(end_date, date(2027, 1, 31))
 
     def test_get_subscription_returns_disabled_for_non_telegram_account(self):
         self._override_user(None, preferences={})
@@ -572,6 +583,10 @@ class TestCalendarAPI(unittest.TestCase):
                 }
             ],
         )
+        self.assertEqual(
+            aggregate_mock.await_args.args[1:],
+            (date(2026, 2, 1), date(2026, 7, 15)),
+        )
 
     def test_public_builtin_feed_combines_bot_and_custom_sources(self):
         active_subscriptions = [
@@ -690,4 +705,8 @@ class TestCalendarAPI(unittest.TestCase):
             'inline; filename="matplobbot-telegram-filtered.ics"',
             response.headers.get("content-disposition", ""),
         )
-        aggregated_mock.assert_awaited()
+        aggregated_mock.assert_awaited_once()
+        self.assertEqual(
+            aggregated_mock.await_args.args[2:4],
+            (date(2026, 2, 1), date(2026, 7, 15)),
+        )

@@ -3,6 +3,7 @@ import json
 import sys
 import types
 import unittest
+from datetime import date
 from unittest.mock import AsyncMock, call, patch
 
 
@@ -47,6 +48,18 @@ def _unfold_ics(payload: bytes) -> str:
 
 
 class TestScheduleServiceCalendar(unittest.TestCase):
+    def test_semester_bounds_keep_early_july_in_spring_semester(self):
+        class _EarlyJulyDate(date):
+            @classmethod
+            def today(cls):
+                return cls(2026, 7, 14)
+
+        with patch.object(schedule_service, "date", _EarlyJulyDate):
+            self.assertEqual(
+                schedule_service.get_semester_bounds(),
+                ("2026-02-01", "2026-07-15"),
+            )
+
     def test_simple_lesson_type_treats_seminar_credit_as_exam(self):
         self.assertEqual(_get_simple_lesson_type("Семинар+зачет"), "Exam")
         self.assertEqual(_get_simple_lesson_type("Экзамены"), "Exam")

@@ -686,6 +686,7 @@ What it does:
 - In Telegram Mini App, the collapsed sync card remains visible while Telegram auth is pending or unavailable, so users can expand it and see the sign-in state instead of the panel disappearing.
 - Shows profile health (event count, next event, cache status, source updated, last access).
 - Adds the last university-site schedule parsing time to every generated iCal event description.
+- Every personal iCal/WebCal feed, including profile-specific and Telegram-filtered variants, covers the full current or upcoming semester instead of a fixed rolling future window.
 - `Exams only` calendar feeds include pre-exam consultations together with exams and pass/fail assessments, while preserving the `Consultation` event type label.
 
 How to use:

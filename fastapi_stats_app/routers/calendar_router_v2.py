@@ -2,7 +2,7 @@ import hashlib
 import logging
 import re
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from email.utils import format_datetime, parsedate_to_datetime
 from typing import Any
 from urllib.parse import quote
@@ -45,8 +45,6 @@ logger = logging.getLogger(__name__)
 
 CALENDAR_SYNC_KEY = "calendar_sync"
 CALENDAR_PROFILE_LIMIT = 6
-CALENDAR_WINDOW_PAST_DAYS = 14
-CALENDAR_WINDOW_FUTURE_DAYS = 90
 CALENDAR_TIMEZONE = "Europe/Moscow"
 DEFAULT_PROFILE_ID = "all"
 BUILT_IN_PROFILES = (
@@ -539,6 +537,12 @@ def _sanitize_filename(profile: dict) -> str:
     return f"matplobbot-{slug}.ics"
 
 
+def _get_calendar_semester_window() -> tuple[date, date]:
+    """Return the full current or upcoming semester for every iCal feed."""
+    semester_start, semester_end = get_semester_bounds()
+    return date.fromisoformat(semester_start), date.fromisoformat(semester_end)
+
+
 def _update_profile_access(sync_state: dict, profile_id: str) -> dict:
     next_state = _normalize_calendar_sync_state(
         {CALENDAR_SYNC_KEY: _serialize_calendar_sync_state(sync_state)}
@@ -570,9 +574,7 @@ async def _build_calendar_subscription_response(
     if telegram_id:
         secret = secret_override or await get_or_create_calendar_secret(telegram_id)
 
-    today = date.today()
-    start_date = today - timedelta(days=CALENDAR_WINDOW_PAST_DAYS)
-    end_date = today + timedelta(days=CALENDAR_WINDOW_FUTURE_DAYS)
+    start_date, end_date = _get_calendar_semester_window()
 
     base_schedule = []
     source_update_map: dict[tuple[str, str], datetime] = {}
@@ -974,9 +976,7 @@ async def _render_public_calendar_feed(
         db,
     )
 
-    today = date.today()
-    start_date = today - timedelta(days=CALENDAR_WINDOW_PAST_DAYS)
-    end_date = today + timedelta(days=CALENDAR_WINDOW_FUTURE_DAYS)
+    start_date, end_date = _get_calendar_semester_window()
     calendar_sources = _get_sources_for_profile(active_subs, sync_state, profile)
     base_schedule = await get_calendar_aggregated_schedule(calendar_sources, start_date, end_date)
     source_update_map = await _get_source_update_map(db, calendar_sources)
@@ -1064,9 +1064,7 @@ async def _render_telegram_filtered_feed(
         else {"excluded_subs": [], "excluded_types": []}
     )
 
-    today = date.today()
-    start_date = today - timedelta(days=CALENDAR_WINDOW_PAST_DAYS)
-    end_date = today + timedelta(days=CALENDAR_WINDOW_FUTURE_DAYS)
+    start_date, end_date = _get_calendar_semester_window()
     aggregated_schedule = await get_aggregated_schedule(
         telegram_user_id,
         active_subs,
