@@ -99,7 +99,7 @@ class MailManager:
             await state.clear()
             await state.set_state(MailSetup.details)
             await callback.message.answer(
-                "Введите адрес, сервер и протокол через пробел.\nНапример: name@yandex.ru imap.yandex.ru imap\nПоддерживаются imap и pop3 с TLS. /cancel для отмены."
+                "Введите адрес, сервер, порт и протокол через пробел.\nНапример: name@yandex.ru imap.yandex.ru 993 imap\nPOP3: name@mail.ru pop.mail.ru 995 pop3\nТолько SSL/TLS, без STARTTLS. /cancel для отмены."
             )
             return
         try:
@@ -134,7 +134,7 @@ class MailManager:
                 account.status = "ready" if account.enabled else "paused"
                 await session.commit()
             await callback.message.answer(
-                f"{account.address}\n{account.protocol.upper()} · {account.host}\nСтатус: {account.status}",
+                f"{account.address}\n{account.protocol.upper()} · {account.host}:{account.port}\nСтатус: {account.status}",
                 reply_markup=keyboard(
                     [
                         [("Пауза" if account.enabled else "Возобновить", f"mail:toggle:{ident}")],
@@ -145,16 +145,19 @@ class MailManager:
 
     async def details(self, message, state: FSMContext):
         try:
-            address, host, protocol = (message.text or "").split()
+            address, host, port_text, protocol = (message.text or "").split()
+            port = int(port_text)
+            if not 1 <= port <= 65535:
+                raise ValueError()
             if len(address) > 320 or "@" not in address:
                 raise ValueError()
             host = validate_host(host, protocol)
         except ValueError:
             await message.answer(
-                "Нужны адрес, разрешённый сервер и imap либо pop3. Например: name@mail.ru imap.mail.ru imap"
+                "Нужны адрес, разрешённый сервер, порт от 1 до 65535 и imap либо pop3. Например: name@mail.ru imap.mail.ru 993 imap. Только SSL/TLS."
             )
             return
-        await state.update_data(address=address, host=host, protocol=protocol)
+        await state.update_data(address=address, host=host, protocol=protocol, port=port)
         await state.set_state(MailSetup.password)
         await message.answer(
             PASSWORD_PROMPT
@@ -173,7 +176,12 @@ class MailManager:
         await state.clear()
         try:
             checkpoint, _ = await asyncio.to_thread(
-                poll_mail, data["host"], data["protocol"], data["address"], password
+                poll_mail,
+                data["host"],
+                data["protocol"],
+                data["address"],
+                password,
+                port=data["port"],
             )
             async with get_session() as session:
                 accounts = (
@@ -268,6 +276,7 @@ async def mail_worker(bot):
                                 account.address,
                                 unseal(account.credential),
                                 unseal(account.checkpoint),
+                                port=account.port,
                             )
                             account.checkpoint = seal(checkpoint)
                             if raw:

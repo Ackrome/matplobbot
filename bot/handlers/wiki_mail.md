@@ -4,6 +4,8 @@
 in private chats: add up to five mailboxes, inspect status, pause/resume, delete
 with confirmation. Connection setup uses aiogram FSM, deletes the password
 message best-effort, and never places the password in FSM storage.
+Setup format: `name@yandex.ru imap.yandex.ru 993 imap`. The port is required,
+persisted and displayed in account details; only implicit TLS is supported.
 
 Example: register `MailManager().router` ahead of general text handlers and run
 `mail_worker(bot)` as a managed background task. `bot/main.py` does both.

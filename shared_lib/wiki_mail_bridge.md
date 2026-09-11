@@ -15,7 +15,9 @@ Run blocking protocol calls in `asyncio.to_thread`, never on the bot event loop.
 Dependencies: standard-library email/imaplib/poplib/ssl, BeautifulSoup,
 cryptography, SQLAlchemy. `MAIL_CREDENTIAL_KEY` must be a persistent Fernet key.
 Additional trusted servers use `MAIL_ALLOWED_HOSTS=host.example:imap,host2:pop3`.
-Only TLS ports 993/995 are supported. Never weaken certificate validation.
+`poll_mail(..., port=1993)` uses an explicit port (1-65535), defaulting to
+993/995 when omitted. All ports require implicit TLS, not STARTTLS.
+Never weaken certificate validation.
 
 Side effects: connects to mail servers but never deletes mail or marks it read.
 No remote HTML assets are fetched. A 35 MiB raw-message cap protects memory;

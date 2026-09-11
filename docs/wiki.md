@@ -1365,6 +1365,11 @@ How to use:
 
 ### Email Forwarding
 
+- Connection format: `name@yandex.ru imap.yandex.ru 993 imap` (POP3 example:
+  `name@mail.ru pop.mail.ru 995 pop3`). Explicit ports 1-65535 are saved per account.
+  All connections require implicit SSL/TLS, not STARTTLS. Migration
+  `f1b52c3d4e5f` backfills existing accounts with protocol-specific default ports.
+
 - `/mail` connects up to five mailboxes per user in private bot chats. Existing
   messages are baselined, not forwarded; subsequent INBOX arrivals are delivered.
 - Supports TLS IMAP (993) and POP3 (995), approximately 30-second polling, not

@@ -51,6 +51,7 @@ class MailAccount(Base):
     address = Column(String(320), nullable=False)
     host = Column(String(253), nullable=False)
     protocol = Column(String(8), nullable=False)
+    port = Column(Integer, nullable=False, default=993)
     credential = Column(LargeBinary, nullable=False)
     enabled = Column(Boolean, nullable=False, default=True)
     checkpoint = Column(LargeBinary, nullable=False)
@@ -83,14 +84,17 @@ def validate_host(host, protocol):
     return host
 
 
-def poll_mail(host, protocol, address, password, checkpoint=None):
+def poll_mail(host, protocol, address, password, checkpoint=None, *, port=None):
     """Return a checkpoint and at most one new MIME message; never alter mail."""
     validate_host(host, protocol)
+    port = port if port is not None else (993 if protocol == "imap" else 995)
+    if type(port) is not int or not 1 <= port <= 65535:
+        raise ValueError("invalid mail port")
     context = ssl.create_default_context()
     client = None
     try:
         if protocol == "imap":
-            client = imaplib.IMAP4_SSL(host, 993, ssl_context=context, timeout=30)
+            client = imaplib.IMAP4_SSL(host, port, ssl_context=context, timeout=30)
             client.login(address, password)
             if client.select("INBOX", readonly=True)[0] != "OK":
                 raise ValueError("inbox unavailable")
@@ -124,7 +128,7 @@ def poll_mail(host, protocol, address, password, checkpoint=None):
                 raise ValueError("message unavailable")
             raw = next(part[1] for part in parts if isinstance(part, tuple))
         else:
-            client = poplib.POP3_SSL(host, 995, context=context, timeout=30)
+            client = poplib.POP3_SSL(host, port, context=context, timeout=30)
             client.user(address)
             client.pass_(password)
             entries = [line.decode("ascii").split() for line in client.uidl()[1]]

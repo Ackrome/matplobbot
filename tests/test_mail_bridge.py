@@ -31,6 +31,16 @@ def handlers():
 
 
 class MailTests(unittest.TestCase):
+    def test_explicit_port(self):
+        client = MagicMock()
+        client.uidl.return_value = (b"+OK", [], 0)
+        with patch("shared_lib.mail_bridge.poplib.POP3_SSL", return_value=client) as connect:
+            poll_mail("pop.yandex.ru", "pop3", "u", "p", port=1995)
+            self.assertEqual(connect.call_args.args, ("pop.yandex.ru", 1995))
+        for port in (0, 65536, "993", True):
+            with self.assertRaises(ValueError):
+                poll_mail("imap.gmail.com", "imap", "u", "p", port=port)
+
     def test_encryption(self):
         with patch.dict(os.environ, MAIL_CREDENTIAL_KEY=Fernet.generate_key().decode()):
             encrypted = seal({"password": "never-log-this"})
