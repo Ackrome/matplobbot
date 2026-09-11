@@ -27,6 +27,7 @@ pipeline {
         PROD_PUBLIC_SITE_URL = credentials('PROD_PUBLIC_SITE_URL')
         PROD_JWT_SECRET_KEY = credentials('PROD_JWT_SECRET_KEY')
         PROD_SUB_URL = credentials('PROD_SUB_URL')
+        PROD_MAIL_CREDENTIAL_KEY = credentials('MAIL_CREDENTIAL_KEY')
     }
 
     stages {
@@ -220,6 +221,7 @@ PROXY_URL=socks5://proxy:20170
 TELEGRAM_PROXY_URL=socks5://proxy:20170
 TELEGRAM_PROXY_TRANSPORT=tcp
 SUB_URL=$PROD_SUB_URL
+MAIL_CREDENTIAL_KEY=$PROD_MAIL_CREDENTIAL_KEY
 EOF
 
                                 if [ -n "${PROD_OUTLINE_ACCESS_KEY:-}" ]; then
