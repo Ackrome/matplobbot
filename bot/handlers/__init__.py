@@ -4,6 +4,7 @@ from .admin import AdminManager
 from .base import BaseManager
 from .github import GitHubManager
 from .library import LibraryManager
+from .mail import MailManager
 from .rendering import RenderingManager
 from .schedule import ScheduleManager
 from .search_center import SearchCenterManager
@@ -16,6 +17,7 @@ router = Router()
 
 def setup_handlers(dp: Router, bot, ruz_api_client):
     """Function to setup all handlers"""
+    dp.include_router(MailManager().router)
     # Instantiate all specialized managers first
     github_manager = GitHubManager()
     library_manager = LibraryManager()

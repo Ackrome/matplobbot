@@ -53,6 +53,10 @@ def _resolve_command(event: Update) -> str | None:
 
 class BotTracingMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Update, data):
+        from shared_lib.mail_bridge import sensitive_mail_update
+
+        if sensitive_mail_update(event, data):
+            return await handler(event, data)
         correlation_id = generate_correlation_id(prefix="bot")
         token = set_correlation_id(correlation_id)
         tracer = get_tracer("bot.updates")

@@ -17,6 +17,7 @@ sys.path.append(os.getcwd())
 
 # 3. Импортируем модели
 from shared_lib.models import Base
+from shared_lib.mail_bridge import MailAccount  # noqa: F401 - register mailbox metadata
 
 config = context.config
 

@@ -1363,6 +1363,38 @@ How to use:
 
 ## Practical Notes
 
+### Email Forwarding
+
+- `/mail` connects up to five mailboxes per user in private bot chats. Existing
+  messages are baselined, not forwarded; subsequent INBOX arrivals are delivered.
+- Supports TLS IMAP (993) and POP3 (995), approximately 30-second polling, not
+  IMAP IDLE. POP3 requires stable UIDL support. Mail is never deleted or marked read.
+- Providers initially allowed: Gmail, Yandex, Mail.ru and Outlook mail endpoints.
+  App-password availability depends on provider/account policy; OAuth-only
+  accounts are not supported. Operators may extend `MAIL_ALLOWED_HOSTS` with
+  comma-separated `hostname:imap` / `hostname:pop3` entries. Only trusted hosts.
+- Apply `python -m alembic upgrade head`. Generate a Fernet key with
+  `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+  and store it as `MAIL_CREDENTIAL_KEY` in the bot's secret environment. Never
+  commit it. Preserve it across deployments; replacing it makes saved accounts
+  and pending mail unreadable. No key means the feature is disabled.
+- Credentials and temporary attachment/body data are Fernet-encrypted in
+  PostgreSQL. No plaintext spool files are created. Each attachment is removed
+  from live pending state after a successful Telegram upload; failed uploads
+  remain available for retry. Backups/WAL have their own retention policy.
+- Uses Telegram [Rich Messages](https://core.telegram.org/bots/api#sendrichmessage)
+  with sanitized rich HTML, preserving supported emphasis, links, lists and
+  tables. Rich HTML and rich Markdown target the same interface. Remote images,
+  scripts and tracking pixels are not loaded. Long HTML falls back to text.
+- Raw mail limit: 35 MiB; larger mail sends a notice. Body limit: 100000 characters
+  with explicit truncation. Files accompany the original message as replies.
+- Pause/resume and confirmed removal are available per mailbox. Removal does
+  not change the provider mailbox or retract previously sent Telegram content.
+  Revoke the provider app password separately when disconnecting permanently.
+- Delivery progress is transactional, but the Telegram API has no idempotency
+  key: ambiguous network failures can duplicate a sent component. Initial
+  acceptance testing requires an explicitly supplied test mailbox and chat.
+
 - Public calendar links are secrets. Rotate immediately if exposed.
 - Legacy stats alias `/api/stats/stats/action_users` is deprecating; migrate clients to `/api/stats/action_users`.
 - Website API base can be switched per environment with `window.__MPB_API_BASE__`.

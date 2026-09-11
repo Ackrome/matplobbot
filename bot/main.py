@@ -78,6 +78,7 @@ async def set_bot_commands(bot: Bot):
     """Sets the bot's command list in the UI for different user scopes."""
 
     user_commands_ru = [
+        types.BotCommand(command="mail", description="Почтовые ящики"),
         types.BotCommand(
             command="start", description=translator.gettext("ru", "command_desc_start")
         ),
@@ -115,6 +116,7 @@ async def set_bot_commands(bot: Bot):
     ]
 
     user_commands_en = [
+        types.BotCommand(command="mail", description="Email inboxes"),
         types.BotCommand(
             command="start", description=translator.gettext("en", "command_desc_start")
         ),
@@ -177,12 +179,18 @@ async def run_bot_once(ruz_api_client_instance) -> None:
     dp.update.outer_middleware(GroupMentionCommandMiddleware())
     dp.update.middleware(UserLoggingMiddleware())
     setup_handlers(dp, bot=bot, ruz_api_client=ruz_api_client_instance)
+    from bot.handlers.mail import mail_worker
+
+    mail_task = asyncio.create_task(mail_worker(bot), name="mail-worker")
 
     try:
         await set_bot_commands(bot)
         await dp.start_polling(bot)
     finally:
         logging.warning("Shutting down...")
+        mail_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await mail_task
         with suppress(Exception):
             await dp.storage.close()
         with suppress(Exception):

@@ -50,6 +50,10 @@ async def _get_avatar_pic_url(bot, user_id: int) -> str | None:
 
 class UserLoggingMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Update, data):
+        from shared_lib.mail_bridge import sensitive_mail_update
+
+        if sensitive_mail_update(event, data):
+            return await handler(event, data)
         bot = data.get("bot")
         user_id = None
         tg_username = None
