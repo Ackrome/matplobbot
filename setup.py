@@ -11,7 +11,7 @@ setup(
         "asyncpg",
         "aiohttp>=3.14.3,<3.15",
         "certifi",
-        "cryptography>=46.0.6,<47",
+        "cryptography>=50.0.0,<51",
         "redis",
         "cachetools",
         "celery",

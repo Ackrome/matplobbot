@@ -1231,7 +1231,7 @@ What it does:
 - Uses an in-repo HS256 JWT implementation for FastAPI access tokens, avoiding the no-fix `python-jose` JWE advisory while keeping existing bearer-token behavior.
 - Removes unused `markdown` from the bot/worker requirements; Markdown rendering uses `markdown-it-py`.
 - Pins `python-multipart` to `0.0.31` for multipart parser DoS fixes.
-- Pins `setuptools` to `83.0.0` and `weasyprint` to `69.0` in the root requirements lock for the current audit gate.
+- Pins `setuptools` to `83.0.0`, `cryptography` to `50.0.0` and `weasyprint` to `70.0` in the root requirements lock for the current audit gate. The cryptography minimum is also enforced in `setup.py`; do not restore the vulnerable 46.x upper bound. Security fixes must pass the unchanged strict audit before deployment.
 - Uses `scripts/build_audit_requirements.py` to build the same filtered `audit-requirements.txt` in GitHub Actions, Jenkins, and local checks. The builder excludes editable installs and the local `matplobbot-shared` package, deduplicates matching pins, and fails on conflicting pins.
 - Keeps GitHub Actions and Jenkins `python -m pip_audit --strict` green with a documented ignore for `PYSEC-2024-277` only. That finding is a disputed, no-fixed-version `joblib` advisory pulled transitively by `matplobblib` via scikit-learn; this project does not load untrusted joblib pickle files.
 - Runs a separate scheduled Dependency Audit workflow every day at `03:17 UTC`, so new advisories that appear after the last dependency change still fail CI.
