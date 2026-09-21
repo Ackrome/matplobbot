@@ -32,9 +32,7 @@ async def index_github_repository(repo_path: str):
 
     try:
         async with aiohttp.ClientSession(headers=headers) as session:
-            url = (
-                f"https://api.github.com/repos/{owner_repo}/git/trees/{branch}?recursive=1"
-            )
+            url = f"https://api.github.com/repos/{owner_repo}/git/trees/{branch}?recursive=1"
             async with session.get(url) as response:
                 if response.status != 200:
                     logger.error(
@@ -49,9 +47,7 @@ async def index_github_repository(repo_path: str):
             indexed_count = 0
             for file_info in files:
                 file_path = file_info["path"]
-                raw_url = (
-                    f"https://raw.githubusercontent.com/{owner_repo}/{branch}/{file_path}"
-                )
+                raw_url = f"https://raw.githubusercontent.com/{owner_repo}/{branch}/{file_path}"
 
                 try:
                     async with session.get(raw_url) as file_resp:

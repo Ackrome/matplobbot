@@ -51,9 +51,7 @@ def parse_repo_reference(value: str | None) -> GitHubRepoReference | None:
     explicit_branch = None
     if "@" in repo:
         repo, explicit_branch = repo.split("@", 1)
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+", owner) or not re.fullmatch(
-        r"[A-Za-z0-9_.-]+", repo
-    ):
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", owner) or not re.fullmatch(r"[A-Za-z0-9_.-]+", repo):
         return None
 
     branch = DEFAULT_GITHUB_BRANCH
@@ -67,7 +65,7 @@ def parse_repo_reference(value: str | None) -> GitHubRepoReference | None:
         branch = parts[2]
 
     branch = unquote(branch).strip().strip("/") or DEFAULT_GITHUB_BRANCH
-    if any(char in branch for char in "?#[\\\"") or branch in {".", ".."}:
+    if any(char in branch for char in '?#[\\"') or branch in {".", ".."}:
         return None
     return GitHubRepoReference(f"{owner}/{repo}", branch)
 
@@ -78,6 +76,7 @@ def split_repo_reference(value: str) -> tuple[str, str]:
     if not reference:
         return value, DEFAULT_GITHUB_BRANCH
     return reference.owner_repo, reference.branch
+
 
 # Caches for GitHub API calls to reduce rate-limiting and speed up responses
 github_content_cache = TTLCache(maxsize=200, ttl=300)  # Cache for file contents (5 min)
@@ -159,7 +158,9 @@ async def get_all_repo_files_cached(
         logger.error("GITHUB_TOKEN environment variable not set. Cannot fetch repo file list.")
         return None
 
-    url = f"https://api.github.com/repos/{owner_repo}/git/trees/{quote(branch, safe='')}?recursive=1"
+    url = (
+        f"https://api.github.com/repos/{owner_repo}/git/trees/{quote(branch, safe='')}?recursive=1"
+    )
     headers = {
         "Accept": "application/vnd.github.v3+json",
         "X-GitHub-Api-Version": "2022-11-28",

@@ -47,10 +47,7 @@ CALENDAR_SYNC_KEY = "calendar_sync"
 CALENDAR_PROFILE_LIMIT = 6
 CALENDAR_TIMEZONE = "Europe/Moscow"
 CALENDAR_TIMEZONE_OPTIONS = [
-    *[
-        {"value": f"Etc/GMT+{offset}", "label": f"GMT-{offset}"}
-        for offset in range(12, 0, -1)
-    ],
+    *[{"value": f"Etc/GMT+{offset}", "label": f"GMT-{offset}"} for offset in range(12, 0, -1)],
     {"value": "UTC", "label": "GMT+0"},
     *[
         {"value": f"Etc/GMT-{offset}", "label": f"GMT+{offset}"}
@@ -301,9 +298,7 @@ async def _migrate_legacy_custom_profiles(
     )
     existing_rows = list(result.scalars().all())
     existing_ids = {str(row.profile_id) for row in existing_rows if row.profile_id}
-    existing_entities = {
-        (str(row.entity_type), str(row.entity_id)): row for row in existing_rows
-    }
+    existing_entities = {(str(row.entity_type), str(row.entity_id)): row for row in existing_rows}
     changed = False
     for profile in profiles:
         if str(profile["id"]) in existing_ids:

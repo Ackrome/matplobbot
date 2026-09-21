@@ -15,8 +15,8 @@ from shared_lib.database import (
     get_all_active_subscriptions,
     get_all_short_names,
     get_session,
-    get_subscriptions_for_notification,
     get_subscriptions_due_for_notification,
+    get_subscriptions_for_notification,
     get_unique_active_subscription_entities,
     get_user_settings,
     upsert_cached_schedule,
@@ -48,8 +48,10 @@ def _filter_schedule_for_subscription(schedule: list[dict], subscription: dict) 
     selected_modules = set(subscription.get("selected_modules") or [])
     filtered = []
     for lesson in schedule:
-        kind = str(lesson.get("kindOfWork") or lesson.get("simple_type") or "").lower().replace(
-            "ё", "е"
+        kind = (
+            str(lesson.get("kindOfWork") or lesson.get("simple_type") or "")
+            .lower()
+            .replace("ё", "е")
         )
         if lesson_mode == "exams_only" and not any(
             marker in kind for marker in ("экзам", "зачет", "зачёт", "аттест", "exam", "credit")

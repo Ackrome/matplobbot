@@ -48,7 +48,11 @@ def normalize_timezone(value: str | None) -> str:
         return candidate
     match = re.fullmatch(r"GMT\s*([+-])\s*(\d{1,2})", candidate, re.IGNORECASE)
     if match and int(match.group(2)) <= 14:
-        return f"Etc/GMT-{'%d' % int(match.group(2))}" if match.group(1) == "+" else f"Etc/GMT+{int(match.group(2))}"
+        return (
+            f"Etc/GMT-{'%d' % int(match.group(2))}"
+            if match.group(1) == "+"
+            else f"Etc/GMT+{int(match.group(2))}"
+        )
     return DEFAULT_TIMEZONE
 
 
