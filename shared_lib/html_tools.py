@@ -1,4 +1,4 @@
-﻿import re
+import re
 
 HTML_TAG_RE = re.compile(r"(</?([a-zA-Z0-9_-]+)(?:\s+[^>]*)?>)")
 

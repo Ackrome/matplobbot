@@ -1,4 +1,4 @@
-﻿import unittest
+import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from bot.logger import _avatar_cache, _get_avatar_pic_url

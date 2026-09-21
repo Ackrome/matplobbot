@@ -60,7 +60,7 @@ class TestLatexTaskSecurity(unittest.TestCase):
         self.assertIn("input", reason)
 
     def test_binary_latex_is_validated_before_compilation(self):
-        binary_tex = base64.b64encode(br"\input{/etc/passwd}").decode()
+        binary_tex = base64.b64encode(rb"\input{/etc/passwd}").decode()
         project_files = [{"path": "main.tex", "binary": binary_tex}]
         with patch("subprocess.run") as mock_run:
             result = compile_project_task.run(project_files, "main.tex")
@@ -71,7 +71,10 @@ class TestLatexTaskSecurity(unittest.TestCase):
     @patch("subprocess.run")
     def test_compile_project_task_rejects_evil_file_before_compilation(self, mock_run):
         project_files = [
-            {"path": "main.tex", "text": r"\documentclass{article}\begin{document}\write18{rm -rf /}\end{document}"}
+            {
+                "path": "main.tex",
+                "text": r"\documentclass{article}\begin{document}\write18{rm -rf /}\end{document}",
+            }
         ]
         result = compile_project_task.run(project_files, "main.tex")
         self.assertEqual(result["status"], "error")

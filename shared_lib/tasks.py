@@ -623,7 +623,9 @@ def compile_project_task(
                             return {
                                 "status": "error",
                                 "message": f"Security restriction in {path}: LaTeX source must be UTF-8 text",
-                                "errors": [{"line": 1, "message": "LaTeX source must be UTF-8 text"}],
+                                "errors": [
+                                    {"line": 1, "message": "LaTeX source must be UTF-8 text"}
+                                ],
                             }
                         is_safe, reason = _validate_latex_source(file_text)
                         if not is_safe:

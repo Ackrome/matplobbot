@@ -31,7 +31,7 @@ class TestSchedulerHTMLSplitter(unittest.TestCase):
 
     def test_split_nested_tags(self):
         inner = "Click here to see schedule details.\n" * 15
-        msg = f"<b>Notice: <a href=\"https://example.com/sched\">{inner}</a></b>"
+        msg = f'<b>Notice: <a href="https://example.com/sched">{inner}</a></b>'
         chunks = split_telegram_html_message(msg, max_chars=200)
 
         self.assertGreater(len(chunks), 1)
@@ -42,13 +42,17 @@ class TestSchedulerHTMLSplitter(unittest.TestCase):
 
     def test_split_preserves_code_and_pre(self):
         inner = "const x = 123;\nconsole.log(x);\n" * 15
-        msg = f"<pre><code class=\"language-js\">{inner}</code></pre>"
+        msg = f'<pre><code class="language-js">{inner}</code></pre>'
         chunks = split_telegram_html_message(msg, max_chars=200)
 
         self.assertGreater(len(chunks), 1)
         for i, chunk in enumerate(chunks):
-            self.assertEqual(chunk.count("<pre>"), chunk.count("</pre>"), f"Chunk {i} unbalanced <pre>")
-            self.assertEqual(chunk.count("<code"), chunk.count("</code>"), f"Chunk {i} unbalanced <code>")
+            self.assertEqual(
+                chunk.count("<pre>"), chunk.count("</pre>"), f"Chunk {i} unbalanced <pre>"
+            )
+            self.assertEqual(
+                chunk.count("<code"), chunk.count("</code>"), f"Chunk {i} unbalanced <code>"
+            )
 
 
 if __name__ == "__main__":

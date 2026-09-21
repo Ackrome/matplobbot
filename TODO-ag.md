@@ -1,6 +1,6 @@
 # Backlog & Audit Report: Matplobbot
 
-> Дата ревью: 17 сентября 2026 г.  
+> Дата ревью: 17 сентября 2026 г.
 > Статус: Комплексный аудит (Product, UI/UX, Security, Backend, Database, Frontend, DevOps)
 
 ---
