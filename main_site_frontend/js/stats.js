@@ -1540,7 +1540,7 @@ function renderLeaderboard() {
                             <div class="flex items-center gap-3">
                                 <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm">${initial}</div>
                                 <div class="min-w-0">
-                                    <div class="font-semibold text-slate-800 truncate">${escapeHtml(user.full_name)}</div>
+                                    <a class="font-semibold text-slate-800 truncate hover:text-blue-700 underline-offset-2 hover:underline" href="/admin-user.html?user_id=${encodeURIComponent(user.user_id)}" aria-label="Open admin details for ${escapeHtml(user.full_name)}">${escapeHtml(user.full_name)}</a>
                                     <div class="text-xs text-slate-500 truncate">${username}</div>
                                 </div>
                             </div>

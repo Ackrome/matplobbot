@@ -16,6 +16,7 @@ from shared_lib.database import (
     get_all_short_names,
     get_session,
     get_subscriptions_for_notification,
+    get_subscriptions_due_for_notification,
     get_unique_active_subscription_entities,
     get_user_settings,
     upsert_cached_schedule,
@@ -39,6 +40,26 @@ from .config import BOT_TOKEN
 logger = logging.getLogger(__name__)
 
 TELEGRAM_MESSAGE_LIMIT = 4096
+
+
+def _filter_schedule_for_subscription(schedule: list[dict], subscription: dict) -> list[dict]:
+    """Apply canonical Web/Telegram lesson and module settings before a diff."""
+    lesson_mode = subscription.get("lesson_mode", "all")
+    selected_modules = set(subscription.get("selected_modules") or [])
+    filtered = []
+    for lesson in schedule:
+        kind = str(lesson.get("kindOfWork") or lesson.get("simple_type") or "").lower().replace(
+            "ё", "е"
+        )
+        if lesson_mode == "exams_only" and not any(
+            marker in kind for marker in ("экзам", "зачет", "зачёт", "аттест", "exam", "credit")
+        ):
+            continue
+        module = lesson.get("module")
+        if selected_modules and module and module not in selected_modules:
+            continue
+        filtered.append(lesson)
+    return filtered
 
 
 async def send_telegram_message(
@@ -132,13 +153,32 @@ async def send_daily_schedules(
     end_date_str = end_date.strftime("%Y-%m-%d")
     current_time_str = now_in_moscow.strftime("%H:%M")
 
-    subscriptions = await get_subscriptions_for_notification(current_time_str)
+    try:
+        subscriptions = await get_subscriptions_due_for_notification(datetime.now(datetime.UTC))
+    except Exception:
+        # Keep the old Moscow lookup as a safe compatibility path while a
+        # rolling deployment is applying the profile migration.
+        subscriptions = await get_subscriptions_for_notification(current_time_str)
     if not subscriptions:
         return
     grouped_subscriptions = collections.defaultdict(list)
     for sub in subscriptions:
+        if sub.get("delivery_mode", "telegram") != "telegram":
+            continue
         entity_key = (sub["entity_type"], sub["entity_id"])
         grouped_subscriptions[entity_key].append(sub)
+
+    # A user can keep several subscriptions for one entity. One Telegram
+    # message per user/entity is the contract; prefer a private chat when it
+    # is present and otherwise keep the first recipient row.
+    for entity_key, entity_subscriptions in list(grouped_subscriptions.items()):
+        recipients: dict[int, dict] = {}
+        for sub in entity_subscriptions:
+            user_id = int(sub["user_id"])
+            previous = recipients.get(user_id)
+            if previous is None or sub.get("chat_id") == user_id:
+                recipients[user_id] = sub
+        grouped_subscriptions[entity_key] = list(recipients.values())
 
     logger.info(
         "Found %s subscriptions across %s unique entities for %s (cid=%s).",
@@ -188,6 +228,7 @@ async def send_daily_schedules(
                         start_date=target_date,
                         is_week_view=False,
                         subscription_id=sub["id"],
+                        lesson_mode=sub.get("lesson_mode", "all"),
                     )
                     send_result = await send_telegram_message(
                         http_session,
@@ -276,8 +317,19 @@ async def check_for_schedule_updates(
         # Группируем подписки по сущностям (Group/Teacher/Auditorium)
         grouped_subscriptions = collections.defaultdict(list)
         for sub in all_subscriptions:
+            if sub.get("delivery_mode", "telegram") != "telegram":
+                continue
             entity_key = (sub["entity_type"], sub["entity_id"])
             grouped_subscriptions[entity_key].append(sub)
+
+        for entity_key, entity_subscriptions in list(grouped_subscriptions.items()):
+            recipients: dict[int, dict] = {}
+            for sub in entity_subscriptions:
+                user_id = int(sub["user_id"])
+                previous = recipients.get(user_id)
+                if previous is None or sub.get("chat_id") == user_id:
+                    recipients[user_id] = sub
+            grouped_subscriptions[entity_key] = list(recipients.values())
 
         short_names_map = await get_all_short_names()
 
@@ -322,22 +374,27 @@ async def check_for_schedule_updates(
                     # 4. Генерируем Diff и отправляем уведомления
                     if old_schedule_data:
                         # Diff генерируется один раз на язык, чтобы не пересчитывать N раз
-                        diffs_by_lang = {}
+                        diffs_by_profile = {}
 
                         for sub in subs_for_entity:
                             try:
                                 lang = await translator.get_language(sub["user_id"], sub["chat_id"])
-                                if lang not in diffs_by_lang:
+                                profile_key = (
+                                    lang,
+                                    sub.get("lesson_mode", "all"),
+                                    tuple(sorted(sub.get("selected_modules") or [])),
+                                )
+                                if profile_key not in diffs_by_profile:
                                     diff_text = diff_schedules(
-                                        old_schedule_data,
-                                        new_schedule_data,
+                                        _filter_schedule_for_subscription(old_schedule_data, sub),
+                                        _filter_schedule_for_subscription(new_schedule_data, sub),
                                         lang,
                                         use_short_names=True,
                                         short_names_map=short_names_map,
                                     )
-                                    diffs_by_lang[lang] = diff_text
+                                    diffs_by_profile[profile_key] = diff_text
 
-                                if diffs_by_lang[lang]:
+                                if diffs_by_profile[profile_key]:
                                     header = translator.gettext(
                                         lang,
                                         "schedule_change_notification",
@@ -346,7 +403,7 @@ async def check_for_schedule_updates(
                                     await send_telegram_message(
                                         http_session,
                                         sub["chat_id"],
-                                        f"{header}\n\n{diffs_by_lang[lang]}",
+                                        f"{header}\n\n{diffs_by_profile[profile_key]}",
                                         sub.get("message_thread_id"),
                                         request_kwargs=telegram_request_kwargs,
                                     )

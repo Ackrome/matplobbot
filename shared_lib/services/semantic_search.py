@@ -1,3 +1,10 @@
+"""PostgreSQL full-text search implementation.
+
+The historical module name is kept for import compatibility. The product
+feature is called *text search*: it uses PostgreSQL FTS and intentionally does
+not create embeddings or depend on a vector store.
+"""
+
 import json
 import logging
 import re

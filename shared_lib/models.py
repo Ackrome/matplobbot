@@ -97,6 +97,12 @@ class UserScheduleSubscription(Base):
     message_thread_id = Column(BigInteger, nullable=True)
     added_at = Column(DateTime(timezone=True), server_default=func.now())
     selected_modules = Column(JSON, server_default="[]", nullable=False)
+    # Canonical profile fields shared by Telegram notifications and WebCal.
+    profile_id = Column(String(128), nullable=True, index=True)
+    timezone = Column(String(64), nullable=False, server_default="Europe/Moscow")
+    delivery_mode = Column(String(16), nullable=False, server_default="telegram")
+    lesson_mode = Column(String(16), nullable=False, server_default="all")
+    calendar_enabled = Column(Boolean, nullable=False, server_default="true")
 
     __table_args__ = (
         UniqueConstraint(

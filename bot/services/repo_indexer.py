@@ -4,7 +4,8 @@ import logging
 
 import aiohttp
 
-from bot.config import GITHUB_TOKEN, MD_SEARCH_BRANCH
+from bot.config import GITHUB_TOKEN
+from bot.github_service import split_repo_reference
 from bot.services.text_utils import chunk_markdown
 from shared_lib.services.semantic_search import search_engine
 
@@ -13,12 +14,13 @@ logger = logging.getLogger(__name__)
 
 async def index_github_repository(repo_path: str):
     """
-    Downloads MD files and indexes them with Hybrid Search (Keyword + Vector).
+    Downloads Markdown files and indexes them for PostgreSQL text search.
     """
     if not GITHUB_TOKEN:
         logger.error("GITHUB_TOKEN is missing! Cannot index repository.")
         return
 
+    owner_repo, branch = split_repo_reference(repo_path)
     source_type_key = f"repo:{repo_path}"
 
     # 1. Clear old data
@@ -31,7 +33,7 @@ async def index_github_repository(repo_path: str):
     try:
         async with aiohttp.ClientSession(headers=headers) as session:
             url = (
-                f"https://api.github.com/repos/{repo_path}/git/trees/{MD_SEARCH_BRANCH}?recursive=1"
+                f"https://api.github.com/repos/{owner_repo}/git/trees/{branch}?recursive=1"
             )
             async with session.get(url) as response:
                 if response.status != 200:
@@ -48,7 +50,7 @@ async def index_github_repository(repo_path: str):
             for file_info in files:
                 file_path = file_info["path"]
                 raw_url = (
-                    f"https://raw.githubusercontent.com/{repo_path}/{MD_SEARCH_BRANCH}/{file_path}"
+                    f"https://raw.githubusercontent.com/{owner_repo}/{branch}/{file_path}"
                 )
 
                 try:

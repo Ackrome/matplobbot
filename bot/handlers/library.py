@@ -263,7 +263,7 @@ class LibraryManager:
             # search теперь async метод, await'им его напрямую
             return await search_library_examples(query, limit=20)
         except Exception as e:
-            logging.error(f"Semantic search failed: {e}", exc_info=True)
+            logging.error(f"Text search failed: {e}", exc_info=True)
             return []
 
     async def search_command(self, message: Message, state: FSMContext):

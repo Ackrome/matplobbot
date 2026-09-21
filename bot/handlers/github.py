@@ -3,7 +3,6 @@ import asyncio
 import hashlib
 import logging
 import os
-import re
 
 import aiohttp
 from aiogram import F, Router
@@ -24,7 +23,7 @@ from cachetools import TTLCache
 from shared_lib.i18n import translator
 from shared_lib.redis_client import redis_client
 
-from .. import database
+from .. import database, github_service
 from .. import keyboards as kb
 from ..config import SEARCH_RESULTS_PER_PAGE
 from ..services import github_display
@@ -482,9 +481,11 @@ class GitHubManager:
     async def process_add_repo(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
         lang = await translator.get_language(user_id, message.chat.id)
-        repo_path = message.text.strip()
+        repo_input = message.text.strip()
+        reference = github_service.parse_repo_reference(repo_input)
 
-        if re.match(r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$", repo_path):
+        if reference:
+            repo_path = reference.canonical
             success = await database.add_user_repo(user_id, repo_path)
             await message.answer(
                 translator.gettext(
@@ -534,11 +535,13 @@ class GitHubManager:
     async def process_edit_repo(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
         lang = await translator.get_language(user_id, message.chat.id)
-        new_repo_path = message.text.strip()
+        new_repo_input = message.text.strip()
         user_data = await state.get_data()
         old_repo_path = user_data.get("old_repo_path")
+        reference = github_service.parse_repo_reference(new_repo_input)
 
-        if re.match(r"^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$", new_repo_path):
+        if reference:
+            new_repo_path = reference.canonical
             await database.update_user_repo(user_id, old_repo_path, new_repo_path)
             await message.answer(
                 translator.gettext(lang, "repo_updated", new_repo_path=new_repo_path),

@@ -1,12 +1,83 @@
 import datetime
 import logging
+import re
+from dataclasses import dataclass
+from urllib.parse import quote, unquote
 
 import aiohttp
 from cachetools import TTLCache
 
-from .config import GITHUB_TOKEN, MD_SEARCH_BRANCH
+from .config import GITHUB_TOKEN
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_GITHUB_BRANCH = "main"
+
+
+@dataclass(frozen=True)
+class GitHubRepoReference:
+    """Canonical repository reference used by the bot and the indexer."""
+
+    owner_repo: str
+    branch: str = DEFAULT_GITHUB_BRANCH
+
+    @property
+    def canonical(self) -> str:
+        # Encode slashes so callback paths can still split ``owner/repo`` from
+        # a branch that itself contains slashes (for example ``release/v2``).
+        return f"{self.owner_repo}@{quote(self.branch, safe='')}"
+
+
+def parse_repo_reference(value: str | None) -> GitHubRepoReference | None:
+    """Parse ``owner/repo`` or a GitHub URL and preserve an explicit branch.
+
+    The database stores the canonical ``owner/repo@branch`` form.  A missing
+    branch intentionally resolves to ``main`` so existing rows keep their
+    historical behaviour.
+    """
+    raw = (value or "").strip()
+    if not raw:
+        return None
+
+    raw = re.sub(r"^https?://(?:www\.)?github\.com/", "", raw, flags=re.IGNORECASE)
+    raw = raw.split("?", 1)[0].split("#", 1)[0].strip("/")
+    parts = [part for part in raw.split("/") if part]
+    if len(parts) < 2:
+        return None
+
+    owner, repo = parts[0], parts[1]
+    if repo.endswith(".git"):
+        repo = repo[:-4]
+    explicit_branch = None
+    if "@" in repo:
+        repo, explicit_branch = repo.split("@", 1)
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", owner) or not re.fullmatch(
+        r"[A-Za-z0-9_.-]+", repo
+    ):
+        return None
+
+    branch = DEFAULT_GITHUB_BRANCH
+    if explicit_branch is not None:
+        branch = "/".join([explicit_branch, *parts[2:]]) if explicit_branch else branch
+    elif len(parts) >= 4 and parts[2].lower() in {"tree", "blob"}:
+        branch = "/".join(parts[3:]) or branch
+    elif len(parts) == 3 and parts[2] not in {"tree", "blob"}:
+        # Accept the compact ``owner/repo/branch`` form for branch names
+        # supplied without a GitHub URL.
+        branch = parts[2]
+
+    branch = unquote(branch).strip().strip("/") or DEFAULT_GITHUB_BRANCH
+    if any(char in branch for char in "?#[\\\"") or branch in {".", ".."}:
+        return None
+    return GitHubRepoReference(f"{owner}/{repo}", branch)
+
+
+def split_repo_reference(value: str) -> tuple[str, str]:
+    """Return ``(owner/repo, branch)`` and fall back safely for old rows."""
+    reference = parse_repo_reference(value)
+    if not reference:
+        return value, DEFAULT_GITHUB_BRANCH
+    return reference.owner_repo, reference.branch
 
 # Caches for GitHub API calls to reduce rate-limiting and speed up responses
 github_content_cache = TTLCache(maxsize=200, ttl=300)  # Cache for file contents (5 min)
@@ -21,7 +92,8 @@ async def get_github_repo_contents(repo_path: str, path: str = "") -> list[dict]
         logger.error("GITHUB_TOKEN environment variable not set. /lec_all command is disabled.")
         return None
 
-    cache_key = f"{repo_path}:{path}"
+    owner_repo, branch = split_repo_reference(repo_path)
+    cache_key = f"{owner_repo}@{branch}:{path}"
     # Check cache first
     cached_contents = github_dir_cache.get(cache_key)
     if cached_contents is not None:
@@ -29,13 +101,13 @@ async def get_github_repo_contents(repo_path: str, path: str = "") -> list[dict]
         return cached_contents
 
     # The URL for the contents API
-    url = f"https://api.github.com/repos/{repo_path}/contents/{path}"
+    url = f"https://api.github.com/repos/{owner_repo}/contents/{quote(path, safe='/')}"
     headers = {
         "Accept": "application/vnd.github.v3+json",
         "X-GitHub-Api-Version": "2022-11-28",
         "Authorization": f"Bearer {github_token}",
     }
-    params = {"ref": MD_SEARCH_BRANCH}
+    params = {"ref": branch}
 
     try:
         async with (
@@ -75,17 +147,19 @@ async def get_all_repo_files_cached(
     Fetches a list of all file paths in a repository using the Git Trees API.
     Results are cached to minimize API calls.
     """
+    owner_repo, branch = split_repo_reference(repo_path)
+    cache_key = f"{owner_repo}@{branch}"
     # Check cache first
-    if repo_path in github_repo_files_cache:
-        logger.info(f"Cache hit for repo file list: {repo_path}")
-        return github_repo_files_cache[repo_path]
+    if cache_key in github_repo_files_cache:
+        logger.info(f"Cache hit for repo file list: {cache_key}")
+        return github_repo_files_cache[cache_key]
 
     github_token = GITHUB_TOKEN
     if not github_token:
         logger.error("GITHUB_TOKEN environment variable not set. Cannot fetch repo file list.")
         return None
 
-    url = f"https://api.github.com/repos/{repo_path}/git/trees/{MD_SEARCH_BRANCH}?recursive=1"
+    url = f"https://api.github.com/repos/{owner_repo}/git/trees/{quote(branch, safe='')}?recursive=1"
     headers = {
         "Accept": "application/vnd.github.v3+json",
         "X-GitHub-Api-Version": "2022-11-28",
@@ -107,7 +181,7 @@ async def get_all_repo_files_cached(
                 ]
 
                 # Store in cache on success
-                github_repo_files_cache[repo_path] = file_paths
+                github_repo_files_cache[cache_key] = file_paths
                 logger.info(f"Fetched and cached {len(file_paths)} file paths for repo {repo_path}")
                 return file_paths
             else:
@@ -130,7 +204,8 @@ async def get_repo_contributors(repo_path: str, session: aiohttp.ClientSession) 
     Возвращает список словарей {'login': username, 'html_url': profile_url} или None в случае ошибки.
     """
     github_token = GITHUB_TOKEN
-    url = f"https://api.github.com/repos/{repo_path}/contributors"
+    owner_repo, _ = split_repo_reference(repo_path)
+    url = f"https://api.github.com/repos/{owner_repo}/contributors"
     headers = {"Accept": "application/vnd.github.v3+json"}
     if github_token:
         headers["Authorization"] = f"token {github_token}"
@@ -159,13 +234,18 @@ async def get_file_last_modified_date(
     Возвращает отформатированную строку с датой или None в случае ошибки.
     """
     github_token = GITHUB_TOKEN
-    url = f"https://api.github.com/repos/{repo_path}/commits?path={file_path}&page=1&per_page=1"
+    owner_repo, branch = split_repo_reference(repo_path)
+    url = f"https://api.github.com/repos/{owner_repo}/commits"
     headers = {"Accept": "application/vnd.github.v3+json"}
     if github_token:
         headers["Authorization"] = f"token {github_token}"
 
     try:
-        async with session.get(url, headers=headers) as response:
+        async with session.get(
+            url,
+            headers=headers,
+            params={"path": file_path, "sha": branch, "page": 1, "per_page": 1},
+        ) as response:
             if response.status == 200:
                 data = await response.json()
                 if data:

@@ -25,6 +25,7 @@ function createDefaultCalendarSubscriptionState() {
         sync_enabled: true,
         selected_profile_id: 'all',
         profile_limit: 0,
+        timezone_options: [{ value: 'Europe/Moscow', label: 'GMT+3 (Moscow)' }],
         eligibility: {
             available: false,
             has_telegram_link: false,
@@ -730,6 +731,15 @@ function renderCalendarSubscription() {
                         ` : `<div class="mt-1 text-xs font-bold text-slate-700 dark:text-slate-200">${escapeHtml(lessonModeLabel)}</div>`}
                     </div>
                     <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70">
+                        <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(t('schedule.calendar.meta.timezone', 'Timezone'))}</div>
+                        ${selectedProfile.kind === 'custom' ? `
+                            <select onchange="updateCalendarSubscriptionProfile('${escapeJsString(selectedProfile.id)}', { timezone: this.value })"
+                                class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                                ${(state.timezone_options || [{ value: 'Europe/Moscow', label: 'GMT+3 (Moscow)' }]).map((option) => `<option value="${escapeHtml(option.value)}" ${option.value === selectedProfile.timezone ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+                            </select>
+                        ` : `<div class="mt-1 text-xs font-bold text-slate-700 dark:text-slate-200">${escapeHtml(selectedProfile.timezone_label || 'GMT+3 (Moscow)')}</div>`}
+                    </div>
+                    <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70">
                         <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(t('schedule.calendar.meta.modules', 'Modules'))}</div>
                         <div class="mt-1 text-xs font-bold text-slate-700 dark:text-slate-200">${escapeHtml(modulesLabel)}</div>
                     </div>
@@ -1180,7 +1190,8 @@ window.createCalendarProfileFromCurrentView = async function() {
             entity_id: currentEntity.id,
             entity_name: currentEntity.name,
             lesson_mode: window.calendarCurrentViewMode,
-            modules: window.getCalendarCurrentViewModules()
+            modules: window.getCalendarCurrentViewModules(),
+            timezone: window.getSelectedCalendarProfile?.()?.timezone || 'Europe/Moscow'
         })
     });
 }

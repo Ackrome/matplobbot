@@ -101,7 +101,8 @@ async def _resolve_wikilinks(
         found_path = file_map.get(file_name_part.lower())
 
         if found_path:
-            url = f"https://github.com/{repo_path}/blob/{github_service.MD_SEARCH_BRANCH}/{quote(found_path)}"
+            owner_repo, branch = github_service.split_repo_reference(repo_path)
+            url = f"https://github.com/{owner_repo}/blob/{quote(branch, safe='/')}/{quote(found_path)}"
             return f"[{display_text}]({url})"
         else:
             return f"_{display_text}_"
@@ -131,7 +132,8 @@ async def display_github_file(
 ):
     """Fetches a file from GitHub and displays it."""
     lang = await translator.get_language(user_id, message.chat.id)
-    raw_url = f"https://raw.githubusercontent.com/{repo_path}/{github_service.MD_SEARCH_BRANCH}/{file_path}"
+    owner_repo, branch = github_service.split_repo_reference(repo_path)
+    raw_url = f"https://raw.githubusercontent.com/{owner_repo}/{quote(branch, safe='/')}/{quote(file_path, safe='/')}"
 
     if file_path.lower().endswith(".md"):
         content = github_service.github_content_cache.get(file_path)

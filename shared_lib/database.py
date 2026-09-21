@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import uuid
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, delete, func, insert, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -625,6 +626,13 @@ async def add_schedule_subscription(
     entity_id: str,
     entity_name: str,
     notification_time: datetime.time,
+    *,
+    profile_id: str | None = None,
+    timezone: str = "Europe/Moscow",
+    delivery_mode: str = "telegram",
+    lesson_mode: str = "all",
+    calendar_enabled: bool = True,
+    selected_modules: list[str] | None = None,
 ) -> int | None:
     async with get_session() as session:
         stmt = (
@@ -637,10 +645,26 @@ async def add_schedule_subscription(
                 entity_id=entity_id,
                 entity_name=entity_name,
                 notification_time=notification_time,
+                profile_id=profile_id,
+                timezone=timezone or "Europe/Moscow",
+                delivery_mode=delivery_mode or "telegram",
+                lesson_mode=lesson_mode or "all",
+                calendar_enabled=calendar_enabled,
+                selected_modules=selected_modules or [],
             )
             .on_conflict_do_update(
                 constraint="uq_schedule_subs",
-                set_=dict(entity_name=entity_name, is_active=True, user_id=user_id),
+                set_=dict(
+                    entity_name=entity_name,
+                    is_active=True,
+                    user_id=user_id,
+                    profile_id=profile_id,
+                    timezone=timezone or "Europe/Moscow",
+                    delivery_mode=delivery_mode or "telegram",
+                    lesson_mode=lesson_mode or "all",
+                    calendar_enabled=calendar_enabled,
+                    selected_modules=selected_modules or [],
+                ),
             )
             .returning(UserScheduleSubscription.id)
         )
@@ -688,6 +712,12 @@ async def get_user_subscriptions(
                 "entity_name": s.entity_name,
                 "notification_time": s.notification_time.strftime("%H:%M"),
                 "is_active": s.is_active,
+                "profile_id": s.profile_id or f"telegram-{s.id}",
+                "timezone": s.timezone or "Europe/Moscow",
+                "delivery_mode": s.delivery_mode or "telegram",
+                "lesson_mode": s.lesson_mode or "all",
+                "calendar_enabled": s.calendar_enabled is not False,
+                "selected_modules": list(s.selected_modules or []),
             }
             for s in subs
         ], total_count
@@ -728,6 +758,12 @@ async def get_chat_subscriptions(
                 "entity_name": s.entity_name,
                 "notification_time": s.notification_time.strftime("%H:%M"),
                 "is_active": s.is_active,
+                "profile_id": s.profile_id or f"telegram-{s.id}",
+                "timezone": s.timezone or "Europe/Moscow",
+                "delivery_mode": s.delivery_mode or "telegram",
+                "lesson_mode": s.lesson_mode or "all",
+                "calendar_enabled": s.calendar_enabled is not False,
+                "selected_modules": list(s.selected_modules or []),
             }
             for s in subs
         ], total_count
@@ -841,6 +877,11 @@ async def get_subscriptions_for_notification(notification_time: str) -> list:
                 "entity_id": s.entity_id,
                 "entity_name": s.entity_name,
                 "last_schedule_hash": s.last_schedule_hash,
+                "profile_id": s.profile_id or f"telegram-{s.id}",
+                "timezone": s.timezone or "Europe/Moscow",
+                "delivery_mode": s.delivery_mode or "telegram",
+                "lesson_mode": s.lesson_mode or "all",
+                "selected_modules": list(s.selected_modules or []),
             }
             for s in subs
         ]
@@ -861,9 +902,61 @@ async def get_all_active_subscriptions() -> list:
                 "entity_id": s.entity_id,
                 "entity_name": s.entity_name,
                 "last_schedule_hash": s.last_schedule_hash,
+                "profile_id": s.profile_id or f"telegram-{s.id}",
+                "timezone": s.timezone or "Europe/Moscow",
+                "delivery_mode": s.delivery_mode or "telegram",
+                "lesson_mode": s.lesson_mode or "all",
+                "calendar_enabled": s.calendar_enabled is not False,
+                "selected_modules": list(s.selected_modules or []),
             }
             for s in subs
         ]
+
+
+async def get_subscriptions_due_for_notification(now_utc: datetime.datetime | None = None) -> list:
+    """Return Telegram-delivery subscriptions whose local time is now.
+
+    ``notification_time`` is a wall-clock value in each profile's timezone;
+    legacy rows without a timezone use Moscow by design.
+    """
+    now_utc = now_utc or datetime.datetime.now(datetime.UTC)
+    async with get_session() as session:
+        result = await session.execute(
+            select(UserScheduleSubscription).where(
+                and_(
+                    UserScheduleSubscription.is_active.is_(True),
+                    UserScheduleSubscription.delivery_mode == "telegram",
+                )
+            )
+        )
+        due = []
+        for s in result.scalars().all():
+            timezone_name = s.timezone or "Europe/Moscow"
+            try:
+                local_now = now_utc.astimezone(ZoneInfo(timezone_name))
+            except Exception:
+                local_now = now_utc.astimezone(ZoneInfo("Europe/Moscow"))
+            if s.notification_time and s.notification_time.strftime("%H:%M") != local_now.strftime(
+                "%H:%M"
+            ):
+                continue
+            due.append(
+                {
+                    "id": s.id,
+                    "user_id": s.user_id,
+                    "chat_id": s.chat_id,
+                    "message_thread_id": s.message_thread_id,
+                    "entity_type": s.entity_type,
+                    "entity_id": s.entity_id,
+                    "entity_name": s.entity_name,
+                    "last_schedule_hash": s.last_schedule_hash,
+                    "profile_id": s.profile_id or f"telegram-{s.id}",
+                    "timezone": timezone_name,
+                    "lesson_mode": s.lesson_mode or "all",
+                    "selected_modules": list(s.selected_modules or []),
+                }
+            )
+        return due
 
 
 async def get_unique_active_subscription_entities() -> list:
@@ -1694,6 +1787,12 @@ async def get_subscription_by_id(subscription_id: int) -> dict | None:
                 "entity_name": sub.entity_name,
                 "is_active": sub.is_active,
                 "notification_time": sub.notification_time,
+                "profile_id": sub.profile_id or f"telegram-{sub.id}",
+                "timezone": sub.timezone or "Europe/Moscow",
+                "delivery_mode": sub.delivery_mode or "telegram",
+                "lesson_mode": sub.lesson_mode or "all",
+                "calendar_enabled": sub.calendar_enabled is not False,
+                "selected_modules": list(sub.selected_modules or []),
             }
         return None
 

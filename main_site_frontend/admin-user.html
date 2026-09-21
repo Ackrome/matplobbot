@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin user details | Matplobbot</title>
+  <link rel="stylesheet" href="/css/tailwind.css?v=6">
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+  <main class="mx-auto max-w-5xl px-4 py-8">
+    <div class="mb-6 flex items-center justify-between gap-4">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-blue-600">Admin only</p>
+        <h1 class="text-2xl font-bold">User details</h1>
+      </div>
+      <a class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm hover:bg-slate-100" href="/stats">Back to stats</a>
+    </div>
+    <section id="status" class="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600" role="status" aria-live="polite">Loading…</section>
+    <section id="profile" class="mt-4 hidden rounded-xl border border-slate-200 bg-white p-5"></section>
+    <section id="actions" class="mt-4 hidden overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div class="border-b border-slate-200 px-5 py-3"><h2 class="font-semibold">Recent actions</h2></div>
+      <div class="overflow-auto"><table class="w-full min-w-[640px] text-left text-sm"><thead class="bg-slate-50"><tr><th class="px-5 py-3">Time</th><th class="px-5 py-3">Type</th><th class="px-5 py-3">Details</th></tr></thead><tbody id="actionsBody"></tbody></table></div>
+    </section>
+  </main>
+  <script src="/js/runtime_config.js"></script>
+  <script src="/js/admin-user.js"></script>
+</body>
+</html>

@@ -35,7 +35,7 @@ from fastapi.templating import Jinja2Templates
 
 from shared_lib.database import close_db_pool, init_db_pool
 
-from .auth import get_current_user  # Import auth dependency
+from .auth import get_current_user, require_admin  # Import auth dependencies
 from .config import CORS_ALLOWED_ORIGINS
 from .middleware import CorrelationIdMiddleware
 from .openapi_docs import configure_openapi
@@ -124,7 +124,7 @@ async def read_root_html(request: Request):
     response_class=HTMLResponse,
     summary="Страница профиля пользователя",
     description="Отображает страницу с детальной информацией о действиях пользователя.",
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_admin)],
     include_in_schema=False,
 )
 async def read_user_details_html(request: Request, user_id: int):

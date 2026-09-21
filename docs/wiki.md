@@ -114,7 +114,7 @@ How to use:
 Commands:
 
 - `/matp_all`: interactive browse of indexed `matplobblib` materials.
-- `/matp_search`: semantic text search in library content.
+- `/matp_search`: PostgreSQL text search in library content (no vector store).
 - `/favorites`: opens saved favorite materials.
 
 What it does:
@@ -141,13 +141,43 @@ What it does:
 
 - Per-user repository management in settings.
 - Markdown viewer for selected file chunks.
-- Semantic search over configured repo sources.
+- PostgreSQL text search over configured repo sources; the legacy
+  `shared_lib/services/semantic_search.py` module name is retained for imports.
 
 How to use:
 
 1. Open `/settings` and add a GitHub repo (`owner/repo`) if none linked.
 2. Send `/lec_all` to browse notes.
 3. Send `/lec_search`, pick a repository, and enter query.
+
+GitHub repository references accept `owner/repo`, `owner/repo@branch`, or a
+GitHub `/tree/<branch>` URL. References without a branch use `main`; the
+canonical stored form is `owner/repo@branch`, and indexing, browsing, raw-file
+links, and commit lookups all use that branch.
+
+### Unified Schedule Profiles
+
+`user_schedule_subscriptions` is the canonical profile object shared by the
+Telegram bot and WebCal UI. It stores the entity, lesson mode, selected
+modules, delivery mode, timezone, notification time, and calendar visibility.
+Legacy website JSON profiles remain readable while new website profiles are
+also persisted in this table. Web changes are applied to every duplicate
+subscription for the same entity, and scheduler notifications are deduplicated
+to one message per Telegram user/entity. Moscow (`Europe/Moscow`, GMT+3) is the
+default; the calendar API exposes GMT±N carousel values. Telegram delivery is
+private-message plus iCal/WebCal link, while the Web UI exposes links only.
+
+The calendar API returns `timezone_options` and each profile includes
+`timezone`/`timezone_label`, allowing clients to render the timezone carousel
+without duplicating timezone rules.
+
+### Admin User Details
+
+Rows in the static `/stats` leaderboard link to `/admin-user.html?user_id=…`.
+The page uses the existing JWT session and requests the admin-protected
+`/api/stats/users/{user_id}/profile` endpoint; non-admin users never receive
+the profile data. The older FastAPI `/users/{user_id}` HTML route is admin-only
+as well.
 
 ### Unified Global Search
 

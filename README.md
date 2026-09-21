@@ -285,7 +285,7 @@ The repository uses GitHub Actions for CI and image publishing, with Jenkins han
 ## Roadmap
 
 - [x] Integrate SQLAlchemy Core instead of raw SQL
-- [x] Add semantic search for project materials
+- [x] Add PostgreSQL text search for project materials
 - [ ] Add plugin-based support for multiple universities
 - [ ] Support voice-driven schedule requests
 

@@ -313,6 +313,8 @@ class CalendarSubscriptionProfile(BaseModel):
     name: str
     kind: Literal["built_in", "custom"] = "built_in"
     lesson_mode: Literal["all", "exams_only"] = "all"
+    timezone: str = "Europe/Moscow"
+    timezone_label: str = "GMT+3"
     selected: bool = False
     can_delete: bool = False
     entity_type: str | None = None
@@ -333,6 +335,7 @@ class CalendarSubscriptionResponse(BaseModel):
     sync_enabled: bool = True
     selected_profile_id: str | None = None
     profile_limit: int = 0
+    timezone_options: list[dict[str, str]] = Field(default_factory=list)
     http_url: str | None = None
     webcal_url: str | None = None
     download_url: str | None = None
@@ -359,12 +362,14 @@ class CalendarSubscriptionProfileCreateRequest(BaseModel):
     entity_name: str = Field(..., min_length=1, max_length=255)
     lesson_mode: Literal["all", "exams_only"] = "all"
     modules: list[str] = Field(default_factory=list)
+    timezone: str = Field(default="Europe/Moscow", max_length=64)
 
 
 class CalendarSubscriptionProfileUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     lesson_mode: Literal["all", "exams_only"] | None = None
     modules: list[str] | None = None
+    timezone: str | None = Field(default=None, max_length=64)
 
 
 class CalendarSubscriptionProfileSelectRequest(BaseModel):

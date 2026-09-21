@@ -2,14 +2,14 @@ import hashlib
 import logging
 import re
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from email.utils import format_datetime, parsedate_to_datetime
 from typing import Any
 from urllib.parse import quote
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from sqlalchemy import select, tuple_
+from sqlalchemy import select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared_lib.database import (
@@ -19,7 +19,7 @@ from shared_lib.database import (
     get_user_subscriptions,
     regenerate_calendar_secret,
 )
-from shared_lib.models import CachedSchedule, WebAccount
+from shared_lib.models import CachedSchedule, UserScheduleSubscription, WebAccount
 from shared_lib.redis_client import redis_client
 from shared_lib.schemas import (
     CalendarSubscriptionProfileCreateRequest,
@@ -46,6 +46,19 @@ logger = logging.getLogger(__name__)
 CALENDAR_SYNC_KEY = "calendar_sync"
 CALENDAR_PROFILE_LIMIT = 6
 CALENDAR_TIMEZONE = "Europe/Moscow"
+CALENDAR_TIMEZONE_OPTIONS = [
+    *[
+        {"value": f"Etc/GMT+{offset}", "label": f"GMT-{offset}"}
+        for offset in range(12, 0, -1)
+    ],
+    {"value": "UTC", "label": "GMT+0"},
+    *[
+        {"value": f"Etc/GMT-{offset}", "label": f"GMT+{offset}"}
+        for offset in range(1, 15)
+        if offset != 3
+    ],
+    {"value": "Europe/Moscow", "label": "GMT+3 (Moscow)"},
+]
 DEFAULT_PROFILE_ID = "all"
 BUILT_IN_PROFILES = (
     {
@@ -71,6 +84,29 @@ CALENDAR_FEED_RESPONSE = {
         "content": {"text/calendar": {"schema": {"type": "string"}}},
     }
 }
+
+
+def _normalize_timezone(value: str | None) -> str:
+    """Normalize the carousel value while keeping Moscow the safe default."""
+    candidate = str(value or CALENDAR_TIMEZONE).strip()
+    if candidate == CALENDAR_TIMEZONE:
+        return candidate
+    if candidate in {option["value"] for option in CALENDAR_TIMEZONE_OPTIONS}:
+        return candidate
+    match = re.fullmatch(r"GMT\s*([+-])\s*(\d{1,2})", candidate, re.IGNORECASE)
+    if match:
+        offset = int(match.group(2))
+        if offset <= 14:
+            return f"Etc/GMT-{'%d' % offset}" if match.group(1) == "+" else f"Etc/GMT+{offset}"
+    return CALENDAR_TIMEZONE
+
+
+def _timezone_label(value: str | None) -> str:
+    normalized = _normalize_timezone(value)
+    for option in CALENDAR_TIMEZONE_OPTIONS:
+        if option["value"] == normalized:
+            return option["label"]
+    return "GMT+3 (Moscow)"
 
 
 def _get_calendar_base_url(request: Request) -> str:
@@ -170,6 +206,7 @@ def _normalize_custom_profile(raw_profile: object) -> dict | None:
         "entity_id": entity_id,
         "entity_name": entity_name,
         "modules": modules,
+        "timezone": _normalize_timezone(raw_profile.get("timezone")),
         "can_delete": True,
     }
 
@@ -216,6 +253,7 @@ def _serialize_calendar_sync_state(state: dict) -> dict:
                 "entity_name": profile["entity_name"],
                 "lesson_mode": profile["lesson_mode"],
                 "modules": list(profile.get("modules", [])),
+                "timezone": _normalize_timezone(profile.get("timezone")),
             }
             for profile in state.get("custom_profiles", [])
             if profile.get("id")
@@ -246,6 +284,60 @@ async def _save_calendar_sync_state(
     await db.commit()
     await db.refresh(account)
     return account
+
+
+async def _migrate_legacy_custom_profiles(
+    db: AsyncSession,
+    telegram_id: int,
+    sync_state: dict[str, Any],
+) -> None:
+    """Materialize pre-DB website profiles into canonical subscription rows."""
+    profiles = [profile for profile in sync_state.get("custom_profiles", []) if profile.get("id")]
+    if not profiles or not isinstance(db, AsyncSession):
+        return
+
+    result = await db.execute(
+        select(UserScheduleSubscription).where(UserScheduleSubscription.user_id == telegram_id)
+    )
+    existing_rows = list(result.scalars().all())
+    existing_ids = {str(row.profile_id) for row in existing_rows if row.profile_id}
+    existing_entities = {
+        (str(row.entity_type), str(row.entity_id)): row for row in existing_rows
+    }
+    changed = False
+    for profile in profiles:
+        if str(profile["id"]) in existing_ids:
+            continue
+        existing_entity = existing_entities.get(
+            (str(profile["entity_type"]), str(profile["entity_id"]))
+        )
+        if existing_entity:
+            existing_entity.profile_id = str(profile["id"])
+            existing_entity.timezone = _normalize_timezone(profile.get("timezone"))
+            existing_entity.lesson_mode = profile.get("lesson_mode", "all")
+            existing_entity.selected_modules = list(profile.get("modules") or [])
+            existing_entity.calendar_enabled = True
+            changed = True
+            continue
+        db.add(
+            UserScheduleSubscription(
+                user_id=telegram_id,
+                chat_id=telegram_id,
+                entity_type=profile["entity_type"],
+                entity_id=str(profile["entity_id"]),
+                entity_name=profile["entity_name"],
+                notification_time=time(8, 0),
+                profile_id=str(profile["id"]),
+                timezone=_normalize_timezone(profile.get("timezone")),
+                delivery_mode="calendar",
+                lesson_mode=profile.get("lesson_mode", "all"),
+                selected_modules=list(profile.get("modules") or []),
+                calendar_enabled=True,
+            )
+        )
+        changed = True
+    if changed:
+        await db.commit()
 
 
 def _build_eligibility(telegram_id: int | None, active_subs: list[dict]) -> dict:
@@ -284,14 +376,47 @@ def _build_source_summary(all_subs: list[dict], active_subs: list[dict]) -> dict
     }
 
 
-def _build_profile_definitions(sync_state: dict) -> list[dict]:
-    return [dict(profile) for profile in BUILT_IN_PROFILES] + [
-        dict(profile) for profile in sync_state.get("custom_profiles", [])
-    ]
+def _subscription_to_profile(subscription: dict[str, Any]) -> dict[str, Any]:
+    """Project one canonical DB subscription into the Web profile shape."""
+    profile_id = str(subscription.get("profile_id") or f"telegram-{subscription.get('id')}")
+    return {
+        "id": profile_id,
+        "name": subscription.get("entity_name") or profile_id,
+        "kind": "custom",
+        "lesson_mode": subscription.get("lesson_mode") or "all",
+        "timezone": _normalize_timezone(subscription.get("timezone")),
+        "entity_type": subscription.get("entity_type"),
+        "entity_id": str(subscription.get("entity_id")),
+        "entity_name": subscription.get("entity_name"),
+        "modules": list(subscription.get("selected_modules") or []),
+        "can_delete": subscription.get("delivery_mode") == "calendar",
+        "delivery_mode": subscription.get("delivery_mode") or "telegram",
+    }
 
 
-def _find_profile_definition(sync_state: dict, profile_id: str) -> dict | None:
-    for profile in _build_profile_definitions(sync_state):
+def _build_profile_definitions(
+    sync_state: dict, active_subs: list[dict[str, Any]] | None = None
+) -> list[dict]:
+    profiles = [dict(profile) for profile in BUILT_IN_PROFILES]
+    seen_ids: set[str] = set()
+    for profile in sync_state.get("custom_profiles", []):
+        profile_copy = dict(profile)
+        profile_copy["timezone"] = _normalize_timezone(profile_copy.get("timezone"))
+        profiles.append(profile_copy)
+        seen_ids.add(str(profile_copy.get("id")))
+    for subscription in active_subs or []:
+        profile = _subscription_to_profile(subscription)
+        if profile["id"] in seen_ids:
+            continue
+        profiles.append(profile)
+        seen_ids.add(profile["id"])
+    return profiles
+
+
+def _find_profile_definition(
+    sync_state: dict, profile_id: str, active_subs: list[dict[str, Any]] | None = None
+) -> dict | None:
+    for profile in _build_profile_definitions(sync_state, active_subs):
         if profile["id"] == profile_id:
             return profile
     return None
@@ -328,10 +453,15 @@ def _build_calendar_source_list(
     active_subs: list[dict[str, Any]],
     sync_state: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    custom_sources: list[dict[str, Any]] = [
-        dict(source) for source in _get_custom_profile_sources(sync_state)
-    ]
-    return [dict(subscription) for subscription in active_subs] + custom_sources
+    sources: list[dict[str, Any]] = []
+    seen_entities: set[tuple[str, str]] = set()
+    for subscription in [*active_subs, *_get_custom_profile_sources(sync_state)]:
+        entity_key = (str(subscription.get("entity_type")), str(subscription.get("entity_id")))
+        if entity_key in seen_entities:
+            continue
+        seen_entities.add(entity_key)
+        sources.append(dict(subscription))
+    return sources
 
 
 def _get_sources_for_profile(
@@ -564,6 +694,7 @@ async def _build_calendar_subscription_response(
     all_subs: list[dict] = []
     active_subs: list[dict] = []
     if telegram_id:
+        await _migrate_legacy_custom_profiles(db, int(telegram_id), sync_state)
         all_subs, _ = await get_user_subscriptions(telegram_id, page=0, page_size=100)
         active_subs = [subscription for subscription in all_subs if subscription["is_active"]]
 
@@ -587,7 +718,7 @@ async def _build_calendar_subscription_response(
 
     profiles = []
     selected_profile_id = sync_state.get("selected_profile_id", DEFAULT_PROFILE_ID)
-    for profile in _build_profile_definitions(sync_state):
+    for profile in _build_profile_definitions(sync_state, active_subs):
         filtered_schedule = _filter_schedule_for_profile(base_schedule, profile)
         links = _build_calendar_links(request, secret, profile["id"]) if secret else {}
         profiles.append(
@@ -596,6 +727,8 @@ async def _build_calendar_subscription_response(
                 "name": profile["name"],
                 "kind": profile["kind"],
                 "lesson_mode": profile.get("lesson_mode", "all"),
+                "timezone": _normalize_timezone(profile.get("timezone")),
+                "timezone_label": _timezone_label(profile.get("timezone")),
                 "selected": profile["id"] == selected_profile_id,
                 "can_delete": bool(profile.get("can_delete")),
                 "entity_type": profile.get("entity_type"),
@@ -622,6 +755,7 @@ async def _build_calendar_subscription_response(
         sync_enabled=bool(sync_state.get("enabled", True)),
         selected_profile_id=selected_profile_id,
         profile_limit=CALENDAR_PROFILE_LIMIT,
+        timezone_options=CALENDAR_TIMEZONE_OPTIONS,
         http_url=selected_links.get("http_url"),
         webcal_url=selected_links.get("webcal_url"),
         download_url=selected_links.get("download_url"),
@@ -717,6 +851,88 @@ def _build_custom_profile_name(payload: CalendarSubscriptionProfileCreateRequest
     return name
 
 
+async def _upsert_canonical_calendar_profile(
+    db: AsyncSession,
+    telegram_id: int,
+    profile: dict[str, Any],
+    existing_subscriptions: list[dict[str, Any]],
+) -> None:
+    """Persist the Web profile in the same table used by Telegram subscriptions.
+
+    The JSON profile remains a read-compatible projection for old clients; all
+    new writes are represented by a database row so Web settings can update
+    Telegram delivery without a second profile object.
+    """
+    matching = next(
+        (
+            sub
+            for sub in existing_subscriptions
+            if sub.get("entity_type") == profile["entity_type"]
+            and str(sub.get("entity_id")) == str(profile["entity_id"])
+        ),
+        None,
+    )
+    values = {
+        "profile_id": profile["id"],
+        "timezone": _normalize_timezone(profile.get("timezone")),
+        "lesson_mode": profile.get("lesson_mode", "all"),
+        "selected_modules": list(profile.get("modules") or []),
+        "calendar_enabled": True,
+        "entity_name": profile.get("entity_name") or profile.get("name"),
+        "is_active": True,
+    }
+    if matching and matching.get("id"):
+        await db.execute(
+            update(UserScheduleSubscription)
+            .where(
+                UserScheduleSubscription.id == int(matching["id"]),
+                UserScheduleSubscription.user_id == telegram_id,
+            )
+            .values(**values)
+        )
+    else:
+        db.add(
+            UserScheduleSubscription(
+                user_id=telegram_id,
+                chat_id=telegram_id,
+                entity_type=profile["entity_type"],
+                entity_id=str(profile["entity_id"]),
+                entity_name=values["entity_name"],
+                notification_time=time(8, 0),
+                profile_id=profile["id"],
+                timezone=values["timezone"],
+                delivery_mode="calendar",
+                lesson_mode=values["lesson_mode"],
+                selected_modules=values["selected_modules"],
+                calendar_enabled=True,
+            )
+        )
+    await db.commit()
+
+
+async def _update_entity_profile_rows(
+    db: AsyncSession,
+    telegram_id: int,
+    profile: dict[str, Any],
+) -> None:
+    """Apply Web profile settings to every duplicate subscription for the entity."""
+    await db.execute(
+        update(UserScheduleSubscription)
+        .where(
+            UserScheduleSubscription.user_id == telegram_id,
+            UserScheduleSubscription.entity_type == profile.get("entity_type"),
+            UserScheduleSubscription.entity_id == str(profile.get("entity_id")),
+        )
+        .values(
+            lesson_mode=profile.get("lesson_mode", "all"),
+            selected_modules=list(profile.get("modules") or []),
+            timezone=_normalize_timezone(profile.get("timezone")),
+            calendar_enabled=True,
+        )
+    )
+    await db.commit()
+
+
 @router.get(
     "/cal/subscription",
     response_model=CalendarSubscriptionResponse,
@@ -787,7 +1003,10 @@ async def select_calendar_subscription_profile(
     _validate_calendar_sync_user(current_user)
     account = await _get_account_for_current_user(current_user, db)
     sync_state = _normalize_calendar_sync_state(current_user.get("preferences"))
-    if not _find_profile_definition(sync_state, payload.profile_id):
+    telegram_id = int(current_user["telegram_id"])
+    active_rows, _ = await get_user_subscriptions(telegram_id, page=0, page_size=100)
+    active_rows = [row for row in active_rows if row.get("is_active")]
+    if not _find_profile_definition(sync_state, payload.profile_id, active_rows):
         raise HTTPException(status_code=404, detail="Calendar profile not found")
 
     sync_state["selected_profile_id"] = payload.profile_id
@@ -811,8 +1030,10 @@ async def create_calendar_subscription_profile(
     current_user: dict = Depends(get_current_user),
 ):
     _validate_calendar_sync_user(current_user)
+    telegram_id = int(current_user["telegram_id"])
     account = await _get_account_for_current_user(current_user, db)
     sync_state = _normalize_calendar_sync_state(current_user.get("preferences"))
+    existing_subscriptions, _ = await get_user_subscriptions(telegram_id, page=0, page_size=100)
 
     normalized_modules = sorted({module.strip() for module in payload.modules if module.strip()})
     existing_profile = next(
@@ -846,10 +1067,23 @@ async def create_calendar_subscription_profile(
                 "entity_id": str(payload.entity_id),
                 "entity_name": payload.entity_name,
                 "modules": normalized_modules,
+                "timezone": _normalize_timezone(payload.timezone),
                 "can_delete": True,
             }
         )
         sync_state["selected_profile_id"] = profile_id
+
+    selected_profile = next(
+        profile
+        for profile in sync_state["custom_profiles"]
+        if profile["id"] == sync_state["selected_profile_id"]
+    )
+    await _upsert_canonical_calendar_profile(
+        db,
+        telegram_id,
+        selected_profile,
+        existing_subscriptions,
+    )
 
     account = await _save_calendar_sync_state(account, db, sync_state)
     await _warm_calendar_profile_cache(request, payload.entity_type, str(payload.entity_id))
@@ -872,6 +1106,7 @@ async def delete_calendar_subscription_profile(
     current_user: dict = Depends(get_current_user),
 ):
     _validate_calendar_sync_user(current_user)
+    telegram_id = int(current_user["telegram_id"])
     account = await _get_account_for_current_user(current_user, db)
     sync_state = _normalize_calendar_sync_state(current_user.get("preferences"))
 
@@ -879,12 +1114,37 @@ async def delete_calendar_subscription_profile(
         profile for profile in sync_state["custom_profiles"] if profile["id"] != profile_id
     ]
     if len(next_profiles) == len(sync_state["custom_profiles"]):
-        raise HTTPException(status_code=404, detail="Calendar profile not found")
+        # Canonical Telegram rows may be selected even when the legacy JSON
+        # projection is absent. They are not deleted by this Web-only action;
+        # disabling their calendar keeps Telegram delivery intact.
+        all_subscriptions, _ = await get_user_subscriptions(telegram_id, page=0, page_size=100)
+        if not any(str(sub.get("profile_id")) == profile_id for sub in all_subscriptions):
+            raise HTTPException(status_code=404, detail="Calendar profile not found")
+        await db.execute(
+            update(UserScheduleSubscription)
+            .where(
+                UserScheduleSubscription.user_id == telegram_id,
+                UserScheduleSubscription.profile_id == profile_id,
+            )
+            .values(is_active=False, calendar_enabled=False)
+        )
+        await db.commit()
+        return await _build_calendar_subscription_response(request, current_user, db)
 
     sync_state["custom_profiles"] = next_profiles
     sync_state["profile_status"].pop(profile_id, None)
     if sync_state.get("selected_profile_id") == profile_id:
         sync_state["selected_profile_id"] = DEFAULT_PROFILE_ID
+
+    await db.execute(
+        update(UserScheduleSubscription)
+        .where(
+            UserScheduleSubscription.user_id == telegram_id,
+            UserScheduleSubscription.profile_id == profile_id,
+        )
+        .values(is_active=False, calendar_enabled=False)
+    )
+    await db.commit()
 
     account = await _save_calendar_sync_state(account, db, sync_state)
     current_user["preferences"] = (
@@ -907,6 +1167,7 @@ async def update_calendar_subscription_profile(
     current_user: dict = Depends(get_current_user),
 ):
     _validate_calendar_sync_user(current_user)
+    telegram_id = int(current_user["telegram_id"])
     account = await _get_account_for_current_user(current_user, db)
     sync_state = _normalize_calendar_sync_state(current_user.get("preferences"))
 
@@ -915,7 +1176,17 @@ async def update_calendar_subscription_profile(
         None,
     )
     if not profile:
-        raise HTTPException(status_code=404, detail="Calendar profile not found")
+        all_subscriptions, _ = await get_user_subscriptions(telegram_id, page=0, page_size=100)
+        profile = next(
+            (
+                _subscription_to_profile(sub)
+                for sub in all_subscriptions
+                if str(sub.get("profile_id")) == profile_id
+            ),
+            None,
+        )
+        if not profile:
+            raise HTTPException(status_code=404, detail="Calendar profile not found")
 
     if payload.name is not None:
         profile["name"] = payload.name.strip()
@@ -925,6 +1196,10 @@ async def update_calendar_subscription_profile(
         profile["modules"] = sorted(
             {str(module).strip() for module in payload.modules if str(module).strip()}
         )
+    if payload.timezone is not None:
+        profile["timezone"] = _normalize_timezone(payload.timezone)
+
+    await _update_entity_profile_rows(db, telegram_id, profile)
 
     account = await _save_calendar_sync_state(account, db, sync_state)
     current_user["preferences"] = (
@@ -952,14 +1227,15 @@ async def _resolve_public_calendar_context(
     if account and not sync_state.get("enabled", True):
         raise HTTPException(status_code=404, detail="Calendar not found")
 
-    profile = _find_profile_definition(sync_state, profile_id)
+    await _migrate_legacy_custom_profiles(db, telegram_user_id, sync_state)
+    all_subs, _ = await get_user_subscriptions(telegram_user_id, page=0, page_size=100)
+    active_subs = [subscription for subscription in all_subs if subscription["is_active"]]
+    profile = _find_profile_definition(sync_state, profile_id, active_subs)
     if profile_id == DEFAULT_PROFILE_ID and not profile:
         profile = dict(BUILT_IN_PROFILES[0])
     if not profile:
         raise HTTPException(status_code=404, detail="Calendar profile not found")
 
-    all_subs, _ = await get_user_subscriptions(telegram_user_id, page=0, page_size=100)
-    active_subs = [subscription for subscription in all_subs if subscription["is_active"]]
     return telegram_user_id, account, sync_state, active_subs, profile
 
 
@@ -990,7 +1266,7 @@ async def _render_public_calendar_feed(
         filtered_schedule,
         calendar_name=_build_calendar_name(profile),
         calendar_description=_build_calendar_description(profile),
-        timezone_name=CALENDAR_TIMEZONE,
+        timezone_name=_normalize_timezone(profile.get("timezone")),
     )
     etag = f'"{hashlib.sha256(ical_bytes).hexdigest()}"'
 
@@ -1079,7 +1355,9 @@ async def _render_telegram_filtered_feed(
         aggregated_schedule,
         calendar_name="Matplobbot Telegram filtered schedule",
         calendar_description="Personal schedule feed filtered by Telegram subscription settings.",
-        timezone_name=CALENDAR_TIMEZONE,
+        timezone_name=_normalize_timezone(
+            active_subs[0].get("timezone") if active_subs else CALENDAR_TIMEZONE
+        ),
     )
     disposition = "attachment" if download else "inline"
     return Response(

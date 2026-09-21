@@ -132,7 +132,7 @@ async def search_library_examples(query: str, limit: int = 20) -> list[dict[str,
     try:
         raw_results = await search_engine.search(query, source_type="lib", top_k=limit)
     except Exception as exc:
-        logger.error("Library semantic search failed: %s", exc, exc_info=True)
+        logger.error("Library text search failed: %s", exc, exc_info=True)
         return []
 
     return [
@@ -153,7 +153,7 @@ async def search_repository_markdown(
             query, source_type=f"repo:{repo_path}", top_k=limit
         )
     except Exception as exc:
-        logger.error("GitHub semantic search failed for %s: %s", repo_path, exc, exc_info=True)
+        logger.error("GitHub text search failed for %s: %s", repo_path, exc, exc_info=True)
         return []
 
     return format_github_search_results(raw_results, repo_path)

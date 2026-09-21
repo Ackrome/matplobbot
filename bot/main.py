@@ -200,7 +200,7 @@ async def run_bot_once(ruz_api_client_instance) -> None:
 async def main():
     await init_db_pool()
 
-    logging.info("Scheduling semantic search index build...")
+    logging.info("Scheduling PostgreSQL text search index build...")
     _start_background_task(index_matplobblib_library(), "matplobblib-index")
 
     timeout_client = aiohttp.ClientTimeout(total=600)

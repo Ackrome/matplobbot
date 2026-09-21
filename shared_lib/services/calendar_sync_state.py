@@ -8,6 +8,7 @@ from urllib.parse import quote
 CALENDAR_SYNC_KEY = "calendar_sync"
 CALENDAR_PROFILE_LIMIT = 6
 DEFAULT_PROFILE_ID = "all"
+DEFAULT_TIMEZONE = "Europe/Moscow"
 
 BUILT_IN_PROFILES = (
     {
@@ -36,6 +37,19 @@ class CalendarProfilePayload:
     entity_name: str
     lesson_mode: str = "all"
     modules: tuple[str, ...] = ()
+    timezone: str = DEFAULT_TIMEZONE
+
+
+def normalize_timezone(value: str | None) -> str:
+    candidate = str(value or DEFAULT_TIMEZONE).strip()
+    if candidate in {DEFAULT_TIMEZONE, "UTC"} or re.fullmatch(
+        r"Etc/GMT[+-](?:0|[1-9]|1[0-2]|1[3-4])", candidate
+    ):
+        return candidate
+    match = re.fullmatch(r"GMT\s*([+-])\s*(\d{1,2})", candidate, re.IGNORECASE)
+    if match and int(match.group(2)) <= 14:
+        return f"Etc/GMT-{'%d' % int(match.group(2))}" if match.group(1) == "+" else f"Etc/GMT+{int(match.group(2))}"
+    return DEFAULT_TIMEZONE
 
 
 def default_calendar_sync_state() -> dict:
@@ -92,6 +106,7 @@ def normalize_custom_profile(raw_profile: object) -> dict | None:
         "entity_name": entity_name,
         "modules": modules,
         "can_delete": True,
+        "timezone": normalize_timezone(raw_profile.get("timezone")),
     }
 
 
@@ -137,6 +152,7 @@ def serialize_calendar_sync_state(state: dict) -> dict:
                 "entity_name": profile["entity_name"],
                 "lesson_mode": profile["lesson_mode"],
                 "modules": list(profile.get("modules", [])),
+                "timezone": normalize_timezone(profile.get("timezone")),
             }
             for profile in state.get("custom_profiles", [])
             if profile.get("id")
@@ -239,6 +255,7 @@ def upsert_custom_profile(
                 entity_name=payload.entity_name,
                 lesson_mode=payload.lesson_mode,
                 modules=tuple(normalized_modules),
+                timezone=payload.timezone,
             )
         ),
         "kind": "custom",
@@ -248,6 +265,7 @@ def upsert_custom_profile(
         "entity_name": payload.entity_name,
         "modules": normalized_modules,
         "can_delete": True,
+        "timezone": normalize_timezone(payload.timezone),
     }
     next_state["custom_profiles"].append(profile)
     next_state["selected_profile_id"] = profile["id"]

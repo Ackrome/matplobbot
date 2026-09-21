@@ -478,6 +478,7 @@ async def format_schedule(
     start_date: date,
     is_week_view: bool = False,
     subscription_id: int | None = None,
+    lesson_mode: str = "all",
 ) -> str:
     """Formats a list of lessons into a readable daily schedule using Variant B (Subgroup Hierarchy)."""
     if not schedule_data:
@@ -531,6 +532,13 @@ async def format_schedule(
                     filtered_data.append(lesson)
 
             schedule_data = filtered_data
+
+    if lesson_mode == "exams_only":
+        schedule_data = [
+            lesson
+            for lesson in schedule_data
+            if _get_simple_lesson_type(lesson.get("kindOfWork", "")) in {"Exam", "Consultation"}
+        ]
 
     # --- 1. Fetch Settings ---
     user_settings = await get_user_settings(user_id)
