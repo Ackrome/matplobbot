@@ -1,4 +1,4 @@
-﻿const API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : "/api";
+const API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : "/api";
 const token = localStorage.getItem("jwt_token");
 
 if (!token) {
@@ -1529,8 +1529,8 @@ function renderLeaderboard() {
         elements.leaderboardBody.innerHTML = pageData.rows
             .map((user, index) => {
                 const rankLabel = pageData.startIndex + index;
-                const initial = user.full_name ? user.full_name[0].toUpperCase() : "?";
-                const username = user.username ? `@${user.username}` : "-";
+                const initial = user.full_name ? escapeHtml(user.full_name[0].toUpperCase()) : "?";
+                const username = user.username ? `@${escapeHtml(user.username)}` : "-";
                 const lastActive = user.last_action_time ? formatDateTime(user.last_action_time) : "-";
 
                 return `
@@ -1540,7 +1540,7 @@ function renderLeaderboard() {
                             <div class="flex items-center gap-3">
                                 <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm">${initial}</div>
                                 <div class="min-w-0">
-                                    <div class="font-semibold text-slate-800 truncate">${user.full_name}</div>
+                                    <div class="font-semibold text-slate-800 truncate">${escapeHtml(user.full_name)}</div>
                                     <div class="text-xs text-slate-500 truncate">${username}</div>
                                 </div>
                             </div>

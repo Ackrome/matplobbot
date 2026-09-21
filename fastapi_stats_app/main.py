@@ -138,3 +138,8 @@ app.include_router(studio_router.router, prefix="/api")
 app.include_router(stats_router.router, prefix="/api")
 app.include_router(ws_router.router, tags=["websockets"])
 app.include_router(calendar_router.router, prefix="/api", tags=["calendar"])
+
+
+@app.get("/api/users/{user_id}/avatar", include_in_schema=False)
+async def get_user_avatar_alias(user_id: int):
+    return await stats_router.get_user_avatar(user_id)

@@ -20,6 +20,7 @@ from shared_lib.database import (
     get_user_settings,
     upsert_cached_schedule,
 )
+from shared_lib.html_tools import split_telegram_html_message
 from shared_lib.i18n import translator
 from shared_lib.redis_client import redis_client
 from shared_lib.request_context import generate_correlation_id, set_correlation_id
@@ -86,16 +87,16 @@ async def send_telegram_message(
         return await post_payload(payload)
 
     logger.info(
-        f"Message for chat {chat_id} is too long ({len(text)} chars). Splitting into chunks."
+        f"Message for chat {chat_id} is too long ({len(text)} chars). Splitting into HTML-safe chunks."
     )
+    chunks = split_telegram_html_message(text, max_chars=3800)
     last_result = None
-    for i in range(0, len(text), TELEGRAM_MESSAGE_LIMIT):
-        chunk = text[i : i + TELEGRAM_MESSAGE_LIMIT]
+    for i, chunk in enumerate(chunks):
         payload = {"chat_id": chat_id, "text": chunk, "parse_mode": "HTML"}
         if message_thread_id:
             payload["message_thread_id"] = message_thread_id
 
-        if reply_markup and (i + TELEGRAM_MESSAGE_LIMIT >= len(text)):
+        if reply_markup and (i == len(chunks) - 1):
             payload["reply_markup"] = reply_markup
 
         last_result = await post_payload(payload)

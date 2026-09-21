@@ -1,3 +1,4 @@
+import logging
 import os
 from dataclasses import dataclass
 
@@ -80,6 +81,22 @@ AUTH_PASSWORD_REGISTRATION_ENABLED = _read_bool_env(
     "AUTH_PASSWORD_REGISTRATION_ENABLED",
     False,
 )
+
+ENVIRONMENT = os.getenv("ENVIRONMENT", os.getenv("APP_ENV", "development")).strip().lower()
+IS_PRODUCTION = ENVIRONMENT in {"production", "prod", "live"}
+
+if IS_PRODUCTION:
+    if not STATS_PASS or STATS_PASS.lower() in ("admin", "password", "123456"):
+        raise RuntimeError(
+            "Insecure STATS_PASS detected in production environment! "
+            "Please set a strong STATS_PASS in your .env file."
+        )
+else:
+    if STATS_PASS == "admin":
+        logging.getLogger(__name__).warning(
+            "Using default admin password (STATS_PASS='admin'). "
+            "Do not use default credentials in production!"
+        )
 
 
 def _parse_admin_user_ids() -> set[int]:

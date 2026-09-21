@@ -1404,3 +1404,11 @@ How to use:
 - Legacy stats alias `/api/stats/stats/action_users` is deprecating; migrate clients to `/api/stats/action_users`.
 - Website API base can be switched per environment with `window.__MPB_API_BASE__`.
 - Bot and website schedule features are intentionally coupled through shared subscription data and cached schedule sources.
+
+## Security Maintenance Notes
+
+- Avatar responses use `/api/stats/users/{user_id}/avatar`; the backend keeps the Telegram bot token server-side and only proxies users already present in the application database. The proxy uses the shared Telegram HTTP/proxy configuration and a bounded in-memory cache.
+- Production FastAPI deployments must set `ENVIRONMENT=production` (the production Compose file sets it explicitly) and provide a non-default `STATS_PASS` and `JWT_SECRET_KEY`. Development may use an ephemeral JWT key, which invalidates tokens after restart.
+- LaTeX compilation rejects shell execution, direct file I/O, unsafe external file references, absolute paths, and traversal. Compilation runs from the temporary project directory with `-no-shell-escape` and a non-root worker.
+- Long Telegram HTML messages are split into balanced chunks. Callers must provide a positive `max_chars` large enough for the tags they need to preserve.
+- Keep TatSu pinned below `5.7`: `ics==0.7.2` still uses the `buffer_class` parser option removed by later TatSu releases. Verify `from fastapi_stats_app.main import app` after dependency updates.

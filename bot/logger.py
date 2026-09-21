@@ -36,9 +36,9 @@ async def _get_avatar_pic_url(bot, user_id: int) -> str | None:
         user_photos = await bot.get_user_profile_photos(user_id, limit=1)
         avatar_pic_url = None
         if user_photos and user_photos.photos and user_photos.photos[0]:
-            file_id = user_photos.photos[0][0].file_id
-            file_info = await bot.get_file(file_id)
-            avatar_pic_url = f"https://api.telegram.org/file/bot{bot.token}/{file_info.file_path}"
+            # Never store bot.token in database or URLs.
+            # Use safe proxy endpoint provided by backend API.
+            avatar_pic_url = f"/api/stats/users/{user_id}/avatar"
 
         _avatar_cache[user_id] = (now + AVATAR_CACHE_TTL_SECONDS, avatar_pic_url)
         return avatar_pic_url

@@ -102,6 +102,10 @@ Create a `.env` file in the project root. This is a minimal example for local st
 BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
 ADMIN_USER_IDS=123456789,987654321
 GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+JWT_SECRET_KEY=change_this_to_a_secure_random_jwt_secret_in_production
+STATS_USER=admin
+STATS_PASS=change_this_admin_password_in_production
+ENVIRONMENT=development
 
 POSTGRES_USER=user
 POSTGRES_PASSWORD=password

@@ -16,4 +16,14 @@ COPY bot/templates/ /app/bot/templates/
 
 RUN chmod +x /app/bot/pandoc_mermaid_filter.py
 
+# Create a non-root user for secure worker execution. Do not force UID 1000:
+# the node-based base image already reserves that UID for its `node` user.
+RUN if id -u appuser >/dev/null 2>&1; then \
+      :; \
+    else \
+      useradd -m -s /bin/bash appuser; \
+    fi && chown -R appuser:appuser /app
+
+USER appuser
+
 CMD ["celery", "-A", "shared_lib.celery_app", "worker", "--loglevel=info", "--concurrency=2"]

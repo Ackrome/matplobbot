@@ -1,3 +1,12 @@
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const pathParts = window.location.pathname.split('/');
     const userId = pathParts[pathParts.length - 1];
@@ -139,20 +148,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let avatarHtml = '';
         if (user.avatar_pic_url) {
-            avatarHtml = `<img src="${user.avatar_pic_url}" alt="Avatar" class="w-10 h-10 rounded-full object-cover border border-gray-300 dark:border-gray-600">`;
+            avatarHtml = `<img src="${escapeHtml(user.avatar_pic_url)}" alt="Avatar" class="w-10 h-10 rounded-full object-cover border border-gray-300 dark:border-gray-600">`;
         } else {
-            const initial = (user.full_name && user.full_name.trim().length > 0) ? user.full_name.trim()[0].toUpperCase() : '?';
+            const initial = (user.full_name && user.full_name.trim().length > 0) ? escapeHtml(user.full_name.trim()[0].toUpperCase()) : '?';
             avatarHtml = `<div class="fallback-avatar w-10 h-10 text-base">${initial}</div>`;
         }
 
         const usernameText = user.username && user.username !== 'Нет username'
-            ? `<a href="https://t.me/${user.username}" target="_blank" class="text-blue-500 hover:underline">@${user.username}</a>`
-            : `<span class="text-gray-400">ID: ${user.user_id}</span>`;
+            ? `<a href="https://t.me/${encodeURIComponent(user.username)}" target="_blank" class="text-blue-500 hover:underline">@${escapeHtml(user.username)}</a>`
+            : `<span class="text-gray-400">ID: ${escapeHtml(user.user_id)}</span>`;
 
         profileHeaderElement.innerHTML = `
             ${avatarHtml}
             <div class="leading-tight">
-                <h1 class="font-bold text-gray-900 dark:text-white text-lg line-clamp-1">${user.full_name}</h1>
+                <h1 class="font-bold text-gray-900 dark:text-white text-lg line-clamp-1">${escapeHtml(user.full_name)}</h1>
                 <div class="text-sm text-gray-500 dark:text-gray-400">${usernameText}</div>
             </div>
         `;
@@ -217,19 +226,19 @@ document.addEventListener('DOMContentLoaded', function() {
         if (isAdminMessage) {
             // Сообщение от Админа (исходящее)
             icon = '';
-            contentHtml = `<span class="whitespace-pre-wrap">${action.action_details}</span>`;
+            contentHtml = `<span class="whitespace-pre-wrap">${escapeHtml(action.action_details)}</span>`;
         } else if (isCommand) {
             icon = '🤖';
-            contentHtml = `<span class="font-mono text-blue-600 dark:text-blue-400 font-semibold">${action.action_details}</span>`;
+            contentHtml = `<span class="font-mono text-blue-600 dark:text-blue-400 font-semibold">${escapeHtml(action.action_details)}</span>`;
         } else if (action.action_type === 'text_message') {
             icon = '💬';
-            contentHtml = `<span class="whitespace-pre-wrap">${action.action_details || 'Empty message'}</span>`;
+            contentHtml = `<span class="whitespace-pre-wrap">${escapeHtml(action.action_details || 'Empty message')}</span>`;
         } else if (action.action_type === 'callback_query') {
             icon = '👆';
-            contentHtml = `<span class="italic text-gray-500">Нажал:</span> <span class="font-mono bg-gray-200 dark:bg-gray-700 px-1 rounded text-xs">${action.action_details}</span>`;
+            contentHtml = `<span class="italic text-gray-500">Нажал:</span> <span class="font-mono bg-gray-200 dark:bg-gray-700 px-1 rounded text-xs">${escapeHtml(action.action_details)}</span>`;
         } else {
             icon = '⚡';
-            contentHtml = `<span class="text-sm">${action.action_type}: ${action.action_details}</span>`;
+            contentHtml = `<span class="text-sm">${escapeHtml(action.action_type)}: ${escapeHtml(action.action_details)}</span>`;
         }
 
         // Иконку показываем только для входящих сообщений

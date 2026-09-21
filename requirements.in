@@ -31,5 +31,7 @@ redis>=5.1.1,<6
 requests>=2.33.0,<3
 setuptools>=83.0.0,<84
 sqlalchemy[asyncio]>=2.0.36,<3
-tatsu>=5.6.1,<6
+# ics 0.7.2 passes the legacy ``buffer_class`` parser option; newer TatSu
+# releases removed it and make the FastAPI app fail during import.
+tatsu>=5.6.1,<5.7
 weasyprint>=70.0,<71

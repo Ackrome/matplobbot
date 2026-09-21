@@ -1324,7 +1324,14 @@ async def get_leaderboard_data_from_db(session: AsyncSession):
         ORDER BY actions_count DESC LIMIT 100;
     """)
     result = await session.execute(stmt)
-    return [dict(row._mapping) for row in result]
+    rows = []
+    for row in result:
+        item = dict(row._mapping)
+        avatar = item.get("avatar_pic_url")
+        if avatar and "api.telegram.org/file/bot" in avatar:
+            item["avatar_pic_url"] = f"/api/stats/users/{item['user_id']}/avatar"
+        rows.append(item)
+    return rows
 
 
 async def get_popular_commands_data_from_db(session: AsyncSession):
@@ -1462,11 +1469,15 @@ async def get_user_profile_data_from_db(
         for r in rows
     ]
 
+    avatar_url = user.avatar_pic_url
+    if avatar_url and "api.telegram.org/file/bot" in avatar_url:
+        avatar_url = f"/api/stats/users/{user.user_id}/avatar"
+
     user_details = {
         "user_id": user.user_id,
         "full_name": user.full_name,
         "username": user.username or "Нет username",
-        "avatar_pic_url": user.avatar_pic_url,
+        "avatar_pic_url": avatar_url,
         "total_actions": total_actions,
     }
 

@@ -1,10 +1,11 @@
-# fastapi_stats_app/routers/stats_router.py
 import csv
 import html
 import json
 import logging
 import math
 import os
+import time as _time
+from collections import OrderedDict
 from datetime import UTC, date, datetime, time, timedelta
 from email.utils import format_datetime
 from io import StringIO
@@ -27,7 +28,7 @@ from shared_lib.database import (
     log_user_action,
 )
 from shared_lib.egress import get_telegram_proxy_url
-from shared_lib.models import DisciplineModule
+from shared_lib.models import DisciplineModule, User
 from shared_lib.redis_client import redis_client
 from shared_lib.request_context import generate_correlation_id, get_correlation_id
 from shared_lib.schemas import (
@@ -56,6 +57,9 @@ logger = logging.getLogger(__name__)
 
 CACHE_TTL = 300
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+_avatar_image_cache: OrderedDict[int, tuple[float, bytes]] = OrderedDict()
+AVATAR_IMAGE_CACHE_TTL = 3600  # 1 hour
+AVATAR_IMAGE_CACHE_MAX_ENTRIES = 512
 SUPPORTED_USER_EXPORT_FORMATS = {"json", "csv", "weekly_pdf"}
 PROFILE_SORT_BY_ALLOWED = ("id", "action_type", "action_details", "timestamp")
 ACTION_USERS_SORT_BY_ALLOWED = ("user_id", "full_name", "username")
@@ -1110,3 +1114,89 @@ async def get_activity(current_user: dict = Depends(require_admin)):
 async def get_proxy_diagnostics(current_user: dict = Depends(require_admin)):
     payload, source_url, error = await _fetch_proxy_summary_payload()
     return _build_proxy_diagnostics_response(payload, source_url=source_url, error=error)
+
+
+@router.get(
+    "/users/{user_id}/avatar",
+    summary="User avatar proxy",
+    description="Safely proxy user avatar from Telegram API without exposing BOT_TOKEN.",
+)
+async def get_user_avatar(user_id: int):
+    if user_id <= 0:
+        raise HTTPException(status_code=404, detail="Avatar unavailable")
+
+    token = BOT_TOKEN or os.getenv("BOT_TOKEN")
+    if not token:
+        raise HTTPException(status_code=404, detail="Avatar unavailable")
+
+    now = _time.time()
+    cached = _avatar_image_cache.get(user_id)
+    if cached and cached[0] > now:
+        _avatar_image_cache.move_to_end(user_id)
+        return Response(
+            content=cached[1],
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    if cached:
+        _avatar_image_cache.pop(user_id, None)
+
+    # Only proxy avatars for users known to the application. This prevents the
+    # endpoint from becoming an unrestricted Telegram profile-photo proxy.
+    async with get_session() as db:
+        known_user = await db.scalar(select(User.user_id).where(User.user_id == user_id))
+    if known_user is None:
+        raise HTTPException(status_code=404, detail="Avatar unavailable")
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=10)
+        session_kwargs, request_kwargs = build_telegram_http_client_config(
+            timeout,
+            get_telegram_proxy_url(),
+            log_context="stats avatar proxy",
+        )
+
+        async with aiohttp.ClientSession(**session_kwargs) as session:
+            photos_url = f"https://api.telegram.org/bot{token}/getUserProfilePhotos"
+            async with session.get(
+                photos_url,
+                params={"user_id": user_id, "limit": 1},
+                **request_kwargs,
+            ) as resp:
+                if resp.status != 200:
+                    raise HTTPException(status_code=404, detail="Failed to fetch user photos")
+                data = await resp.json()
+                photos = data.get("result", {}).get("photos", [])
+                if not photos or not photos[0]:
+                    raise HTTPException(status_code=404, detail="User has no avatar")
+                file_id = photos[0][0]["file_id"]
+
+            file_url = f"https://api.telegram.org/bot{token}/getFile"
+            async with session.get(file_url, params={"file_id": file_id}, **request_kwargs) as resp:
+                if resp.status != 200:
+                    raise HTTPException(status_code=404, detail="Failed to fetch file info")
+                data = await resp.json()
+                file_path = data.get("result", {}).get("file_path")
+                if not file_path:
+                    raise HTTPException(status_code=404, detail="File path not found")
+
+            download_url = f"https://api.telegram.org/file/bot{token}/{file_path}"
+            async with session.get(download_url, **request_kwargs) as resp:
+                if resp.status != 200:
+                    raise HTTPException(status_code=404, detail="Failed to download avatar image")
+                image_bytes = await resp.read()
+
+        _avatar_image_cache[user_id] = (now + AVATAR_IMAGE_CACHE_TTL, image_bytes)
+        _avatar_image_cache.move_to_end(user_id)
+        while len(_avatar_image_cache) > AVATAR_IMAGE_CACHE_MAX_ENTRIES:
+            _avatar_image_cache.popitem(last=False)
+        return Response(
+            content=image_bytes,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Error proxying avatar for user {user_id}: {e}")
+        raise HTTPException(status_code=404, detail="Avatar not found")

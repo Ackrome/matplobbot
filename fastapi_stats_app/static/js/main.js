@@ -1,3 +1,12 @@
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+}
+
 const totalActionsValueElement = document.getElementById('total-actions-value');
 const leaderboardBodyElement = document.getElementById('leaderboard-body');
 const popularActionsStatusElement = document.getElementById('popular-actions-status');
@@ -230,20 +239,20 @@ function handleStatsSocketMessage(event) {
 
                     let avatarHtml = '';
                     if (user.avatar_pic_url) {
-                        avatarHtml = `<img class="w-8 h-8 rounded-full object-cover" src="${user.avatar_pic_url}" alt="Avatar">`;
+                        avatarHtml = `<img class="w-8 h-8 rounded-full object-cover" src="${escapeHtml(user.avatar_pic_url)}" alt="Avatar">`;
                     } else {
-                        const initial = (user.full_name && user.full_name.trim().length > 0) ? user.full_name.trim()[0] : '?';
+                        const initial = (user.full_name && user.full_name.trim().length > 0) ? escapeHtml(user.full_name.trim()[0]) : '?';
                         avatarHtml = `<div class="fallback-avatar">${initial}</div>`;
                     }
 
-                    const nameLink = `<a href="/users/${user.user_id}" class="font-medium text-blue-600 dark:text-blue-400 hover:underline">${user.full_name}</a>`;
+                    const nameLink = `<a href="/users/${encodeURIComponent(user.user_id)}" class="font-medium text-blue-600 dark:text-blue-400 hover:underline">${escapeHtml(user.full_name)}</a>`;
                     tdUser.innerHTML = `${avatarHtml} <div>${nameLink}</div>`;
                     tr.appendChild(tdUser);
 
                     const tdTag = document.createElement('td');
                     tdTag.className = "px-6 py-4";
                     if (user.username && user.username !== 'Нет username') {
-                        tdTag.innerHTML = `<span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-gray-700 dark:text-gray-300">@${user.username}</span>`;
+                        tdTag.innerHTML = `<span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-gray-700 dark:text-gray-300">@${escapeHtml(user.username)}</span>`;
                     } else {
                         tdTag.innerHTML = `<span class="text-gray-400 text-xs">-</span>`;
                     }
@@ -313,10 +322,10 @@ function handleLogSocketMessage(event) {
         const [, timestamp, level, loggerName, moduleName, funcName, lineNo, message] = match;
         const levelClass = `level-${level.toLowerCase()}`;
         newLogEntry.innerHTML = `
-            <span class="timestamp">${timestamp}</span>
-            <span class="${levelClass}">[${level}]</span>
-            <span class="text-gray-500 dark:text-gray-400 ml-1 text-[10px]">${loggerName}</span>
-            <span class="message ml-2">${message}</span>
+            <span class="timestamp">${escapeHtml(timestamp)}</span>
+            <span class="${escapeHtml(levelClass)}">[${escapeHtml(level)}]</span>
+            <span class="text-gray-500 dark:text-gray-400 ml-1 text-[10px]">${escapeHtml(loggerName)}</span>
+            <span class="message ml-2">${escapeHtml(message)}</span>
         `;
     } else {
         newLogEntry.textContent = logText;
@@ -538,9 +547,9 @@ function fetchUsersForModal(label, type, page = 1) {
                 <tbody>
                     ${data.users.map(u => `
                         <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
-                            <td class="px-6 py-4">${u.user_id}</td>
-                            <td class="px-6 py-4"><a href="/users/${u.user_id}" target="_blank" class="text-blue-500 hover:underline">${u.full_name}</a></td>
-                            <td class="px-6 py-4">${u.username}</td>
+                            <td class="px-6 py-4">${escapeHtml(u.user_id)}</td>
+                            <td class="px-6 py-4"><a href="/users/${encodeURIComponent(u.user_id)}" target="_blank" class="text-blue-500 hover:underline">${escapeHtml(u.full_name)}</a></td>
+                            <td class="px-6 py-4">${escapeHtml(u.username)}</td>
                         </tr>
                     `).join('')}
                 </tbody>

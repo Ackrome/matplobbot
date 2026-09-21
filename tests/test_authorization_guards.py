@@ -60,9 +60,18 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
     def test_ws_guard_rejects_other_user(self):
         self.assertFalse(can_subscribe_user_updates({"role": "user", "telegram_id": 1}, 2))
 
-    def test_get_jwt_secret_key_raises_if_missing(self):
-        with patch.dict(os.environ, {}, clear=True), self.assertRaises(RuntimeError):
+    def test_get_jwt_secret_key_raises_if_missing_in_production(self):
+        with patch.dict(os.environ, {"ENVIRONMENT": "production"}, clear=True), self.assertRaises(RuntimeError):
             _get_jwt_secret_key()
+
+    def test_get_jwt_secret_key_raises_for_prod_alias(self):
+        with patch.dict(os.environ, {"ENVIRONMENT": "prod"}, clear=True), self.assertRaises(RuntimeError):
+            _get_jwt_secret_key()
+
+    def test_get_jwt_secret_key_fallback_in_development(self):
+        with patch.dict(os.environ, {"ENVIRONMENT": "development"}, clear=True):
+            key = _get_jwt_secret_key()
+            self.assertTrue(bool(key))
 
     def test_get_jwt_secret_key_returns_value(self):
         with patch.dict(os.environ, {"JWT_SECRET_KEY": "abc"}, clear=True):

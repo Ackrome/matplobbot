@@ -127,6 +127,8 @@ services:
         max-size: "10m"
         max-file: "3"
     env_file: ./.env
+    environment:
+      - ENVIRONMENT=production
     ports:
       - "127.0.0.1:9583:9583"
     depends_on:

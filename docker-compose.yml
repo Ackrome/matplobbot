@@ -151,6 +151,7 @@ services:
     volumes:
       # Пробрасываем папку с нашим HTML внутрь Nginx
       - ./main_site_frontend:/usr/share/nginx/html:ro
+      - ./main_site_frontend/default.conf:/etc/nginx/conf.d/default.conf:ro
     # Порт 8080 внутри Docker, Caddy будет перекидывать сюда трафик
     ports:
       - "8080:80"

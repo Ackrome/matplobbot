@@ -1,4 +1,5 @@
 import base64
+import binascii
 import html
 import io
 import logging
@@ -432,14 +433,13 @@ def parse_latex_log(log_path: str) -> list[dict]:
 @app.task(bind=True, soft_time_limit=60, name="shared_lib.tasks.compile_full_latex")
 def compile_full_latex_task(self, latex_code: str):
     """Быстрая компиляция одного файла (Quick Mode)"""
-    forbidden_commands = [r"\write18", r"\openout", r"\newwrite", r"\immediate"]
-    for cmd in forbidden_commands:
-        if cmd in latex_code:
-            return {
-                "status": "error",
-                "message": f"Security violation: {cmd} is forbidden.",
-                "errors": [{"line": 1, "message": f"Forbidden command: {cmd}"}],
-            }
+    is_safe, reason = _validate_latex_source(latex_code)
+    if not is_safe:
+        return {
+            "status": "error",
+            "message": f"Security restriction: {reason}",
+            "errors": [{"line": 1, "message": reason}],
+        }
 
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -456,11 +456,13 @@ def compile_full_latex_task(self, latex_code: str):
                     "-pdf",
                     "-interaction=nonstopmode",
                     "-halt-on-error",
+                    "-no-shell-escape",
                     f"-output-directory={temp_dir}",
                     tex_path,
                 ],
                 capture_output=True,
                 timeout=50,
+                cwd=temp_dir,
             )
 
             if not os.path.exists(pdf_path):
@@ -526,6 +528,58 @@ def _safe_extract_zip(zf: zipfile.ZipFile, destination: str):
             shutil.copyfileobj(src, dst)
 
 
+LATEX_SOURCE_EXTENSIONS = (".tex", ".ltx", ".latex", ".sty", ".cls", ".bib", ".dtx", ".ins")
+
+DANGEROUS_LATEX_PATTERNS = [
+    (
+        re.compile(r"\\(?:write18|sys_shell)\b", re.IGNORECASE),
+        "Shell execution via write18/sys_shell is forbidden",
+    ),
+    (
+        re.compile(r"\\(?:openin|newread|openout|newwrite|read|write)\b", re.IGNORECASE),
+        "Direct file I/O (openin/newread/openout/newwrite/read/write) is forbidden",
+    ),
+]
+
+LATEX_FILE_REFERENCE_RE = re.compile(
+    r"\\(?:input|include|subfile|includegraphics|lstinputlisting|verbatiminput|inputminted|bibliography)"
+    r"\s*(?:\[[^]]*\])?\s*\{([^{}]*)\}",
+    re.IGNORECASE,
+)
+LATEX_UNBRACED_REFERENCE_RE = re.compile(
+    r"\\(?:input|include|subfile|includegraphics|lstinputlisting|verbatiminput|inputminted)\s+(?!\{)",
+    re.IGNORECASE,
+)
+
+
+def _validate_latex_source(text: str) -> tuple[bool, str | None]:
+    # TeX comments can hide whitespace and split a command across lines. Scan
+    # a comment-normalized copy so simple obfuscation cannot bypass checks.
+    scan_text = re.sub(r"(?<!\\)%[^\r\n]*", " ", text)
+
+    for pattern, reason in DANGEROUS_LATEX_PATTERNS:
+        if pattern.search(scan_text):
+            return False, reason
+
+    if LATEX_UNBRACED_REFERENCE_RE.search(scan_text):
+        return False, "Unbraced external file references (input/include/etc.) are forbidden"
+
+    for match in LATEX_FILE_REFERENCE_RE.finditer(scan_text):
+        command_match = re.match(r"\\([A-Za-z]+)", match.group(0))
+        command = f"\\{command_match.group(1)}" if command_match else "LaTeX command"
+        target = match.group(1).strip().replace("\\", "/")
+        if not target or "\x00" in target:
+            return False, f"Invalid file reference in {command}"
+        if target.startswith("/") or re.match(r"^[A-Za-z]:/", target):
+            return False, f"Absolute path in {command} is forbidden"
+        if any(part == ".." for part in target.split("/")):
+            return False, f"Path traversal in {command} is forbidden"
+        if not re.fullmatch(r"[A-Za-z0-9._+/- ]+", target):
+            return False, f"Dynamic or unsafe file reference in {command} is forbidden"
+
+    return True, None
+
+
 @app.task(bind=True, soft_time_limit=60, name="shared_lib.tasks.compile_project")
 def compile_project_task(
     self, project_files: list, main_file: str, build_cache_b64: str | None = None
@@ -553,11 +607,46 @@ def compile_project_task(
                 os.makedirs(os.path.dirname(full_path), exist_ok=True)
 
                 if pf.get("binary"):
+                    try:
+                        binary_content = base64.b64decode(pf["binary"], validate=True)
+                    except (ValueError, TypeError, binascii.Error) as exc:
+                        return {
+                            "status": "error",
+                            "message": f"Invalid base64 content in {path}: {exc}",
+                            "errors": [{"line": 1, "message": "Invalid base64 content"}],
+                        }
+
+                    if path.lower().endswith(LATEX_SOURCE_EXTENSIONS):
+                        try:
+                            file_text = binary_content.decode("utf-8")
+                        except UnicodeDecodeError:
+                            return {
+                                "status": "error",
+                                "message": f"Security restriction in {path}: LaTeX source must be UTF-8 text",
+                                "errors": [{"line": 1, "message": "LaTeX source must be UTF-8 text"}],
+                            }
+                        is_safe, reason = _validate_latex_source(file_text)
+                        if not is_safe:
+                            return {
+                                "status": "error",
+                                "message": f"Security restriction in {path}: {reason}",
+                                "errors": [{"line": 1, "message": reason}],
+                            }
+
                     with open(full_path, "wb") as f:
-                        f.write(base64.b64decode(pf["binary"]))
+                        f.write(binary_content)
                 else:
+                    file_text = pf.get("text", "")
+                    if path.lower().endswith(LATEX_SOURCE_EXTENSIONS):
+                        is_safe, reason = _validate_latex_source(file_text)
+                        if not is_safe:
+                            return {
+                                "status": "error",
+                                "message": f"Security restriction in {path}: {reason}",
+                                "errors": [{"line": 1, "message": reason}],
+                            }
                     with open(full_path, "w", encoding="utf-8") as f:
-                        f.write(pf.get("text", ""))
+                        f.write(file_text)
 
             tex_path = _safe_join(temp_dir, main_file)
             if not tex_path:
@@ -570,17 +659,25 @@ def compile_project_task(
             pdf_path = os.path.splitext(tex_path)[0] + ".pdf"
             log_path = os.path.splitext(tex_path)[0] + ".log"
 
-            # 3. Компиляция (Добавлен флаг -synctex=1)
+            # 3. Компиляция (с защитой от выполнения шелла и SyncTeX)
             compile_cmd = [
                 "latexmk",
                 "-pdf",
                 "-interaction=nonstopmode",
                 "-halt-on-error",
+                "-no-shell-escape",
                 "-synctex=1",
                 f"-output-directory={temp_dir}",
                 tex_path,
             ]
-            subprocess.run(compile_cmd, capture_output=True, text=True, errors="ignore", timeout=50)
+            subprocess.run(
+                compile_cmd,
+                capture_output=True,
+                text=True,
+                errors="ignore",
+                timeout=50,
+                cwd=temp_dir,
+            )
 
             # 4. Упаковка артефактов в новый кэш
             out_cache_b64 = None

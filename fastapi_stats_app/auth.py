@@ -4,7 +4,9 @@ import binascii
 import hashlib
 import hmac
 import json
+import logging
 import os
+import secrets
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -21,12 +23,21 @@ from shared_lib.models import User, WebAccount
 
 from .config import ADMIN_USER_IDS
 
+logger = logging.getLogger(__name__)
+
 
 def _get_jwt_secret_key() -> str:
     secret_key = os.getenv("JWT_SECRET_KEY")
-    if not secret_key:
-        raise RuntimeError("JWT_SECRET_KEY environment variable must be set")
-    return secret_key
+    if secret_key:
+        return secret_key
+    env = os.getenv("ENVIRONMENT", os.getenv("APP_ENV", "development")).strip().lower()
+    if env in {"production", "prod", "live"}:
+        raise RuntimeError("JWT_SECRET_KEY environment variable must be set in production")
+    logger.warning(
+        "JWT_SECRET_KEY environment variable is not set! Using an ephemeral secret key for this process. "
+        "Generated tokens will become invalid upon application restart. Set JWT_SECRET_KEY in production."
+    )
+    return secrets.token_urlsafe(32)
 
 
 SECRET_KEY = _get_jwt_secret_key()
@@ -258,6 +269,8 @@ async def get_current_user(
         if tg_user:
             display_name = tg_user.full_name
             avatar_url = tg_user.avatar_pic_url
+            if avatar_url and "api.telegram.org/file/bot" in avatar_url:
+                avatar_url = f"/api/stats/users/{account.telegram_id}/avatar"
 
     return {
         "id": account.id,
