@@ -1,3 +1,4 @@
+import html
 import logging
 
 from aiogram import Router
@@ -61,8 +62,10 @@ class RenderingManager:
             await status_msg.delete()
             await message.answer_photo(
                 photo=BufferedInputFile(image_buffer.read(), filename="formula.png"),
-                caption=translator.gettext(lang, "latex_your_formula", formula=formula),
-                parse_mode="markdown",
+                caption=translator.gettext(
+                    lang, "latex_your_formula", formula=html.escape(formula, quote=False)
+                ),
+                parse_mode="HTML",
             )
             await message.answer(
                 translator.gettext(lang, "choose_next_command"),

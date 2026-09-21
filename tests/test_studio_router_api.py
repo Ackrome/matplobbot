@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 FASTAPI_AVAILABLE = True
 try:
-    from fastapi import FastAPI
+    from fastapi import FastAPI, HTTPException
     from fastapi.testclient import TestClient
 
     os.environ.setdefault("JWT_SECRET_KEY", "test-secret-for-unit-tests")
@@ -80,6 +80,15 @@ class TestStudioRouterAPI(unittest.TestCase):
 
     def tearDown(self):
         self.app.dependency_overrides.clear()
+
+    def test_project_filename_rejects_paths_and_control_characters(self):
+        self.assertEqual(
+            studio_router._sanitize_project_filename("diagram.png"), "diagram.png"
+        )
+        for filename in ("../secret.txt", "nested/image.png", r"nested\image.png", "bad\x00.txt"):
+            with self.subTest(filename=filename), self.assertRaises(HTTPException) as raised:
+                studio_router._sanitize_project_filename(filename)
+            self.assertEqual(raised.exception.status_code, 400)
 
     def test_project_ownership_guard_returns_404(self):
         self.db.execute.return_value = _mock_scalar_result(None)

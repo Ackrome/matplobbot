@@ -35,7 +35,6 @@ let statsSocketManager;
 const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 const wsHost = window.location.host;
 const statsWsUrl = `${wsProtocol}//${wsHost}/ws/stats/total_actions`;
-const logWsUrl = `${wsProtocol}//${wsHost}/ws/bot_log`;
 
 const chartDataStore = {};
 let lastSyncDate = null;
@@ -310,37 +309,6 @@ function handleStatsSocketError() {
     setConnectionState('offline', 'Ошибка соединения');
     showToast('error', 'Ошибка соединения со статистикой');
 }
-function handleLogSocketMessage(event) {
-    const newLogEntry = document.createElement('div');
-    newLogEntry.className = "log-entry"; // Basic CSS class from styles.css
-    const logText = event.data;
-
-    const logRegex = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) - (INFO|WARNING|ERROR|CRITICAL|DEBUG) - ([a-zA-Z0-9_.]+) - ([a-zA-Z0-9_<>.]+)\.([a-zA-Z0-9_<>]+):(\d+) - (.*)$/;
-    const match = logText.match(logRegex);
-
-    if (match) {
-        const [, timestamp, level, loggerName, moduleName, funcName, lineNo, message] = match;
-        const levelClass = `level-${level.toLowerCase()}`;
-        newLogEntry.innerHTML = `
-            <span class="timestamp">${escapeHtml(timestamp)}</span>
-            <span class="${escapeHtml(levelClass)}">[${escapeHtml(level)}]</span>
-            <span class="text-gray-500 dark:text-gray-400 ml-1 text-[10px]">${escapeHtml(loggerName)}</span>
-            <span class="message ml-2">${escapeHtml(message)}</span>
-        `;
-    } else {
-        newLogEntry.textContent = logText;
-        if (logText.includes("ERROR")) newLogEntry.classList.add("text-red-400");
-    }
-
-    botLogContentElement.appendChild(newLogEntry);
-    if (botLogContentElement.childElementCount > 200) {
-        botLogContentElement.removeChild(botLogContentElement.firstChild);
-    }
-    botLogContentElement.scrollTop = botLogContentElement.scrollHeight;
-
-    if (botLogStatusElement.textContent) botLogStatusElement.textContent = '';
-}
-
 function updateCombinedPopularActionsChart() {
     const filter = document.querySelector('input[name="actionFilter"]:checked').value;
     const commands = (chartDataStore.popularCommands || []).map(d => ({ label: d.command, count: d.count, type: 'command' }));
@@ -628,19 +596,10 @@ document.addEventListener('DOMContentLoaded', function() {
         statsRetryButtonElement.addEventListener('click', reconnectStats);
     }
 
-    const logSocketManager = new WebSocketManager(logWsUrl, {
-        onOpen: () => {
-            botLogStatusElement.textContent = 'Connected';
-        },
-        onMessage: handleLogSocketMessage,
-        onClose: () => {
-            botLogStatusElement.textContent = 'Disconnected';
-        },
-        onError: () => {
-            botLogStatusElement.textContent = 'Connection error';
-        },
-    });
-    logSocketManager.connect();
+    if (botLogStatusElement) botLogStatusElement.textContent = 'Docker logs';
+    if (botLogContentElement) {
+        botLogContentElement.textContent = 'Live log streaming is disabled. Use docker compose logs -f mpb-telegram-bot.';
+    }
 
     document.querySelectorAll('input[name="actionFilter"]').forEach(r => r.addEventListener('change', updateCombinedPopularActionsChart));
     document.querySelectorAll('input[name="timeFilter"]').forEach(r => r.addEventListener('change', updateActivityOverTimeChart));

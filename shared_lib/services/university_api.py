@@ -31,8 +31,10 @@ class RuzAPIClient:
         self.initial_delay = initial_delay
         self.backoff_factor = backoff_factor
 
-    async def _request(self, sub_url: str) -> dict[str, Any] | list[dict[str, Any]]:
-        full_url = self.HOST + sub_url
+    async def _request(
+        self, path: str, params: dict[str, str] | None = None
+    ) -> dict[str, Any] | list[dict[str, Any]]:
+        full_url = self.HOST + path
         ssl_context = ssl.create_default_context(cafile=certifi.where())
         last_exception = None
 
@@ -40,7 +42,10 @@ class RuzAPIClient:
             try:
                 # Добавляем явный таймаут на запрос, чтобы не висеть бесконечно
                 async with self.session.get(
-                    full_url, ssl=ssl_context, timeout=aiohttp.ClientTimeout(total=15)
+                    full_url,
+                    params=params,
+                    ssl=ssl_context,
+                    timeout=aiohttp.ClientTimeout(total=15),
                 ) as response:
                     if response.status == 200:
                         try:
@@ -73,14 +78,17 @@ class RuzAPIClient:
 
     async def search(self, term: str, search_type: str) -> list[dict[str, Any]]:
         """Generic search function."""
-        return await self._request(f"/api/search?term={term}&type={search_type}")
+        return await self._request(
+            "/api/search", params={"term": term, "type": search_type}
+        )
 
     async def get_schedule(
         self, entity_type: str, entity_id: str, start: str, finish: str
     ) -> list[dict[str, Any]]:
         """Generic function to get a schedule."""
         return await self._request(
-            f"/api/schedule/{entity_type}/{entity_id}?start={start}&finish={finish}&lng=1"
+            f"/api/schedule/{entity_type}/{entity_id}",
+            params={"start": start, "finish": finish, "lng": "1"},
         )
 
 

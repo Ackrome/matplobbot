@@ -56,6 +56,15 @@
         document.documentElement.dataset.theme = webApp.colorScheme === "dark" ? "dark" : "light";
     }
 
+    function updateBackButton() {
+        if (!webApp?.BackButton) return;
+        if (window.history.length > 1) {
+            webApp.BackButton.show();
+        } else {
+            webApp.BackButton.hide?.();
+        }
+    }
+
     async function exchangeInitData() {
         if (!isTelegramLaunch) {
             markTelegramAuthSettled();
@@ -112,7 +121,9 @@
                 webApp.close();
             }
         });
-        webApp.BackButton?.show();
+        window.addEventListener("popstate", updateBackButton);
+        window.addEventListener("pageshow", updateBackButton);
+        updateBackButton();
     } catch (error) {
         console.warn("Telegram WebApp initialization failed", error);
     }

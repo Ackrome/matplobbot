@@ -136,6 +136,7 @@
     "help_btn_lec_search": "📚 /lec_search - Поиск по конспектам",
     "help_btn_lec_all": "📂 /lec_all - Просмотр конспектов",
     "help_btn_favorites": "⭐ /favorites - Избранное",
+    "help_btn_mail": "✉️ /mail - Почтовые ящики",
     "help_btn_settings": "⚙️ /settings - Настройки",
     "help_btn_latex": "🧮 /latex - Рендер LaTeX",
     "help_btn_mermaid": "🎨 /mermaid - Рендер Mermaid",

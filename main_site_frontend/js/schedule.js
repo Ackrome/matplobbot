@@ -875,7 +875,26 @@ function persistScheduleSnapshot(entityKey, schedule, updatedAt) {
         source_updated_at: updatedAt || null,
         lessons: (Array.isArray(schedule) ? schedule : []).map(normalizeLessonForSnapshot)
     };
-    localStorage.setItem(SCHEDULE_SNAPSHOTS_KEY, JSON.stringify(snapshots));
+    const recentSnapshots = Object.fromEntries(
+        Object.entries(snapshots)
+            .sort(([, left], [, right]) => String(left?.captured_at || '').localeCompare(String(right?.captured_at || '')))
+            .slice(-3)
+    );
+    try {
+        localStorage.setItem(SCHEDULE_SNAPSHOTS_KEY, JSON.stringify(recentSnapshots));
+    } catch (error) {
+        // Quota limits and disabled storage must not break schedule rendering.
+        console.warn('Unable to persist schedule snapshot:', error);
+        try {
+            localStorage.removeItem(SCHEDULE_SNAPSHOTS_KEY);
+            localStorage.setItem(
+                SCHEDULE_SNAPSHOTS_KEY,
+                JSON.stringify({ [entityKey]: snapshots[entityKey] })
+            );
+        } catch {
+            // Storage is optional; the in-memory schedule remains usable.
+        }
+    }
 }
 
 function normalizeLessonForSnapshot(lesson) {

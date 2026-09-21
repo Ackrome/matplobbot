@@ -17,7 +17,8 @@ router = Router()
 
 def setup_handlers(dp: Router, bot, ruz_api_client):
     """Function to setup all handlers"""
-    dp.include_router(MailManager().router)
+    mail_manager = MailManager()
+    dp.include_router(mail_manager.router)
     # Instantiate all specialized managers first
     github_manager = GitHubManager()
     library_manager = LibraryManager()
@@ -47,6 +48,7 @@ def setup_handlers(dp: Router, bot, ruz_api_client):
         admin_manager,
         settings_manager,
         suggestions_manager,
+        mail_manager,
     )
 
     settings_manager.set_base_manager(base_manager)  # Inject base_manager into settings_manager

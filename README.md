@@ -59,7 +59,8 @@ The project currently includes:
 - View live usage stats over WebSockets.
 - See popular commands, text activity, action-type breakdowns, and activity trends.
 - Inspect user-specific pages with paginated history, filtering, and CSV export.
-- Stream the bot log into the dashboard for real-time monitoring.
+- View bot logs with `docker compose logs -f mpb-telegram-bot`; the legacy log WebSocket is intentionally disabled.
+- Configure private mailbox forwarding with `/mail` (requires `MAIL_CREDENTIAL_KEY`).
 
 ## Screenshots
 

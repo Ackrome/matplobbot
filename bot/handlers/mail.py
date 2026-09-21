@@ -24,7 +24,6 @@ from sqlalchemy import select
 from shared_lib.database import get_session
 from shared_lib.mail_bridge import (
     PASSWORD_PROMPT,
-    MailAccount,
     cipher,
     parse_mail,
     poll_mail,
@@ -32,6 +31,9 @@ from shared_lib.mail_bridge import (
     unseal,
     validate_host,
 )
+from shared_lib.models import MailAccount, User
+
+MAX_MAILBOXES_PER_USER = 10
 
 
 class MailSetup(StatesGroup):
@@ -85,17 +87,38 @@ class MailManager:
                 )
             ).all()
         rows = [[(f"{a.address}: {a.status}", f"mail:show:{a.id}")] for a in accounts]
-        rows.append([("Добавить ящик", "mail:add")])
+        if len(accounts) < MAX_MAILBOXES_PER_USER:
+            rows.append([("Добавить ящик", "mail:add")])
+        else:
+            rows.append([(f"Лимит: {MAX_MAILBOXES_PER_USER} ящиков", "mail:limit")])
         await message.answer("Почтовые ящики", reply_markup=keyboard(rows))
 
     async def action(self, callback, state: FSMContext):
         await callback.answer()
+        if callback.data == "mail:limit":
+            await callback.message.answer(
+                f"Достигнут лимит: {MAX_MAILBOXES_PER_USER} почтовых ящиков на пользователя."
+            )
+            return
         if callback.data == "mail:add":
             try:
                 cipher()
             except (KeyError, ValueError):
                 await callback.message.answer("Почта пока не включена администратором.")
                 return
+            async with get_session() as session:
+                account_ids = list(
+                    await session.scalars(
+                        select(MailAccount.id)
+                        .where(MailAccount.user_id == callback.from_user.id)
+                        .limit(MAX_MAILBOXES_PER_USER + 1)
+                    )
+                )
+                if len(account_ids) >= MAX_MAILBOXES_PER_USER:
+                    await callback.message.answer(
+                        f"Достигнут лимит: {MAX_MAILBOXES_PER_USER} почтовых ящиков на пользователя."
+                    )
+                    return
             await state.clear()
             await state.set_state(MailSetup.details)
             await callback.message.answer(
@@ -184,15 +207,24 @@ class MailManager:
                 port=data["port"],
             )
             async with get_session() as session:
+                # Serialize additions per user so concurrent password replies cannot
+                # bypass the per-user cap between the count and INSERT statements.
+                await session.scalar(
+                    select(User.user_id)
+                    .where(User.user_id == message.from_user.id)
+                    .with_for_update()
+                )
                 accounts = (
                     await session.scalars(
                         select(MailAccount).where(MailAccount.user_id == message.from_user.id)
                     )
                 ).all()
-                if len(accounts) >= 5 or any(
+                if len(accounts) >= MAX_MAILBOXES_PER_USER or any(
                     a.address == data["address"] and a.host == data["host"] for a in accounts
                 ):
-                    await message.answer("Этот ящик уже подключён или достигнут лимит: 5 ящиков.")
+                    await message.answer(
+                        f"Этот ящик уже подключён или достигнут лимит: {MAX_MAILBOXES_PER_USER} ящиков."
+                    )
                     return
                 session.add(
                     MailAccount(

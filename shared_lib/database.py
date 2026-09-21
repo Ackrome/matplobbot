@@ -815,14 +815,17 @@ async def delete_old_inactive_subscriptions(days_inactive: int = 30):
 
 
 async def get_subscriptions_for_notification(notification_time: str) -> list:
+    try:
+        target_time = datetime.time.fromisoformat(notification_time)
+    except (TypeError, ValueError):
+        logger.warning("Ignoring invalid notification time: %r", notification_time)
+        return []
+
     async with get_session() as session:
-        # notification_time comes as "HH:MM"
-        # We use PostgreSQL TO_CHAR on the Time column
         stmt = select(UserScheduleSubscription).where(
             and_(
                 UserScheduleSubscription.is_active.is_(True),
-                func.to_char(UserScheduleSubscription.notification_time, "HH24:MI")
-                == notification_time,
+                UserScheduleSubscription.notification_time == target_time,
             )
         )
         result = await session.execute(stmt)
@@ -1004,20 +1007,46 @@ async def batch_update_subscription_hashes(entity_type: str, entity_id: str, new
 
 
 # --- Cached Schedules ---
+def _cached_entity_name(entity_type: str, data: list | dict, fallback: str) -> str:
+    """Extract a stable display name without querying/expanding JSON later."""
+    if not isinstance(data, list):
+        return fallback
+    field_by_type = {
+        "group": "group",
+        "person": "lecturer_title",
+        "auditorium": "auditorium",
+    }
+    field = field_by_type.get(entity_type)
+    if not field:
+        return fallback
+    for lesson in data:
+        if isinstance(lesson, dict):
+            value = str(lesson.get(field) or "").strip()
+            if value:
+                return value[:255]
+    return fallback
+
+
 async def upsert_cached_schedule(entity_type: str, entity_id: str, data: list | dict):
     json_data = json.loads(json.dumps(data, default=str))  # Ensure serializable
+    entity_name = _cached_entity_name(entity_type, json_data, str(entity_id))
     async with get_session() as session:
         stmt = (
             pg_insert(CachedSchedule)
             .values(
                 entity_type=entity_type,
                 entity_id=str(entity_id),
+                entity_name=entity_name,
                 schedule_data=json_data,
                 updated_at=datetime.datetime.now(),
             )
             .on_conflict_do_update(
                 constraint="uq_cached_schedule_entity",
-                set_=dict(schedule_data=json_data, updated_at=datetime.datetime.now()),
+                set_=dict(
+                    entity_name=entity_name,
+                    schedule_data=json_data,
+                    updated_at=datetime.datetime.now(),
+                ),
             )
         )
         await session.execute(stmt)
@@ -1598,6 +1627,7 @@ async def merge_cached_schedule(
         # merged_data.sort(key=lambda x: (x.get('date', ''), x.get('beginLesson', '')))
 
         json_data = json.loads(json.dumps(merged_data, default=str))
+        entity_name = _cached_entity_name(entity_type, json_data, str(entity_id))
 
         # 4. Upsert (вставка или обновление)
         stmt_insert = (
@@ -1605,12 +1635,17 @@ async def merge_cached_schedule(
             .values(
                 entity_type=entity_type,
                 entity_id=str(entity_id),
+                entity_name=entity_name,
                 schedule_data=json_data,
                 updated_at=datetime.datetime.now(),
             )
             .on_conflict_do_update(
                 constraint="uq_cached_schedule_entity",
-                set_=dict(schedule_data=json_data, updated_at=datetime.datetime.now()),
+                set_=dict(
+                    entity_name=entity_name,
+                    schedule_data=json_data,
+                    updated_at=datetime.datetime.now(),
+                ),
             )
         )
 

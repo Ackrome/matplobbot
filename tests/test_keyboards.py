@@ -78,6 +78,8 @@ class TestTelegramWebAppKeyboards(unittest.IsolatedAsyncioTestCase):
         buttons = [button for row in markup.keyboard for button in row]
         self.assertFalse(any(button.web_app for button in buttons))
         self.assertIn("/search", [button.text for button in buttons])
+        self.assertIn("/mail", [button.text for button in buttons])
+        self.assertLessEqual(max(len(row) for row in markup.keyboard), 2)
 
     async def test_invalid_public_site_url_omits_inline_web_app_buttons(self):
         kb.PUBLIC_SITE_URL = "http://localhost:8080"

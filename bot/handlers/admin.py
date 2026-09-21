@@ -99,7 +99,6 @@ class AdminManager:
             self.broadcast_release_command
         )
         self.router.message(Command("set_module"), AdminFilter())(self.set_module_command)
-        self.router.message(Command("set_module"), AdminFilter())(self.set_module_command)
 
     def _parse_broadcast_command_args(self, text: str | None) -> tuple[dict | None, str | None]:
         try:

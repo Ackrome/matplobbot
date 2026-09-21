@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 
 import redis.asyncio as redis
 
@@ -67,4 +68,7 @@ class RedisClient:
 
 
 # Создаем единственный экземпляр клиента
-redis_client = RedisClient(host="redis")
+redis_client = RedisClient(
+    host=os.getenv("REDIS_HOST", "redis"),
+    port=int(os.getenv("REDIS_PORT", "6379")),
+)

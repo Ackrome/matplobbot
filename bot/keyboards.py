@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 # Define base commands that are always available
 BASE_COMMANDS = [
+    "/mail",
     "/search",
     "/search_presets",
     "/schedule",
@@ -165,7 +166,10 @@ async def get_main_reply_keyboard(user_id: int) -> ReplyKeyboardMarkup:
         ]
         for text_key, url in _get_web_app_button_specs()
     ]
-    keyboard_buttons.extend([[KeyboardButton(text=cmd)] for cmd in current_commands])
+    command_buttons = [KeyboardButton(text=cmd) for cmd in current_commands]
+    keyboard_buttons.extend(
+        [command_buttons[index : index + 2] for index in range(0, len(command_buttons), 2)]
+    )
     return ReplyKeyboardMarkup(
         keyboard=keyboard_buttons,
         resize_keyboard=True,
@@ -241,6 +245,12 @@ async def get_help_inline_keyboard(user_id: int) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=translator.gettext(lang, "help_btn_favorites"),
                     callback_data="help_cmd_favorites",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=translator.gettext(lang, "help_btn_mail"),
+                    callback_data="help_cmd_mail",
                 )
             ],
             [

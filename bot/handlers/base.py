@@ -20,6 +20,7 @@ from .github import GitHubManager
 
 # Import the manager classes to access their states and methods
 from .library import LibraryManager
+from .mail import MailManager
 from .rendering import RenderingManager
 from .schedule import ScheduleManager
 from .search_center import SearchCenterManager
@@ -72,6 +73,7 @@ class BaseManager:
         admin_manager: AdminManager,
         settings_manager: "SettingsManager",
         suggestions_manager: "SuggestionsManager",
+        mail_manager: MailManager,
     ):
         self.router = Router()
         self.library_manager = library_manager
@@ -82,6 +84,7 @@ class BaseManager:
         self.admin_manager = admin_manager
         self.settings_manager = settings_manager
         self.suggestions_manager = suggestions_manager
+        self.mail_manager = mail_manager
         self._register_handlers()
 
     def _register_handlers(self):
@@ -462,6 +465,7 @@ class BaseManager:
             "lec_search": self.github_manager.lec_search_command,
             "lec_all": self.github_manager.lec_all_command,
             "favorites": self.library_manager.favorites_command,
+            "mail": self.mail_manager.menu,
             "latex": self.rendering_manager.latex_command,
             "mermaid": self.rendering_manager.mermaid_command,
             "offershorter": self.suggestions_manager.cmd_offer_shorter,

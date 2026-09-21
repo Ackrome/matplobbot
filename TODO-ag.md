@@ -73,7 +73,7 @@
 
 ---
 
-### 🟠 SEC-6: Отсутствие санитизации имен файлов при загрузке в Studio
+### ✅ SEC-6 (ИСПРАВЛЕНО): Отсутствие санитизации имен файлов при загрузке в Studio
 - **Приоритет:** MEDIUM (P2)
 - **Файл:** [fastapi_stats_app/routers/studio_router.py](file:///c:/Projects/matplobbot/fastapi_stats_app/routers/studio_router.py#L294)
 - **Проблема:** В `upload_asset` имя загружаемого файла `file_path=file.filename` используется без нормализации (`secure_filename`).
@@ -104,7 +104,7 @@
 
 ---
 
-### 🔴 BUG-3: Падение отправки формул LaTeX в боте из-за устаревшего Markdown
+### ✅ BUG-3 (ИСПРАВЛЕНО): Падение отправки формул LaTeX в боте из-за устаревшего Markdown
 - **Приоритет:** MEDIUM (P2)
 - **Файл:** [bot/handlers/rendering.py](file:///c:/Projects/matplobbot/bot/handlers/rendering.py#L64-L66)
 - **Проблема:** Подпись к формуле отправляется с `parse_mode="markdown"`, а формула вставляется напрямую в строку шаблона:
@@ -142,7 +142,7 @@
 
 ---
 
-### 🟡 BUG-6: Отсутствие URL-кодирования поискового запроса в RUZ API
+### ✅ BUG-6 (ИСПРАВЛЕНО): Отсутствие URL-кодирования поискового запроса в RUZ API
 - **Приоритет:** MEDIUM (P2)
 - **Файл:** [shared_lib/services/university_api.py](file:///c:/Projects/matplobbot/shared_lib/services/university_api.py#L76)
 - **Проблема:** Строка запроса формируется конкатенацией: `f"/api/search?term={term}&type={search_type}"` без `urllib.parse.quote_plus(term)`.
@@ -151,7 +151,7 @@
 
 ---
 
-### 🟡 BUG-7: Дублирующаяся регистрация обработчика команды в `admin.py`
+### ✅ BUG-7 (ИСПРАВЛЕНО): Дублирующаяся регистрация обработчика команды в `admin.py`
 - **Приоритет:** LOW (P3)
 - **Файл:** [bot/handlers/admin.py](file:///c:/Projects/matplobbot/bot/handlers/admin.py#L101-L102)
 - **Проблема:** Строка `self.router.message(Command("set_module"), AdminFilter())(self.set_module_command)` зарегистрирована дважды подряд.
@@ -161,13 +161,13 @@
 
 ## 3. Продуктовые пробелы и несоответствия (Product Issues)
 
-### 🧩 PROD-1: Скрытая и недокументированная интеграция с почтой (`/mail`)
+### ✅ PROD-1 (ИСПРАВЛЕНО): Скрытая и недокументированная интеграция с почтой (`/mail`)
 - **Проблема:** В проекте реализован мощный функционал защищенного почтового клиента (IMAP/POP3 через TLS с шифрованием Fernet, парсинг MIME, отправка в Telegram).
 - **Несоответствия:**
   1. Команда `/mail` отсутствует в списке популярных команд в `README.md`.
   2. Команда `/mail` отсутствует в меню `/help` бота (`get_help_inline_keyboard`).
   3. Команда `/mail` отсутствует в `BASE_COMMANDS` в `keyboards.py`.
-  4. На сайте нет упоминания и интерфейса управления почтой.
+  4. Сайт не должен получать почтовые пароли; управление почтой остаётся в private-only Telegram UI.
   5. Переменная `MAIL_CREDENTIAL_KEY` не описана в документации по настройке `.env`.
 - **Решение:** Либо полноценно представить почту как фичу в документации и UI, либо пометить как экспериментальный/скрытый модуль.
 
@@ -182,7 +182,7 @@
 
 ---
 
-### 🧩 PROD-3: Заброшенный эндпоинт стриминга логов (`/ws/bot_log`)
+### ✅ PROD-3 (ИСПРАВЛЕНО): Заброшенный эндпоинт стриминга логов (`/ws/bot_log`)
 - **Проблема:** `README.md` заявляет функцию: *"Stream the bot log into the dashboard for real-time monitoring"*. В дашборде есть соответствующий блок, но в `ws_router.py` отдаётся заглушка: *"File-based bot log streaming is disabled. Use docker compose logs -f..."*.
 - **Решение:** Либо реализовать реальный стриминг через Redis Pub/Sub логгер-хэндлер, либо удалить вводящее в заблуждение описание из `README.md` и UI.
 
@@ -194,7 +194,7 @@
 
 ---
 
-### 🧩 PROD-5: "Мертвая" страница регистрации `register.html`
+### ✅ PROD-5 (ИСПРАВЛЕНО): "Мертвая" страница регистрации `register.html`
 - **Проблема:** На странице `register.html` выводится надпись "Регистрация закрыта. Парольные аккаунты выдаются вручную. Для обычного входа используйте Telegram", форма ввода удалена, но остались пустые div-ы для сообщений об ошибках, а в навигации всё ещё есть ссылки на авторизацию/регистрацию.
 - **Решение:** При отключенной регистрации автоматически перенаправлять на `/login` с понятным баннером или показывать четкую инструкцию по входу через Telegram Widget.
 
@@ -214,7 +214,7 @@
 
 ## 4. UI/UX проблемы и фронтенд (UI/UX & Frontend)
 
-### ⚠️ UX-1: Перегруженная Reply-клавиатура бота на 20+ строк
+### ✅ UX-1 (ИСПРАВЛЕНО): Перегруженная Reply-клавиатура бота на 20+ строк
 - **Файл:** [bot/keyboards.py](file:///c:/Projects/matplobbot/bot/keyboards.py#L156-L175)
 - **Проблема:** В `get_main_reply_keyboard` каждая кнопка и WebApp размещаются на отдельной строке:
   `keyboard_buttons.extend([[KeyboardButton(text=cmd)] for cmd in current_commands])`.
@@ -225,7 +225,7 @@
 
 ---
 
-### ⚠️ UX-2: Риск падения фронтенда по `QuotaExceededError` в LocalStorage
+### ✅ UX-2 (ИСПРАВЛЕНО): Риск падения фронтенда по `QuotaExceededError` в LocalStorage
 - **Файл:** [main_site_frontend/js/schedule.js](file:///c:/Projects/matplobbot/main_site_frontend/js/schedule.js#L878)
 - **Проблема:** В `persistScheduleSnapshot` полные списки пар за семестр для разных групп сохраняются в `localStorage` без очистки старых записей и без `try...catch`.
 - **Влияние:** В браузерах Safari (iOS) при превышении квоты 5 МБ происходит `Uncaught DOMException: QuotaExceededError`, ломающий весь JS на странице расписания.
@@ -235,7 +235,7 @@
 
 ---
 
-### ⚠️ UX-3: Безусловное отображение `BackButton` в Telegram Mini App
+### ✅ UX-3 (ИСПРАВЛЕНО): Безусловное отображение `BackButton` в Telegram Mini App
 - **Файл:** [main_site_frontend/js/telegram_webapp.js](file:///c:/Projects/matplobbot/main_site_frontend/js/telegram_webapp.js#L115)
 - **Проблема:** `webApp.BackButton?.show()` вызывается при старте любого экрана TMA.
 - **Влияние:** Пользователь видит кнопку "Назад" даже когда он только что открыл WebApp и истории переходов ещё нет. Нажатие на кнопку в таком случае закрывает приложение или ведёт себя непредсказуемо.
@@ -260,7 +260,7 @@
 
 ## 5. База данных и производительность (Database & Performance)
 
-### ⚡ DB-1: Отсутствие индексов на таблице действий пользователей (`user_actions`)
+### ✅ DB-1 (ИСПРАВЛЕНО): Отсутствие индексов на таблице действий пользователей (`user_actions`)
 - **Файлы:** [shared_lib/models.py](file:///c:/Projects/matplobbot/shared_lib/models.py#L34-L42), [alembic/versions/c7a670795f42_init_full_schema.py](file:///c:/Projects/matplobbot/alembic/versions/c7a670795f42_init_full_schema.py#L74-L82)
 - **Проблема:** Таблица `user_actions` содержит только первичный ключ `id`. Индексы на `user_id`, `action_type`, `timestamp` отсутствуют.
 - **Влияние:** При росте таблицы до сотен тысяч записей выборка истории пользователя (`WHERE user_id = ... ORDER BY timestamp DESC`) и графиков активности в дашборде приводит к медленному Sequential Scan и деградации производительности БД.
@@ -271,7 +271,7 @@
 
 ---
 
-### ⚡ DB-2: Отсутствие индексов на подписках (`user_schedule_subscriptions`)
+### ✅ DB-2 (ИСПРАВЛЕНО): Отсутствие индексов на подписках (`user_schedule_subscriptions`)
 - **Файл:** [shared_lib/models.py](file:///c:/Projects/matplobbot/shared_lib/models.py#L74-L96)
 - **Проблема:** Планировщик каждую минуту выполняет запрос:
   `WHERE notification_time = :time AND is_active = true`.
@@ -282,7 +282,7 @@
 
 ---
 
-### ⚡ DB-3: Избыточный опрос БД через WebSocket (`periodic_stats_updater`)
+### ✅ DB-3 (ИСПРАВЛЕНО): Избыточный опрос БД через WebSocket (`periodic_stats_updater`)
 - **Файл:** [fastapi_stats_app/routers/ws_router.py](file:///c:/Projects/matplobbot/fastapi_stats_app/routers/ws_router.py#L113-L136)
 - **Проблема:** Каждые 2 секунды при наличии подключенных клиентов фоновая задача проверяет `SELECT COUNT(*) FROM user_actions`. Если счетчик изменился, в одном цикле выполняется 9 тяжелых аналитических SQL-запросов (агрегации, группировки по дням/неделям/месяцам, подсчет топ-команд).
 - **Влияние:** При активном использовании бота и открытом дашборде создаётся непрерывная паразитная нагрузка на PostgreSQL.
@@ -292,7 +292,7 @@
 
 ---
 
-### ⚡ DB-4: Неэффективный `jsonb_array_elements` в `/api/schedule/cached_list`
+### ✅ DB-4 (ИСПРАВЛЕНО): Неэффективный `jsonb_array_elements` в `/api/schedule/cached_list`
 - **Файл:** [fastapi_stats_app/routers/schedule_router.py](file:///c:/Projects/matplobbot/fastapi_stats_app/routers/schedule_router.py#L327-L344)
 - **Проблема:** Чтобы узнать читаемое название группы/преподавателя (`label`), эндпоинт распаковывает весь JSON семестрового расписания через `LEFT JOIN LATERAL jsonb_array_elements(...)`.
 - **Влияние:** Высокая нагрузка на CPU и память БД при открытии оффлайн-шторки в вебе.
@@ -300,7 +300,7 @@
 
 ---
 
-### ⚡ DB-5: Изолированная модель `MailAccount` вне `models.py`
+### ✅ DB-5 (ИСПРАВЛЕНО): Изолированная модель `MailAccount` вне `models.py`
 - **Файл:** [shared_lib/mail_bridge.py](file:///c:/Projects/matplobbot/shared_lib/mail_bridge.py#L44-L60)
 - **Проблема:** Класс `MailAccount` объявлен в `mail_bridge.py`, а не в общем файле `shared_lib/models.py`. У колонки `user_id` отсутствует `ForeignKey("users.user_id", ondelete="CASCADE")`.
 - **Влияние:** Нарушение целостности: при удалении пользователя его почтовые аккаунты остаются в базе данных навсегда.
@@ -319,7 +319,7 @@
 
 ---
 
-### 🧹 DEBT-2: Мертвый код `calendar_router.py` (v1)
+### ✅ DEBT-2 (ИСПРАВЛЕНО): Мертвый код `calendar_router.py` (v1)
 - **Файл:** [fastapi_stats_app/routers/calendar_router.py](file:///c:/Projects/matplobbot/fastapi_stats_app/routers/calendar_router.py)
 - **Проблема:** В `fastapi_stats_app/main.py` импортируется `calendar_router_v2 as calendar_router`. Старый файл `calendar_router.py` (135 строк) нигде не используется.
 - **Решение:** Удалить неиспользуемый файл `calendar_router.py`.
@@ -344,7 +344,7 @@
 
 ---
 
-### 🧹 DEBT-5: Захардкоженный хост Redis в клиенте
+### ✅ DEBT-5 (ИСПРАВЛЕНО): Захардкоженный хост Redis в клиенте
 - **Файл:** [shared_lib/redis_client.py](file:///c:/Projects/matplobbot/shared_lib/redis_client.py#L70)
 - **Проблема:** Строка `redis_client = RedisClient(host="redis")` не считывает переменную `REDIS_HOST`.
 - **Решение:** Использовать `os.getenv("REDIS_HOST", "redis")` и `int(os.getenv("REDIS_PORT", 6379))`.
@@ -388,17 +388,23 @@
 | **P1 (High)** | SEC-3 | Небезопасная компиляция LaTeX (RCE / File Read) | ✅ Исправлено |
 | **P1 (High)** | SEC-4 | Дефолтные учетные данные `admin:admin` | ✅ Исправлено |
 | **P1 (High)** | DB-1 | Отсутствие индексов на таблице `user_actions` | ✅ Исправлено |
-| **P2 (Medium)** | UX-1 | Перегруженная Reply-клавиатура бота на 20+ строк | ⏳ В бэклоге |
-| **P2 (Medium)** | UX-2 | Падение по `QuotaExceededError` в LocalStorage фронтенда | ⏳ В бэклоге |
-| **P2 (Medium)** | BUG-3 | Падение отправки формул LaTeX в боте из-за устаревшего Markdown | ⏳ В бэклоге |
+| **P2 (Medium)** | SEC-6 | Санитизация имён файлов Studio | ✅ Исправлено |
+| **P2 (Medium)** | UX-1 | Перегруженная Reply-клавиатура бота на 20+ строк | ✅ Исправлено |
+| **P2 (Medium)** | UX-2 | Падение по `QuotaExceededError` в LocalStorage фронтенда | ✅ Исправлено |
+| **P2 (Medium)** | BUG-3 | Падение отправки формул LaTeX в боте из-за устаревшего Markdown | ✅ Исправлено |
 | **P2 (Medium)** | BUG-5 | Потеря инлайн-кнопок при перезапуске бота (`code_path_cache`) | ⏳ В бэклоге |
-| **P2 (Medium)** | PROD-1 | Скрытая и недокументированная интеграция `/mail` | ⏳ В бэклоге |
-| **P2 (Medium)** | PROD-3 | Сломанный стриминг логов бота в дашборд | ⏳ В бэклоге |
-| **P2 (Medium)** | DB-2 | Отсутствие индексов на подписках | ⏳ В бэклоге |
-| **P2 (Medium)** | DB-3 | DDoS базы данных через WebSocket опрос каждые 2 секунды | ⏳ В бэклоге |
+| **P2 (Medium)** | BUG-6 | URL-параметры поисковых запросов RUZ | ✅ Исправлено |
+| **P2 (Medium)** | PROD-1 | Скрытая и недокументированная интеграция `/mail` | ✅ Исправлено |
+| **P2 (Medium)** | PROD-3 | Сломанный стриминг логов бота в дашборд | ✅ Исправлено (явно отключён, UI показывает Docker logs) |
+| **P2 (Medium)** | DB-2 | Отсутствие индексов на подписках | ✅ Исправлено |
+| **P2 (Medium)** | DB-3 | DDoS базы данных через WebSocket опрос каждые 2 секунды | ✅ Исправлено |
+| **P2 (Medium)** | DB-4 | Полный `jsonb_array_elements` для списка кэша расписаний | ✅ Исправлено |
+| **P2 (Medium)** | UX-3 | Безусловный BackButton в Telegram Mini App | ✅ Исправлено |
 | **P2 (Medium)** | DEBT-1 | Разделение на два разных сайта/дашборда (Jinja2 vs Static) | ⏳ В бэклоге |
 | **P2 (Medium)** | OPS-1 | Запуск контейнеров от `root` | ⏳ В бэклоге |
-| **P3 (Low)** | DEBT-2 | Удаление мертвого `calendar_router.py` (v1) | ⏳ В бэклоге |
+| **P3 (Low)** | DEBT-2 | Удаление мертвого `calendar_router.py` (v1) | ✅ Исправлено |
 | **P3 (Low)** | DEBT-3 | Рефакторинг God Objects (`ScheduleManager`, `database.py`) | ⏳ В бэклоге |
-| **P3 (Low)** | DEBT-5 | Параметризация `REDIS_HOST` в `shared_lib/redis_client.py` | ⏳ В бэклоге |
-| **P3 (Low)** | BUG-7 | Удаление дубликата команды в `admin.py` | ⏳ В бэклоге |
+| **P3 (Low)** | DEBT-5 | Параметризация `REDIS_HOST` в `shared_lib/redis_client.py` | ✅ Исправлено |
+| **P3 (Low)** | BUG-7 | Удаление дубликата команды в `admin.py` | ✅ Исправлено |
+| **P3 (Low)** | DB-5 | Централизация `MailAccount` и FK владельца | ✅ Исправлено |
+| **P3 (Low)** | PROD-5 | Ясная заглушка закрытой регистрации без мёртвых элементов формы | ✅ Исправлено |

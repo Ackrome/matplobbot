@@ -151,7 +151,6 @@ services:
       - "127.0.0.1:8080:80"
     volumes:
       - ./main_site_frontend:/usr/share/nginx/html:ro
-      # ДОБАВЬ ЭТУ СТРОКУ:
       - ./main_site_frontend/default.conf:/etc/nginx/conf.d/default.conf:ro
 
   caddy:

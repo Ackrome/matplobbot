@@ -80,7 +80,12 @@ class UserScheduleSubscription(Base):
     __tablename__ = "user_schedule_subscriptions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(
+        BigInteger,
+        ForeignKey("users.user_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     chat_id = Column(BigInteger, nullable=False)
     entity_type = Column(String, nullable=False)
     entity_id = Column(String, nullable=False)
@@ -96,6 +101,11 @@ class UserScheduleSubscription(Base):
     __table_args__ = (
         UniqueConstraint(
             "chat_id", "entity_type", "entity_id", "notification_time", name="uq_schedule_subs"
+        ),
+        Index(
+            "ix_user_subscriptions_notification_time_active",
+            "notification_time",
+            "is_active",
         ),
     )
 
@@ -134,12 +144,38 @@ class CachedSchedule(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     entity_type = Column(String, nullable=False)
     entity_id = Column(String, nullable=False)
+    entity_name = Column(String(255), nullable=True)
     schedule_data = Column(JSONB, nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         UniqueConstraint("entity_type", "entity_id", name="uq_cached_schedule_entity"),
     )
+
+
+class MailAccount(Base):
+    """Encrypted mailbox connection owned by a Telegram user."""
+
+    __tablename__ = "mail_accounts"
+    __table_args__ = (
+        UniqueConstraint("user_id", "address", "host", name="uq_mail_owner_address_host"),
+    )
+    id = Column(Integer, primary_key=True)
+    user_id = Column(
+        BigInteger,
+        ForeignKey("users.user_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    address = Column(String(320), nullable=False)
+    host = Column(String(253), nullable=False)
+    protocol = Column(String(8), nullable=False)
+    port = Column(Integer, nullable=False, default=993)
+    credential = Column(LargeBinary, nullable=False)
+    enabled = Column(Boolean, nullable=False, default=True)
+    checkpoint = Column(LargeBinary, nullable=False)
+    pending = Column(LargeBinary, nullable=True)
+    status = Column(String(80), nullable=False, default="ready")
 
 
 class SearchDocument(Base):

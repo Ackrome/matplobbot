@@ -13,9 +13,10 @@ from html import escape
 
 from bs4 import BeautifulSoup
 from cryptography.fernet import Fernet
-from sqlalchemy import BigInteger, Boolean, Column, Integer, LargeBinary, String, UniqueConstraint
 
-from shared_lib.models import Base
+from shared_lib.models import MailAccount
+
+__all__ = ["MailAccount", "cipher", "seal", "unseal", "validate_host", "poll_mail", "parse_mail"]
 
 MAX_MAIL_BYTES = 35 * 1024 * 1024
 PASSWORD_PROMPT = "Пароль приложения для почты"
@@ -39,24 +40,6 @@ def sensitive_mail_update(event, data):
     return str(data.get("raw_state", "")).startswith("MailSetup:") or bool(
         reply and (reply.text or "").startswith(PASSWORD_PROMPT)
     )
-
-
-class MailAccount(Base):
-    __tablename__ = "mail_accounts"
-    __table_args__ = (
-        UniqueConstraint("user_id", "address", "host", name="uq_mail_owner_address_host"),
-    )
-    id = Column(Integer, primary_key=True)
-    user_id = Column(BigInteger, nullable=False, index=True)
-    address = Column(String(320), nullable=False)
-    host = Column(String(253), nullable=False)
-    protocol = Column(String(8), nullable=False)
-    port = Column(Integer, nullable=False, default=993)
-    credential = Column(LargeBinary, nullable=False)
-    enabled = Column(Boolean, nullable=False, default=True)
-    checkpoint = Column(LargeBinary, nullable=False)
-    pending = Column(LargeBinary, nullable=True)
-    status = Column(String(80), nullable=False, default="ready")
 
 
 def cipher():

@@ -73,6 +73,26 @@ class FileRename(BaseModel):
     new_name: str
 
 
+def _sanitize_project_filename(filename: str | None) -> str:
+    """Return a safe single project path component.
+
+    Studio assets are stored by logical project path, not as files on the API
+    host.  Keeping only one path component prevents traversal in exports and
+    in the worker while preserving Unicode names and normal extensions.
+    """
+    name = (filename or "").strip()
+    if (
+        not name
+        or name in {".", ".."}
+        or any(ord(char) < 32 for char in name)
+        or any(separator in name for separator in ("/", "\\"))
+        or ":" in name
+        or len(name) > 255
+    ):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    return name
+
+
 DEFAULT_LATEX = r"""\documentclass[12pt, a4paper]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[T2A]{fontenc}
@@ -288,16 +308,17 @@ async def upload_asset(
     if len(content) > 5 * 1024 * 1024:  # Лимит 5 МБ
         raise HTTPException(status_code=400, detail="File too large (max 5MB)")
 
+    safe_filename = _sanitize_project_filename(file.filename)
     stmt = (
         pg_insert(ProjectFile)
         .values(
-            project_id=project_id, file_path=file.filename, content_binary=content, is_main=False
+            project_id=project_id, file_path=safe_filename, content_binary=content, is_main=False
         )
         .on_conflict_do_update(constraint="uq_project_file_path", set_=dict(content_binary=content))
     )
     await db.execute(stmt)
     await db.commit()
-    return {"status": "success", "filename": file.filename}
+    return {"status": "success", "filename": safe_filename}
 
 
 @router.post(
@@ -407,14 +428,13 @@ async def rename_file(
     current_user: dict = Depends(get_current_user),
 ):
     await get_owned_project_or_404(db, project_id, current_user["id"])
-    if not data.new_name.strip():
-        raise HTTPException(status_code=400, detail="Filename cannot be empty")
+    safe_filename = _sanitize_project_filename(data.new_name)
 
     try:
         result = await db.execute(
             update(ProjectFile)
             .where(ProjectFile.id == file_id, ProjectFile.project_id == project_id)
-            .values(file_path=data.new_name.strip())
+            .values(file_path=safe_filename)
         )
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="File not found")

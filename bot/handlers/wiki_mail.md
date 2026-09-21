@@ -1,7 +1,7 @@
 # Mail Bot Integration
 
 `mail.py` provides `MailManager` and `mail_worker(bot)`. The router exposes `/mail`
-in private chats: add up to five mailboxes, inspect status, pause/resume, delete
+in private chats: add up to ten mailboxes, inspect status, pause/resume, delete
 with confirmation. Connection setup uses aiogram FSM, deletes the password
 message best-effort, and never places the password in FSM storage.
 Setup format: `name@yandex.ru imap.yandex.ru 993 imap`. The port is required,

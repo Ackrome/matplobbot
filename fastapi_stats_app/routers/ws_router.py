@@ -90,7 +90,7 @@ log_manager = ConnectionManager(name="bot_log")
 stats_update_task: asyncio.Task | None = None
 last_sent_stats_data_str: str = ""
 last_checked_actions_count: int = -1
-STATS_MIN_POLL_SECONDS = 2
+STATS_MIN_POLL_SECONDS = 10
 STATS_MAX_IDLE_POLL_SECONDS = 15
 
 

@@ -1370,8 +1370,11 @@ How to use:
   All connections require implicit SSL/TLS, not STARTTLS. Migration
   `f1b52c3d4e5f` backfills existing accounts with protocol-specific default ports.
 
-- `/mail` connects up to five mailboxes per user in private bot chats. Existing
+- `/mail` connects up to ten mailboxes per user in private bot chats. Existing
   messages are baselined, not forwarded; subsequent INBOX arrivals are delivered.
+- `/mail` is available in the bot command menu, reply keyboard, and `/help`.
+- The bot reply keyboard groups command buttons two per row; Web App actions
+  remain full-width for touch-friendly access.
 - Supports TLS IMAP (993) and POP3 (995), approximately 30-second polling, not
   IMAP IDLE. POP3 requires stable UIDL support. Mail is never deleted or marked read.
 - Providers initially allowed: Gmail, Yandex, Mail.ru and Outlook mail endpoints.
@@ -1383,6 +1386,8 @@ How to use:
   and store it as `MAIL_CREDENTIAL_KEY` in the bot's secret environment. Never
   commit it. Preserve it across deployments; replacing it makes saved accounts
   and pending mail unreadable. No key means the feature is disabled.
+- `MAIL_ALLOWED_HOSTS` is optional and extends the built-in trusted provider
+  allow-list using `hostname:imap,hostname:pop3` entries.
 - Credentials and temporary attachment/body data are Fernet-encrypted in
   PostgreSQL. No plaintext spool files are created. Each attachment is removed
   from live pending state after a successful Telegram upload; failed uploads
@@ -1412,3 +1417,13 @@ How to use:
 - LaTeX compilation rejects shell execution, direct file I/O, unsafe external file references, absolute paths, and traversal. Compilation runs from the temporary project directory with `-no-shell-escape` and a non-root worker.
 - Long Telegram HTML messages are split into balanced chunks. Callers must provide a positive `max_chars` large enough for the tags they need to preserve.
 - Keep TatSu pinned below `5.7`: `ics==0.7.2` still uses the `buffer_class` parser option removed by later TatSu releases. Verify `from fastapi_stats_app.main import app` after dependency updates.
+- Studio upload and rename endpoints accept one safe filename component only;
+  path separators, control characters, absolute paths and traversal attempts are rejected.
+- Schedule notification lookups compare the native PostgreSQL `TIME` value and
+  use the `notification_time/is_active` index. `REDIS_HOST` and `REDIS_PORT`
+  control the shared Redis client in local and CI environments.
+- Cached schedule rows store their display label in `entity_name`; the offline
+  list no longer expands every semester JSON document at request time.
+- Schedule snapshots keep only the three most recent entities and tolerate
+  unavailable or quota-limited browser storage. Telegram Mini App BackButton is
+  shown only when browser history has a previous entry.

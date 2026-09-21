@@ -329,15 +329,8 @@ async def get_cached_list(db: AsyncSession = Depends(get_db_session_dependency))
         SELECT cs.entity_type,
                cs.entity_id,
                cs.updated_at,
-               COALESCE(
-                   NULLIF(MAX(CASE WHEN cs.entity_type = 'group' THEN elem->>'group' END), ''),
-                   NULLIF(MAX(CASE WHEN cs.entity_type = 'person' THEN elem->>'lecturer_title' END), ''),
-                   NULLIF(MAX(CASE WHEN cs.entity_type = 'auditorium' THEN elem->>'auditorium' END), ''),
-                   cs.entity_id
-               ) AS label
+               COALESCE(NULLIF(cs.entity_name, ''), cs.entity_id) AS label
         FROM cached_schedules cs
-        LEFT JOIN LATERAL jsonb_array_elements(cs.schedule_data) AS elem ON TRUE
-        GROUP BY cs.entity_type, cs.entity_id, cs.updated_at
         ORDER BY updated_at DESC
         LIMIT 60
     """

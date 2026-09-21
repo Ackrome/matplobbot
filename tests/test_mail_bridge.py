@@ -106,6 +106,7 @@ class MailTests(unittest.TestCase):
     def test_sensitive_inputs_and_router(self):
         module = handlers()
         self.assertEqual(module.MailManager().router.name, "mail")
+        self.assertEqual(module.MAX_MAILBOXES_PER_USER, 10)
         event = SimpleNamespace(message=SimpleNamespace(reply_to_message=None), edited_message=None)
         self.assertTrue(sensitive_mail_update(event, {"raw_state": "MailSetup:password"}))
         event.message.reply_to_message = SimpleNamespace(text=module.PASSWORD_PROMPT)

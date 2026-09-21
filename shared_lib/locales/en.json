@@ -157,6 +157,7 @@
     "help_btn_lec_search": "📚 /lec_search - Search notes",
     "help_btn_lec_all": "📂 /lec_all - Browse notes",
     "help_btn_favorites": "⭐ /favorites - Favorites",
+    "help_btn_mail": "✉️ /mail - Mailboxes",
     "help_btn_settings": "⚙️ /settings - Settings",
     "help_btn_latex": "🧮 /latex - Render LaTeX",
     "help_btn_mermaid": "🎨 /mermaid - Render Mermaid",

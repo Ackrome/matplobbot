@@ -1,7 +1,10 @@
 # Mail Bridge
 
-`mail_bridge.py` owns the `MailAccount` SQLAlchemy model, Fernet encryption,
+`mail_bridge.py` owns Fernet encryption,
 TLS IMAP/POP3 ingestion and MIME-to-rich-HTML conversion.
+
+The `MailAccount` SQLAlchemy model lives in `shared_lib/models.py`, keeping
+metadata and its cascading user foreign key in the central model registry.
 
 Public entry points: `seal`/`unseal` protect JSON credentials and delivery state;
 `validate_host` enforces the operator's server allowlist; `poll_mail` returns
@@ -15,6 +18,7 @@ Run blocking protocol calls in `asyncio.to_thread`, never on the bot event loop.
 Dependencies: standard-library email/imaplib/poplib/ssl, BeautifulSoup,
 cryptography, SQLAlchemy. `MAIL_CREDENTIAL_KEY` must be a persistent Fernet key.
 Additional trusted servers use `MAIL_ALLOWED_HOSTS=host.example:imap,host2:pop3`.
+The bot handler allows up to ten mailboxes per Telegram user.
 `poll_mail(..., port=1993)` uses an explicit port (1-65535), defaulting to
 993/995 when omitted. All ports require implicit TLS, not STARTTLS.
 Never weaken certificate validation.
