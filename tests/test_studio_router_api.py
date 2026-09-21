@@ -82,9 +82,7 @@ class TestStudioRouterAPI(unittest.TestCase):
         self.app.dependency_overrides.clear()
 
     def test_project_filename_rejects_paths_and_control_characters(self):
-        self.assertEqual(
-            studio_router._sanitize_project_filename("diagram.png"), "diagram.png"
-        )
+        self.assertEqual(studio_router._sanitize_project_filename("diagram.png"), "diagram.png")
         for filename in ("../secret.txt", "nested/image.png", r"nested\image.png", "bad\x00.txt"):
             with self.subTest(filename=filename), self.assertRaises(HTTPException) as raised:
                 studio_router._sanitize_project_filename(filename)

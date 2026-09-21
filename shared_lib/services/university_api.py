@@ -78,9 +78,7 @@ class RuzAPIClient:
 
     async def search(self, term: str, search_type: str) -> list[dict[str, Any]]:
         """Generic search function."""
-        return await self._request(
-            "/api/search", params={"term": term, "type": search_type}
-        )
+        return await self._request("/api/search", params={"term": term, "type": search_type})
 
     async def get_schedule(
         self, entity_type: str, entity_id: str, start: str, finish: str

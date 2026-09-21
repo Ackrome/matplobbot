@@ -566,9 +566,7 @@ class TestRuzAPIClient(unittest.IsolatedAsyncioTestCase):
         await client.get_schedule("group", "M80/101", "2026-04-01", "2026-04-30")
 
         self.assertEqual(session.calls[0][0], "https://ruz.fa.ru/api/search")
-        self.assertEqual(
-            session.calls[0][1]["params"], {"term": "М80 & 101", "type": "group"}
-        )
+        self.assertEqual(session.calls[0][1]["params"], {"term": "М80 & 101", "type": "group"})
         self.assertEqual(session.calls[1][0], "https://ruz.fa.ru/api/schedule/group/M80/101")
         self.assertEqual(
             session.calls[1][1]["params"],
@@ -578,9 +576,7 @@ class TestRuzAPIClient(unittest.IsolatedAsyncioTestCase):
 
 class TestCachedScheduleLabels(unittest.TestCase):
     def test_cached_entity_name_uses_type_specific_display_field(self):
-        self.assertEqual(
-            _cached_entity_name("group", [{"group": "M80-101"}], "group-1"), "M80-101"
-        )
+        self.assertEqual(_cached_entity_name("group", [{"group": "M80-101"}], "group-1"), "M80-101")
         self.assertEqual(
             _cached_entity_name("person", [{"lecturer_title": "Ivan Petrov"}], "person-1"),
             "Ivan Petrov",
