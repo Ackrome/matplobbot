@@ -179,7 +179,7 @@ class LibraryManager:
     async def cq_matp_all_navigate(self, callback: CallbackQuery):
         parts = callback.data.split(":")
         path_hash, page = parts[1], int(parts[2])
-        path = "" if path_hash == "root" else kb.code_path_cache.get(path_hash)
+        path = "" if path_hash == "root" else await kb.resolve_code_path(path_hash)
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         if path is None:
             await callback.answer(translator.gettext(lang, "matp_all_show_error"), show_alert=True)
@@ -192,7 +192,7 @@ class LibraryManager:
     async def cq_matp_all_show_code(self, callback: CallbackQuery):
         path_hash = callback.data.split(":", 1)[1]
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
-        code_path = kb.code_path_cache.get(path_hash)
+        code_path = await kb.resolve_code_path(path_hash)
         if not code_path:
             await callback.answer(translator.gettext(lang, "matp_all_show_error"), show_alert=True)
             return
@@ -378,7 +378,7 @@ class LibraryManager:
     async def cq_add_favorite(self, callback: CallbackQuery):
         path_hash = callback.data.split(":", 1)[1]
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
-        code_path = kb.code_path_cache.get(path_hash)
+        code_path = await kb.resolve_code_path(path_hash)
         if not code_path:
             await callback.answer(translator.gettext(lang, "matp_all_show_error"), show_alert=True)
             return
@@ -396,7 +396,7 @@ class LibraryManager:
             await translator.get_language(callback.from_user.id, callback.message.chat.id),
         )
         path_hash = callback.data.split(":", 1)[1]
-        code_path = kb.code_path_cache.get(path_hash)
+        code_path = await kb.resolve_code_path(path_hash)
         if not code_path:
             await callback.answer(
                 translator.gettext(lang, "favorites_info_outdated"), show_alert=True
@@ -443,7 +443,7 @@ class LibraryManager:
     async def cq_show_favorite(self, callback: CallbackQuery):
         path_hash = callback.data.split(":", 1)[1]
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
-        code_path = kb.code_path_cache.get(path_hash)
+        code_path = await kb.resolve_code_path(path_hash)
         if not code_path:
             await callback.answer(
                 translator.gettext(lang, "favorites_info_outdated"), show_alert=True

@@ -1,6 +1,8 @@
+import asyncio
 import calendar
 import hashlib
 import logging
+import os
 from datetime import date, datetime, timedelta
 from typing import Any
 from urllib.parse import urlsplit
@@ -18,6 +20,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from cachetools import LRUCache
 
 from shared_lib.i18n import translator
+from shared_lib.redis_client import redis_client
 
 from . import database  # Import database to check for user repos
 from .config import ADMIN_USER_IDS, PUBLIC_SITE_URL
@@ -51,8 +54,58 @@ WEB_APP_BUTTONS = (
 )
 _WEB_APP_URL_WARNING_EMITTED = False
 
-# Cache for long code paths to use in callback_data
-code_path_cache = LRUCache(maxsize=1024)
+_DEFAULT_CALLBACK_PATH_TTL_SECONDS = 14 * 24 * 60 * 60
+try:
+    CALLBACK_PATH_TTL_SECONDS = max(
+        1,
+        int(os.getenv("CALLBACK_PATH_TTL_SECONDS", str(_DEFAULT_CALLBACK_PATH_TTL_SECONDS))),
+    )
+except ValueError:
+    CALLBACK_PATH_TTL_SECONDS = _DEFAULT_CALLBACK_PATH_TTL_SECONDS
+    logger.warning("Invalid CALLBACK_PATH_TTL_SECONDS; using the 14-day default")
+
+
+def _consume_callback_cache_task(task: asyncio.Task) -> None:
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        pass
+    except Exception:
+        logger.warning("Callback path persistence task failed", exc_info=True)
+
+
+class CallbackPathCache(LRUCache):
+    """Fast local callback lookup with best-effort Redis persistence."""
+
+    def __setitem__(self, key: str, value: str) -> None:
+        super().__setitem__(key, value)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        task = loop.create_task(
+            redis_client.set_callback_path(key, value, ttl=CALLBACK_PATH_TTL_SECONDS)
+        )
+        task.add_done_callback(_consume_callback_cache_task)
+
+
+# Keep a bounded process-local hot cache. Redis lets generated buttons survive
+# restarts and multiple bot replicas while remaining optional during outages.
+code_path_cache = CallbackPathCache(maxsize=1024)
+
+
+async def resolve_code_path(path_hash: str, default: str | None = None) -> str | None:
+    value = code_path_cache.get(path_hash)
+    if value is not None:
+        return value
+
+    value = await redis_client.get_callback_path(path_hash)
+    if value is None:
+        return default
+
+    # Populate the hot cache without scheduling a redundant Redis write.
+    LRUCache.__setitem__(code_path_cache, path_hash, value)
+    return value
 
 # Pre-generate data structure for topics and codes, not actual ReplyKeyboards.
 # This structure will be used by functions to build keyboards dynamically.

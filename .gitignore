@@ -16,6 +16,7 @@ repomix-output.xml
 node_modules/
 docker-compose.test.yml
 Caddyfile.test
+Caddyfile.local
 main_site_frontend/test.default.conf
 
 # graphify artifacts

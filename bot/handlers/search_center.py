@@ -325,7 +325,7 @@ class SearchCenterManager:
         user_id = callback.from_user.id
         lang = await translator.get_language(user_id, callback.message.chat.id)
         repo_hash = callback.data.split(":", 1)[1]
-        repo_path = kb.code_path_cache.get(repo_hash)
+        repo_path = await kb.resolve_code_path(repo_hash)
         context = await redis_client.get_user_cache(user_id, "global_search")
         if not repo_path or not context:
             await callback.answer(

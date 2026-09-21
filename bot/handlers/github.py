@@ -127,7 +127,7 @@ class GitHubManager:
         user_id = callback.from_user.id
         lang = await translator.get_language(user_id, callback.message.chat.id)
         repo_hash = callback.data.split(":", 1)[1]
-        repo_path = kb.code_path_cache.get(repo_hash)
+        repo_path = await kb.resolve_code_path(repo_hash)
         if not repo_path:
             await callback.answer(translator.gettext(lang, "github_info_outdated"), show_alert=True)
             return
@@ -139,7 +139,7 @@ class GitHubManager:
 
     async def cq_lec_all_navigate(self, callback: CallbackQuery):
         path_hash = callback.data.split(":", 1)[1]
-        path = kb.code_path_cache.get(path_hash)
+        path = await kb.resolve_code_path(path_hash)
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
 
         if path is None:
@@ -161,7 +161,7 @@ class GitHubManager:
 
     async def cq_lec_all_show_file(self, callback: CallbackQuery):
         path_hash = callback.data.split(":", 1)[1]
-        file_path = kb.code_path_cache.get(path_hash)
+        file_path = await kb.resolve_code_path(path_hash)
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         if not file_path:
             await callback.answer(
@@ -314,7 +314,7 @@ class GitHubManager:
     async def cq_lec_search_repo_selected(self, callback: CallbackQuery, state: FSMContext):
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         repo_hash = callback.data.split(":", 1)[1]
-        repo_path = kb.code_path_cache.get(repo_hash)
+        repo_path = await kb.resolve_code_path(repo_hash)
         if not repo_path:
             await callback.answer(translator.gettext(lang, "github_info_outdated"), show_alert=True)
             return
@@ -421,7 +421,7 @@ class GitHubManager:
     async def cq_show_md_result(self, callback: CallbackQuery):
         path_hash = callback.data.split(":", 1)[1]
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
-        relative_path = kb.code_path_cache.get(path_hash)
+        relative_path = await kb.resolve_code_path(path_hash)
         search_data = await redis_client.get_user_cache(callback.from_user.id, "md_search")
 
         if not relative_path or not search_data:
@@ -504,7 +504,7 @@ class GitHubManager:
         user_id = callback.from_user.id
         lang = await translator.get_language(user_id, callback.message.chat.id)
         repo_hash = callback.data.split(":", 1)[1]
-        repo_path = kb.code_path_cache.get(repo_hash)
+        repo_path = await kb.resolve_code_path(repo_hash)
         if not repo_path:
             await callback.answer(translator.gettext(lang, "github_info_outdated"), show_alert=True)
             return
@@ -517,7 +517,7 @@ class GitHubManager:
 
     async def cq_edit_repo_prompt(self, callback: CallbackQuery, state: FSMContext):
         repo_hash = callback.data.split(":", 1)[1]
-        repo_path = kb.code_path_cache.get(repo_hash)
+        repo_path = await kb.resolve_code_path(repo_hash)
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
         if not repo_path:
             await callback.answer(translator.gettext(lang, "github_info_outdated"), show_alert=True)
@@ -552,7 +552,7 @@ class GitHubManager:
 
     async def cq_index_repo(self, callback: CallbackQuery):
         repo_hash = callback.data.split(":", 1)[1]
-        repo_path = kb.code_path_cache.get(repo_hash)
+        repo_path = await kb.resolve_code_path(repo_hash)
 
         if not repo_path:
             await callback.answer("Ошибка: данные устарели", show_alert=True)

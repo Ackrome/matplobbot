@@ -159,6 +159,7 @@ services:
     network_mode: host # Оставляем host, чтобы не мучиться с портами 80/443
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
+      - ${CADDY_LOCAL_FILE:-./Caddyfile.local.example}:/etc/caddy/Caddyfile.local:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

@@ -239,6 +239,7 @@ class AdminManager:
         status_msg = await message.answer(translator.gettext(lang, "admin_clear_cache_start"))
 
         await redis_client.clear_all_user_cache()
+        await redis_client.clear_callback_paths()
         kb.code_path_cache.clear()
         github_service.github_content_cache.clear()
         github_service.github_dir_cache.clear()

@@ -162,6 +162,7 @@ services:
     network_mode: host # Используем сеть хоста, чтобы Caddy видел порты напрямую
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile # Пробрасываем файл конфига
+      - ${CADDY_LOCAL_FILE:-./Caddyfile.local.example}:/etc/caddy/Caddyfile.local:ro
       - caddy_data:/data
       - caddy_config:/config
     # Команда запуска теперь короче

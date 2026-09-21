@@ -7,26 +7,7 @@ ivantishchenko.ru {
 api.ivantishchenko.ru {
     reverse_proxy 127.0.0.1:9583
 }
-kg.ivantishchenko.ru {
-    reverse_proxy 192.168.1.30:3000
-}
 
-ftv.ivantishchenko.ru {
-    reverse_proxy 192.168.1.16:8765
-}
-
-immich.ivantishchenko.ru {
-    reverse_proxy 192.168.1.33:2283
-}
-
-auth.ivantishchenko.ru {
-    reverse_proxy 192.168.1.33:9091
-}
-
-dl.ivantishchenko.ru {
-    forward_auth 192.168.1.33:9091 {
-        uri /api/verify?rd=https://auth.ivantishchenko.ru/
-        copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
-    }
-    reverse_proxy 192.168.1.33:8080
-}
+# Personal and private-network routes live in the untracked Caddyfile.local.
+# Keep that file on the deployment host and never commit its internal IPs.
+import /etc/caddy/Caddyfile.local

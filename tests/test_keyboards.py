@@ -1,7 +1,9 @@
+import asyncio
 import importlib
 import sys
 import types
 import unittest
+from unittest.mock import AsyncMock, patch
 
 
 def _install_matplobblib_stub() -> None:
@@ -90,3 +92,41 @@ class TestTelegramWebAppKeyboards(unittest.IsolatedAsyncioTestCase):
         buttons = [button for row in help_markup.inline_keyboard for button in row]
         self.assertFalse(any(button.web_app for button in buttons))
         self.assertIn("help_btn_matp_all", [button.text for button in buttons])
+
+
+@unittest.skipUnless(KEYBOARDS_AVAILABLE, "bot keyboard dependencies are not installed")
+class TestCallbackPathPersistence(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        kb.code_path_cache.clear()
+
+    async def asyncTearDown(self):
+        kb.code_path_cache.clear()
+
+    async def test_resolve_code_path_restores_mapping_from_redis(self):
+        path_hash = "a" * 16
+        with patch.object(
+            kb.redis_client,
+            "get_callback_path",
+            new=AsyncMock(return_value="owner/repo/README.md"),
+        ) as get_callback_path:
+            value = await kb.resolve_code_path(path_hash)
+
+        self.assertEqual(value, "owner/repo/README.md")
+        self.assertEqual(kb.code_path_cache.get(path_hash), "owner/repo/README.md")
+        get_callback_path.assert_awaited_once_with(path_hash)
+
+    async def test_cache_write_persists_mapping_to_redis(self):
+        path_hash = "b" * 16
+        with patch.object(
+            kb.redis_client,
+            "set_callback_path",
+            new=AsyncMock(),
+        ) as set_callback_path:
+            kb.code_path_cache[path_hash] = "owner/repo/src/main.py"
+            await asyncio.sleep(0)
+
+        set_callback_path.assert_awaited_once_with(
+            path_hash,
+            "owner/repo/src/main.py",
+            ttl=kb.CALLBACK_PATH_TTL_SECONDS,
+        )

@@ -1406,6 +1406,13 @@ How to use:
   acceptance testing requires an explicitly supplied test mailbox and chat.
 
 - Public calendar links are secrets. Rotate immediately if exposed.
+- `Caddyfile` contains only public application/API routes. Personal or
+  private-network proxies belong in the ignored deployment-local
+  `Caddyfile.local`, mounted into the Caddy container and imported by the
+  public file. Compose defaults to the safe tracked
+  `Caddyfile.local.example`; production hosts set
+  `CADDY_LOCAL_FILE=./Caddyfile.local` before starting Compose. Provision that
+  file on every host and do not commit internal IP addresses.
 - Legacy stats alias `/api/stats/stats/action_users` is deprecating; migrate clients to `/api/stats/action_users`.
 - Website API base can be switched per environment with `window.__MPB_API_BASE__`.
 - Bot and website schedule features are intentionally coupled through shared subscription data and cached schedule sources.
@@ -1422,6 +1429,12 @@ How to use:
 - Schedule notification lookups compare the native PostgreSQL `TIME` value and
   use the `notification_time/is_active` index. `REDIS_HOST` and `REDIS_PORT`
   control the shared Redis client in local and CI environments.
+- Generated Telegram inline-button hashes use the bounded local
+  `CallbackPathCache` first and Redis keys named `callback_path:<hash>` as a
+  restart/replica-safe fallback. `CALLBACK_PATH_TTL_SECONDS` controls the
+  persistence window (14 days by default). A Redis outage keeps local buttons
+  usable; the admin `/clear_cache` operation removes both local and persistent
+  callback mappings.
 - Cached schedule rows store their display label in `entity_name`; the offline
   list no longer expands every semester JSON document at request time.
 - Schedule snapshots keep only the three most recent entities and tolerate

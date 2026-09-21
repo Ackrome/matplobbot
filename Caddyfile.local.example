@@ -1,0 +1,2 @@
+# Safe placeholder for local development. Do not put internal IP addresses in
+# this tracked example; production hosts set CADDY_LOCAL_FILE to Caddyfile.local.

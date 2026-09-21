@@ -25,6 +25,7 @@ from bot.keyboards import (
     get_myschedule_calendar_keyboard,
     get_myschedule_filters_keyboard,
     get_schedule_type_keyboard,
+    resolve_code_path,
 )
 from shared_lib.database import (
     get_cached_schedule,
@@ -602,7 +603,7 @@ class ScheduleManager:
         try:
             original_entity_id = entity_id
             if len(entity_id) == 16 and not entity_id.isdigit():
-                original_entity_id = code_path_cache.get(entity_id, entity_id)
+                original_entity_id = await resolve_code_path(entity_id, entity_id)
 
             selected_date = datetime.strptime(date_str, "%Y-%m-%d")
             api_date_str = selected_date.strftime("%Y-%m-%d")
@@ -673,7 +674,7 @@ class ScheduleManager:
 
             original_entity_id = entity_id
             if len(entity_id) == 16 and not entity_id.isdigit():
-                original_entity_id = code_path_cache.get(entity_id, entity_id)
+                original_entity_id = await resolve_code_path(entity_id, entity_id)
 
             # --- ИСПОЛЬЗУЕМ УМНЫЙ ФЕТЧЕР ---
             try:
@@ -731,7 +732,7 @@ class ScheduleManager:
 
         original_entity_id = entity_id
         if len(entity_id) == 16 and not entity_id.isdigit():
-            original_entity_id = code_path_cache.get(entity_id, entity_id)
+            original_entity_id = await resolve_code_path(entity_id, entity_id)
 
         try:
             schedule_data, _ = await get_schedule_with_cache_fallback(
@@ -787,7 +788,7 @@ class ScheduleManager:
         lang = await translator.get_language(user_id, callback.message.chat.id)
         try:
             data_hash = callback.data.split(":", 1)[1]
-            data_part = code_path_cache.get(data_hash)
+            data_part = await resolve_code_path(data_hash)
             entity_type, entity_id, entity_name = data_part.split(":", 2)
         except (ValueError, TypeError):
             logging.error(f"Invalid subscribe callback data: {callback.data}")

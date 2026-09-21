@@ -8,6 +8,11 @@ logger = logging.getLogger(__name__)
 
 # TTL для кэша в секундах (например, 1 час)
 CACHE_TTL = 3600
+CALLBACK_PATH_KEY_PREFIX = "callback_path:"
+
+
+def _is_callback_path_hash(value: str) -> bool:
+    return len(value) == 16 and all(char in "0123456789abcdef" for char in value)
 
 
 class RedisClient:
@@ -65,6 +70,40 @@ class RedisClient:
             logger.info("Весь пользовательский кэш в Redis очищен.")
         except Exception as e:
             logger.error(f"Ошибка при очистке кэша Redis: {e}")
+
+    async def set_callback_path(self, path_hash: str, path: str, ttl: int):
+        """Persist a Telegram callback hash mapping without serializing secrets."""
+        if not _is_callback_path_hash(path_hash):
+            raise ValueError("invalid callback path hash")
+        if ttl <= 0:
+            raise ValueError("callback path TTL must be positive")
+        try:
+            await self.client.set(
+                f"{CALLBACK_PATH_KEY_PREFIX}{path_hash}",
+                path,
+                ex=ttl,
+            )
+        except Exception as e:
+            logger.error("Ошибка при записи callback path в Redis для hash=%s: %s", path_hash, e)
+
+    async def get_callback_path(self, path_hash: str) -> str | None:
+        """Load a callback mapping created by this application."""
+        if not _is_callback_path_hash(path_hash):
+            return None
+        try:
+            return await self.client.get(f"{CALLBACK_PATH_KEY_PREFIX}{path_hash}")
+        except Exception as e:
+            logger.error("Ошибка при чтении callback path из Redis для hash=%s: %s", path_hash, e)
+            return None
+
+    async def clear_callback_paths(self):
+        """Remove persistent callback mappings during an explicit admin cache clear."""
+        try:
+            async for key in self.client.scan_iter(f"{CALLBACK_PATH_KEY_PREFIX}*"):
+                await self.client.delete(key)
+            logger.info("Все callback path mappings в Redis очищены.")
+        except Exception as e:
+            logger.error("Ошибка при очистке callback path mappings в Redis: %s", e)
 
 
 # Создаем единственный экземпляр клиента
