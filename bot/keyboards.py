@@ -107,6 +107,7 @@ async def resolve_code_path(path_hash: str, default: str | None = None) -> str |
     LRUCache.__setitem__(code_path_cache, path_hash, value)
     return value
 
+
 # Pre-generate data structure for topics and codes, not actual ReplyKeyboards.
 # This structure will be used by functions to build keyboards dynamically.
 # topics_data = {submodule_name: {'topics': [list_of_topics], 'codes': {topic_name: [list_of_codes]}}}
