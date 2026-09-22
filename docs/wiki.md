@@ -173,7 +173,8 @@ without duplicating timezone rules.
 
 ### Admin User Details
 
-Rows in the static `/stats` leaderboard link to `/admin-user.html?user_id=…`.
+Each static `/stats` leaderboard row now has a visible `Подробнее` link and the
+whole row is clickable/focusable; both open `/admin-user.html?user_id=…`.
 The page uses the existing JWT session and requests the admin-protected
 `/api/stats/users/{user_id}/profile` endpoint; non-admin users never receive
 the profile data. The older FastAPI `/users/{user_id}` HTML route is admin-only

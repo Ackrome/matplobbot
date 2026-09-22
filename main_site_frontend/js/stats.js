@@ -102,6 +102,7 @@ const STATS_I18N = {
         "stats.leaderboard.user": "User",
         "stats.leaderboard.actions": "Actions",
         "stats.leaderboard.lastActive": "Last active",
+        "stats.leaderboard.details": "Details",
         "stats.leaderboard.rows": "Rows",
         "stats.leaderboard.prev": "Prev",
         "stats.leaderboard.next": "Next",
@@ -279,6 +280,7 @@ const STATS_I18N = {
         "stats.leaderboard.user": "Пользователь",
         "stats.leaderboard.actions": "Действия",
         "stats.leaderboard.lastActive": "Последняя активность",
+        "stats.leaderboard.details": "Подробнее",
         "stats.leaderboard.rows": "Строк",
         "stats.leaderboard.prev": "Назад",
         "stats.leaderboard.next": "Вперед",
@@ -1521,7 +1523,7 @@ function renderLeaderboard() {
     if (pageData.totalRows === 0) {
         elements.leaderboardBody.innerHTML = `
             <tr>
-                <td colspan="4" class="px-4 py-6 text-sm text-slate-500">${escapeHtml(t("stats.leaderboard.noData", "No leaderboard data for current filters."))}</td>
+                <td colspan="5" class="px-4 py-6 text-sm text-slate-500">${escapeHtml(t("stats.leaderboard.noData", "No leaderboard data for current filters."))}</td>
             </tr>
         `;
         setBlockStatus(elements.leaderboardStatus, t("stats.leaderboard.noStatus", "No data"), "warning");
@@ -1532,21 +1534,26 @@ function renderLeaderboard() {
                 const initial = user.full_name ? escapeHtml(user.full_name[0].toUpperCase()) : "?";
                 const username = user.username ? `@${escapeHtml(user.username)}` : "-";
                 const lastActive = user.last_action_time ? formatDateTime(user.last_action_time) : "-";
+                const detailsUrl = `/admin-user.html?user_id=${encodeURIComponent(user.user_id)}`;
+                const detailsLabel = t("stats.leaderboard.details", "Details");
 
                 return `
-                    <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                    <tr class="border-b border-slate-100 hover:bg-blue-50/60 transition-colors cursor-pointer focus-within:bg-blue-50/60" tabindex="0" data-user-details-url="${escapeHtml(detailsUrl)}" aria-label="${escapeHtml(detailsLabel)}: ${escapeHtml(user.full_name)}">
                         <td class="px-4 py-3 text-slate-400 font-semibold">${rankLabel}</td>
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-3">
                                 <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm">${initial}</div>
                                 <div class="min-w-0">
-                                    <a class="font-semibold text-slate-800 truncate hover:text-blue-700 underline-offset-2 hover:underline" href="/admin-user.html?user_id=${encodeURIComponent(user.user_id)}" aria-label="Open admin details for ${escapeHtml(user.full_name)}">${escapeHtml(user.full_name)}</a>
+                                    <a class="font-semibold text-slate-800 truncate hover:text-blue-700 underline-offset-2 hover:underline" href="${escapeHtml(detailsUrl)}" aria-label="${escapeHtml(detailsLabel)}: ${escapeHtml(user.full_name)}">${escapeHtml(user.full_name)}</a>
                                     <div class="text-xs text-slate-500 truncate">${username}</div>
                                 </div>
                             </div>
                         </td>
                         <td class="px-4 py-3 text-right font-mono font-bold text-blue-600">${user.actions_count}</td>
                         <td class="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">${lastActive}</td>
+                        <td class="px-4 py-3 text-right">
+                            <a class="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-100 focus-ring" href="${escapeHtml(detailsUrl)}">${escapeHtml(detailsLabel)}</a>
+                        </td>
                     </tr>
                 `;
             })
@@ -1712,7 +1719,7 @@ function setLoading(isLoading) {
     if (isLoading) {
         elements.leaderboardBody.innerHTML = Array.from({ length: 5 }, () => `
             <tr>
-                <td colspan="4" class="px-4 py-4"><div class="h-4 w-full skeleton rounded"></div></td>
+                <td colspan="5" class="px-4 py-4"><div class="h-4 w-full skeleton rounded"></div></td>
             </tr>
         `).join("");
     }
@@ -2124,6 +2131,24 @@ function registerStatsTranslations() {
 function wireEvents() {
     elements.sortButtons.forEach((button) => {
         button.addEventListener("click", () => changeSort(button.dataset.sort));
+    });
+
+    elements.leaderboardBody?.addEventListener("click", (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        const row = target?.closest("tr[data-user-details-url]");
+        if (!row || target.closest("a, button")) return;
+        const url = row.dataset.userDetailsUrl;
+        if (url) window.location.assign(url);
+    });
+
+    elements.leaderboardBody?.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        const target = event.target instanceof Element ? event.target : null;
+        const row = target?.closest("tr[data-user-details-url]");
+        if (!row || target.closest("a, button")) return;
+        event.preventDefault();
+        const url = row.dataset.userDetailsUrl;
+        if (url) window.location.assign(url);
     });
 
     elements.leaderboardPrev?.addEventListener("click", () => {
