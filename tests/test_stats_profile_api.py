@@ -1,7 +1,7 @@
 import os
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, patch
 
 FASTAPI_AVAILABLE = True
 try:
@@ -100,6 +100,42 @@ class TestStatsProfileAPI(unittest.TestCase):
             params={"sort_order": "sideways"},
         )
         self.assertEqual(response.status_code, 422)
+
+    def test_messages_history_is_paginated_and_keeps_direction(self):
+        fake_messages = {
+            "messages": [
+                {
+                    "id": 11,
+                    "direction": "incoming",
+                    "text": "Hello",
+                    "timestamp": "2026-09-22T10:00:00+00:00",
+                },
+                {
+                    "id": 12,
+                    "direction": "outgoing",
+                    "text": "Reply",
+                    "timestamp": "2026-09-22T10:01:00+00:00",
+                },
+            ],
+            "total_messages": 4,
+        }
+        with patch.object(
+            stats_router,
+            "get_user_message_history",
+            new=AsyncMock(return_value=fake_messages),
+        ) as mocked_get_messages:
+            response = self.client.get(
+                "/api/stats/users/42/messages",
+                params={"page": 2, "page_size": 2},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["messages"], fake_messages["messages"])
+        self.assertEqual(payload["total_messages"], 4)
+        self.assertEqual(payload["pagination"]["current_page"], 2)
+        self.assertEqual(payload["pagination"]["total_pages"], 2)
+        mocked_get_messages.assert_awaited_once_with(ANY, 42, 2, 2)
 
     def test_module_mappings_list_filters_rows(self):
         rows = [

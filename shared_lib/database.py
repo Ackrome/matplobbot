@@ -1606,6 +1606,52 @@ async def get_user_profile_data_from_db(
     return {"user_details": user_details, "actions": actions, "total_actions": total_actions}
 
 
+async def get_user_message_history(
+    session: AsyncSession,
+    user_id: int,
+    page: int = 1,
+    page_size: int = 50,
+):
+    """Return paginated inbound/outbound text messages for one Telegram user.
+
+    The existing ``user_actions`` stream is the source of truth: middleware
+    records inbound text/commands as ``text_message``/``command`` and the
+    admin send endpoint records outbound messages as ``admin_message``.
+    """
+
+    message_types = ("text_message", "command", "admin_message")
+    filters = (
+        UserAction.user_id == user_id,
+        UserAction.action_type.in_(message_types),
+    )
+    count_stmt = select(func.count()).select_from(UserAction).where(*filters)
+    total_messages = int((await session.execute(count_stmt)).scalar() or 0)
+
+    stmt = (
+        select(
+            UserAction.id,
+            UserAction.action_type,
+            UserAction.action_details,
+            UserAction.timestamp,
+        )
+        .where(*filters)
+        .order_by(UserAction.timestamp.desc(), UserAction.id.desc())
+        .limit(page_size)
+        .offset((page - 1) * page_size)
+    )
+    rows = await session.execute(stmt)
+    messages = [
+        {
+            "id": row.id,
+            "direction": "outgoing" if row.action_type == "admin_message" else "incoming",
+            "text": row.action_details or "",
+            "timestamp": row.timestamp.isoformat() if row.timestamp else "",
+        }
+        for row in rows
+    ]
+    return {"messages": messages, "total_messages": total_messages}
+
+
 async def get_users_for_action(
     session: AsyncSession,
     action_type: str,

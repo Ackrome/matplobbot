@@ -23,6 +23,7 @@ from shared_lib.database import (
     get_db_session_dependency,
     get_leaderboard_data_from_db,
     get_session,
+    get_user_message_history,
     get_user_profile_data_from_db,
     get_users_for_action,
     log_user_action,
@@ -44,6 +45,7 @@ from shared_lib.schemas import (
     LeaderboardEntry,
     ProxyDiagnosticsResponse,
     SendMessageRequest,
+    UserMessageHistoryResponse,
     UserProfileResponse,
 )
 from shared_lib.telegram_http import build_telegram_http_client_config
@@ -680,6 +682,49 @@ async def get_user_profile(
 
     except Exception as e:
         logger.error(f"Database error fetching user profile {user_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Database Error") from e
+
+
+@router.get(
+    "/users/{user_id}/messages",
+    summary="User Telegram message history",
+    description=(
+        "Returns paginated inbound text/command messages and outbound admin messages "
+        "for the Telegram conversation."
+    ),
+    response_model=UserMessageHistoryResponse,
+    dependencies=[Depends(require_admin)],
+)
+async def get_user_messages(
+    user_id: int,
+    page: int = Query(
+        1,
+        ge=1,
+        description="Newest page first; larger pages contain older messages.",
+    ),
+    page_size: int = Query(50, ge=1, le=100, description="Messages per page."),
+    db: AsyncSession = Depends(get_db_session_dependency),
+) -> Any:
+    try:
+        message_data = await get_user_message_history(db, user_id, page, page_size)
+        total_messages = message_data["total_messages"]
+        total_pages = math.ceil(total_messages / page_size) if page_size > 0 else 0
+        return {
+            "messages": message_data["messages"],
+            "total_messages": total_messages,
+            "pagination": {
+                "current_page": page,
+                "total_pages": total_pages,
+                "page_size": page_size,
+                "sort_by": "timestamp",
+                "sort_order": "desc",
+            },
+        }
+    except Exception as e:
+        logger.error(
+            f"Database error fetching messages for user {user_id}: {e}",
+            exc_info=True,
+        )
         raise HTTPException(status_code=500, detail="Internal Database Error") from e
 
 

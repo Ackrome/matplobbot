@@ -179,6 +179,15 @@ The page uses the existing JWT session and requests the admin-protected
 `/api/stats/users/{user_id}/profile` endpoint; non-admin users never receive
 the profile data. The older FastAPI `/users/{user_id}` HTML route is admin-only
 as well.
+After the profile loads, admins see a Telegram-like conversation with inbound
+and outbound text bubbles. History is served by the admin-protected
+`GET /api/stats/users/{user_id}/messages` endpoint, paginated newest-first, and
+the page polls for new messages every ten seconds while visible. The `Reply as
+bot` form calls the admin-protected `/api/stats/users/{user_id}/send_message`
+endpoint and displays the correlation id returned by the server. The chat stays
+hidden when the profile request is rejected. The initial history includes user
+text/commands and messages sent from this admin composer; unrelated automatic
+bot replies are not retroactively reconstructed from Telegram.
 
 ### Unified Global Search
 
@@ -966,6 +975,7 @@ Endpoints:
 - `GET /api/stats/users/{user_id}/profile` (admin)
 - `GET /api/stats/action_users` (admin, canonical)
 - `GET /api/stats/stats/action_users` (admin, legacy alias, deprecating)
+- `GET /api/stats/users/{user_id}/messages` (admin, paginated Telegram text history)
 - `GET /api/stats/users/{user_id}/export_actions` (admin)
 - `POST /api/stats/users/{user_id}/send_message` (admin)
 - `GET /api/stats/leaderboard` (admin)

@@ -136,6 +136,27 @@ class UserActionSchema(BaseModel):
 # --- Модели Ответов API (Response Models) ---
 
 
+class UserMessageSchema(BaseModel):
+    """One text message in the admin/user Telegram conversation."""
+
+    id: int = Field(..., description="Stable user_actions id used for deduplication.")
+    direction: Literal["incoming", "outgoing"]
+    text: str = Field(..., description="Message text shown in the conversation.")
+    timestamp: str = Field(..., description="Message timestamp in ISO-8601 format.")
+
+    model_config = BASE_CONFIG
+
+
+class UserMessageHistoryResponse(BaseModel):
+    """Paginated text-message history for an admin/user conversation."""
+
+    messages: list[UserMessageSchema] = Field(default_factory=list)
+    pagination: PaginationSchema
+    total_messages: int = Field(0, ge=0)
+
+    model_config = BASE_CONFIG
+
+
 class UserProfileResponse(BaseModel):
     """Ответ эндпоинта профиля пользователя."""
 
