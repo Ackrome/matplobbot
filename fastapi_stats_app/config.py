@@ -114,6 +114,7 @@ def _parse_admin_user_ids() -> set[int]:
 
 ADMIN_USER_IDS = _parse_admin_user_ids()
 PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "").rstrip("/")
+PUBLIC_SITE_URL = os.getenv("PUBLIC_SITE_URL", "http://localhost:8080").rstrip("/")
 
 # --- FastAPI CORS ---
 CORS_ALLOWED_ORIGINS = _read_csv_env(

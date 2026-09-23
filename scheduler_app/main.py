@@ -20,17 +20,11 @@ from scheduler_app.jobs import (
     update_schedule_cache,
 )
 from shared_lib.database import close_db_pool, get_session, init_db_pool
-from shared_lib.request_context import configure_correlation_logging
+from shared_lib.logging_config import configure_logging
 from shared_lib.services.university_api import create_ruz_api_client
 
 # --- Logging Setup ---
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - [cid=%(correlation_id)s] - %(name)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    handlers=[logging.StreamHandler()],
-)
-configure_correlation_logging()
+configure_logging("matplobbot-scheduler")
 aps_logger = logging.getLogger("apscheduler")
 aps_logger.propagate = True
 if aps_logger.handlers:

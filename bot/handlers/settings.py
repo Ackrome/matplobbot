@@ -20,6 +20,7 @@ import logging
 from aiogram import Bot
 
 from bot.keyboards import get_modules_keyboard
+from bot.services.settings_keyboard import SettingsKeyboardFactory
 from shared_lib.database import (
     SubscriptionConflictError,
     delete_all_user_data,
@@ -31,7 +32,6 @@ from shared_lib.database import (
     get_disabled_short_names_for_user,
     get_subscription_by_id,
     get_subscription_modules,
-    get_user_repos,
     get_user_settings,
     get_user_subscriptions,
     remove_schedule_subscription,
@@ -72,6 +72,10 @@ class SettingsManager:
         self.schedule_manager = schedule_manager
         self.admin_manager = admin_manager
         self.base_manager: BaseManager | None = None  # Will be set later
+        self.settings_keyboard_factory = SettingsKeyboardFactory(
+            available_languages=AVAILABLE_LANGUAGES,
+            admin_user_ids=ADMIN_USER_IDS,
+        )
         self._register_handlers()
         self.AVAILABLE_LANGUAGES = AVAILABLE_LANGUAGES
 
@@ -254,209 +258,30 @@ class SettingsManager:
     async def _build_display_settings(
         self, builder: InlineKeyboardBuilder, settings: dict, lang: str
     ):
-        """Builds buttons related to how information is displayed."""
-        # Short Names Toggle
-        short_names_status_key = (
-            "settings_docstring_on"
-            if settings.get("use_short_names", True)
-            else "settings_docstring_off"
-        )
-        builder.row(
-            InlineKeyboardButton(
-                text=translator.gettext(
-                    lang,
-                    "settings_use_short_names",
-                    status=translator.gettext(lang, short_names_status_key),
-                ),
-                callback_data="settings_toggle_short_names",
-            )
-        )
-        emojis_status_key = (
-            "settings_docstring_on"
-            if settings.get("show_schedule_emojis", True)
-            else "settings_docstring_off"
-        )
-        builder.row(
-            InlineKeyboardButton(
-                text=translator.gettext(
-                    lang,
-                    "settings_show_schedule_emojis",
-                    status=translator.gettext(lang, emojis_status_key),
-                ),
-                callback_data="settings_toggle_emojis",
-            )
-        )
-        emails_status_key = (
-            "settings_docstring_on"
-            if settings.get("show_lecturer_emails", True)
-            else "settings_docstring_off"
-        )
-        builder.row(
-            InlineKeyboardButton(
-                text=translator.gettext(
-                    lang,
-                    "settings_show_lecturer_emails",
-                    status=translator.gettext(lang, emails_status_key),
-                ),
-                callback_data="settings_toggle_emails",
-            )
-        )
-        # Docstring toggle
-        docstring_status_key = (
-            "settings_docstring_on" if settings["show_docstring"] else "settings_docstring_off"
-        )
-        builder.row(
-            InlineKeyboardButton(
-                text=translator.gettext(
-                    lang,
-                    "settings_show_docstring",
-                    status=translator.gettext(lang, docstring_status_key),
-                ),
-                callback_data="settings_toggle_docstring",
-            )
-        )
-        # Markdown display mode
-        md_mode = settings.get("md_display_mode", "md_file")
-        md_mode_map = {
-            "md_file": translator.gettext(lang, "settings_md_mode_md"),
-            "html_file": translator.gettext(lang, "settings_md_mode_html"),
-            "pdf_file": translator.gettext(lang, "settings_md_mode_pdf"),
-        }
-        md_mode_text = md_mode_map.get(
-            md_mode, translator.gettext(lang, "settings_md_mode_unknown")
-        )
-        builder.row(
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "settings_md_display_mode", mode_text=md_mode_text),
-                callback_data="settings_cycle_md_mode",
-            )
-        )
-        # Кнопка детализации модулей
-        details_status_key = (
-            "settings_docstring_on"
-            if settings.get("show_module_details", True)
-            else "settings_docstring_off"
-        )
-        builder.row(
-            InlineKeyboardButton(
-                text=translator.gettext(
-                    lang,
-                    "settings_show_module_details",
-                    status=translator.gettext(lang, details_status_key),
-                ),
-                callback_data="settings_toggle_module_details",
-            )
-        )
+        """Compatibility facade for display-setting buttons."""
+        await self.settings_keyboard_factory.build_display(builder, settings, lang)
 
     async def _build_latex_settings(
         self, builder: InlineKeyboardBuilder, settings: dict, lang: str
     ):
-        """Builds buttons for LaTeX rendering options."""
-        builder.row(
-            InlineKeyboardButton(text="➖", callback_data="latex_padding_decr"),
-            InlineKeyboardButton(
-                text=translator.gettext(
-                    lang, "settings_latex_padding", padding=settings["latex_padding"]
-                ),
-                callback_data="noop",
-            ),
-            InlineKeyboardButton(text="➕", callback_data="latex_padding_incr"),
-        )
-        builder.row(
-            InlineKeyboardButton(text="➖", callback_data="latex_dpi_decr"),
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "settings_latex_dpi", dpi=settings["latex_dpi"]),
-                callback_data="noop",
-            ),
-            InlineKeyboardButton(text="➕", callback_data="latex_dpi_incr"),
-        )
+        """Compatibility facade for LaTeX-setting buttons."""
+        await self.settings_keyboard_factory.build_latex(builder, settings, lang)
 
     async def _build_data_management_settings(
         self, builder: InlineKeyboardBuilder, user_id: int, lang: str
     ):
-        """Builds buttons for managing user-specific data."""
-        user_repos = await get_user_repos(user_id)
-        repo_button_key = "settings_manage_repos_btn" if user_repos else "settings_add_repos_btn"
-        builder.row(
-            InlineKeyboardButton(
-                text=translator.gettext(lang, repo_button_key), callback_data="manage_repos"
-            )
-        )
-        builder.row(
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "settings_manage_subscriptions_btn"),
-                callback_data="manage_personal_subscriptions",
-            )
-        )
-        builder.row(
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "settings_manage_short_names_btn"),
-                callback_data="manage_short_names",
-            )
-        )
-        builder.row(
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "settings_delete_my_data_btn"),
-                callback_data="delete_my_data",
-            )
-        )
+        """Compatibility facade for data-management buttons."""
+        await self.settings_keyboard_factory.build_data_management(builder, user_id, lang)
 
     async def _build_admin_settings(
         self, builder: InlineKeyboardBuilder, settings: dict, lang: str
     ):
-        """Builds admin-only settings buttons."""
-        summary_time = settings.get("admin_daily_summary_time", "09:00")
-        builder.row(
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "admin_settings_summary_time_btn", time=summary_time),
-                callback_data="admin_settings_summary_time",
-            )
-        )
-        builder.row(
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "admin_get_summary_now_btn"),
-                callback_data="admin_get_summary_now",
-            )
-        )
-        summary_days = settings.get("admin_summary_days", [0, 1, 2, 3, 4])
-        day_names = translator.gettext(lang, "calendar_days_short").split(",")
-        day_buttons = [
-            InlineKeyboardButton(
-                text=f"{'✅' if i in summary_days else '❌'} {day_name}",
-                callback_data=f"admin_toggle_summary_day:{i}",
-            )
-            for i, day_name in enumerate(day_names)
-        ]
-        builder.row(*day_buttons)
+        """Compatibility facade for admin-setting buttons."""
+        await self.settings_keyboard_factory.build_admin(builder, settings, lang)
 
     async def get_settings_keyboard(self, user_id: int) -> InlineKeyboardBuilder:
-        """Creates the main inline keyboard for user settings."""
-        settings = await get_user_settings(user_id)
-        lang = settings.get("language", "en")
-        builder = InlineKeyboardBuilder()
-
-        await self._build_display_settings(builder, settings, lang)
-        await self._build_latex_settings(builder, settings, lang)
-        await self._build_data_management_settings(builder, user_id, lang)
-
-        current_lang_name = AVAILABLE_LANGUAGES.get(lang, "Unknown")
-        builder.row(
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "settings_language_btn", lang_name=current_lang_name),
-                callback_data="settings_cycle_language",
-            )
-        )
-        builder.row(
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "settings_restart_onboarding_btn"),
-                callback_data="restart_onboarding",
-            )
-        )
-
-        if user_id in ADMIN_USER_IDS:
-            await self._build_admin_settings(builder, settings, lang)
-
-        return builder
+        """Compatibility facade for the extracted settings keyboard factory."""
+        return await self.settings_keyboard_factory.build(user_id)
 
     async def _get_group_settings_menu(
         self, chat_id: int, user_id: int

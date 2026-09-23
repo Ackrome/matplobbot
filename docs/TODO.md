@@ -40,7 +40,7 @@ This backlog is an OKF draft concept. Completed checkboxes record delivered work
 - [ ] Verify Redis persistence strategy (AOF/RDB) so pending Celery tasks and critical rate-limit states survive container restarts.
 - [ ] Enforce strict Rate Limiting (e.g., Token Bucket via Redis) on CPU-intensive endpoints (/api/studio/compile) and bot render commands to prevent OOM/DDoS.
 - [ ] Hardcap user inputs: set maximum payload sizes, max execution time for Pandoc/LaTeX, and memory limits inside Celery tasks.
-- [ ] Configure Log Rotation (via Docker logging driver or Python's TimedRotatingFileHandler) with size limits and retention policies to prevent disk exhaustion.
+- [x] Configure structured stdout logging plus Docker `json-file` rotation with size and retention limits to prevent disk exhaustion.
 - [x] Create a safe broadcast script/admin command to send the announcements and changelog to all active users with proper rate-limiting (max ~30 msgs/sec for Telegram).
 
 ### P1 - Reliability, Security, and Delivery

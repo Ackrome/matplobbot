@@ -5,18 +5,12 @@ import time
 from aiogram import BaseMiddleware
 from aiogram.types import Update
 
-from shared_lib.request_context import configure_correlation_logging
+from shared_lib.logging_config import configure_logging
 
 from .database import log_user_action
 
+configure_logging("matplobbot-bot")
 logging.getLogger("aiogram.event").setLevel(logging.WARNING)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - [cid=%(correlation_id)s] - %(name)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    handlers=[logging.StreamHandler()],
-)
-configure_correlation_logging()
 
 AVATAR_CACHE_TTL_SECONDS = int(os.getenv("AVATAR_CACHE_TTL_SECONDS", "21600"))
 AVATAR_ERROR_CACHE_TTL_SECONDS = int(os.getenv("AVATAR_ERROR_CACHE_TTL_SECONDS", "900"))

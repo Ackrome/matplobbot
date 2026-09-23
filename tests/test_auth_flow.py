@@ -14,7 +14,7 @@ try:
     from fastapi import Depends, FastAPI, HTTPException
     from fastapi.testclient import TestClient
 
-    os.environ.setdefault("JWT_SECRET_KEY", "test-secret-for-unit-tests")
+    os.environ.setdefault("JWT_SECRET_KEY", "test-secret-for-unit-tests-at-least-32-bytes")
     os.environ.setdefault("BOT_TOKEN", "123456:test-token")
 
     from fastapi_stats_app import auth as fastapi_auth
@@ -112,6 +112,57 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
         decoded = fastapi_auth.decode_access_token(body["access_token"])
         self.assertEqual(decoded["sub"], "7")
         self.assertEqual(decoded["role"], "user")
+        self.assertEqual(decoded["iss"], fastapi_auth.JWT_ISSUER)
+        self.assertEqual(decoded["aud"], fastapi_auth.JWT_AUDIENCE)
+        self.assertIn("iat", decoded)
+        self.assertIn("nbf", decoded)
+        self.assertIn("exp", decoded)
+
+    def test_jwt_decoder_rejects_tampered_signature(self):
+        token = fastapi_auth.create_access_token({"sub": "7", "role": "user"})
+        replacement = "A" if token[-1] != "A" else "B"
+
+        with self.assertRaises(fastapi_auth.JWTError):
+            fastapi_auth.decode_access_token(f"{token[:-1]}{replacement}")
+
+    def test_jwt_decoder_requires_standard_claims(self):
+        now = int(time.time())
+        token = fastapi_auth.jwt.encode(
+            {
+                "sub": "7",
+                "iat": now,
+                "nbf": now,
+                "exp": now + 60,
+                "iss": fastapi_auth.JWT_ISSUER,
+            },
+            fastapi_auth.SECRET_KEY,
+            algorithm=fastapi_auth.ALGORITHM,
+        )
+
+        with self.assertRaises(fastapi_auth.JWTError):
+            fastapi_auth.decode_access_token(token)
+
+    def test_jwt_decoder_rejects_wrong_audience(self):
+        now = int(time.time())
+        token = fastapi_auth.jwt.encode(
+            {
+                "sub": "7",
+                "iat": now,
+                "nbf": now,
+                "exp": now + 60,
+                "iss": fastapi_auth.JWT_ISSUER,
+                "aud": "another-service",
+            },
+            fastapi_auth.SECRET_KEY,
+            algorithm=fastapi_auth.ALGORITHM,
+        )
+
+        with self.assertRaises(fastapi_auth.JWTError):
+            fastapi_auth.decode_access_token(token)
+
+    def test_jwt_encoder_rejects_non_numeric_subject(self):
+        with self.assertRaises(ValueError):
+            fastapi_auth.create_access_token({"sub": "not-an-account", "role": "user"})
 
     def test_login_rejects_invalid_password(self):
         account = SimpleNamespace(

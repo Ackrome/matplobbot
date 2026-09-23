@@ -32,7 +32,7 @@
 10. **DEBT-3:** принять поэтапный рефакторинг больших объектов с совместимым фасадом.
 11. **DEBT-4:** принять миграцию на стандартную JWT-библиотеку с проверками claims и тестами.
 12. **OPS-1:** текущую политику запуска контейнеров оставить без изменения.
-13. **OPS-2 — `compose.dev`:** отдельный `compose.dev` не считать обязательным; оставить основной Compose для локальной/базовой конфигурации и production overlay, проверяя оба сценария.
+13. **OPS-2 — `compose.dev`:** отдельный `compose.dev` не нужен; оставить `docker-compose.yml` самостоятельной локальной конфигурацией, а `docker-compose.prod.yml` — самостоятельной production-конфигурацией, используемой `deploy.sh`, и проверять оба сценария.
 14. **OPS-3:** принять рекомендации по структурированному логированию и уровням через env, сохранив Docker-ротацию логов.
 
 > Дата ревью: 17 сентября 2026 г.
@@ -58,9 +58,9 @@
 ### ✅ SEC-2 (ИСПРАВЛЕНО): Хранимая межсайтовая сценария (Stored XSS) в дашборде статистики
 - **Приоритет:** CRITICAL (P0)
 - **Файлы:**
-  - [main_site_frontend/js/stats.js](file:///c:/Projects/matplobbot/main_site_frontend/js/stats.js#L1543-L1544) (строки 1543–1544: `${user.full_name}`, `${username}`)
-  - [fastapi_stats_app/static/js/main.js](file:///c:/Projects/matplobbot/fastapi_stats_app/static/js/main.js#L239-L240) (строка 239: `${user.full_name}`, строка 246: `@${user.username}`)
-  - [fastapi_stats_app/static/js/user_details.js](file:///c:/Projects/matplobbot/fastapi_stats_app/static/js/user_details.js#L220-L233) (строки 220, 226, 229: `${action.action_details}`)
+  - [main_site_frontend/js/stats.js](file:///c:/Projects/matplobbot/main_site_frontend/js/stats.js)
+  - [main_site_frontend/js/admin-user.js](file:///c:/Projects/matplobbot/main_site_frontend/js/admin-user.js)
+- **Исправление:** Единый статический frontend экранирует пользовательские поля до вставки в HTML. Удалённые Jinja-дашборд и его legacy JS больше не являются отдельной поверхностью рендеринга.
 - **Проблема:** Пользовательские данные (имя Telegram-аккаунта `full_name`, никнейм `username` и текст сообщений, отправленных боту `action_details`) напрямую конкатенируются в HTML-строки и вставляются в DOM через `innerHTML` без вызова функции экранирования `escapeHtml`.
 - **Влияние:** Любой пользователь Telegram может отправить сообщение боту с XSS-нагрузкой (например, `<img src=x onerror="...">`) или указать такое имя в профиле. Когда администратор открывает дашборд статистики или историю сообщений, скрипт выполняется в браузере администратора с правами доступа к `localStorage.getItem("jwt_token")`, что приводит к краже административной сессии.
 - **Рекомендация:**
@@ -286,10 +286,10 @@
 
 ---
 
-### ⚠️ UX-5: Дублирование словарей локализации на фронтенде
-- **Файлы:** [main_site_frontend/js/navbar.js](file:///c:/Projects/matplobbot/main_site_frontend/js/navbar.js), [main_site_frontend/js/stats.js](file:///c:/Projects/matplobbot/main_site_frontend/js/stats.js)
-- **Проблема:** Переводы зашиты прямо в тело JS-файлов в виде гигантских объектов (более 1000 строк суммарно), дублируя ключи и не синхронизируясь с серверными `ru.json` / `en.json`.
-- **Рекомендация:** Загружать JSON-файлы локализации динамически через fetch или генерировать их на этапе сборки.
+### ✅ UX-5 (ИСПРАВЛЕНО): Единый источник локализации фронтенда
+- **Файлы:** [main_site_frontend/js/frontend_i18n.js](file:///c:/Projects/matplobbot/main_site_frontend/js/frontend_i18n.js), [main_site_frontend/locales/en.json](file:///c:/Projects/matplobbot/main_site_frontend/locales/en.json), [main_site_frontend/locales/ru.json](file:///c:/Projects/matplobbot/main_site_frontend/locales/ru.json)
+- **Решение:** Встроенные словари удалены из `navbar.js` и `stats.js`. Оба языка загружаются из общих JSON-файлов через единый `window.mpbI18n`; service worker кэширует loader и локали.
+- **Проверка:** Тест контролирует одинаковые ключи и placeholder'ы RU/EN, существование ключей из HTML-атрибутов и порядок подключения loader до `navbar.js`.
 
 ---
 
@@ -345,12 +345,9 @@
 
 ## 6. Технологический долг и архитектура (Technical Debt & Architecture)
 
-### 🧹 DEBT-1: Разделение интерфейсов на две независимые системы
-- **Проблема:** В проекте сосуществуют:
-  1. `fastapi_stats_app/templates/` (Jinja2 + `static/js/main.js` + `user_details.js`)
-  2. `main_site_frontend/` (Static HTML + `js/stats.js` + `schedule.js` + `navbar.js`)
-  Они дублируют стили Tailwind, логику подключения к сокетам, логику авторизации и таблицы.
-- **Решение:** Избавиться от Jinja2-шаблонов дашборда внутри FastAPI, сделав `main_site_frontend` единым SPA/PWA приложением, а FastAPI — чистым REST/WebSocket API.
+### ✅ DEBT-1 (ИСПРАВЛЕНО): Единый статический интерфейс
+- **Решение:** Jinja2-шаблоны дашборда и их дублирующие JS/CSS удалены. `main_site_frontend` является единственным UI, а FastAPI обслуживает REST/WebSocket/OpenAPI и совместимые защищённые редиректы старых URL на `PUBLIC_SITE_URL`.
+- **Совместимость:** `/` перенаправляет аутентифицированного пользователя на `/stats`, `/users/{user_id}` остаётся admin-only и перенаправляет на `/admin-user.html?user_id=...`.
 
 ---
 
@@ -361,21 +358,22 @@
 
 ---
 
-### 🧹 DEBT-3: Классы-монолиты ("God Nodes") и циклическая связанность
+### ✅ DEBT-3 (БЕЗОПАСНЫЙ ЭТАП ВЫПОЛНЕН): Разбиение "God Nodes" с фасадами
 - **Проблема:**
   - `ScheduleManager` — 2027 строк кода.
   - `SettingsManager` — 1643 строки кода.
   - `schedule_service.py` — 1435 строк кода.
   - `database.py` — 1756 строк кода.
   Менеджеры требуют взаимной инициализации (`set_base_manager`), что усложняет тестирование и расширение.
-- **Решение:** Разбить крупные классы на независимые хэндлеры по фичам (например, вынести логику модулей, историю поисков и фильтры расписания в отдельные модули).
+- **Решение:** Запросы профиля/истории действий вынесены в `shared_lib/user_activity_repository.py`, фильтры агрегированного расписания — в `bot/services/myschedule_filters.py`, сборка приватной клавиатуры настроек — в `bot/services/settings_keyboard.py`.
+- **Совместимость:** Прежние функции `shared_lib.database` и методы менеджеров оставлены как тонкие async-фасады. Это позволяет продолжать поэтапное разбиение без одномоментной миграции всех вызовов.
 
 ---
 
-### 🧹 DEBT-4: Самописная реализация JWT
+### ✅ DEBT-4 (ИСПРАВЛЕНО): JWT через PyJWT
 - **Файл:** [fastapi_stats_app/auth.py](file:///c:/Projects/matplobbot/fastapi_stats_app/auth.py#L48-L109)
-- **Проблема:** Самописные функции `_encode_hs256_jwt` и `_decode_hs256_jwt` вместо использования стандартных библиотек (`pyjwt`).
-- **Решение:** Заменить на проверенную библиотеку `PyJWT` с поддержкой валидации дат и стандартных клеймов.
+- **Решение:** Самописный код удалён, токены создаются и проверяются через `PyJWT==2.15.0` с явным `HS256` и обязательными `sub`, `iat`, `nbf`, `exp`, `iss`, `aud`.
+- **Безопасность:** В production требуется секрет не короче 32 байт; issuer/audience настраиваются через окружение. Старые токены без обязательных claims после обновления требуют повторного входа.
 
 ---
 
@@ -388,26 +386,30 @@
 
 ## 7. Инфраструктура и DevOps (DevOps & CI/CD)
 
-### ⚙️ OPS-1: Контейнеры запускаются от имени пользователя `root`
+### ✅ OPS-1 (РЕШЕНИЕ ЗАФИКСИРОВАНО): Текущая политика пользователей контейнеров оставлена
 - **Файлы:** [Dockerfile.bot](file:///c:/Projects/matplobbot/Dockerfile.bot), [Dockerfile.worker](file:///c:/Projects/matplobbot/Dockerfile.worker), [scheduler_app/Dockerfile](file:///c:/Projects/matplobbot/scheduler_app/Dockerfile), [fastapi_stats_app/Dockerfile](file:///c:/Projects/matplobbot/fastapi_stats_app/Dockerfile)
 - **Проблема:** Ни в одном Dockerfile не создаётся пользователь приложения.
-- **Решение:** Добавить `RUN useradd -m appuser && USER appuser` в базовые или финальные образы.
+- **Решение пользователя:** Не менять текущую политику в рамках этого цикла. Задача закрыта как осознанно принятый инфраструктурный риск; существующий non-root запуск worker не откатывается.
 
 ---
 
-### ⚙️ OPS-2: Рассинхронизация конфигураций `docker-compose.yml` и `docker-compose.prod.yml`
+### ✅ OPS-2 (ИСПРАВЛЕНО): Конфигурации Compose проверяются как два самостоятельных сценария
 - **Проблема:**
   1. В `docker-compose.prod.yml` есть сервис `proxy`, а в `docker-compose.yml` его нет.
   2. В `docker-compose.prod.yml` монтируется `default.conf` в nginx, а в dev `docker-compose.yml` — нет.
   3. В `docker-compose.prod.yml` остался комментарий `# ДОБАВЬ ЭТУ СТРОКУ:`.
-- **Решение:** Вынести общие сервисы в базовый compose-файл или привести dev-конфигурацию в соответствие с prod.
+- **Исправление:**
+  1. Отдельный `compose.dev` не создаётся: локальный и production-файлы остаются самостоятельными, что соответствует реальному запуску `deploy.sh`.
+  2. Общие nginx/Caddy mounts выровнены и сделаны read-only; устаревшая директива `version` удалена.
+  3. `proxy` явно оставлен production-only, так как ему нужны production-секреты/подписки; это единственное разрешённое различие топологии сервисов.
+  4. Добавлен тест паритета общих сервисов, mounts и Docker log limits; оба Compose-файла проходят `docker compose config`.
 
 ---
 
-### ⚙️ OPS-3: Отсутствие ротации логов на уровне приложения
+### ✅ OPS-3 (ИСПРАВЛЕНО): Структурированные логи и ограниченная Docker-ротация
 - **Файлы:** [bot/logger.py](file:///c:/Projects/matplobbot/bot/logger.py), [fastapi_stats_app/main.py](file:///c:/Projects/matplobbot/fastapi_stats_app/main.py)
-- **Проблема:** Логи пишутся в `StreamHandler` без поддержки структурного логирования (JSON).
-- **Решение:** Настроить форматирование в JSON для продакшена и валидацию уровней логирования через env.
+- **Проблема:** Логи писались в `StreamHandler` без поддержки структурного логирования (JSON).
+- **Исправление:** Общий `shared_lib.logging_config` валидирует `LOG_LEVEL`/`LOG_FORMAT`, выдаёт JSON по умолчанию в production и человекочитаемый текст локально, сохраняет correlation ID и форматирует Uvicorn handlers. Логи остаются в stdout/stderr, а все долгоживущие Compose-сервисы ограничены Docker `json-file` ротацией `10m × 3`.
 
 ---
 
@@ -435,10 +437,14 @@
 | **P2 (Medium)** | DB-3 | DDoS базы данных через WebSocket опрос каждые 2 секунды | ✅ Исправлено |
 | **P2 (Medium)** | DB-4 | Полный `jsonb_array_elements` для списка кэша расписаний | ✅ Исправлено |
 | **P2 (Medium)** | UX-3 | Безусловный BackButton в Telegram Mini App | ✅ Исправлено |
-| **P2 (Medium)** | DEBT-1 | Разделение на два разных сайта/дашборда (Jinja2 vs Static) | ⏳ В бэклоге |
-| **P2 (Medium)** | OPS-1 | Запуск контейнеров от `root` | ⏳ В бэклоге |
+| **P2 (Medium)** | UX-5 | Дублирование словарей локализации фронтенда | ✅ Исправлено |
+| **P2 (Medium)** | DEBT-1 | Разделение на два разных сайта/дашборда (Jinja2 vs Static) | ✅ Исправлено |
+| **P2 (Medium)** | OPS-1 | Политика пользователей контейнеров | ✅ Решение зафиксировано: оставить текущую |
+| **P2 (Medium)** | OPS-2 | Паритет локальной и production Compose-конфигураций | ✅ Исправлено |
+| **P2 (Medium)** | OPS-3 | Структурированные логи и Docker-ротация | ✅ Исправлено |
 | **P3 (Low)** | DEBT-2 | Удаление мертвого `calendar_router.py` (v1) | ✅ Исправлено |
-| **P3 (Low)** | DEBT-3 | Рефакторинг God Objects (`ScheduleManager`, `database.py`) | ⏳ В бэклоге |
+| **P3 (Low)** | DEBT-3 | Рефакторинг God Objects (`ScheduleManager`, `SettingsManager`, `database.py`) | ✅ Безопасный этап выполнен |
+| **P3 (Low)** | DEBT-4 | Самописная реализация JWT | ✅ Исправлено |
 | **P3 (Low)** | DEBT-5 | Параметризация `REDIS_HOST` в `shared_lib/redis_client.py` | ✅ Исправлено |
 | **P3 (Low)** | BUG-7 | Удаление дубликата команды в `admin.py` | ✅ Исправлено |
 | **P3 (Low)** | DB-5 | Централизация `MailAccount` и FK владельца | ✅ Исправлено |

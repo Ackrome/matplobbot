@@ -10,6 +10,7 @@ try:
     os.environ.setdefault("JWT_SECRET_KEY", "test-secret-for-unit-tests")
 
     from fastapi_stats_app.auth import _get_jwt_secret_key, require_admin
+    from fastapi_stats_app.main import read_root_html, read_user_details_html
     from fastapi_stats_app.routers.studio_router import get_owned_project_or_404
     from fastapi_stats_app.routers.ws_router import can_subscribe_user_updates
 except ModuleNotFoundError:
@@ -74,6 +75,17 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
         ):
             _get_jwt_secret_key()
 
+    def test_get_jwt_secret_key_rejects_short_production_secret(self):
+        with (
+            patch.dict(
+                os.environ,
+                {"ENVIRONMENT": "production", "JWT_SECRET_KEY": "too-short"},
+                clear=True,
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            _get_jwt_secret_key()
+
     def test_get_jwt_secret_key_fallback_in_development(self):
         with patch.dict(os.environ, {"ENVIRONMENT": "development"}, clear=True):
             key = _get_jwt_secret_key()
@@ -82,3 +94,15 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
     def test_get_jwt_secret_key_returns_value(self):
         with patch.dict(os.environ, {"JWT_SECRET_KEY": "abc"}, clear=True):
             self.assertEqual(_get_jwt_secret_key(), "abc")
+
+    async def test_legacy_dashboard_route_redirects_to_static_frontend(self):
+        response = await read_root_html()
+
+        self.assertEqual(response.status_code, 307)
+        self.assertTrue(response.headers["location"].endswith("/stats"))
+
+    async def test_legacy_user_route_preserves_user_id_in_static_redirect(self):
+        response = await read_user_details_html(user_id=12345)
+
+        self.assertEqual(response.status_code, 307)
+        self.assertTrue(response.headers["location"].endswith("/admin-user.html?user_id=12345"))

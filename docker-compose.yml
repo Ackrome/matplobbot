@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   redis:
     image: redis:7-alpine # Using a specific version is good practice
@@ -148,6 +146,11 @@ services:
   main-site-frontend:
     image: nginx:alpine
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       # Пробрасываем папку с нашим HTML внутрь Nginx
       - ./main_site_frontend:/usr/share/nginx/html:ro
@@ -159,12 +162,20 @@ services:
   caddy:
     image: caddy:alpine
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     network_mode: host # Используем сеть хоста, чтобы Caddy видел порты напрямую
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile # Пробрасываем файл конфига
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro # Пробрасываем файл конфига
       - ${CADDY_LOCAL_FILE:-./Caddyfile.local.example}:/etc/caddy/Caddyfile.local:ro
       - caddy_data:/data
       - caddy_config:/config
+    depends_on:
+      - mpb-fastapi-stats
+      - main-site-frontend
     # Команда запуска теперь короче
     command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
 

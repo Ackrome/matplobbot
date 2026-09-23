@@ -15,8 +15,8 @@ try:
     fake_schedule_service = types.ModuleType("shared_lib.services.schedule_service")
     fake_schedule_service.generate_ical_from_aggregated_schedule = lambda *args, **kwargs: b""
     fake_schedule_service.get_aggregated_schedule = AsyncMock(return_value=[])
-    fake_schedule_service.generate_profile_ical_from_aggregated_schedule = (
-        lambda *args, **kwargs: b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n"
+    fake_schedule_service.generate_profile_ical_from_aggregated_schedule = lambda *args, **kwargs: (
+        b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n"
     )
     fake_schedule_service.get_calendar_aggregated_schedule = AsyncMock(return_value=[])
     fake_schedule_service.get_schedule_with_cache_fallback = AsyncMock(return_value=([], False))
@@ -41,8 +41,8 @@ class TestCalendarAPI(unittest.TestCase):
         self.fake_db.add = lambda _obj: None
         self.fake_db.commit = AsyncMock()
         self.fake_db.refresh = AsyncMock()
-        self.app.dependency_overrides[calendar_router.get_db_session_dependency] = (
-            lambda: self.fake_db
+        self.app.dependency_overrides[calendar_router.get_db_session_dependency] = lambda: (
+            self.fake_db
         )
 
     def tearDown(self):
@@ -346,6 +346,11 @@ class TestCalendarAPI(unittest.TestCase):
         with (
             patch.object(
                 calendar_router,
+                "get_semester_bounds",
+                return_value=("2026-02-01", "2026-07-15"),
+            ),
+            patch.object(
+                calendar_router,
                 "_resolve_public_calendar_context",
                 AsyncMock(
                     return_value=(
@@ -549,6 +554,11 @@ class TestCalendarAPI(unittest.TestCase):
         with (
             patch.object(
                 calendar_router,
+                "get_semester_bounds",
+                return_value=("2026-02-01", "2026-07-15"),
+            ),
+            patch.object(
+                calendar_router,
                 "_resolve_public_calendar_context",
                 AsyncMock(return_value=(12345, None, sync_state, [], custom_profile)),
             ),
@@ -666,6 +676,11 @@ class TestCalendarAPI(unittest.TestCase):
         ]
 
         with (
+            patch.object(
+                calendar_router,
+                "get_semester_bounds",
+                return_value=("2026-02-01", "2026-07-15"),
+            ),
             patch.object(
                 calendar_router,
                 "get_user_id_by_calendar_secret",

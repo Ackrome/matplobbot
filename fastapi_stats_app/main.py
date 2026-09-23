@@ -7,7 +7,7 @@ from dotenv import load_dotenv  # Добавьте импорт
 from fastapi.middleware.cors import CORSMiddleware
 
 from shared_lib.egress import configure_process_http_proxy_env, get_global_http_proxy_url
-from shared_lib.request_context import configure_correlation_logging
+from shared_lib.logging_config import configure_logging
 
 load_dotenv()  # Загружаем .env
 
@@ -15,28 +15,18 @@ configure_process_http_proxy_env(
     get_global_http_proxy_url(),
     no_proxy_hosts=("ruz.fa.ru",),
 )
-# Настройка логгирования для FastAPI приложения
-# Reuse the same logging format as in bot/logger.py
-# --- ВАЖНО: Эта конфигурация должна быть выполнена ДО импорта других модулей приложения ---
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - [cid=%(correlation_id)s] - %(name)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    handlers=[logging.StreamHandler()],
-)
-configure_correlation_logging()
+configure_logging("matplobbot-api")
 logger = logging.getLogger(__name__)  # Получаем логгер после базовой конфигурации
 
 # --- Теперь можно безопасно импортировать остальные части приложения ---
-from fastapi import Depends, FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi import Depends, FastAPI
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from shared_lib.database import close_db_pool, init_db_pool
 
 from .auth import get_current_user, require_admin  # Import auth dependencies
-from .config import CORS_ALLOWED_ORIGINS
+from .config import CORS_ALLOWED_ORIGINS, PUBLIC_SITE_URL
 from .middleware import CorrelationIdMiddleware
 from .openapi_docs import configure_openapi
 from .routers import (
@@ -91,9 +81,6 @@ app.add_middleware(
 # Определяем базовую директорию приложения (где находится main.py)
 APP_BASE_DIR = Path(__file__).resolve().parent
 
-# Настройка Jinja2 для шаблонов
-templates = Jinja2Templates(directory=str(APP_BASE_DIR / "templates"))
-
 # Создаем директорию для статики, если ее нет
 STATIC_DIR = APP_BASE_DIR / "static"
 STATIC_DIR.mkdir(exist_ok=True)
@@ -106,30 +93,33 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 configure_openapi(app)
 
 
-# Root HTML endpoint for stats page
+# Compatibility redirects keep old dashboard URLs working while the static
+# frontend remains the only rendered user interface.
 @app.get(
     "/",
-    response_class=HTMLResponse,
-    summary="Главная страница статистики",
-    description="Отображает HTML страницу со статистикой бота.",
+    response_class=RedirectResponse,
+    summary="Переход к панели статистики",
+    description="Перенаправляет в единый статический интерфейс статистики.",
     dependencies=[Depends(get_current_user)],
     include_in_schema=False,
 )
-async def read_root_html(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+async def read_root_html():
+    return RedirectResponse(f"{PUBLIC_SITE_URL}/stats", status_code=307)
 
 
 @app.get(
     "/users/{user_id}",
-    response_class=HTMLResponse,
-    summary="Страница профиля пользователя",
-    description="Отображает страницу с детальной информацией о действиях пользователя.",
+    response_class=RedirectResponse,
+    summary="Переход к профилю пользователя",
+    description="Перенаправляет в admin-only страницу единого статического интерфейса.",
     dependencies=[Depends(require_admin)],
     include_in_schema=False,
 )
-async def read_user_details_html(request: Request, user_id: int):
-    # user_id передается в шаблон, но мы будем загружать данные через JS/API
-    return templates.TemplateResponse("user_details.html", {"request": request, "user_id": user_id})
+async def read_user_details_html(user_id: int):
+    return RedirectResponse(
+        f"{PUBLIC_SITE_URL}/admin-user.html?user_id={user_id}",
+        status_code=307,
+    )
 
 
 app.include_router(auth_router.router, prefix="/api")

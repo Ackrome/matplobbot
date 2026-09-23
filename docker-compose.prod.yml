@@ -51,6 +51,8 @@ services:
         max-size: "10m"
         max-file: "3"
     env_file: ./.env
+    environment:
+      - ENVIRONMENT=production
     depends_on:
       mpb-worker:
         condition: service_started
@@ -78,6 +80,7 @@ services:
     env_file: ./.env
     environment:
       - TZ=Europe/Moscow
+      - ENVIRONMENT=production
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -96,6 +99,8 @@ services:
     image: ghcr.io/ackrome/matplobbot-bot:${BOT_TAG:-latest}
     command: ["/bin/bash", "-c", "alembic upgrade head"]
     env_file: ./.env
+    environment:
+      - ENVIRONMENT=production
     depends_on:
       postgres:
         condition: service_healthy
@@ -113,6 +118,7 @@ services:
     env_file: ./.env
     environment:
       - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=production
     depends_on:
       redis:
         condition: service_healthy
@@ -147,6 +153,11 @@ services:
   main-site-frontend:
     image: nginx:alpine
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "127.0.0.1:8080:80"
     volumes:
@@ -156,9 +167,14 @@ services:
   caddy:
     image: caddy:alpine
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     network_mode: host # Оставляем host, чтобы не мучиться с портами 80/443
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ${CADDY_LOCAL_FILE:-./Caddyfile.local.example}:/etc/caddy/Caddyfile.local:ro
       - caddy_data:/data
       - caddy_config:/config
@@ -171,6 +187,11 @@ services:
       context: ./proxy
       dockerfile: Dockerfile.proxy
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     env_file: ./.env
     ports:
       - "127.0.0.1:20170:20170"

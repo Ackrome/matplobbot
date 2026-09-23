@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 import tempfile
 import types
@@ -50,3 +51,53 @@ class TestLocalizationCompleteness(unittest.TestCase):
             self.assertEqual(translator.gettext("ru", "fallback_only"), "Default value")
             self.assertEqual(translator.gettext("es", "fallback_only"), "Default value")
             self.assertEqual(translator.gettext("ru", "missing_key"), "_missing_key_")
+
+    def test_frontend_locale_key_sets_and_placeholders_are_in_sync(self):
+        locales_dir = Path("main_site_frontend/locales")
+        en_data = json.loads((locales_dir / "en.json").read_text(encoding="utf-8"))
+        ru_data = json.loads((locales_dir / "ru.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(set(en_data), set(ru_data))
+        placeholder_pattern = re.compile(r"\{(\w+)\}")
+        mismatched_placeholders = {
+            key: (
+                set(placeholder_pattern.findall(en_data[key])),
+                set(placeholder_pattern.findall(ru_data[key])),
+            )
+            for key in en_data
+            if set(placeholder_pattern.findall(en_data[key]))
+            != set(placeholder_pattern.findall(ru_data[key]))
+        }
+        self.assertEqual(mismatched_placeholders, {})
+
+    def test_frontend_translation_attributes_reference_known_keys(self):
+        locales_dir = Path("main_site_frontend/locales")
+        known_keys = set(json.loads((locales_dir / "en.json").read_text(encoding="utf-8")))
+        attribute_pattern = re.compile(
+            r"data-(?:i18n|i18n-placeholder|i18n-title|i18n-aria-label|"
+            r'stats-i18n|stats-placeholder|stats-title|stats-aria-label)="([^"]+)"'
+        )
+        used_keys: set[str] = set()
+        for html_path in Path("main_site_frontend").glob("*.html"):
+            used_keys.update(attribute_pattern.findall(html_path.read_text(encoding="utf-8")))
+
+        self.assertEqual(used_keys - known_keys, set())
+
+    def test_frontend_scripts_use_shared_locale_loader(self):
+        navbar_source = Path("main_site_frontend/js/navbar.js").read_text(encoding="utf-8")
+        stats_source = Path("main_site_frontend/js/stats.js").read_text(encoding="utf-8")
+        self.assertNotIn("const I18N =", navbar_source)
+        self.assertNotIn("const STATS_I18N =", stats_source)
+
+        for page_name in (
+            "index.html",
+            "login.html",
+            "register.html",
+            "schedule.html",
+            "stats.html",
+            "studio.html",
+        ):
+            source = Path("main_site_frontend", page_name).read_text(encoding="utf-8")
+            loader_position = source.index("/js/frontend_i18n.js")
+            navbar_position = source.index("/js/navbar.js")
+            self.assertLess(loader_position, navbar_position, page_name)

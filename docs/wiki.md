@@ -527,12 +527,16 @@ How to use: (or not use)
 
 Files:
 
+- `main_site_frontend/js/frontend_i18n.js`
 - `main_site_frontend/js/navbar.js`
+- `main_site_frontend/locales/en.json`
+- `main_site_frontend/locales/ru.json`
 
 What it does:
 
 - Shared top nav across pages.
-- EN/RU translation dictionary and runtime text updates.
+- Loads one shared EN/RU locale source for navbar, schedule, authentication, and stats runtime text.
+- Keeps locale dictionaries out of page scripts and applies runtime text updates through `window.mpbI18n`.
 - Command palette and keyboard shortcuts.
 - Sun/moon theme toggle that persists the selected light/dark theme.
 - Admin-only nav item for stats page.
@@ -543,6 +547,34 @@ How to use:
 2. Use the sun/moon button to toggle the global theme.
 3. Open palette/shortcuts from navbar controls.
 4. Use account menu for logout and profile actions.
+
+Maintenance:
+
+1. Add every new key to both locale JSON files and preserve the same `{placeholder}` names.
+2. Load `frontend_i18n.js` before `navbar.js` on pages that use the shared API.
+3. Run `python -m unittest discover -s tests -p test_localization_completeness.py -v` after locale changes.
+4. Advance the service-worker cache version when changing the loader or locale assets.
+
+### Unified Static Frontend
+
+Files:
+
+- `main_site_frontend/`
+- `fastapi_stats_app/main.py`
+
+What it does:
+
+- Uses `main_site_frontend` as the only rendered website/dashboard interface.
+- Keeps FastAPI focused on REST, WebSocket, OpenAPI, and protected static documentation assets.
+- Redirects the authenticated legacy FastAPI root to `/stats` on `PUBLIC_SITE_URL`.
+- Redirects the admin-only legacy `/users/{user_id}` route to `/admin-user.html?user_id=...`.
+- Removes the obsolete Jinja dashboard templates and their duplicated dashboard JavaScript/CSS.
+
+How to use:
+
+1. Set `PUBLIC_SITE_URL` to the public website origin in deployed FastAPI environments.
+2. Link to `/stats` and `/admin-user.html?user_id=...` for new UI flows.
+3. Old FastAPI dashboard bookmarks continue through protected HTTP 307 redirects.
 
 ### Global Dark Theme
 
@@ -582,21 +614,19 @@ Files:
 - `tailwind.config.js`
 - `tailwind.input.css`
 - `main_site_frontend/css/tailwind.css`
-- `fastapi_stats_app/static/css/tailwind.css`
 
 What it does:
 
 - Builds production Tailwind CSS locally instead of loading `cdn.tailwindcss.com` in the browser.
-- Scans static website HTML/JS and FastAPI dashboard templates/JS for utility classes.
-- Emits one stylesheet for the nginx-served site and one stylesheet for FastAPI static templates.
-- Keeps class-based dark mode enabled for both frontends.
+- Scans the unified static website HTML/JS for utility classes.
+- Emits the stylesheet for the nginx-served site.
+- Keeps class-based dark mode enabled for the static frontend.
 
 How to use:
 
 1. Run `npm install` after cloning or when dependencies change.
 2. Run `npm run build:tailwind` after changing frontend HTML or JS that uses Tailwind utilities.
 3. Serve the static site normally; pages load `/css/tailwind.css`.
-4. Serve the FastAPI app normally; templates load `/static/css/tailwind.css`.
 
 ### Schedule Page
 
@@ -759,7 +789,7 @@ What it does:
 - Supports exports (JSON/CSV/PDF weekly) with date range and timezone.
 - Includes partial-degradation state when one widget fails.
 - Shows an admin-only `Refresh schedule cache` action that force-runs the full semester cache remap/refresh workflow from `/stats`; non-admin accounts never see the button, and the API still enforces admin access.
-- Owns page-specific EN/RU translations for static labels, dynamic REST/WebSocket statuses, module-management statuses, mobile filters, and empty states. Language changes are applied through the shared navbar i18n API without requiring a page reload.
+- Uses the shared frontend locale JSON for static labels, dynamic REST/WebSocket statuses, module-management statuses, mobile filters, and empty states. Language changes are applied without a page reload.
 
 How to use:
 
@@ -903,6 +933,14 @@ How to use:
 2. For Telegram Mini Apps, send raw `window.Telegram.WebApp.initData` as `{ "init_data": "..." }` to `/telegram/webapp`.
 3. Pass bearer token to protected endpoints.
 4. Store/update user preferences through `/preferences`.
+
+Token behavior:
+
+- Access tokens are issued and verified with PyJWT using `HS256` only.
+- Decoding requires and validates `sub`, `iat`, `nbf`, `exp`, `iss`, and `aud`.
+- `JWT_ISSUER` defaults to `matplobbot-api`; `JWT_AUDIENCE` defaults to `matplobbot-web`.
+- `JWT_LEEWAY_SECONDS` can allow a small deployment clock skew; the default is strict (`0`).
+- Tokens issued before this claims migration are intentionally invalid and users must authenticate again after deployment.
 
 ### Schedule API
 
@@ -1120,6 +1158,7 @@ Other scheduler features:
 
 Source:
 
+- `shared_lib/logging_config.py`
 - `bot/logger.py`
 - `fastapi_stats_app/main.py`
 - `scheduler_app/main.py`
@@ -1128,18 +1167,24 @@ Source:
 
 What it does:
 
-- Bot, FastAPI, and scheduler logging is console-only through `logging.StreamHandler()`.
+- Bot, FastAPI, and scheduler use one `shared_lib.logging_config` policy and remain console-only through `logging.StreamHandler()`.
+- `LOG_LEVEL` accepts `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` (`WARN` and `FATAL` are normalized aliases); invalid values stop startup with a clear configuration error.
+- `LOG_FORMAT` accepts `text` or `json`. When it is omitted, `ENVIRONMENT=production` selects one-object-per-line JSON and other environments select readable text.
+- Structured records contain UTC timestamp, level, stable service name, logger, message, correlation ID, and source location. Existing Uvicorn access/error handlers receive the same formatter.
 - The shared `bot_logs` Docker volume and `/app/logs` mounts are removed.
 - Long-running containers use Docker `json-file` log rotation with `max-size=10m` and `max-file=3`.
-- Per-container Docker logs are capped at roughly 30 MB for `mpb-telegram-bot`, `mpb-fastapi-stats`, `mpb-worker`, `mpb-scheduler`, `postgres`, and `redis`.
+- Per-container Docker logs are capped at roughly 30 MB for the application, database, frontend, Caddy, and production proxy services.
+- `docker-compose.yml` is the standalone local stack and `docker-compose.prod.yml` is the standalone production stack used by `deploy.sh`; a separate `compose.dev` file is intentionally not maintained.
+- The production credentials-backed `proxy` is the only intentional topology difference. Automated tests enforce shared-service, nginx/Caddy mount, and retention parity.
 - The `/ws/bot_log` endpoint no longer tails a file and returns an informational message instead.
 
 How to use:
 
 1. Read live logs with `docker compose logs -f mpb-telegram-bot` or another service name.
 2. Use `docker compose -f docker-compose.prod.yml logs --tail=200 mpb-fastapi-stats` on production deployments.
-3. After deploying this change, remove the old named log volume only after confirming no previous stack still needs it, for example `docker volume rm matplobbot_bot_logs`.
-4. Keep the `logging` block on every long-running service that writes useful stdout/stderr output.
+3. Set `LOG_LEVEL=DEBUG` temporarily for diagnosis; set `LOG_FORMAT=json` explicitly when a non-production environment is connected to a structured log collector.
+4. After deploying this change, remove the old named log volume only after confirming no previous stack still needs it, for example `docker volume rm matplobbot_bot_logs`.
+5. Keep the `logging` block on every long-running service that writes useful stdout/stderr output.
 
 ### Bot Startup Reliability
 
@@ -1269,7 +1314,7 @@ What it does:
 - Pins `aiogram` to `3.29.1` so the bot and scheduler can use the current `aiohttp 3.14.x` release line without the old `<3.14` resolver cap.
 - Pins `aiohttp` to the non-vulnerable `3.14.3` release across bot, scheduler, and shared package metadata. This is the minimum version that clears `PYSEC-2026-3545`; `PYSEC-2026-3546` and `PYSEC-2026-3547` are fixed by `3.14.2`, but the lock must stay at least `3.14.3`.
 - Pins FastAPI to `0.136.3` and Starlette to `1.3.1` in `fastapi_stats_app/requirements.txt` so the stats service stays on a Starlette release line with the current multipart and request parsing fixes.
-- Uses an in-repo HS256 JWT implementation for FastAPI access tokens, avoiding the no-fix `python-jose` JWE advisory while keeping existing bearer-token behavior.
+- Pins PyJWT to `2.15.0` for FastAPI access tokens and restricts decoding to HS256 with required issuer, audience, subject, issued-at, not-before, and expiry claims.
 - Removes unused `markdown` from the bot/worker requirements; Markdown rendering uses `markdown-it-py`.
 - Pins `python-multipart` to `0.0.31` for multipart parser DoS fixes.
 - Pins `setuptools` to `83.0.0`, `cryptography` to `50.0.0` and `weasyprint` to `70.0` in the root requirements lock for the current audit gate. The cryptography minimum is also enforced in `setup.py`; do not restore the vulnerable 46.x upper bound. Security fixes must pass the unchanged strict audit before deployment.
@@ -1337,6 +1382,31 @@ How to use:
 
 1. Check `GET /api/schedule/fallback_counters` as admin.
 2. Correlate spikes in fallback/no-cache with upstream incidents.
+
+### Extracted Feature Services And Compatibility Facades
+
+Source:
+
+- `shared_lib/user_activity_repository.py`
+- `shared_lib/database.py`
+- `bot/services/myschedule_filters.py`
+- `bot/handlers/schedule.py`
+- `bot/services/settings_keyboard.py`
+- `bot/handlers/settings.py`
+
+What it does:
+
+- Moves user profile, message-history, action-user, and export queries out of the large database module.
+- Moves aggregated-schedule filter persistence, cache migration, active-subscription lookup, and built-in presets out of `ScheduleManager`.
+- Moves private settings keyboard construction out of `SettingsManager`.
+- Preserves the old public database functions and manager helper methods as async compatibility facades, so callers can migrate independently.
+
+Maintenance:
+
+1. Put new query behavior in `user_activity_repository.py`, not back into the database facade.
+2. Put new My Schedule filter rules in `myschedule_filters.py`; keep allowed lesson types aligned with database normalization.
+3. Put new private settings buttons in `settings_keyboard.py` and keep callback data synchronized with registered handlers.
+4. Keep facade signatures until all external callers and tests have intentionally migrated.
 
 ### Stats Manual Module Mappings
 
@@ -1461,7 +1531,8 @@ How to use:
 ## Security Maintenance Notes
 
 - Avatar responses use `/api/stats/users/{user_id}/avatar`; the backend keeps the Telegram bot token server-side and only proxies users already present in the application database. The proxy uses the shared Telegram HTTP/proxy configuration and a bounded in-memory cache.
-- Production FastAPI deployments must set `ENVIRONMENT=production` (the production Compose file sets it explicitly) and provide a non-default `STATS_PASS` and `JWT_SECRET_KEY`. Development may use an ephemeral JWT key, which invalidates tokens after restart.
+- Production FastAPI deployments must set `ENVIRONMENT=production` (the production Compose file sets it explicitly) and provide a non-default `STATS_PASS` and a random `JWT_SECRET_KEY` of at least 32 bytes. Development may use an ephemeral JWT key, which invalidates tokens after restart.
+- Keep `JWT_ISSUER` and `JWT_AUDIENCE` stable across replicas. Changing either value invalidates existing sessions by design.
 - LaTeX compilation rejects shell execution, direct file I/O, unsafe external file references, absolute paths, and traversal. Compilation runs from the temporary project directory with `-no-shell-escape` and a non-root worker.
 - Long Telegram HTML messages are split into balanced chunks. Callers must provide a positive `max_chars` large enough for the tags they need to preserve.
 - Keep TatSu pinned below `5.7`: `ics==0.7.2` still uses the `buffer_class` parser option removed by later TatSu releases. Verify `from fastapi_stats_app.main import app` after dependency updates.

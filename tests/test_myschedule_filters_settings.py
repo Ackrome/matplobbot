@@ -3,6 +3,8 @@ from unittest.mock import AsyncMock, patch
 
 SHARED_DB_AVAILABLE = True
 try:
+    from bot.services import settings_keyboard
+    from bot.services.myschedule_filters import MyScheduleFilterService
     from shared_lib import database as shared_database
 except ModuleNotFoundError:
     SHARED_DB_AVAILABLE = False
@@ -12,6 +14,57 @@ except ModuleNotFoundError:
     SHARED_DB_AVAILABLE, "database dependencies are not installed in this environment"
 )
 class TestMyScheduleFiltersSettings(unittest.IsolatedAsyncioTestCase):
+    async def test_extracted_builtin_filter_presets_preserve_behavior(self):
+        active_subscriptions = [
+            {"id": 1, "entity_type": "group"},
+            {"id": 2, "entity_type": "auditorium"},
+        ]
+
+        self.assertEqual(
+            MyScheduleFilterService.build_builtin("all", active_subscriptions),
+            {"excluded_subs": [], "excluded_types": []},
+        )
+        self.assertEqual(
+            MyScheduleFilterService.build_builtin("hide_auditoriums", active_subscriptions),
+            {"excluded_subs": [2], "excluded_types": []},
+        )
+        self.assertIsNone(MyScheduleFilterService.build_builtin("unknown", active_subscriptions))
+
+    async def test_extracted_settings_keyboard_keeps_registered_callback_contract(self):
+        factory = settings_keyboard.SettingsKeyboardFactory(
+            available_languages={"en": "English", "ru": "Русский"},
+            admin_user_ids={42},
+        )
+        user_settings = {
+            "language": "en",
+            "show_docstring": True,
+            "latex_padding": 15,
+            "latex_dpi": 300,
+        }
+        with (
+            patch.object(
+                settings_keyboard,
+                "get_user_settings",
+                new=AsyncMock(return_value=user_settings),
+            ),
+            patch.object(
+                settings_keyboard,
+                "get_user_repos",
+                new=AsyncMock(return_value=[]),
+            ),
+        ):
+            builder = await factory.build(42)
+
+        callback_values = {
+            button.callback_data
+            for row in builder.as_markup().inline_keyboard
+            for button in row
+            if button.callback_data
+        }
+        self.assertIn("settings_toggle_short_names", callback_values)
+        self.assertIn("manage_personal_subscriptions", callback_values)
+        self.assertIn("admin_settings_summary_time", callback_values)
+
     async def test_normalize_filters_sanitizes_values(self):
         normalized = shared_database.normalize_myschedule_filters(
             {

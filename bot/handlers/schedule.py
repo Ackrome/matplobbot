@@ -27,6 +27,7 @@ from bot.keyboards import (
     get_schedule_type_keyboard,
     resolve_code_path,
 )
+from bot.services.myschedule_filters import MyScheduleFilterService
 from shared_lib.database import (
     get_cached_schedule,
     get_cached_schedule_updated_at,
@@ -78,6 +79,7 @@ class ScheduleManager:
     def __init__(self, ruz_api_client: RuzAPIClient):
         self.router = Router()
         self.api_client = ruz_api_client
+        self.myschedule_filters = MyScheduleFilterService()
         self._background_tasks: set[asyncio.Task] = set()
         self._register_handlers()
 
@@ -1116,38 +1118,13 @@ class ScheduleManager:
         await callback.answer()
 
     async def _get_user_filters(self, user_id: int) -> dict:
-        db_filters = await database.get_user_myschedule_filters(user_id)
-        redis_filters = await redis_client.get_user_cache(user_id, "mysch_filters")
-
-        if redis_filters:
-            normalized_redis = {
-                "excluded_subs": [
-                    int(item)
-                    for item in redis_filters.get("excluded_subs", [])
-                    if str(item).strip().isdigit()
-                ],
-                "excluded_types": [
-                    str(item)
-                    for item in redis_filters.get("excluded_types", [])
-                    if str(item) in {"Lecture", "Seminar", "Exam", "Consultation", "Other"}
-                ],
-            }
-            if (
-                db_filters == {"excluded_subs": [], "excluded_types": []}
-                and normalized_redis != db_filters
-            ):
-                db_filters = await database.save_user_myschedule_filters(user_id, normalized_redis)
-
-        await redis_client.set_user_cache(user_id, "mysch_filters", db_filters, ttl=3600)
-        return db_filters
+        return await self.myschedule_filters.get(user_id)
 
     async def _save_user_filters(self, user_id: int, filters: dict):
-        normalized = await database.save_user_myschedule_filters(user_id, filters)
-        await redis_client.set_user_cache(user_id, "mysch_filters", normalized, ttl=3600)
+        await self.myschedule_filters.save(user_id, filters)
 
     async def _get_active_subscriptions(self, user_id: int) -> list[dict]:
-        subscriptions, _ = await database.get_user_subscriptions(user_id, page=0, page_size=100)
-        return [sub for sub in subscriptions if sub["is_active"]]
+        return await self.myschedule_filters.get_active_subscriptions(user_id)
 
     async def _render_myschedule_filters_menu_message(
         self, message: Message, user_id: int, *, is_edit: bool
@@ -1166,19 +1143,7 @@ class ScheduleManager:
     def _build_builtin_myschedule_filter(
         self, preset_id: str, active_subs: list[dict]
     ) -> dict | None:
-        if preset_id == "all":
-            return {"excluded_subs": [], "excluded_types": []}
-        if preset_id == "only_exams":
-            return {
-                "excluded_subs": [],
-                "excluded_types": ["Lecture", "Seminar", "Other"],
-            }
-        if preset_id == "hide_auditoriums":
-            excluded = [
-                int(sub["id"]) for sub in active_subs if sub.get("entity_type") == "auditorium"
-            ]
-            return {"excluded_subs": excluded, "excluded_types": []}
-        return None
+        return self.myschedule_filters.build_builtin(preset_id, active_subs)
 
     async def _render_calendar(self, callback: CallbackQuery, year: int, month: int):
         user_id = callback.from_user.id
@@ -1293,7 +1258,7 @@ class ScheduleManager:
         for lesson in schedule:
             l_copy = lesson.copy()
             l_copy["lecturer_title"] = (
-                f"{l_copy.get('lecturer_title','')} ({lesson.get('source_entity')})"
+                f"{l_copy.get('lecturer_title', '')} ({lesson.get('source_entity')})"
             )
             formatted_lessons.append(l_copy)
 
@@ -1485,7 +1450,7 @@ class ScheduleManager:
         for lesson in schedule:
             l_copy = lesson.copy()
             l_copy["lecturer_title"] = (
-                f"{l_copy.get('lecturer_title','')} ({lesson.get('source_entity')})"
+                f"{l_copy.get('lecturer_title', '')} ({lesson.get('source_entity')})"
             )
             formatted_lessons.append(l_copy)
 

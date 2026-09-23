@@ -94,7 +94,7 @@ def _normalize_timezone(value: str | None) -> str:
     if match:
         offset = int(match.group(2))
         if offset <= 14:
-            return f"Etc/GMT-{'%d' % offset}" if match.group(1) == "+" else f"Etc/GMT+{offset}"
+            return f"Etc/GMT-{offset}" if match.group(1) == "+" else f"Etc/GMT+{offset}"
     return CALENDAR_TIMEZONE
 
 

@@ -16,10 +16,6 @@ class TestDashboardTextEncoding(unittest.TestCase):
             Path("main_site_frontend/js").glob("*.js")
         )
         backend_targets = [
-            Path("fastapi_stats_app/static/js/main.js"),
-            Path("fastapi_stats_app/static/js/user_details.js"),
-            Path("fastapi_stats_app/templates/index.html"),
-            Path("fastapi_stats_app/templates/user_details.html"),
             Path("fastapi_stats_app/main.py"),
             Path("fastapi_stats_app/routers/auth_router.py"),
             Path("fastapi_stats_app/routers/schedule_router.py"),
