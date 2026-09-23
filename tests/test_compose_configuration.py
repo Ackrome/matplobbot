@@ -38,14 +38,10 @@ class TestComposeConfiguration(unittest.TestCase):
     def test_shared_frontend_and_caddy_mounts_stay_aligned(self):
         for service_name in ("main-site-frontend", "caddy"):
             local_volumes = set(self.local["services"][service_name]["volumes"])
-            production_volumes = set(
-                self.production["services"][service_name]["volumes"]
-            )
+            production_volumes = set(self.production["services"][service_name]["volumes"])
             self.assertEqual(local_volumes, production_volumes)
 
-        frontend_volumes = set(
-            self.local["services"]["main-site-frontend"]["volumes"]
-        )
+        frontend_volumes = set(self.local["services"]["main-site-frontend"]["volumes"])
         self.assertIn(
             "./main_site_frontend/default.conf:/etc/nginx/conf.d/default.conf:ro",
             frontend_volumes,

@@ -86,9 +86,7 @@ def resolve_log_format(
         os.getenv("ENVIRONMENT", "development") if environment is None else environment
     )
     default_format = (
-        "json"
-        if (environment_name or "").strip().lower() in _PRODUCTION_ENVIRONMENTS
-        else "text"
+        "json" if (environment_name or "").strip().lower() in _PRODUCTION_ENVIRONMENTS else "text"
     )
     raw_value = os.getenv("LOG_FORMAT", "") if value is None else value
     format_name = (raw_value or default_format).strip().lower()
@@ -132,8 +130,7 @@ def configure_logging(
         for framework_handler in framework_logger.handlers:
             framework_handler.setFormatter(formatter)
             if not any(
-                isinstance(item, CorrelationIdLogFilter)
-                for item in framework_handler.filters
+                isinstance(item, CorrelationIdLogFilter) for item in framework_handler.filters
             ):
                 framework_handler.addFilter(CorrelationIdLogFilter())
 
