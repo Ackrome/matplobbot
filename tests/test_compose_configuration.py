@@ -6,6 +6,9 @@ import yaml
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 LOCAL_COMPOSE = PROJECT_ROOT / "docker-compose.yml"
 PRODUCTION_COMPOSE = PROJECT_ROOT / "docker-compose.prod.yml"
+GITHUB_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "ci-cd.yml"
+JENKINSFILE = PROJECT_ROOT / "Jenkinsfile.groovy"
+VALIDATION_REQUIREMENTS = PROJECT_ROOT / "requirements-validation.txt"
 COMMON_LONG_RUNNING_SERVICES = {
     "redis",
     "postgres",
@@ -69,6 +72,17 @@ class TestComposeConfiguration(unittest.TestCase):
             with self.subTest(service=service_name):
                 environment = self.production["services"][service_name]["environment"]
                 self.assertIn("ENVIRONMENT=production", environment)
+
+    def test_quality_gates_share_validation_dependencies(self):
+        github_workflow = GITHUB_WORKFLOW.read_text(encoding="utf-8")
+        jenkinsfile = JENKINSFILE.read_text(encoding="utf-8")
+        validation_requirements = VALIDATION_REQUIREMENTS.read_text(encoding="utf-8")
+
+        install_command = "pip install -r requirements-validation.txt"
+        self.assertIn(install_command, github_workflow)
+        self.assertIn(f"python -m {install_command}", jenkinsfile)
+        self.assertIn("PyYAML==6.0.3", validation_requirements)
+        self.assertIn('"yaml",', jenkinsfile)
 
 
 if __name__ == "__main__":

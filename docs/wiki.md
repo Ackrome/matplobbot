@@ -1320,6 +1320,7 @@ Source:
 - `requirements.txt`
 - `fastapi_stats_app/requirements.txt`
 - `scheduler_app/requirements.txt`
+- `requirements-validation.txt`
 - `.github/workflows/ci-cd.yml`
 - `.github/workflows/dependency-audit.yml`
 - `Jenkinsfile.groovy`
@@ -1475,7 +1476,8 @@ Pipeline features:
 Jenkins + deploy features:
 
 - `Jenkinsfile.groovy` runs a pre-deploy quality gate before touching production.
-- The quality gate creates `.jenkins-venv`, installs project dependencies, checks critical FastAPI/test imports, runs `ruff check . --select E9,F63,F7,F82`, and runs `python -m unittest discover -s tests -v`.
+- GitHub Actions and Jenkins install the same pinned lint/test/type/coverage tools from `requirements-validation.txt`, preventing provider-specific dependency drift.
+- The Jenkins quality gate creates `.jenkins-venv`, installs project and validation dependencies, checks critical FastAPI/test imports (including `yaml`), runs `ruff check . --select E9,F63,F7,F82`, and runs `python -m unittest discover -s tests -v`.
 - The gate fails if unittest output shows dependency-driven skips/import errors such as missing FastAPI modules.
 - `Jenkinsfile.groovy` performs production deploy and smoke checks.
 - Deploy host fingerprint pinning via `APP_VM_SHA256` (with optional one-off override).

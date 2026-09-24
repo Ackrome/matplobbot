@@ -57,7 +57,7 @@ pipeline {
                         python -m pip install --upgrade pip
                         python -m pip install -e .
                         python -m pip install -r requirements.txt -r fastapi_stats_app/requirements.txt -r scheduler_app/requirements.txt
-                        python -m pip install ruff==0.8.6 pip-audit==2.10.1
+                        python -m pip install -r requirements-validation.txt
 
                         python - <<'PY'
 import importlib
@@ -70,6 +70,7 @@ required_modules = [
     "fastapi.testclient",
     "passlib",
     "sqlalchemy",
+    "yaml",
 ]
 missing = []
 for module_name in required_modules:
