@@ -5,7 +5,10 @@ import io
 import logging
 import mimetypes
 import os
+import re
+import unicodedata
 import zipfile
+from urllib.parse import quote
 
 import aiohttp
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
@@ -47,6 +50,21 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 def _build_studio_telegram_caption(project_name: str) -> str:
     escaped_name = html.escape(project_name, quote=True)
     return f"📄 Ваш проект: <b>{escaped_name}</b>"
+
+
+def _build_zip_content_disposition(project_name: str) -> str:
+    """Build an RFC 6266 header with an ASCII fallback and UTF-8 filename."""
+    display_name = re.sub(r"[\x00-\x1f\x7f/\\]+", "_", str(project_name)).strip()
+    display_name = display_name[:120] or "project"
+    unicode_filename = f"{display_name}_export.zip"
+
+    ascii_name = (
+        unicodedata.normalize("NFKD", display_name).encode("ascii", "ignore").decode("ascii")
+    )
+    ascii_name = re.sub(r"[^A-Za-z0-9._-]+", "_", ascii_name).strip("._-") or "project"
+    ascii_filename = f"{ascii_name}_export.zip"
+    encoded_filename = quote(unicode_filename, safe="")
+    return f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{encoded_filename}"
 
 
 async def get_owned_project_or_404(db: AsyncSession, project_id: int, owner_id: int) -> Project:
@@ -480,8 +498,7 @@ async def export_project_zip(
 
     zip_buffer.seek(0)
 
-    safe_name = "".join([c if c.isalnum() else "_" for c in project.name])
-    headers = {"Content-Disposition": f"attachment; filename={safe_name}_export.zip"}
+    headers = {"Content-Disposition": _build_zip_content_disposition(project.name)}
 
     return StreamingResponse(zip_buffer, media_type="application/zip", headers=headers)
 

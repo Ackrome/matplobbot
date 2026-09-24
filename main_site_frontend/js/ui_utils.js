@@ -16,9 +16,40 @@
         return normalized || "/api";
     }
 
+    function normalizeWebSocketBase(rawValue) {
+        if (typeof rawValue !== "string" || !rawValue.trim()) return "";
+        const resolved = new URL(rawValue.trim(), window.location.origin);
+        if (resolved.protocol === "http:") resolved.protocol = "ws:";
+        if (resolved.protocol === "https:") resolved.protocol = "wss:";
+        if (resolved.protocol !== "ws:" && resolved.protocol !== "wss:") return "";
+        resolved.search = "";
+        resolved.hash = "";
+        return resolved.toString().replace(/\/+$/, "");
+    }
+
+    function resolveWebSocketBase() {
+        const fromGlobal =
+            typeof window.__MPB_WS_BASE__ === "string" ? window.__MPB_WS_BASE__ : "";
+        const fromMeta =
+            document.querySelector('meta[name="mpb-ws-base"]')?.getAttribute("content") || "";
+        const explicitBase = normalizeWebSocketBase(fromGlobal) || normalizeWebSocketBase(fromMeta);
+        if (explicitBase) return explicitBase;
+
+        const apiUrl = new URL(resolveApiBase(), window.location.origin);
+        apiUrl.protocol = apiUrl.protocol === "https:" ? "wss:" : "ws:";
+        apiUrl.pathname = apiUrl.pathname.replace(/\/api\/?$/, "").replace(/\/+$/, "");
+        apiUrl.search = "";
+        apiUrl.hash = "";
+        return apiUrl.toString().replace(/\/+$/, "");
+    }
+
     window.MPB_API_BASE = resolveApiBase();
     window.getMpbApiBase = function getMpbApiBase() {
         return window.MPB_API_BASE || "/api";
+    };
+    window.MPB_WS_BASE = resolveWebSocketBase();
+    window.getMpbWebSocketBase = function getMpbWebSocketBase() {
+        return window.MPB_WS_BASE || resolveWebSocketBase();
     };
 
     const popupState = {

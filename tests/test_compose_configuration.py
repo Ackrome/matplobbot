@@ -9,6 +9,10 @@ PRODUCTION_COMPOSE = PROJECT_ROOT / "docker-compose.prod.yml"
 GITHUB_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "ci-cd.yml"
 JENKINSFILE = PROJECT_ROOT / "Jenkinsfile.groovy"
 VALIDATION_REQUIREMENTS = PROJECT_ROOT / "requirements-validation.txt"
+FRONTEND_NGINX = PROJECT_ROOT / "main_site_frontend" / "default.conf"
+FRONTEND_UI_UTILS = PROJECT_ROOT / "main_site_frontend" / "js" / "ui_utils.js"
+FRONTEND_STATS = PROJECT_ROOT / "main_site_frontend" / "js" / "stats.js"
+SCHEDULER_MAIN = PROJECT_ROOT / "scheduler_app" / "main.py"
 COMMON_LONG_RUNNING_SERVICES = {
     "redis",
     "postgres",
@@ -83,6 +87,57 @@ class TestComposeConfiguration(unittest.TestCase):
         self.assertIn(f"python -m {install_command}", jenkinsfile)
         self.assertIn("PyYAML==6.0.3", validation_requirements)
         self.assertIn('"yaml",', jenkinsfile)
+
+    def test_jenkins_writes_complete_remote_env_atomically(self):
+        jenkinsfile = JENKINSFILE.read_text(encoding="utf-8")
+
+        self.assertIn("mktemp .env.tmp.XXXXXX", jenkinsfile)
+        self.assertIn('mv -f \\"\\$ENV_TMP\\" .env', jenkinsfile)
+        self.assertIn("Remote .env keys verified without exposing values.", jenkinsfile)
+        self.assertNotIn(">> .env", jenkinsfile)
+        payload_start = jenkinsfile.index("EXPECTED_ENV_KEYS=")
+        remote_write = jenkinsfile.index("} | ssh", payload_start)
+        for key in (
+            "OUTLINE_ACCESS_KEY",
+            "TELEGRAM_REQUEST_RETRY_ATTEMPTS",
+            "TELEGRAM_REQUEST_RETRY_DELAY_SECONDS",
+        ):
+            self.assertLess(jenkinsfile.index(f"printf '{key}=", payload_start), remote_write)
+
+    def test_frontend_nginx_proxies_websocket_upgrades(self):
+        nginx = FRONTEND_NGINX.read_text(encoding="utf-8")
+        jenkinsfile = JENKINSFILE.read_text(encoding="utf-8")
+
+        ws_location = nginx.split("location /ws/", 1)[1].split("location /", 1)[0]
+        self.assertIn("proxy_pass $stats_api", ws_location)
+        self.assertIn("proxy_http_version 1.1", ws_location)
+        self.assertIn("proxy_set_header Upgrade $http_upgrade", ws_location)
+        self.assertIn('proxy_set_header Connection "upgrade"', ws_location)
+        self.assertIn("check_ws_upgrade", jenkinsfile)
+        self.assertIn('if [ "$status" != "101" ]', jenkinsfile)
+        self.assertIn("http://127.0.0.1:9584/ws/stats/total_actions", jenkinsfile)
+        self.assertIn("${PUBLIC_SITE_URL%/}/ws/stats/total_actions", jenkinsfile)
+
+    def test_stats_websocket_uses_runtime_api_origin_and_single_reconnect_timer(self):
+        ui_utils = FRONTEND_UI_UTILS.read_text(encoding="utf-8")
+        stats = FRONTEND_STATS.read_text(encoding="utf-8")
+
+        self.assertIn("window.getMpbWebSocketBase", ui_utils)
+        self.assertIn("apiUrl.pathname.replace(/\\/api\\/?$/", ui_utils)
+        self.assertIn("window.getMpbWebSocketBase()", stats)
+        self.assertIn("wsReconnectTimer", stats)
+        self.assertIn("WebSocket.CONNECTING", stats)
+        self.assertNotIn("window.location.host}/ws/stats", stats)
+
+    def test_schedule_outbox_is_drained_every_minute(self):
+        scheduler_main = SCHEDULER_MAIN.read_text(encoding="utf-8")
+
+        outbox_job = scheduler_main.split(
+            "scheduler.add_job(\n                deliver_pending_schedule_change_notifications,",
+            1,
+        )[1].split("scheduler.add_job(", 1)[0]
+        self.assertIn('trigger="interval"', outbox_job)
+        self.assertIn("minutes=1", outbox_job)
 
 
 if __name__ == "__main__":

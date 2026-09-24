@@ -193,5 +193,5 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
             encoding="utf-8"
         )
 
-        self.assertIn('const CACHE_VERSION = "mpb-site-v32"', service_worker)
+        self.assertIn('const CACHE_VERSION = "mpb-site-v33"', service_worker)
         self.assertIn('"/js/studio.js?v=11"', service_worker)

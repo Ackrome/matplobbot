@@ -3,6 +3,7 @@ import os
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
+from urllib.parse import unquote
 
 FASTAPI_AVAILABLE = True
 try:
@@ -107,6 +108,29 @@ class TestStudioRouterAPI(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json().get("detail"), "Filename might already exist or invalid")
+
+    def test_zip_export_uses_ascii_fallback_and_utf8_filename(self):
+        project = SimpleNamespace(id=7, owner_id=1, name='Курсовая "работа" финал')
+        files = [
+            SimpleNamespace(
+                file_path="main.tex",
+                content_text="Привет",
+                content_binary=None,
+            )
+        ]
+        self.db.execute.side_effect = [
+            _mock_scalar_result(project),
+            _mock_scalars_result(files),
+        ]
+
+        response = self.client.get("/api/studio/projects/7/export/zip")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "application/zip")
+        disposition = response.headers["content-disposition"]
+        self.assertIn('filename="project_export.zip"', disposition)
+        encoded_name = disposition.split("filename*=UTF-8''", 1)[1]
+        self.assertEqual(unquote(encoded_name), 'Курсовая "работа" финал_export.zip')
 
     def test_send_telegram_rejects_unlinked_telegram_account(self):
         self.app.dependency_overrides[studio_router.get_current_user] = lambda: {

@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     LargeBinary,
     String,
+    Text,
     Time,
     UniqueConstraint,
     func,
@@ -112,6 +113,51 @@ class UserScheduleSubscription(Base):
             "ix_user_subscriptions_notification_time_active",
             "notification_time",
             "is_active",
+        ),
+    )
+
+
+class ScheduleChangeDelivery(Base):
+    """Durable Telegram outbox item for one schedule change and application user."""
+
+    __tablename__ = "schedule_change_deliveries"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    event_key = Column(String(64), nullable=False)
+    user_id = Column(
+        BigInteger,
+        ForeignKey("users.user_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    entity_type = Column(String(32), nullable=False)
+    entity_id = Column(String, nullable=False)
+    chat_id = Column(BigInteger, nullable=False)
+    message_thread_id = Column(BigInteger, nullable=True)
+    payload = Column(Text, nullable=False)
+    status = Column(String(16), nullable=False, server_default="pending")
+    attempt_count = Column(Integer, nullable=False, server_default="0")
+    next_attempt_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    locked_at = Column(DateTime(timezone=True), nullable=True)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "event_key",
+            "user_id",
+            name="uq_schedule_change_delivery_event_user",
+        ),
+        Index(
+            "ix_schedule_change_deliveries_ready",
+            "status",
+            "next_attempt_at",
         ),
     )
 

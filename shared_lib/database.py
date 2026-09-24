@@ -1143,14 +1143,14 @@ async def upsert_cached_schedule(entity_type: str, entity_id: str, data: list | 
                 entity_id=str(entity_id),
                 entity_name=entity_name,
                 schedule_data=json_data,
-                updated_at=datetime.datetime.now(),
+                updated_at=datetime.datetime.now(datetime.UTC),
             )
             .on_conflict_do_update(
                 constraint="uq_cached_schedule_entity",
                 set_=dict(
                     entity_name=entity_name,
                     schedule_data=json_data,
-                    updated_at=datetime.datetime.now(),
+                    updated_at=datetime.datetime.now(datetime.UTC),
                 ),
             )
         )
@@ -1681,14 +1681,14 @@ async def merge_cached_schedule(
                 entity_id=str(entity_id),
                 entity_name=entity_name,
                 schedule_data=json_data,
-                updated_at=datetime.datetime.now(),
+                updated_at=datetime.datetime.now(datetime.UTC),
             )
             .on_conflict_do_update(
                 constraint="uq_cached_schedule_entity",
                 set_=dict(
                     entity_name=entity_name,
                     schedule_data=json_data,
-                    updated_at=datetime.datetime.now(),
+                    updated_at=datetime.datetime.now(datetime.UTC),
                 ),
             )
         )

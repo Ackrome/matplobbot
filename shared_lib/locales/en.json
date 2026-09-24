@@ -241,6 +241,7 @@
     "myschedule_no_subscriptions": "You have no active subscriptions. You can add them via the /schedule command.",
     "myschedule_loading": "⏳ Fetching your schedules for today...",
     "schedule_change_notification": "❗️ Attention! The schedule for '{entity_name}' has been updated.",
+    "schedule_daily_cache_warning": "⚠️ <i>The university API is unavailable. This schedule uses the copy last checked at {checked_at}.</i>",
     "group_chat_start_text": "Hello! I'm Matplobbot. To access all my features, please start a conversation with me in a private message.",
     "group_chat_start_button": "🤖 Start a Chat",
     "command_desc_start": "🚀 Start/Restart the bot",

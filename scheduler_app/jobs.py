@@ -3,7 +3,7 @@ import collections
 import hashlib
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -14,6 +14,7 @@ from shared_lib.database import (
     get_admin_daily_summary,
     get_all_active_subscriptions,
     get_all_short_names,
+    get_cached_schedule_snapshot,
     get_session,
     get_subscriptions_due_for_notification,
     get_subscriptions_for_notification,
@@ -25,6 +26,13 @@ from shared_lib.html_tools import split_telegram_html_message
 from shared_lib.i18n import translator
 from shared_lib.redis_client import redis_client
 from shared_lib.request_context import generate_correlation_id, set_correlation_id
+from shared_lib.schedule_outbox import (
+    build_schedule_change_event_key,
+    claim_schedule_change_deliveries,
+    commit_schedule_change_transition,
+    mark_schedule_change_delivery_sent,
+    reschedule_schedule_change_delivery,
+)
 from shared_lib.services.schedule_service import (
     diff_schedules,
     format_schedule,
@@ -35,7 +43,13 @@ from shared_lib.services.schedule_service import (
 # We need to import these from the bot's services.
 from shared_lib.services.university_api import RuzAPIClient, RuzAPIError
 
-from .config import BOT_TOKEN
+from .config import (
+    BOT_TOKEN,
+    SCHEDULE_OUTBOX_BASE_DELAY_SECONDS,
+    SCHEDULE_OUTBOX_MAX_ATTEMPTS,
+    TELEGRAM_REQUEST_RETRY_ATTEMPTS,
+    TELEGRAM_REQUEST_RETRY_DELAY_SECONDS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +85,8 @@ async def send_telegram_message(
     message_thread_id: int | None = None,
     reply_markup: dict | None = None,
     request_kwargs: dict | None = None,
+    retry_attempts: int | None = None,
+    retry_delay_seconds: float | None = None,
 ) -> dict | None:
     """
     Sends a message using a direct Telegram API call.
@@ -78,27 +94,74 @@ async def send_telegram_message(
     """
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     request_kwargs = request_kwargs or {}
+    retries = TELEGRAM_REQUEST_RETRY_ATTEMPTS if retry_attempts is None else max(0, retry_attempts)
+    base_delay = (
+        TELEGRAM_REQUEST_RETRY_DELAY_SECONDS
+        if retry_delay_seconds is None
+        else max(0.0, retry_delay_seconds)
+    )
 
     async def post_payload(payload: dict) -> dict | None:
-        try:
-            async with session.post(url, json=payload, **request_kwargs) as response:
-                if response.status != 200:
+        for attempt in range(retries + 1):
+            try:
+                async with session.post(url, json=payload, **request_kwargs) as response:
+                    if response.status == 200:
+                        resp_json = await response.json()
+                        logger.info("Sent message to chat %s.", chat_id)
+                        return resp_json.get("result")
+
+                    response_text = await response.text()
+                    if response.status == 429 and attempt < retries:
+                        retry_after = base_delay
+                        try:
+                            response_json = await response.json()
+                            retry_after = max(
+                                retry_after,
+                                float(response_json.get("parameters", {}).get("retry_after", 0)),
+                            )
+                        except (TypeError, ValueError, aiohttp.ClientError, json.JSONDecodeError):
+                            pass
+                        logger.warning(
+                            "Telegram rate limited chat %s; retrying in %.2fs (%s/%s).",
+                            chat_id,
+                            retry_after,
+                            attempt + 1,
+                            retries,
+                        )
+                        if retry_after > 0:
+                            await asyncio.sleep(retry_after)
+                        continue
+
                     logger.error(
-                        f"Failed to send message to chat {chat_id}. Status: {response.status}, Response: {await response.text()}"
+                        "Failed to send message to chat %s. Status: %s, Response: %s",
+                        chat_id,
+                        response.status,
+                        response_text,
                     )
                     return None
-
-                resp_json = await response.json()
-                logger.info(f"Sent message to chat {chat_id}.")
-                return resp_json.get("result")
-        except (TimeoutError, aiohttp.ClientError) as exc:
-            logger.error(
-                "Transport error while sending message to chat %s: %s",
-                chat_id,
-                exc,
-                exc_info=True,
-            )
-            return None
+            except (TimeoutError, aiohttp.ClientError, OSError) as exc:
+                if attempt < retries:
+                    delay = base_delay * (2**attempt)
+                    logger.warning(
+                        "Telegram transport error for chat %s; retrying in %.2fs (%s/%s): %s",
+                        chat_id,
+                        delay,
+                        attempt + 1,
+                        retries,
+                        exc,
+                    )
+                    if delay > 0:
+                        await asyncio.sleep(delay)
+                    continue
+                logger.error(
+                    "Transport error while sending message to chat %s after %s attempt(s): %s",
+                    chat_id,
+                    retries + 1,
+                    exc,
+                    exc_info=True,
+                )
+                return None
+        return None
 
     if len(text) <= TELEGRAM_MESSAGE_LIMIT:
         payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
@@ -132,6 +195,67 @@ async def send_telegram_message(
     return last_result
 
 
+def _format_cached_schedule_timestamp(value: datetime | None, timezone_name: str) -> str:
+    if value is None:
+        return "unknown"
+    normalized = value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+    try:
+        local_value = normalized.astimezone(ZoneInfo(timezone_name))
+    except Exception:
+        local_value = normalized.astimezone(ZoneInfo("Europe/Moscow"))
+    return local_value.strftime("%Y-%m-%d %H:%M %Z")
+
+
+async def deliver_pending_schedule_change_notifications(
+    http_session: aiohttp.ClientSession,
+    telegram_request_kwargs: dict | None = None,
+) -> dict[str, int]:
+    """Deliver one claimed outbox batch and reschedule only failed recipients."""
+    deliveries = await claim_schedule_change_deliveries(max_attempts=SCHEDULE_OUTBOX_MAX_ATTEMPTS)
+    summary = {"claimed": len(deliveries), "sent": 0, "rescheduled": 0, "failed": 0}
+    for delivery in deliveries:
+        delivery_id = int(delivery["id"])
+        attempt_count = int(delivery.get("attempt_count") or 1)
+        error_message = "Telegram API did not accept the message"
+        try:
+            result = await send_telegram_message(
+                http_session,
+                int(delivery["chat_id"]),
+                str(delivery["payload"]),
+                delivery.get("message_thread_id"),
+                request_kwargs=telegram_request_kwargs,
+            )
+            if result is not None:
+                await mark_schedule_change_delivery_sent(delivery_id)
+                summary["sent"] += 1
+                continue
+        except Exception as exc:
+            error_message = f"{type(exc).__name__}: {exc}"
+            logger.error(
+                "Schedule outbox delivery %s failed unexpectedly: %s",
+                delivery_id,
+                exc,
+                exc_info=True,
+            )
+
+        terminal = attempt_count >= SCHEDULE_OUTBOX_MAX_ATTEMPTS
+        delay_seconds = min(
+            SCHEDULE_OUTBOX_BASE_DELAY_SECONDS * (2 ** max(0, attempt_count - 1)),
+            6 * 60 * 60,
+        )
+        await reschedule_schedule_change_delivery(
+            delivery_id,
+            error=error_message,
+            delay_seconds=delay_seconds,
+            terminal=terminal,
+        )
+        summary["failed" if terminal else "rescheduled"] += 1
+
+    if deliveries:
+        logger.info("Schedule change outbox batch finished: %s", summary)
+    return summary
+
+
 async def send_daily_schedules(
     http_session: aiohttp.ClientSession,
     ruz_api_client: RuzAPIClient,
@@ -156,7 +280,7 @@ async def send_daily_schedules(
     current_time_str = now_in_moscow.strftime("%H:%M")
 
     try:
-        subscriptions = await get_subscriptions_due_for_notification(datetime.now(datetime.UTC))
+        subscriptions = await get_subscriptions_due_for_notification(datetime.now(UTC))
     except Exception:
         # Keep the old Moscow lookup as a safe compatibility path while a
         # rolling deployment is applying the profile migration.
@@ -192,6 +316,8 @@ async def send_daily_schedules(
 
     entity_fetch_successes = 0
     entity_fetch_failures = 0
+    entity_cache_fallbacks = 0
+    entity_processing_failures = 0
     subscriber_attempts = 0
     delivery_successes = 0
     delivery_failures = 0
@@ -209,10 +335,39 @@ async def send_daily_schedules(
                 len(subs_for_entity),
                 correlation_id,
             )
-            schedule_data = await ruz_api_client.get_schedule(
-                entity_type, entity_id, start=start_date_str, finish=end_date_str
-            )
-            entity_fetch_successes += 1
+            using_cached_schedule = False
+            source_checked_at = None
+            try:
+                schedule_data = await ruz_api_client.get_schedule(
+                    entity_type, entity_id, start=start_date_str, finish=end_date_str
+                )
+                entity_fetch_successes += 1
+            except Exception as fetch_error:
+                entity_fetch_failures += 1
+                schedule_data, source_checked_at = await get_cached_schedule_snapshot(
+                    entity_type, entity_id
+                )
+                if schedule_data is None:
+                    logger.error(
+                        "Daily schedule has no live or cached data for '%s' (%s:%s, cid=%s): %s",
+                        entity_name_for_log,
+                        entity_type,
+                        entity_id,
+                        correlation_id,
+                        fetch_error,
+                    )
+                    continue
+                using_cached_schedule = True
+                entity_cache_fallbacks += 1
+                logger.warning(
+                    "Daily schedule is using cached data for '%s' (%s:%s, checked_at=%s, cid=%s): %s",
+                    entity_name_for_log,
+                    entity_type,
+                    entity_id,
+                    source_checked_at,
+                    correlation_id,
+                    fetch_error,
+                )
 
             for sub in subs_for_entity:
                 subscriber_attempts += 1
@@ -232,6 +387,17 @@ async def send_daily_schedules(
                         subscription_id=sub["id"],
                         lesson_mode=sub.get("lesson_mode", "all"),
                     )
+                    if using_cached_schedule:
+                        checked_at = _format_cached_schedule_timestamp(
+                            source_checked_at,
+                            sub.get("timezone") or "Europe/Moscow",
+                        )
+                        cache_warning = translator.gettext(
+                            lang,
+                            "schedule_daily_cache_warning",
+                            checked_at=checked_at,
+                        )
+                        formatted_text = f"{formatted_text}\n\n{cache_warning}"
                     send_result = await send_telegram_message(
                         http_session,
                         recipient_chat_id,
@@ -256,7 +422,7 @@ async def send_daily_schedules(
                     )
 
         except Exception as e:
-            entity_fetch_failures += 1
+            entity_processing_failures += 1
             logger.error(
                 "Failed to process entity group '%s' (cid=%s): %s",
                 entity_name_for_log,
@@ -266,10 +432,12 @@ async def send_daily_schedules(
             )
 
     logger.info(
-        "Daily schedules job finished (cid=%s). Entity fetches: %s succeeded, %s failed. Deliveries: %s attempted, %s succeeded, %s failed.",
+        "Daily schedules job finished (cid=%s). Live fetches: %s succeeded, %s failed; cache fallbacks: %s; processing failures: %s. Deliveries: %s attempted, %s succeeded, %s failed.",
         correlation_id,
         entity_fetch_successes,
         entity_fetch_failures,
+        entity_cache_fallbacks,
+        entity_processing_failures,
         subscriber_attempts,
         delivery_successes,
         delivery_failures,
@@ -285,17 +453,10 @@ async def send_daily_schedules(
     if (
         grouped_subscriptions
         and entity_fetch_successes == 0
+        and entity_cache_fallbacks == 0
         and entity_fetch_failures == len(grouped_subscriptions)
     ):
         raise RuntimeError("Daily schedules job failed: could not fetch any schedule data.")
-
-
-# ... existing imports
-from shared_lib.database import get_cached_schedule  # <--- Добавлен импорт
-
-# ... existing imports
-
-# ... (функция send_telegram_message и send_daily_schedules без изменений) ...
 
 
 async def check_for_schedule_updates(
@@ -304,14 +465,29 @@ async def check_for_schedule_updates(
     telegram_request_kwargs: dict | None = None,
 ):
     """
-    Periodically checks all active subscriptions for changes.
-    Optimized to prevent duplicate notifications by updating DB state immediately.
+    Periodically check subscriptions and durably enqueue per-user change notifications.
+
+    The outbox is drained both before and after polling. New deliveries are committed before the
+    cache/hash checkpoint advances, so a Telegram outage or worker restart cannot silently discard
+    an observed change.
     """
     logger.info("Starting schedule change detection job...")
 
     start_date_str, end_date_str = get_semester_bounds()
 
     try:
+        try:
+            await deliver_pending_schedule_change_notifications(
+                http_session,
+                telegram_request_kwargs=telegram_request_kwargs,
+            )
+        except Exception as exc:
+            logger.error(
+                "Failed to drain the schedule-change outbox before polling: %s",
+                exc,
+                exc_info=True,
+            )
+
         all_subscriptions = await get_all_active_subscriptions()
         if not all_subscriptions:
             return
@@ -350,9 +526,20 @@ async def check_for_schedule_updates(
                     json.dumps(new_schedule_data, sort_keys=True).encode()
                 ).hexdigest()
 
-                # Берем хэш любого подписчика этой группы (они должны быть одинаковы, если синхронизированы)
-                # Если у кого-то рассинхрон, это исправится при массовом обновлении
-                reference_hash = subs_for_entity[0].get("last_schedule_hash")
+                # Treat the entity as the notification unit. If any recipient already carries the
+                # new hash, the transition was handled and the remaining rows only need repair.
+                reference_hashes = sorted(
+                    {
+                        str(sub["last_schedule_hash"])
+                        for sub in subs_for_entity
+                        if sub.get("last_schedule_hash")
+                    }
+                )
+                reference_hash = (
+                    new_hash
+                    if new_hash in reference_hashes
+                    else (reference_hashes[0] if reference_hashes else None)
+                )
 
                 if reference_hash and new_hash != reference_hash:
                     logger.info(
@@ -361,62 +548,75 @@ async def check_for_schedule_updates(
 
                     # 2. Получаем СТАРЫЕ данные из БД (CachedSchedule) для сравнения
                     # Важно сделать это ДО обновления кэша
-                    old_schedule_data = await get_cached_schedule(entity_type, entity_id)
+                    old_schedule_data, source_checked_at = await get_cached_schedule_snapshot(
+                        entity_type, entity_id
+                    )
 
-                    # 3. IMPORTANT: immediately update DB state (cache + subscription hashes)
-                    # Это предотвращает повторную обработку этой сущности, если отправка сообщений упадет.
-                    await upsert_cached_schedule(entity_type, entity_id, new_schedule_data)
-                    await batch_update_subscription_hashes(entity_type, entity_id, new_hash)
-
-                    # Также обновляем Redis для совместимости (необязательно, но полезно)
-                    # Обновляем для одного "референсного" пользователя, чтобы не спамить Redis запросами в цикле
-                    # (В будущем логику redis_client.set_user_cache можно убрать, если перешли на CachedSchedule)
-                    # await redis_client.set_cache(f"schedule_data:{entity_type}:{entity_id}", json.dumps(new_schedule_data))
-
-                    # 4. Генерируем Diff и отправляем уведомления
-                    if old_schedule_data:
-                        # Diff генерируется один раз на язык, чтобы не пересчитывать N раз
+                    deliveries = []
+                    if old_schedule_data is not None:
                         diffs_by_profile = {}
-
                         for sub in subs_for_entity:
-                            try:
-                                lang = await translator.get_language(sub["user_id"], sub["chat_id"])
-                                profile_key = (
+                            lang = await translator.get_language(sub["user_id"], sub["chat_id"])
+                            profile_key = (
+                                lang,
+                                sub.get("lesson_mode", "all"),
+                                tuple(sorted(sub.get("selected_modules") or [])),
+                            )
+                            if profile_key not in diffs_by_profile:
+                                diffs_by_profile[profile_key] = diff_schedules(
+                                    _filter_schedule_for_subscription(old_schedule_data, sub),
+                                    _filter_schedule_for_subscription(new_schedule_data, sub),
                                     lang,
-                                    sub.get("lesson_mode", "all"),
-                                    tuple(sorted(sub.get("selected_modules") or [])),
+                                    use_short_names=True,
+                                    short_names_map=short_names_map,
                                 )
-                                if profile_key not in diffs_by_profile:
-                                    diff_text = diff_schedules(
-                                        _filter_schedule_for_subscription(old_schedule_data, sub),
-                                        _filter_schedule_for_subscription(new_schedule_data, sub),
-                                        lang,
-                                        use_short_names=True,
-                                        short_names_map=short_names_map,
-                                    )
-                                    diffs_by_profile[profile_key] = diff_text
 
-                                if diffs_by_profile[profile_key]:
-                                    header = translator.gettext(
-                                        lang,
-                                        "schedule_change_notification",
-                                        entity_name=sub["entity_name"],
-                                    )
-                                    await send_telegram_message(
-                                        http_session,
-                                        sub["chat_id"],
-                                        f"{header}\n\n{diffs_by_profile[profile_key]}",
-                                        sub.get("message_thread_id"),
-                                        request_kwargs=telegram_request_kwargs,
-                                    )
-                            except Exception as inner_e:
-                                logger.error(
-                                    f"Failed to send update notification to chat {sub['chat_id']}: {inner_e}"
+                            diff_text = diffs_by_profile[profile_key]
+                            if diff_text:
+                                header = translator.gettext(
+                                    lang,
+                                    "schedule_change_notification",
+                                    entity_name=sub["entity_name"],
                                 )
+                                deliveries.append(
+                                    {
+                                        "user_id": sub["user_id"],
+                                        "chat_id": sub["chat_id"],
+                                        "message_thread_id": sub.get("message_thread_id"),
+                                        "payload": f"{header}\n\n{diff_text}",
+                                    }
+                                )
+
+                        event_key = build_schedule_change_event_key(
+                            entity_type,
+                            entity_id,
+                            reference_hash,
+                            new_hash,
+                            source_checked_at,
+                        )
                     else:
                         logger.info(
                             f"Old schedule not found in cache for '{entity_name}'. Skipping diff notification, but updating hash."
                         )
+                        event_key = build_schedule_change_event_key(
+                            entity_type,
+                            entity_id,
+                            reference_hash,
+                            new_hash,
+                            source_checked_at,
+                        )
+
+                    # Commit the outbox and checkpoint atomically. If this fails, the next poll
+                    # sees the same transition and retries it without losing recipients.
+                    await commit_schedule_change_transition(
+                        event_key=event_key,
+                        entity_type=entity_type,
+                        entity_id=entity_id,
+                        entity_name=entity_name,
+                        schedule_data=new_schedule_data,
+                        new_hash=new_hash,
+                        deliveries=deliveries,
+                    )
 
                 elif not reference_hash:
                     # Если хэша нет (первый запуск для этой подписки), просто сохраняем текущий
@@ -424,8 +624,9 @@ async def check_for_schedule_updates(
                     await upsert_cached_schedule(entity_type, entity_id, new_schedule_data)
                 else:
                     # The schedule did not change, but the API poll succeeded. Refresh the
-                    # DB cache timestamp so stale-cache checks reflect the latest successful sync.
+                    # DB cache timestamp and repair any divergent per-subscription hashes.
                     await upsert_cached_schedule(entity_type, entity_id, new_schedule_data)
+                    await batch_update_subscription_hashes(entity_type, entity_id, new_hash)
                     logger.debug(
                         "Refreshed unchanged schedule cache for %s (%s:%s)",
                         entity_name,
@@ -443,6 +644,18 @@ async def check_for_schedule_updates(
                     f"Change detection: Failed to process entity '{entity_name}': {e}",
                     exc_info=True,
                 )
+
+        try:
+            await deliver_pending_schedule_change_notifications(
+                http_session,
+                telegram_request_kwargs=telegram_request_kwargs,
+            )
+        except Exception as exc:
+            logger.error(
+                "Failed to drain the schedule-change outbox after polling: %s",
+                exc,
+                exc_info=True,
+            )
     except Exception as e:
         logger.error(f"Critical error in check_for_schedule_updates job: {e}", exc_info=True)
 

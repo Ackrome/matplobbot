@@ -2,9 +2,10 @@ import os
 import sys
 import types
 import unittest
-from datetime import UTC, datetime
-from unittest.mock import AsyncMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, Mock, patch
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 FASTAPI_AVAILABLE = True
 try:
@@ -18,6 +19,7 @@ try:
     fake_schedule_service.get_semester_bounds = lambda: ("2026-08-25", "2027-01-31")
     fake_schedule_service.get_schedule_with_cache_fallback = AsyncMock(return_value=([], False))
     fake_schedule_service.get_schedule_fallback_counters = AsyncMock(return_value={})
+    fake_schedule_service.record_schedule_fallback_metric = AsyncMock()
     fake_schedule_service.get_unique_modules_hybrid = AsyncMock(return_value=[])
     fake_schedule_service.refresh_cached_schedule_entity_ids_and_semester_cache = AsyncMock(
         return_value={}
@@ -31,7 +33,9 @@ try:
 except ModuleNotFoundError:
     FASTAPI_AVAILABLE = False
 
+from shared_lib import database as shared_database
 from shared_lib.database import _cached_entity_name
+from shared_lib.services import schedule_freshness
 from shared_lib.services.university_api import RuzAPIClient
 
 
@@ -42,8 +46,8 @@ class TestScheduleSearchAPI(unittest.TestCase):
         self.app.include_router(schedule_router.router, prefix="/api")
         self.client = TestClient(self.app)
         self.fake_db = AsyncMock()
-        self.app.dependency_overrides[schedule_router.get_db_session_dependency] = (
-            lambda: self.fake_db
+        self.app.dependency_overrides[schedule_router.get_db_session_dependency] = lambda: (
+            self.fake_db
         )
         self.app.dependency_overrides[schedule_router.get_shared_http_session] = lambda: object()
 
@@ -632,3 +636,70 @@ class TestCachedScheduleLabels(unittest.TestCase):
             "A-101",
         )
         self.assertEqual(_cached_entity_name("group", [], "group-1"), "group-1")
+
+
+class _SessionContext:
+    def __init__(self, session):
+        self.session = session
+
+    async def __aenter__(self):
+        return self.session
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+class TestCachedScheduleTimestamps(unittest.IsolatedAsyncioTestCase):
+    def test_utc_and_moscow_representations_have_the_same_cache_age(self):
+        checked_at_utc = datetime.now(UTC) - timedelta(seconds=90)
+        checked_at_moscow = checked_at_utc.astimezone(ZoneInfo("Europe/Moscow"))
+
+        utc_age = schedule_freshness._cache_age_seconds(checked_at_utc)
+        moscow_age = schedule_freshness._cache_age_seconds(checked_at_moscow)
+
+        self.assertIsNotNone(utc_age)
+        self.assertIsNotNone(moscow_age)
+        self.assertLessEqual(abs(utc_age - moscow_age), 1)
+
+    def _assert_statement_datetimes_are_utc(self, statement):
+        values = [
+            value for value in statement.compile().params.values() if isinstance(value, datetime)
+        ]
+        self.assertTrue(values)
+        for value in values:
+            self.assertIsNotNone(value.tzinfo)
+            self.assertEqual(value.utcoffset(), timedelta(0))
+
+    async def test_upsert_cached_schedule_writes_aware_utc_timestamp(self):
+        session = AsyncMock()
+
+        with patch.object(
+            shared_database,
+            "get_session",
+            return_value=_SessionContext(session),
+        ):
+            await shared_database.upsert_cached_schedule("group", "42", [])
+
+        statement = session.execute.await_args.args[0]
+        self._assert_statement_datetimes_are_utc(statement)
+
+    async def test_merge_cached_schedule_writes_aware_utc_timestamp(self):
+        current_result = Mock()
+        current_result.scalar.return_value = []
+        session = AsyncMock()
+        session.execute.side_effect = [current_result, Mock()]
+
+        with patch.object(
+            shared_database,
+            "get_session",
+            return_value=_SessionContext(session),
+        ):
+            await shared_database.merge_cached_schedule(
+                "group",
+                "42",
+                [{"date": "2026.09.24"}],
+                ["2026.09.24"],
+            )
+
+        statement = session.execute.await_args_list[1].args[0]
+        self._assert_statement_datetimes_are_utc(statement)

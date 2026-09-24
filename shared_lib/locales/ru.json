@@ -220,6 +220,7 @@
     "myschedule_no_subscriptions": "У вас нет активных подписок. Вы можете добавить их через команду /schedule.",
     "myschedule_loading": "⏳ Загружаю ваши расписания на сегодня...",
     "schedule_change_notification": "❗️ Внимание! Расписание для '{entity_name}' было обновлено.",
+    "schedule_daily_cache_warning": "⚠️ <i>API вуза недоступно. Используется копия расписания, проверенная {checked_at}.</i>",
     "group_chat_start_text": "Привет! Я Matplobbot. Для доступа ко всем моим функциям, пожалуйста, начните диалог со мной в личных сообщениях.",
     "group_chat_start_button": "🤖 Начать диалог",
     "command_desc_start": "🚀 Запуск/перезапуск бота",

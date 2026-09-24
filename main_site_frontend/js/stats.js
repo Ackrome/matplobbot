@@ -78,6 +78,7 @@ const state = {
     wsConnected: false,
     wsBackoffMs: 1000,
     wsReconnects: 0,
+    wsReconnectTimer: null,
     lastUpdated: "",
     lastSyncSource: "-",
     failedRequests: 0,
@@ -1586,22 +1587,38 @@ function applyStatsPayload(payload) {
 }
 
 function scheduleWsReconnect() {
+    if (state.wsReconnectTimer !== null) return;
+
     state.wsReconnects += 1;
     updateDiagnostics();
 
     const waitMs = Math.min(state.wsBackoffMs, 30000);
     state.wsBackoffMs = Math.min(state.wsBackoffMs * 2, 30000);
 
-    window.setTimeout(() => {
+    state.wsReconnectTimer = window.setTimeout(() => {
+        state.wsReconnectTimer = null;
         connectWebSocket();
     }, waitMs);
 }
 
 function connectWebSocket() {
     if (!token) return;
+    if (
+        state.ws &&
+        (state.ws.readyState === WebSocket.CONNECTING || state.ws.readyState === WebSocket.OPEN)
+    ) {
+        return;
+    }
 
-    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const wsUrl = `${protocol}://${window.location.host}/ws/stats/total_actions?token=${encodeURIComponent(token)}`;
+    if (state.wsReconnectTimer !== null) {
+        window.clearTimeout(state.wsReconnectTimer);
+        state.wsReconnectTimer = null;
+    }
+
+    const wsBase = window.getMpbWebSocketBase
+        ? window.getMpbWebSocketBase()
+        : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}`;
+    const wsUrl = `${wsBase}/ws/stats/total_actions?token=${encodeURIComponent(token)}`;
 
     setConnectionState("connecting", t("stats.connection.connecting", "Connecting..."));
 
@@ -1609,6 +1626,10 @@ function connectWebSocket() {
     state.ws = socket;
 
     socket.addEventListener("open", () => {
+        if (state.ws !== socket) {
+            socket.close();
+            return;
+        }
         state.wsConnected = true;
         state.wsBackoffMs = 1000;
         updateDashboardHealthState();
@@ -1639,6 +1660,7 @@ function connectWebSocket() {
     socket.addEventListener("close", () => {
         if (state.ws !== socket) return;
 
+        state.ws = null;
         state.wsConnected = false;
         setConnectionState("offline", t("stats.connection.disconnected", "Disconnected"));
         setRetryButtonsVisible(true);
