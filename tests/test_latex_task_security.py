@@ -90,14 +90,14 @@ class TestLatexTaskSecurity(unittest.TestCase):
             project_root=Path("/unused"),
         )
         self.assertTrue(
-            container_paths["mermaid_filter"].as_posix().endswith(
-                "/app/bot/pandoc_mermaid_filter.py"
-            )
+            container_paths["mermaid_filter"]
+            .as_posix()
+            .endswith("/app/bot/pandoc_mermaid_filter.py")
         )
         self.assertTrue(
-            container_paths["pandoc_header"].as_posix().endswith(
-                "/app/bot/templates/pandoc_header.tex"
-            )
+            container_paths["pandoc_header"]
+            .as_posix()
+            .endswith("/app/bot/templates/pandoc_header.tex")
         )
 
         worker_dockerfile = (PROJECT_ROOT / "Dockerfile.worker").read_text(encoding="utf-8")
@@ -132,7 +132,7 @@ class TestLatexTaskSecurity(unittest.TestCase):
         self.assertNotIn("javascript:", converted)
         self.assertNotIn("onclick", converted)
         self.assertNotIn("custom-tag", converted)
-        self.assertNotIn("class=\"title\"", converted)
+        self.assertNotIn('class="title"', converted)
 
     def test_html_converter_sanitizes_unknown_and_nested_attributes(self):
         converted = convert_html_to_telegram_html(

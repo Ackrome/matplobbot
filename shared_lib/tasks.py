@@ -38,9 +38,9 @@ def resolve_worker_resource_paths(
     checkout_bot_dir = project_root / "bot"
     default_bot_dir = checkout_bot_dir if checkout_bot_dir.is_dir() else Path("/app/bot")
     bot_dir = Path(env.get("APP_BOT_DIR", str(default_bot_dir))).expanduser().resolve()
-    templates_dir = Path(
-        env.get("APP_TEMPLATES_DIR", str(bot_dir / "templates"))
-    ).expanduser().resolve()
+    templates_dir = (
+        Path(env.get("APP_TEMPLATES_DIR", str(bot_dir / "templates"))).expanduser().resolve()
+    )
     return {
         "mermaid_filter": bot_dir / "pandoc_mermaid_filter.py",
         "math_filter": bot_dir / "pandoc_math_filter.lua",
@@ -70,6 +70,7 @@ def validate_worker_resources() -> None:
 @worker_process_init.connect
 def _validate_worker_resources_on_start(**_kwargs) -> None:
     validate_worker_resources()
+
 
 # Читаем хедер для Pandoc
 PANDOC_HEADER_INCLUDES = ""

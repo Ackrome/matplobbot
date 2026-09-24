@@ -216,15 +216,13 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
 
     def test_studio_csp_rejects_inline_scripts_and_event_attributes(self):
         html = (PROJECT_ROOT / "main_site_frontend" / "studio.html").read_text(encoding="utf-8")
-        nginx = (PROJECT_ROOT / "main_site_frontend" / "default.conf").read_text(
-            encoding="utf-8"
-        )
+        nginx = (PROJECT_ROOT / "main_site_frontend" / "default.conf").read_text(encoding="utf-8")
 
         self.assertIsNone(re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html, re.IGNORECASE))
         self.assertNotIn("<style", html.lower())
         self.assertIsNone(re.search(r"\son[a-z]+\s*=", html, re.IGNORECASE))
-        self.assertIn('location = /studio {', nginx)
-        self.assertIn('location = /studio.html {', nginx)
+        self.assertIn("location = /studio {", nginx)
+        self.assertIn("location = /studio.html {", nginx)
         self.assertIn("Content-Security-Policy", nginx)
         self.assertIn("script-src-attr 'none'", nginx)
         script_directive = nginx.split("script-src ", 1)[1].split(";", 1)[0]

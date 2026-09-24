@@ -122,9 +122,8 @@ class _TelegramHTMLParser(HTMLParser):
             href = attributes.get("href", "").strip()
             parsed_href = urlparse(href)
             scheme = parsed_href.scheme.lower()
-            has_safe_target = (
-                (scheme in {"http", "https"} and bool(parsed_href.netloc))
-                or (scheme in {"mailto", "tg"} and bool(parsed_href.path or parsed_href.netloc))
+            has_safe_target = (scheme in {"http", "https"} and bool(parsed_href.netloc)) or (
+                scheme in {"mailto", "tg"} and bool(parsed_href.path or parsed_href.netloc)
             )
             if scheme in _SAFE_LINK_SCHEMES and has_safe_target:
                 self.parts.append(f'<a href="{html.escape(href, quote=True)}">')
