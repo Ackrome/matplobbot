@@ -526,9 +526,7 @@ async def get_schedule_data(
 
         modules = await get_unique_modules_hybrid(schedule)
         source_checked_at = freshness_result.source_checked_at
-        source_checked_at_value = (
-            source_checked_at.isoformat() if source_checked_at else None
-        )
+        source_checked_at_value = source_checked_at.isoformat() if source_checked_at else None
 
         return {
             "schedule": schedule,

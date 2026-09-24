@@ -74,9 +74,7 @@ class TestScheduleFreshness(unittest.IsolatedAsyncioTestCase):
                     ]
                 ),
             ),
-            patch.object(
-                schedule_freshness, "upsert_cached_schedule", AsyncMock()
-            ) as upsert,
+            patch.object(schedule_freshness, "upsert_cached_schedule", AsyncMock()) as upsert,
             patch.object(
                 schedule_freshness,
                 "_failure_cooldown_active",
@@ -87,9 +85,7 @@ class TestScheduleFreshness(unittest.IsolatedAsyncioTestCase):
                 "_acquire_distributed_lock",
                 AsyncMock(return_value="lease-token"),
             ),
-            patch.object(
-                schedule_freshness, "_release_distributed_lock", AsyncMock()
-            ),
+            patch.object(schedule_freshness, "_release_distributed_lock", AsyncMock()),
             patch.object(schedule_freshness, "_clear_refresh_failure", AsyncMock()),
         ):
             result = await schedule_freshness.get_schedule_with_freshness(
@@ -150,9 +146,7 @@ class TestScheduleFreshness(unittest.IsolatedAsyncioTestCase):
                 "_acquire_distributed_lock",
                 AsyncMock(return_value="lease-token"),
             ),
-            patch.object(
-                schedule_freshness, "_release_distributed_lock", AsyncMock()
-            ),
+            patch.object(schedule_freshness, "_release_distributed_lock", AsyncMock()),
             patch.object(schedule_freshness, "_clear_refresh_failure", AsyncMock()),
         ):
             requests = [
@@ -183,9 +177,7 @@ class TestScheduleFreshness(unittest.IsolatedAsyncioTestCase):
             patch.object(
                 schedule_freshness,
                 "get_cached_schedule_snapshot",
-                AsyncMock(
-                    return_value=(cached, datetime.now(UTC) - timedelta(days=1))
-                ),
+                AsyncMock(return_value=(cached, datetime.now(UTC) - timedelta(days=1))),
             ),
             patch.object(
                 schedule_freshness,
@@ -197,9 +189,7 @@ class TestScheduleFreshness(unittest.IsolatedAsyncioTestCase):
                 "_acquire_distributed_lock",
                 AsyncMock(return_value="lease-token"),
             ),
-            patch.object(
-                schedule_freshness, "_release_distributed_lock", AsyncMock()
-            ),
+            patch.object(schedule_freshness, "_release_distributed_lock", AsyncMock()),
             patch.object(schedule_freshness, "_mark_refresh_failure", AsyncMock()),
         ):
             result = await schedule_freshness.get_schedule_with_freshness(
@@ -234,9 +224,7 @@ class TestScheduleFreshness(unittest.IsolatedAsyncioTestCase):
                 "_acquire_distributed_lock",
                 AsyncMock(return_value="lease-token"),
             ),
-            patch.object(
-                schedule_freshness, "_release_distributed_lock", AsyncMock()
-            ),
+            patch.object(schedule_freshness, "_release_distributed_lock", AsyncMock()),
             patch.object(schedule_freshness, "_mark_refresh_failure", AsyncMock()),
         ):
             with self.assertRaises(schedule_freshness.ScheduleUnavailableError):
@@ -265,9 +253,7 @@ class TestScheduleFreshness(unittest.IsolatedAsyncioTestCase):
                     ]
                 ),
             ),
-            patch.object(
-                schedule_freshness, "upsert_cached_schedule", AsyncMock()
-            ) as upsert,
+            patch.object(schedule_freshness, "upsert_cached_schedule", AsyncMock()) as upsert,
             patch.object(
                 schedule_freshness,
                 "_failure_cooldown_active",
@@ -278,9 +264,7 @@ class TestScheduleFreshness(unittest.IsolatedAsyncioTestCase):
                 "_acquire_distributed_lock",
                 AsyncMock(return_value="lease-token"),
             ),
-            patch.object(
-                schedule_freshness, "_release_distributed_lock", AsyncMock()
-            ),
+            patch.object(schedule_freshness, "_release_distributed_lock", AsyncMock()),
             patch.object(schedule_freshness, "_clear_refresh_failure", AsyncMock()),
         ):
             result = await schedule_freshness.get_schedule_with_freshness(

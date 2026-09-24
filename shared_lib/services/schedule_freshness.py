@@ -234,9 +234,7 @@ async def _refresh_schedule(
         raise
     except Exception as exc:
         await _mark_refresh_failure(key, failure_cooldown_seconds)
-        _record_refresh_metric(
-            "cache_fallback" if cached_schedule is not None else "no_cache"
-        )
+        _record_refresh_metric("cache_fallback" if cached_schedule is not None else "no_cache")
         logger.warning("Schedule live refresh failed for %s: %s", key, exc)
         return _RefreshOutcome(status="failed")
     finally:
@@ -317,9 +315,7 @@ async def get_schedule_with_freshness(
 ) -> ScheduleFreshnessResult:
     """Return cached data immediately while coalescing a live refresh when needed."""
 
-    cached_payload, source_checked_at = await get_cached_schedule_snapshot(
-        entity_type, entity_id
-    )
+    cached_payload, source_checked_at = await get_cached_schedule_snapshot(entity_type, entity_id)
     cached_schedule = cached_payload if isinstance(cached_payload, list) else None
     has_cache = cached_schedule is not None
     cache_age_seconds = _cache_age_seconds(source_checked_at)
@@ -425,19 +421,13 @@ async def get_schedule_with_freshness(
             requested_end,
             refresh_in_progress=False,
         )
-    raise ScheduleUnavailableError(
-        "University schedule is unavailable and no cached copy exists."
-    )
+    raise ScheduleUnavailableError("University schedule is unavailable and no cached copy exists.")
 
 
 async def shutdown_schedule_refresh_tasks() -> None:
     """Cancel opportunistic refreshes during API shutdown."""
 
-    tasks = [
-        task
-        for task in [*_refresh_tasks.values(), *_metric_tasks]
-        if not task.done()
-    ]
+    tasks = [task for task in [*_refresh_tasks.values(), *_metric_tasks] if not task.done()]
     for task in tasks:
         task.cancel()
     if tasks:

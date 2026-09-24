@@ -535,9 +535,7 @@ class ScheduleDataResponse(BaseModel):
     is_offline: bool = False
     source_updated_at: str | None = None
     source_checked_at: str | None = None
-    freshness: Literal["live", "fresh_cache", "refreshing", "stale_fallback"] = (
-        "fresh_cache"
-    )
+    freshness: Literal["live", "fresh_cache", "refreshing", "stale_fallback"] = "fresh_cache"
     refresh_in_progress: bool = False
     cache_age_seconds: int | None = Field(None, ge=0)
     content_changed: bool = False
