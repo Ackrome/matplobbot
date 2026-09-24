@@ -241,9 +241,7 @@ REMOTE_EOF
                                     if [ -n "${PROD_TELEGRAM_REQUEST_RETRY_DELAY_SECONDS:-}" ]; then
                                         printf 'TELEGRAM_REQUEST_RETRY_DELAY_SECONDS=%s\n' "$PROD_TELEGRAM_REQUEST_RETRY_DELAY_SECONDS"
                                     fi
-                                } | ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH' && umask 077 && ENV_TMP=\$(mktemp .env.tmp.XXXXXX) && trap 'rm -f \"\$ENV_TMP\"' EXIT && cat > \"\$ENV_TMP\" && chmod 600 \"\$ENV_TMP\" && mv -f \"\$ENV_TMP\" .env && trap - EXIT"
-
-                                ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH' && for key in $EXPECTED_ENV_KEYS; do grep -q \"^\${key}=\" .env || { echo \"ERROR: remote .env is missing \$key\"; exit 1; }; done; echo 'Remote .env keys verified without exposing values.'"
+                                } | ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH' && bash ./deploy.sh --write-env .env $EXPECTED_ENV_KEYS"
 
                                 # Safer cleanup policy than full system prune.
                                 ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "docker image prune -af --filter 'until=168h' && docker container prune -f --filter 'until=24h'"

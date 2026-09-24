@@ -1583,6 +1583,11 @@ Jenkins + deploy features:
 - The gate fails if unittest output shows dependency-driven skips/import errors such as missing FastAPI modules.
 - `Jenkinsfile.groovy` performs production deploy and smoke checks.
 - Deploy host fingerprint pinning via `APP_VM_SHA256` (with optional one-off override).
+- Jenkins streams the complete production environment into `deploy.sh --write-env`; that mode
+  creates a permission-`0600` temporary file beside the target, validates every required key,
+  and only then atomically renames it to `.env`. An incomplete stream leaves the prior `.env`
+  untouched. Keeping temporary-variable handling inside the remote script avoids
+  Groovy/Bash/SSH expansion of unset remote variables.
 - `deploy.sh` pre-pulls only the GHCR application services, retries transient registry/network pull failures, and avoids unnecessary Docker Hub pulls for stable infra services on routine deploys.
 - `deploy.sh` also rebuilds local build services such as `proxy` and restarts config-mounted services such as `main-site-frontend` and `caddy` so repo changes are actually applied in production.
 

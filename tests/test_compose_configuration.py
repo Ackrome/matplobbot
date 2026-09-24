@@ -1,3 +1,8 @@
+import os
+import shutil
+import stat
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -8,6 +13,7 @@ LOCAL_COMPOSE = PROJECT_ROOT / "docker-compose.yml"
 PRODUCTION_COMPOSE = PROJECT_ROOT / "docker-compose.prod.yml"
 GITHUB_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "ci-cd.yml"
 JENKINSFILE = PROJECT_ROOT / "Jenkinsfile.groovy"
+DEPLOY_SCRIPT = PROJECT_ROOT / "deploy.sh"
 VALIDATION_REQUIREMENTS = PROJECT_ROOT / "requirements-validation.txt"
 FRONTEND_NGINX = PROJECT_ROOT / "main_site_frontend" / "default.conf"
 FRONTEND_UI_UTILS = PROJECT_ROOT / "main_site_frontend" / "js" / "ui_utils.js"
@@ -27,6 +33,25 @@ COMMON_LONG_RUNNING_SERVICES = {
 
 def _load_compose(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def _find_bash() -> str | None:
+    if os.name == "nt":
+        for candidate in (
+            Path("C:/Program Files/Git/bin/bash.exe"),
+            Path("C:/Program Files/Git/usr/bin/bash.exe"),
+        ):
+            if candidate.is_file():
+                return str(candidate)
+    return shutil.which("bash")
+
+
+def _bash_path(path: Path) -> str:
+    resolved = path.resolve()
+    if os.name != "nt":
+        return str(resolved)
+    drive = resolved.drive.rstrip(":").lower()
+    return f"/{drive}{resolved.as_posix()[2:]}"
 
 
 class TestComposeConfiguration(unittest.TestCase):
@@ -90,10 +115,14 @@ class TestComposeConfiguration(unittest.TestCase):
 
     def test_jenkins_writes_complete_remote_env_atomically(self):
         jenkinsfile = JENKINSFILE.read_text(encoding="utf-8")
+        deploy_script = DEPLOY_SCRIPT.read_text(encoding="utf-8")
 
-        self.assertIn("mktemp .env.tmp.XXXXXX", jenkinsfile)
-        self.assertIn('mv -f \\"\\$ENV_TMP\\" .env', jenkinsfile)
-        self.assertIn("Remote .env keys verified without exposing values.", jenkinsfile)
+        self.assertIn("bash ./deploy.sh --write-env .env $EXPECTED_ENV_KEYS", jenkinsfile)
+        self.assertNotIn("ENV_TMP", jenkinsfile)
+        self.assertNotIn("for key in $EXPECTED_ENV_KEYS", jenkinsfile)
+        self.assertIn('mktemp "${target_dir}/${target_name}.tmp.XXXXXX"', deploy_script)
+        self.assertIn('mv -f -- "$temp_path" "$target_path"', deploy_script)
+        self.assertIn("Remote .env keys verified without exposing values.", deploy_script)
         self.assertNotIn(">> .env", jenkinsfile)
         payload_start = jenkinsfile.index("EXPECTED_ENV_KEYS=")
         remote_write = jenkinsfile.index("} | ssh", payload_start)
@@ -103,6 +132,65 @@ class TestComposeConfiguration(unittest.TestCase):
             "TELEGRAM_REQUEST_RETRY_DELAY_SECONDS",
         ):
             self.assertLess(jenkinsfile.index(f"printf '{key}=", payload_start), remote_write)
+
+    def test_deploy_script_atomically_writes_env_payload(self):
+        bash = _find_bash()
+        if bash is None:
+            self.skipTest("bash is unavailable")
+
+        payload = "BOT_TOKEN=secret-value\nREDIS_URL=rediss://redis:6380/2\n"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            completed = subprocess.run(
+                [
+                    bash,
+                    _bash_path(DEPLOY_SCRIPT),
+                    "--write-env",
+                    ".env",
+                    "BOT_TOKEN",
+                    "REDIS_URL",
+                ],
+                cwd=temp_dir,
+                input=payload,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            target = Path(temp_dir) / ".env"
+            self.assertEqual(target.read_text(encoding="utf-8"), payload)
+            self.assertEqual(list(Path(temp_dir).glob(".env.tmp.*")), [])
+            if os.name != "nt":
+                self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+
+    def test_deploy_script_rejects_incomplete_env_without_replacing_target(self):
+        bash = _find_bash()
+        if bash is None:
+            self.skipTest("bash is unavailable")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / ".env"
+            target.write_text("BOT_TOKEN=previous\n", encoding="utf-8")
+            completed = subprocess.run(
+                [
+                    bash,
+                    _bash_path(DEPLOY_SCRIPT),
+                    "--write-env",
+                    ".env",
+                    "BOT_TOKEN",
+                    "REDIS_URL",
+                ],
+                cwd=temp_dir,
+                input="BOT_TOKEN=replacement\n",
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("missing REDIS_URL", completed.stderr)
+            self.assertEqual(target.read_text(encoding="utf-8"), "BOT_TOKEN=previous\n")
+            self.assertEqual(list(Path(temp_dir).glob(".env.tmp.*")), [])
 
     def test_frontend_nginx_proxies_websocket_upgrades(self):
         nginx = FRONTEND_NGINX.read_text(encoding="utf-8")
