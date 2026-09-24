@@ -117,7 +117,12 @@ class TestComposeConfiguration(unittest.TestCase):
         jenkinsfile = JENKINSFILE.read_text(encoding="utf-8")
         deploy_script = DEPLOY_SCRIPT.read_text(encoding="utf-8")
 
-        self.assertIn("bash ./deploy.sh --write-env .env $EXPECTED_ENV_KEYS", jenkinsfile)
+        self.assertIn("DEPLOY_PATH = '~/matplobbot'", jenkinsfile)
+        self.assertIn(
+            '"cd $DEPLOY_PATH && bash ./deploy.sh --write-env .env $EXPECTED_ENV_KEYS"',
+            jenkinsfile,
+        )
+        self.assertNotIn("cd '$DEPLOY_PATH'", jenkinsfile)
         self.assertNotIn("ENV_TMP", jenkinsfile)
         self.assertNotIn("for key in $EXPECTED_ENV_KEYS", jenkinsfile)
         self.assertIn('mktemp "${target_dir}/${target_name}.tmp.XXXXXX"', deploy_script)
@@ -191,6 +196,15 @@ class TestComposeConfiguration(unittest.TestCase):
             self.assertIn("missing REDIS_URL", completed.stderr)
             self.assertEqual(target.read_text(encoding="utf-8"), "BOT_TOKEN=previous\n")
             self.assertEqual(list(Path(temp_dir).glob(".env.tmp.*")), [])
+
+    def test_jenkins_failure_notification_avoids_secret_groovy_interpolation(self):
+        jenkinsfile = JENKINSFILE.read_text(encoding="utf-8")
+
+        self.assertNotIn('withEnv(["TG_CHAT_ID=${adminIds[0]}"])', jenkinsfile)
+        self.assertIn(
+            'TG_CHAT_ID="$(printf \'%s\' "$PROD_ADMIN_USER_IDS" | awk -F,',
+            jenkinsfile,
+        )
 
     def test_frontend_nginx_proxies_websocket_upgrades(self):
         nginx = FRONTEND_NGINX.read_text(encoding="utf-8")

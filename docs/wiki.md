@@ -1587,7 +1587,9 @@ Jenkins + deploy features:
   creates a permission-`0600` temporary file beside the target, validates every required key,
   and only then atomically renames it to `.env`. An incomplete stream leaves the prior `.env`
   untouched. Keeping temporary-variable handling inside the remote script avoids
-  Groovy/Bash/SSH expansion of unset remote variables.
+  Groovy/Bash/SSH expansion of unset remote variables. The configured `~/matplobbot` path is
+  passed to the remote shell without single-quoting the tilde so it resolves against the deploy
+  user's home directory.
 - `deploy.sh` pre-pulls only the GHCR application services, retries transient registry/network pull failures, and avoids unnecessary Docker Hub pulls for stable infra services on routine deploys.
 - `deploy.sh` also rebuilds local build services such as `proxy` and restarts config-mounted services such as `main-site-frontend` and `caddy` so repo changes are actually applied in production.
 

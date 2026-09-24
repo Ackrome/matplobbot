@@ -241,7 +241,7 @@ REMOTE_EOF
                                     if [ -n "${PROD_TELEGRAM_REQUEST_RETRY_DELAY_SECONDS:-}" ]; then
                                         printf 'TELEGRAM_REQUEST_RETRY_DELAY_SECONDS=%s\n' "$PROD_TELEGRAM_REQUEST_RETRY_DELAY_SECONDS"
                                     fi
-                                } | ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH' && bash ./deploy.sh --write-env .env $EXPECTED_ENV_KEYS"
+                                } | ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && bash ./deploy.sh --write-env .env $EXPECTED_ENV_KEYS"
 
                                 # Safer cleanup policy than full system prune.
                                 ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "docker image prune -af --filter 'until=168h' && docker container prune -f --filter 'until=24h'"
@@ -440,9 +440,13 @@ ${clippedLogTail}
 
                 writeFile file: 'deploy_failure_notify.txt', text: message
                 withCredentials([sshUserPrivateKey(credentialsId: 'app-vm-ssh-key', keyFileVariable: 'SSH_KEY_FILE', usernameVariable: 'SSH_USER')]) {
-                    withEnv(["TG_CHAT_ID=${adminIds[0]}"]) {
-                        sh '''
+                    sh '''
                             set +e
+                            TG_CHAT_ID="$(printf '%s' "$PROD_ADMIN_USER_IDS" | awk -F, '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); print $1; exit}')"
+                            if [ -z "$TG_CHAT_ID" ]; then
+                              echo "Skip Telegram failure notification: no usable admin chat ID."
+                              exit 0
+                            fi
 
                             # First try direct egress from Jenkins.
                             if curl -fsS --connect-timeout 20 --max-time 45 -X POST "https://api.telegram.org/bot$PROD_BOT_TOKEN/sendMessage" \
@@ -486,7 +490,6 @@ ${clippedLogTail}
                               "curl -fsS --connect-timeout 20 --max-time 60 --proxy socks5h://127.0.0.1:20170 -X POST \"https://api.telegram.org/bot$PROD_BOT_TOKEN/sendMessage\" --data-urlencode \"chat_id=$TG_CHAT_ID\" --data-urlencode \"text@-\" --data-urlencode \"disable_web_page_preview=true\" >/dev/null" \
                               < deploy_failure_notify.txt || true
                         '''
-                    }
                 }
             }
         }
