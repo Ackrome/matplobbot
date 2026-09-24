@@ -21,7 +21,7 @@ from shared_lib.database import (
 )
 from shared_lib.redis_client import redis_client
 
-from ..auth import get_ws_user
+from ..auth import get_ws_user, require_ws_admin
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -164,7 +164,10 @@ async def periodic_stats_updater():
 
 
 @router.websocket("/ws/stats/total_actions")
-async def websocket_total_actions_endpoint(websocket: WebSocket, user: dict = Depends(get_ws_user)):
+async def websocket_total_actions_endpoint(
+    websocket: WebSocket,
+    user: dict = Depends(require_ws_admin),
+):
     global stats_update_task
 
     await stats_manager.connect(websocket)

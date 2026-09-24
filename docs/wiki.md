@@ -816,6 +816,13 @@ What it does:
 - Supports create/edit/rename/delete files, upload assets, compile, export ZIP.
 - Supports sending compiled project PDF directly to linked Telegram account.
 - Follows the global website theme and switches Monaco between `vs-light` and `vs-dark`.
+- Sanitizes rendered Markdown with pinned DOMPurify before inserting it into the preview DOM.
+  The preview uses an explicit tag/attribute allow-list, removes executable URLs and handlers,
+  renders failures through `textContent`, and runs Mermaid in strict security mode. The
+  sanitizer-unavailable error is available in both shared frontend locales.
+- DOMPurify must load before Marked in `studio.html`. When either the sanitizer policy or the
+  Studio script changes, bump both the `studio.js` query version and the service-worker cache
+  version so installed clients cannot retain the vulnerable preview implementation.
 
 How to use:
 
@@ -1136,7 +1143,9 @@ Endpoints:
 
 Feature details:
 
-- Stats stream sends full live analytics payload when changed.
+- Stats stream sends full live analytics payload when changed and therefore requires an admin
+  role before the server accepts the connection. Authenticated non-admin accounts are closed
+  with WebSocket policy-violation code `1008` and receive no payload.
 - Bot log file streaming is disabled because services no longer write `.log` files.
 - User-specific stream is restricted to admins or matching Telegram user.
 

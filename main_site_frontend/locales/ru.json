@@ -3,6 +3,7 @@
   "nav.projects": "Проекты",
   "nav.schedule": "Расписание",
   "nav.studio": "Студия",
+  "studio.preview.sanitizerUnavailable": "Средство защиты предпросмотра Markdown недоступно.",
   "nav.admin": "Админ",
   "nav.signIn": "Войти",
   "nav.profile": "Профиль",

@@ -280,3 +280,10 @@ async def get_ws_user(websocket: WebSocket) -> dict:
 
     except (JWTError, ValueError) as exc:
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION) from exc
+
+
+def require_ws_admin(user: dict = Depends(get_ws_user)) -> dict:
+    """Allow administrative WebSocket streams only to resolved admin accounts."""
+    if user.get("role") != "admin":
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
+    return user

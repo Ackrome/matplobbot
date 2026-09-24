@@ -23,6 +23,48 @@ async function ensureStudioAuth() {
 }
 
 const studioAuthReady = ensureStudioAuth();
+
+const STUDIO_MARKDOWN_SANITIZE_CONFIG = Object.freeze({
+    ALLOWED_TAGS: [
+        'a', 'b', 'blockquote', 'br', 'code', 'del', 'div', 'em', 'h1', 'h2', 'h3',
+        'h4', 'h5', 'h6', 'hr', 'i', 'img', 'li', 'ol', 'p', 'pre', 'span',
+        'strong', 'table', 'tbody', 'td', 'th', 'thead', 'tr', 'ul',
+    ],
+    ALLOWED_ATTR: [
+        'alt', 'class', 'colspan', 'href', 'rel', 'rowspan', 'src', 'target', 'title',
+    ],
+    ALLOW_DATA_ATTR: false,
+    ALLOW_UNKNOWN_PROTOCOLS: false,
+    FORBID_TAGS: ['embed', 'form', 'iframe', 'input', 'math', 'object', 'script', 'style', 'svg'],
+});
+
+function studioTranslate(key, fallback, params = {}) {
+    return window.mpbI18n?.t(key, fallback, params) || fallback;
+}
+
+function getStudioHtmlSanitizer() {
+    const sanitizer = window.DOMPurify;
+    if (!sanitizer || typeof sanitizer.sanitize !== 'function') {
+        throw new Error(studioTranslate(
+            'studio.preview.sanitizerUnavailable',
+            'Markdown preview sanitizer is unavailable.'
+        ));
+    }
+    return sanitizer;
+}
+
+function sanitizeStudioMarkdownPreview(markdownSource) {
+    const renderedHtml = marked.parse(markdownSource);
+    return getStudioHtmlSanitizer().sanitize(renderedHtml, STUDIO_MARKDOWN_SANITIZE_CONFIG);
+}
+
+function renderStudioPreviewError(container, error) {
+    const errorElement = document.createElement('pre');
+    errorElement.className = 'text-red-500 text-xs p-4';
+    errorElement.textContent = error instanceof Error ? error.message : String(error);
+    container.replaceChildren(errorElement);
+}
+
 // Настройка парсера Markdown для поддержки локальных картинок
 const renderer = new marked.Renderer();
 renderer.image = function(href, title, text) {
@@ -189,7 +231,7 @@ require(['vs/editor/editor.main'], function() {
 
     // Initialize Mermaid
     try {
-        mermaid.initialize({ startOnLoad: false, theme: 'default' });
+        mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict' });
     } catch(e) {
         console.warn("Mermaid init error:", e);
     }
@@ -283,27 +325,34 @@ async function updateLivePreview() {
     liveDiv.classList.remove('hidden');
 
     if (type === 'markdown') {
-        // Подменяем $$ формулы для KaTeX перед парсингом Markdown
-        let safeCode = code.replace(/\$\$(.*?)\$\$/gs, (m, p1) => `\n<div class="math-block">${p1}</div>\n`);
-        safeCode = safeCode.replace(/\$(.*?)\$/g, (m, p1) => `<span class="math-inline">${p1}</span>`);
+        try {
+            // Подменяем $$ формулы для KaTeX перед парсингом Markdown.
+            let markdownWithMath = code.replace(/\$\$(.*?)\$\$/gs, (m, p1) => `\n<div class="math-block">${p1}</div>\n`);
+            markdownWithMath = markdownWithMath.replace(/\$(.*?)\$/g, (m, p1) => `<span class="math-inline">${p1}</span>`);
 
-        contentDiv.innerHTML = marked.parse(safeCode);
+            contentDiv.innerHTML = sanitizeStudioMarkdownPreview(markdownWithMath);
+            for (const link of contentDiv.querySelectorAll('a[target="_blank"]')) {
+                link.rel = 'noopener noreferrer';
+            }
 
-        // Рендерим математику
-        if (typeof renderMathInElement === 'function') {
-            renderMathInElement(contentDiv, {
-                delimiters:[
-                    {left: '<div class="math-block">', right: '</div>', display: true},
-                    {left: '<span class="math-inline">', right: '</span>', display: false}
-                ]
-            });
+            // KaTeX runs only after untrusted Markdown HTML has been sanitized.
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(contentDiv, {
+                    delimiters:[
+                        {left: '<div class="math-block">', right: '</div>', display: true},
+                        {left: '<span class="math-inline">', right: '</span>', display: false}
+                    ]
+                });
+            }
+        } catch (error) {
+            renderStudioPreviewError(contentDiv, error);
         }
     } else if (type === 'mermaid') {
         try {
             const { svg } = await mermaid.render('mermaid-svg-' + Date.now(), code);
             contentDiv.innerHTML = `<div class="flex items-center justify-center h-full">${svg}</div>`;
         } catch (e) {
-            contentDiv.innerHTML = `<pre class="text-red-500 text-xs p-4">${e.message}</pre>`;
+            renderStudioPreviewError(contentDiv, e);
         }
     }
 }
