@@ -31,6 +31,8 @@ let fixedTimeSlotRangesCache = null;
 let fullSchedule =[];
 let loadedBounds = { start: null, end: null };
 let sourceUpdatedAt = null;
+let scheduleFreshness = 'fresh_cache';
+let scheduleRefreshInProgress = false;
 let currentEntity = { type: null, id: null, name: null };
 let allAvailableModules =[];
 let selectedModules = new Set();
@@ -47,6 +49,10 @@ let scheduleChangeSummary = null;
 let lessonActionMap = new Map();
 let isRefreshingScheduleCache = false;
 let isRefreshingSemesterCache = false;
+let scheduleLoadRequestSeq = 0;
+let scheduleLoadAbortController = null;
+let scheduleRefreshPollTimer = null;
+const MAX_SCHEDULE_REFRESH_POLLS = 4;
 
 function createDefaultSchedulePageState() {
     return {
@@ -1924,6 +1930,14 @@ window.openScheduleFromSearch = function(type, id, label) {
 }
 
 async function loadSchedule(type, id, name, targetDate = null, options = {}) {
+    if (scheduleRefreshPollTimer) {
+        clearTimeout(scheduleRefreshPollTimer);
+        scheduleRefreshPollTimer = null;
+    }
+    scheduleLoadAbortController?.abort();
+    const requestController = new AbortController();
+    scheduleLoadAbortController = requestController;
+    const requestSeq = ++scheduleLoadRequestSeq;
     resultsBox.classList.add('hidden');
     groupInput.value = name || id || '';
     const previousEntityKey = getScheduleEntityKey(currentEntity);
@@ -1945,24 +1959,36 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
     });
     document.getElementById('defaultState').classList.add('hidden');
     document.getElementById('scheduleControls').classList.remove('hidden');
-    document.getElementById('desktopSchedule').innerHTML = `<div class="p-8"><div class="skeleton h-64 w-full rounded-3xl"></div></div>`;
-    document.getElementById('mobileSchedule').innerHTML = `<div class="skeleton h-64 w-full rounded-3xl"></div>`;
-    sourceUpdatedAt = null;
+    if (!options.silent) {
+        document.getElementById('desktopSchedule').innerHTML = `<div class="p-8"><div class="skeleton h-64 w-full rounded-3xl"></div></div>`;
+        document.getElementById('mobileSchedule').innerHTML = `<div class="skeleton h-64 w-full rounded-3xl"></div>`;
+        sourceUpdatedAt = null;
+        scheduleRefreshInProgress = false;
+    }
     renderScheduleHome();
     try {
         const data = await (window.ScheduleApi?.loadScheduleData?.({
             type: nextEntity.type,
             id: nextEntity.id,
             baseDate: requestedDate,
-            refresh: Boolean(options.refresh)
-        }) || fetch(`${API_BASE}/schedule/data/${nextEntity.type}/${encodeURIComponent(nextEntity.id)}?base_date=${requestedDate}${options.refresh ? '&refresh=1' : ''}`).then((res) => {
+            refresh: Boolean(options.refresh),
+            signal: requestController.signal
+        }) || fetch(`${API_BASE}/schedule/data/${nextEntity.type}/${encodeURIComponent(nextEntity.id)}?base_date=${requestedDate}${options.refresh ? '&refresh=1' : ''}`, {
+            signal: requestController.signal
+        }).then((res) => {
             if (!res.ok) throw new Error('API Error');
             return res.json();
         }));
-        fullSchedule = (data.schedule || []).map(normalizeScheduleLesson);
+        if (requestSeq !== scheduleLoadRequestSeq) return;
+        const receivedSchedule = (data.schedule || []).map(normalizeScheduleLesson);
+        // A silent poll may observe cache written by a background request. Its own
+        // content_changed flag is false, so always adopt the returned snapshot.
+        fullSchedule = receivedSchedule;
         allAvailableModules = buildAvailableModules(data.available_modules || [], fullSchedule);
         loadedBounds = data.loaded_bounds || {start: "2000-01-01", end: "2099-01-01"};
-        sourceUpdatedAt = data.source_updated_at || null;
+        sourceUpdatedAt = data.source_checked_at || data.source_updated_at || null;
+        scheduleFreshness = data.freshness || (data.is_offline ? 'stale_fallback' : 'fresh_cache');
+        scheduleRefreshInProgress = Boolean(data.refresh_in_progress);
         window.ScheduleState?.addRecent?.(currentEntity);
         const snapshotKey = getSnapshotEntityKey(nextEntity);
         const previousSnapshot = loadScheduleSnapshots()[snapshotKey];
@@ -1983,10 +2009,42 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         syncScheduleUrl(options.urlMode || (entityChanged ? 'push' : 'replace'));
         // Вызываем обновление календаря, так как сменилась сущность
         if (window._renderCalendarSubscriptionImpl) window._renderCalendarSubscriptionImpl();
+        const pollAttempt = Number(options.pollAttempt) || 0;
+        if (scheduleRefreshInProgress && pollAttempt < MAX_SCHEDULE_REFRESH_POLLS) {
+            const expectedEntityKey = getScheduleEntityKey(nextEntity);
+            scheduleRefreshPollTimer = setTimeout(() => {
+                if (getScheduleEntityKey(currentEntity) !== expectedEntityKey) return;
+                void loadSchedule(
+                    nextEntity.type,
+                    nextEntity.id,
+                    nextEntity.name,
+                    requestedDate,
+                    {
+                        preserveModules: true,
+                        keepEmptyModules: selectedModules.size === 0,
+                        silent: true,
+                        pollAttempt: pollAttempt + 1,
+                        urlMode: 'replace'
+                    }
+                );
+            }, Math.min(1500 + pollAttempt * 750, 3750));
+        }
     } catch (err) {
+        if (err?.name === 'AbortError' || requestSeq !== scheduleLoadRequestSeq) return;
+        if (options.silent) {
+            scheduleFreshness = 'stale_fallback';
+            scheduleRefreshInProgress = false;
+            isOfflineMode = true;
+            filterAndRender();
+            return;
+        }
         const errorText = escapeHtml(t('schedule.error.load', 'Ошибка загрузки расписания.'));
         document.getElementById('desktopSchedule').innerHTML = `<div class="p-10 text-center text-red-500 font-bold">${errorText}</div>`;
         document.getElementById('mobileSchedule').innerHTML = `<div class="p-10 text-center text-red-500 font-bold">${errorText}</div>`;
+    } finally {
+        if (scheduleLoadAbortController === requestController) {
+            scheduleLoadAbortController = null;
+        }
     }
 }
 
@@ -2011,6 +2069,9 @@ async function applyScheduleStateFromUrl() {
     selectedModules.clear();
     scheduleChangeSummary = null;
     isOfflineMode = false;
+    scheduleFreshness = 'fresh_cache';
+    scheduleRefreshInProgress = false;
+    document.getElementById('offlineWarning')?.classList.add('hidden');
     document.getElementById('scheduleControls')?.classList.remove('hidden');
     document.getElementById('defaultState')?.classList.remove('hidden');
     document.getElementById('desktopSchedule').innerHTML = '';
@@ -2241,16 +2302,37 @@ window.refreshCurrentScheduleSemesterCache = async function() {
 
 function filterAndRender() {
     const offlineWarning = document.getElementById('offlineWarning');
-    const cacheIsStale = isScheduleCacheStale(sourceUpdatedAt);
     if (offlineWarning) {
-        const warningText = offlineWarning.querySelector('[data-i18n="schedule.offline.warning"]');
-        if (isOfflineMode || cacheIsStale) {
-            offlineWarning.classList.remove('hidden');
-            if (warningText) {
-                warningText.textContent = isOfflineMode
-                    ? t('schedule.offline.warningDetailed', 'University service is unavailable. Loaded cached data from {time}.', { time: formatRelativeDateTime(sourceUpdatedAt) })
-                    : t('schedule.offline.staleWarning', 'Opened data may be outdated. Cache updated {time}.', { time: formatRelativeDateTime(sourceUpdatedAt) });
+        const freshnessText = document.getElementById('scheduleFreshnessText');
+        const freshnessIcon = document.getElementById('scheduleFreshnessIcon');
+        const checkedTime = formatRelativeDateTime(sourceUpdatedAt);
+        const state = isOfflineMode ? 'stale_fallback' : scheduleFreshness;
+        const presentation = {
+            live: {
+                classes: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/35 dark:text-emerald-200',
+                iconClasses: 'text-emerald-500 dark:text-emerald-300',
+                text: t('schedule.freshness.live', 'Schedule checked against the university service just now.')
+            },
+            fresh_cache: {
+                classes: 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-900/70 dark:bg-sky-950/35 dark:text-sky-200',
+                iconClasses: 'text-sky-500 dark:text-sky-300',
+                text: t('schedule.freshness.freshCache', 'Checked against the university service {time}.', { time: checkedTime })
+            },
+            refreshing: {
+                classes: 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900/70 dark:bg-blue-950/35 dark:text-blue-200',
+                iconClasses: 'text-blue-500 dark:text-blue-300',
+                text: t('schedule.freshness.refreshing', 'Showing the saved schedule while checking for updates...')
+            },
+            stale_fallback: {
+                classes: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/35 dark:text-amber-200',
+                iconClasses: 'text-amber-500 dark:text-amber-300',
+                text: t('schedule.freshness.staleFallback', 'Could not check for updates. Showing data confirmed {time}.', { time: checkedTime })
             }
+        }[state] || null;
+        if (presentation && currentEntity?.id) {
+            offlineWarning.className = `m-3 flex items-center gap-2 rounded-xl border p-3 fade-in ${presentation.classes}`;
+            if (freshnessIcon) freshnessIcon.className = `h-4 w-4 shrink-0 ${presentation.iconClasses}`;
+            if (freshnessText) freshnessText.textContent = presentation.text;
         } else {
             offlineWarning.classList.add('hidden');
         }

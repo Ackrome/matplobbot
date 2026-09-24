@@ -684,7 +684,10 @@ What it does:
 - Includes copy-to-clipboard actions for room/lecturer.
 - When the `Actions` toggle is enabled, lesson cards and timetable cells expose inline quick buttons for room copy, lecturer/room navigation, one-lesson ICS export, and module-only/module-hide actions without opening a per-card accordion.
 - In desktop `Table`, the `Actions` toggle shows a compact action launcher inside each timetable cell instead of a full six-button strip. This keeps long lesson titles visible while still exposing room/teacher/calendar/module actions from a small overlay menu.
-- Shows source update timestamp and offline/fallback states.
+- Opens from the shared entity cache immediately and automatically revalidates old data against RUZ with stale-while-revalidate semantics.
+- Coalesces concurrent viewers of the same group/lecturer/room into one upstream request through a process-local task and Redis lease; a short failure cooldown prevents retry storms during an outage.
+- Shows precise source states instead of a generic stale warning: checked live, recently checked cache, checking now, or confirmed cache after a failed check.
+- Cancels superseded browser requests when the user switches entities quickly, and silently polls a bounded number of times while a shared refresh is still running.
 - Search UX includes recent schedules, favorites, quick type categories, local fuzzy matching, and separate loading/empty/network-error states.
 - Offline drawer shows cached schedules, cache update time, and a refresh action for the current schedule. Admin users also see `Refresh full semester`, which force-refreshes the whole current semester cache for the selected schedule entity.
 - The offline drawer is rendered as a floating overlay layer above the schedule grid, so opening cached schedules never pushes the timetable or control rows down.
@@ -973,8 +976,17 @@ Feature details:
 - `available_modules`
 - `is_offline`
 - `source_updated_at`
+- `source_checked_at`
+- `freshness` (`live`, `fresh_cache`, `refreshing`, or `stale_fallback`)
+- `refresh_in_progress`
+- `cache_age_seconds`
+- `content_changed`
 - `loaded_bounds`
-- `GET /api/schedule/data/{type}/{id}` accepts `refresh=1` to force a live refresh attempt even when the local cache is still fresh.
+- Normal schedule opens treat a cache verified in the last 3 minutes as fresh by default. Older data starts one shared full-semester RUZ refresh; the request waits briefly for a fast live answer, otherwise returns the cached window with `freshness=refreshing`.
+- `GET /api/schedule/data/{type}/{id}` accepts `refresh=1` for an explicit refresh action even when the cache is still fresh. Automatic week navigation uses the freshness policy rather than forcing another upstream request.
+- Interactive source calls use one bounded attempt; scheduler jobs retain their longer retry policy. A first visit with no cache waits longer than a cached visit but returns `503` instead of hanging indefinitely.
+- Successful empty RUZ lists are authoritative and remove old lessons. Non-list JSON is rejected as a malformed upstream response and never overwrites cache.
+- Schedule data has its own Redis-backed per-client rate limit in addition to per-entity request coalescing.
 - If a legacy Schedule URL or local state passes a non-numeric group, lecturer, or auditorium label such as `ПМ23-1` as `{id}`, the API resolves it through live RUZ search before fetching schedule data, so refresh uses the numeric RUZ entity id.
 - `POST /api/schedule/cache/{type}/{id}/refresh_semester` is admin-only and forces an immediate current-semester RUZ fetch for one schedule entity. It resolves non-numeric group, lecturer, and auditorium labels to numeric RUZ ids, writes the semester payload to `cached_schedules`, and fails instead of silently serving old cache when the upstream refresh cannot be completed.
 - `POST /api/schedule/cache/refresh_all_semester` is admin-only and runs the semester maintenance workflow for cached and subscribed schedule entities: it searches each entity by display name, writes fresh semester data under the current RUZ id, deletes stale cache rows after successful remap, moves active Telegram subscriptions, updates website calendar custom profiles, and returns counters for refreshed, remapped, skipped, and failed entities.
@@ -983,7 +995,7 @@ Feature details:
 
 What `is_offline` means:
 
-- In `GET /api/schedule/data/{type}/{id}`, `is_offline=true` means live RUZ data was unavailable and the response was assembled from cached schedule data.
+- In `GET /api/schedule/data/{type}/{id}`, `is_offline=true` is the compatibility form of `freshness=stale_fallback`: a live check failed and the response was assembled from cached schedule data.
 - In `GET /api/schedule/search`, `is_offline` is per-result. Mixed responses are possible: some entities may come from live RUZ (`false`) while others are cache fallback (`true`).
 - `is_offline=false` means a live upstream response was used for that entity/request path.
 
@@ -992,14 +1004,21 @@ Frontend behavior guidance:
 1. Keep fallback results selectable and renderable; cache fallback is a degraded-but-valid state, not a hard error.
 2. Surface a visible badge/state (for example `CACHE`) when item-level or schedule-level `is_offline=true`.
 3. Treat `503` from search as a full-source outage state (upstream unavailable and no cache matches), and show retry/help UI.
-4. Use `source_updated_at` together with `is_offline` to communicate data freshness to users.
+4. Prefer `freshness` and `source_checked_at` for user-facing copy. `source_updated_at` remains as a compatibility alias.
 
 How to use:
 
 1. Call `/search?term=...&type=all|group|person|auditorium` with a term of at least 2 non-whitespace characters.
 2. Use returned entity `type/id` with `/data/{type}/{id}`.
 3. Optionally pass `base_date=YYYY-MM-DD` to center the loaded window.
-4. Pass `refresh=1` from an explicit user action such as `Refresh cache`; do not use it for every automatic navigation.
+4. Pass `refresh=1` only from an explicit action such as `Refresh cache`; ordinary opens already revalidate old data through the shared freshness policy.
+
+Operator controls:
+
+- `SCHEDULE_ON_OPEN_REFRESH_ENABLED` provides a rollback switch to the legacy six-hour freshness window.
+- `SCHEDULE_INTERACTIVE_FRESHNESS_SECONDS`, `SCHEDULE_INTERACTIVE_LIVE_WAIT_SECONDS`, and `SCHEDULE_INITIAL_LIVE_WAIT_SECONDS` tune freshness and user wait budgets.
+- `SCHEDULE_INTERACTIVE_UPSTREAM_TIMEOUT_SECONDS`, `SCHEDULE_REFRESH_LOCK_TTL_SECONDS`, and `SCHEDULE_REFRESH_FAILURE_COOLDOWN_SECONDS` bound upstream and coordination behavior.
+- `FASTAPI_RATE_LIMIT_SCHEDULE_DATA_LIMIT` and `FASTAPI_RATE_LIMIT_SCHEDULE_DATA_WINDOW_SECONDS` control per-client data reads.
 
 ### Stats API
 

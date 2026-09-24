@@ -180,7 +180,11 @@ OPERATION_MARKDOWN_BY_ROUTE = {
 
 - `schedule` contains a centered 29-day window around `base_date` or today's date.
 - `loaded_bounds` tells the frontend which dates were actually loaded.
-- `source_updated_at` is populated when the response came from cached schedule data.
+- `freshness` is `live`, `fresh_cache`, `refreshing`, or `stale_fallback`.
+- `source_checked_at` records the last successful RUZ verification; `source_updated_at` is its compatibility alias.
+- Old cache starts one coalesced background refresh per schedule entity. `refresh_in_progress=true` tells clients to keep rendering the cache and poll again later.
+- `is_offline=true` is retained for compatibility and corresponds to `stale_fallback`.
+- A successful empty list is authoritative; malformed non-list JSON never overwrites cache.
 - Non-numeric group, lecturer, and auditorium labels are resolved through live RUZ search before schedule loading.
 """,
     ("post", "/api/schedule/cache/{type}/{id}/refresh_semester"): """

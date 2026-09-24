@@ -280,3 +280,50 @@ class TestScheduleEntityIdRefresh(unittest.IsolatedAsyncioTestCase):
                 call("person", "person-id", expected_person_hash),
             ]
         )
+
+    async def test_refresh_cached_schedule_treats_empty_semester_as_authoritative(self):
+        fake_client = types.SimpleNamespace(
+            search=AsyncMock(return_value=[{"id": "group-id", "label": "PM23-1"}]),
+            get_schedule=AsyncMock(return_value=[]),
+        )
+
+        with (
+            patch.object(
+                schedule_service,
+                "get_cached_schedule_entities_for_id_refresh",
+                AsyncMock(
+                    return_value=[
+                        {
+                            "entity_type": "group",
+                            "entity_id": "group-id",
+                            "entity_name": "PM23-1",
+                        }
+                    ]
+                ),
+            ),
+            patch.object(
+                schedule_service,
+                "get_unique_active_subscription_entities",
+                AsyncMock(return_value=[]),
+            ),
+            patch.object(
+                schedule_service,
+                "get_semester_bounds",
+                return_value=("2026-08-25", "2027-01-31"),
+            ),
+            patch.object(schedule_service, "upsert_cached_schedule", AsyncMock()) as upsert_cache,
+            patch.object(
+                schedule_service, "batch_update_subscription_hashes", AsyncMock()
+            ) as update_hashes,
+        ):
+            result = await schedule_service.refresh_cached_schedule_entity_ids_and_semester_cache(
+                fake_client,
+                sleep_seconds=0,
+            )
+
+        self.assertEqual(result["refreshed"], 1)
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["items"][0]["lesson_count"], 0)
+        upsert_cache.assert_awaited_once_with("group", "group-id", [])
+        expected_hash = hashlib.sha256(json.dumps([], sort_keys=True).encode()).hexdigest()
+        update_hashes.assert_awaited_once_with("group", "group-id", expected_hash)

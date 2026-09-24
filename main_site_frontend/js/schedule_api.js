@@ -32,12 +32,15 @@
         return requestJson(`${getBaseUrl()}/schedule/cached_list`);
     }
 
-    function loadScheduleData({ type, id, baseDate, refresh = false }) {
+    function loadScheduleData({ type, id, baseDate, refresh = false, signal = undefined }) {
         const params = new URLSearchParams();
         if (baseDate) params.set("base_date", baseDate);
         if (refresh) params.set("refresh", "1");
         const suffix = params.toString() ? `?${params.toString()}` : "";
-        return requestJson(`${getBaseUrl()}/schedule/data/${type}/${encodeURIComponent(id)}${suffix}`);
+        return requestJson(
+            `${getBaseUrl()}/schedule/data/${type}/${encodeURIComponent(id)}${suffix}`,
+            { signal }
+        );
     }
 
     function refreshSemesterCache({ type, id, token }) {

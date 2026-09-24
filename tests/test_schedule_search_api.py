@@ -227,22 +227,26 @@ class TestScheduleSearchAPI(unittest.TestCase):
             }
         ]
         parsed_at = datetime(2026, 4, 6, 10, 30, tzinfo=UTC)
+        freshness_result = types.SimpleNamespace(
+            schedule=fake_schedule,
+            source_checked_at=parsed_at,
+            is_offline=False,
+            freshness="fresh_cache",
+            refresh_in_progress=False,
+            cache_age_seconds=30,
+            content_changed=False,
+        )
 
         with (
             patch.object(schedule_router, "create_ruz_api_client", return_value=object()),
             patch.object(
                 schedule_router,
-                "get_schedule_with_cache_fallback",
-                AsyncMock(return_value=(fake_schedule, False)),
+                "get_schedule_with_freshness",
+                AsyncMock(return_value=freshness_result),
             ),
             patch.object(schedule_router, "get_all_short_names", AsyncMock(return_value={})),
             patch.object(schedule_router, "get_discipline_modules_map", AsyncMock(return_value={})),
             patch.object(schedule_router, "get_unique_modules_hybrid", AsyncMock(return_value=[])),
-            patch.object(
-                schedule_router,
-                "get_cached_schedule_updated_at",
-                AsyncMock(return_value=parsed_at),
-            ),
         ):
             response = self.client.get("/api/schedule/data/group/group-1")
 
@@ -266,22 +270,26 @@ class TestScheduleSearchAPI(unittest.TestCase):
         fake_client = types.SimpleNamespace(
             search=AsyncMock(return_value=[{"id": "162426", "label": "ПМ23-1"}])
         )
+        freshness_result = types.SimpleNamespace(
+            schedule=fake_schedule,
+            source_checked_at=parsed_at,
+            is_offline=False,
+            freshness="live",
+            refresh_in_progress=False,
+            cache_age_seconds=0,
+            content_changed=True,
+        )
 
         with (
             patch.object(schedule_router, "create_ruz_api_client", return_value=fake_client),
             patch.object(
                 schedule_router,
-                "get_schedule_with_cache_fallback",
-                AsyncMock(return_value=(fake_schedule, False)),
+                "get_schedule_with_freshness",
+                AsyncMock(return_value=freshness_result),
             ) as schedule_fetch,
             patch.object(schedule_router, "get_all_short_names", AsyncMock(return_value={})),
             patch.object(schedule_router, "get_discipline_modules_map", AsyncMock(return_value={})),
             patch.object(schedule_router, "get_unique_modules_hybrid", AsyncMock(return_value=[])),
-            patch.object(
-                schedule_router,
-                "get_cached_schedule_updated_at",
-                AsyncMock(return_value=parsed_at),
-            ) as get_updated_at,
         ):
             response = self.client.get(
                 "/api/schedule/data/group/%D0%9F%D0%9C23-1",
@@ -294,9 +302,9 @@ class TestScheduleSearchAPI(unittest.TestCase):
         args, kwargs = schedule_fetch.await_args
         self.assertEqual(args[:4], (fake_client, "group", "162426", "2026-08-07"))
         self.assertEqual(args[4], "2026-09-04")
-        self.assertEqual(kwargs["max_cache_age_hours"], 0)
-        get_updated_at.assert_awaited_once_with("group", "162426")
+        self.assertTrue(kwargs["force_refresh"])
         self.assertEqual(response.json()["source_updated_at"], parsed_at.isoformat())
+        self.assertEqual(response.json()["freshness"], "live")
 
     def test_schedule_semester_refresh_resolves_entity_label_and_updates_cache(self):
         self.app.dependency_overrides[schedule_router.require_admin] = lambda: {
@@ -369,21 +377,34 @@ class TestScheduleSearchAPI(unittest.TestCase):
                     },
                 )
 
-    def test_schedule_semester_refresh_does_not_overwrite_empty_upstream_response(self):
+    def test_schedule_semester_refresh_persists_authoritative_empty_response(self):
         self.app.dependency_overrides[schedule_router.require_admin] = lambda: {
             "id": 1,
             "role": "admin",
         }
         fake_client = types.SimpleNamespace(get_schedule=AsyncMock(return_value=[]))
+        parsed_at = datetime(2026, 9, 24, 12, 30, tzinfo=UTC)
 
         with (
             patch.object(schedule_router, "create_ruz_api_client", return_value=fake_client),
             patch.object(schedule_router, "upsert_cached_schedule", AsyncMock()) as upsert_cache,
+            patch.object(
+                schedule_router,
+                "get_cached_schedule_updated_at",
+                AsyncMock(return_value=parsed_at),
+            ),
         ):
             response = self.client.post("/api/schedule/cache/group/162426/refresh_semester")
 
-        self.assertEqual(response.status_code, 502)
-        upsert_cache.assert_not_awaited()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["lesson_count"], 0)
+        upsert_cache.assert_awaited_once_with("group", "162426", [])
+
+    def test_schedule_data_rejects_unsupported_entity_type(self):
+        response = self.client.get("/api/schedule/data/unknown/42")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Unsupported schedule entity type", response.json()["detail"])
 
     def test_schedule_bulk_semester_refresh_endpoint_uses_service(self):
         self.app.dependency_overrides[schedule_router.require_admin] = lambda: {
@@ -505,6 +526,9 @@ class TestScheduleSearchAPI(unittest.TestCase):
         schedule_data_schema = schema["components"]["schemas"]["ScheduleDataResponse"]
         self.assertIn("loaded_bounds", schedule_data_schema["properties"])
         self.assertIn("source_updated_at", schedule_data_schema["properties"])
+        self.assertIn("source_checked_at", schedule_data_schema["properties"])
+        self.assertIn("freshness", schedule_data_schema["properties"])
+        self.assertIn("refresh_in_progress", schedule_data_schema["properties"])
 
         lesson_schema = schema["components"]["schemas"]["ScheduleLessonSchema"]
         self.assertIn("discipline_short", lesson_schema["properties"])
@@ -572,6 +596,28 @@ class TestRuzAPIClient(unittest.IsolatedAsyncioTestCase):
             session.calls[1][1]["params"],
             {"start": "2026-04-01", "finish": "2026-04-30", "lng": "1"},
         )
+
+    async def test_unexpected_json_shape_is_not_treated_as_empty_schedule(self):
+        class FakeResponse:
+            status = 200
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                return None
+
+            async def json(self):
+                return {"error": "temporary proxy payload"}
+
+        class FakeSession:
+            def get(self, *_args, **_kwargs):
+                return FakeResponse()
+
+        client = RuzAPIClient(FakeSession(), max_retries=1)
+
+        with self.assertRaisesRegex(Exception, "unexpected JSON payload"):
+            await client.get_schedule("group", "42", "2026-09-01", "2026-09-30")
 
 
 class TestCachedScheduleLabels(unittest.TestCase):

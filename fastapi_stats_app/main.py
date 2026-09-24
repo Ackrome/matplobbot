@@ -24,6 +24,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from shared_lib.database import close_db_pool, init_db_pool
+from shared_lib.services.schedule_freshness import shutdown_schedule_refresh_tasks
 
 from .auth import get_current_user, require_admin  # Import auth dependencies
 from .config import CORS_ALLOWED_ORIGINS, PUBLIC_SITE_URL
@@ -54,6 +55,7 @@ async def lifespan(app: FastAPI):
     yield
     # On shutdown
     shared_http_session = getattr(app.state, "shared_http_session", None)
+    await shutdown_schedule_refresh_tasks()
     if shared_http_session and not shared_http_session.closed:
         await shared_http_session.close()
     logger.info("Application shutdown: Closing database pool...")

@@ -14,7 +14,7 @@
     <link rel="manifest" href="/site.webmanifest">
     <script src="/js/theme_bootstrap.js?v=20260821-6"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="/css/tailwind.css?v=20260821-6">
+    <link rel="stylesheet" href="/css/tailwind.css?v=20260924-1">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -1038,9 +1038,9 @@
                         </div>
 
                         <div id="scheduleGridContent" class="schedule-grid-surface relative flex-grow bg-white dark:bg-slate-800">
-                            <div id="offlineWarning" class="hidden m-3 flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-800 fade-in">
-                                <svg class="h-4 w-4 shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                                <span data-i18n="schedule.offline.warning" class="text-xs font-medium md:text-sm">ВУЗ недоступен. Загружена сохраненная копия.</span>
+                            <div id="offlineWarning" class="hidden m-3 flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sky-800 fade-in">
+                                <svg id="scheduleFreshnessIcon" class="h-4 w-4 shrink-0 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                <span id="scheduleFreshnessText" data-i18n="schedule.freshness.refreshing" class="text-xs font-medium md:text-sm">Показываем сохранённое расписание и проверяем обновления…</span>
                             </div>
                             <div id="desktopSchedule" class="hidden w-full lg:block"></div>
                             <div id="mobileSchedule" class="schedule-cards-feed block flex-col gap-0 lg:hidden"></div>
@@ -1065,10 +1065,10 @@
     <script src="/js/frontend_i18n.js?v=1"></script>
     <script src="/js/navbar.js?v=20260923-1"></script>
     <script src="/js/schedule_state.js?v=20260821-6"></script>
-    <script src="/js/schedule_api.js?v=20260821-6"></script>
+    <script src="/js/schedule_api.js?v=20260924-1"></script>
     <script src="/js/schedule_filters.js?v=20260821-6"></script>
     <script src="/js/schedule_render.js?v=20260821-6"></script>
-    <script src="/js/schedule.js?v=20260831-8"></script>
+    <script src="/js/schedule.js?v=20260924-1"></script>
     <script src="/js/calendar_sync.js?v=20260821-6"></script>
     <script src="/js/schedule_ux.js?v=20260831-10"></script>
 </body>

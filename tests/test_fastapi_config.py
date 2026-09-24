@@ -32,9 +32,15 @@ class TestFastAPIConfig(unittest.TestCase):
             {
                 "FASTAPI_RATE_LIMIT_SCHEDULE_SEARCH_LIMIT": "25",
                 "FASTAPI_RATE_LIMIT_SCHEDULE_SEARCH_WINDOW_SECONDS": "120",
+                "FASTAPI_RATE_LIMIT_SCHEDULE_DATA_LIMIT": "80",
+                "SCHEDULE_INTERACTIVE_FRESHNESS_SECONDS": "240",
+                "SCHEDULE_INTERACTIVE_LIVE_WAIT_SECONDS": "2.5",
             },
         ):
             reloaded = importlib.reload(config)
 
         self.assertEqual(reloaded.RATE_LIMIT_SCHEDULE_SEARCH.limit, 25)
         self.assertEqual(reloaded.RATE_LIMIT_SCHEDULE_SEARCH.window_seconds, 120)
+        self.assertEqual(reloaded.RATE_LIMIT_SCHEDULE_DATA.limit, 80)
+        self.assertEqual(reloaded.SCHEDULE_INTERACTIVE_FRESHNESS_SECONDS, 240)
+        self.assertEqual(reloaded.SCHEDULE_INTERACTIVE_LIVE_WAIT_SECONDS, 2.5)

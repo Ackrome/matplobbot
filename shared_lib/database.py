@@ -1171,6 +1171,26 @@ async def get_cached_schedule(entity_type: str, entity_id: str) -> list | None:
         return result.scalar()
 
 
+async def get_cached_schedule_snapshot(
+    entity_type: str, entity_id: str
+) -> tuple[list | dict | None, datetime.datetime | None]:
+    """Return cached payload and the time it was last verified with the source."""
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(CachedSchedule.schedule_data, CachedSchedule.updated_at).where(
+                and_(
+                    CachedSchedule.entity_type == entity_type,
+                    CachedSchedule.entity_id == str(entity_id),
+                )
+            )
+        )
+        row = result.first()
+        if row is None:
+            return None, None
+        return row.schedule_data, row.updated_at
+
+
 async def delete_cached_schedule(entity_type: str, entity_id: str) -> int:
     async with get_session() as session:
         result = await session.execute(

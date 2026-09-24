@@ -23,10 +23,13 @@ from shared_lib.schemas import (
     ScheduleSearchResultSchema,
     ScheduleSemesterRefreshResponse,
 )
+from shared_lib.services.schedule_freshness import (
+    ScheduleUnavailableError,
+    get_schedule_with_freshness,
+)
 from shared_lib.services.schedule_service import (
     get_module_name,
     get_schedule_fallback_counters,
-    get_schedule_with_cache_fallback,
     get_semester_bounds,
     get_unique_modules_hybrid,
     refresh_cached_schedule_entity_ids_and_semester_cache,
@@ -34,7 +37,18 @@ from shared_lib.services.schedule_service import (
 from shared_lib.services.university_api import RuzAPIError, create_ruz_api_client
 
 from ..auth import require_admin
-from ..config import RATE_LIMIT_SCHEDULE_SEARCH
+from ..config import (
+    RATE_LIMIT_SCHEDULE_DATA,
+    RATE_LIMIT_SCHEDULE_SEARCH,
+    SCHEDULE_INITIAL_LIVE_WAIT_SECONDS,
+    SCHEDULE_INTERACTIVE_FRESHNESS_SECONDS,
+    SCHEDULE_INTERACTIVE_LIVE_WAIT_SECONDS,
+    SCHEDULE_INTERACTIVE_UPSTREAM_TIMEOUT_SECONDS,
+    SCHEDULE_LEGACY_FRESHNESS_SECONDS,
+    SCHEDULE_ON_OPEN_REFRESH_ENABLED,
+    SCHEDULE_REFRESH_FAILURE_COOLDOWN_SECONDS,
+    SCHEDULE_REFRESH_LOCK_TTL_SECONDS,
+)
 from ..rate_limit import enforce_rate_limit
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
@@ -407,12 +421,6 @@ async def refresh_schedule_semester_cache(
     try:
         resolved_id = await _resolve_schedule_entity_id(client, entity_type, requested_id)
         schedule = await client.get_schedule(entity_type, resolved_id, start=start, finish=finish)
-        if not schedule:
-            raise HTTPException(
-                status_code=502,
-                detail="RUZ returned an empty semester schedule; cache was not overwritten.",
-            )
-
         await upsert_cached_schedule(entity_type, resolved_id, schedule)
         source_updated_at = await get_cached_schedule_updated_at(entity_type, resolved_id)
 
@@ -446,6 +454,7 @@ async def refresh_schedule_semester_cache(
     ),
 )
 async def get_schedule_data(
+    request: Request,
     type: str,
     id: str,
     base_date: date | None = Query(
@@ -459,7 +468,13 @@ async def get_schedule_data(
     db: AsyncSession = Depends(get_db_session_dependency),
     http_session: aiohttp.ClientSession = Depends(get_shared_http_session),
 ):
+    await enforce_rate_limit(
+        request,
+        scope="schedule_data",
+        settings=RATE_LIMIT_SCHEDULE_DATA,
+    )
     center_date = base_date or date.today()
+    entity_type = _normalize_schedule_entity_type(type)
 
     # Build a +/- 14 day window from the selected center date.
     start_date = center_date - timedelta(days=14)
@@ -468,12 +483,32 @@ async def get_schedule_data(
     start = start_date.strftime("%Y-%m-%d")
     finish = finish_date.strftime("%Y-%m-%d")
 
-    client = create_ruz_api_client(http_session)
+    client = create_ruz_api_client(
+        http_session,
+        max_retries=1,
+        request_timeout_seconds=SCHEDULE_INTERACTIVE_UPSTREAM_TIMEOUT_SECONDS,
+    )
     try:
-        resolved_id = await _resolve_schedule_entity_id(client, type, id)
-        schedule, is_offline = await get_schedule_with_cache_fallback(
-            client, type, resolved_id, start, finish, max_cache_age_hours=0 if refresh else 6
+        resolved_id = await _resolve_schedule_entity_id(client, entity_type, id)
+        freshness_seconds = (
+            SCHEDULE_INTERACTIVE_FRESHNESS_SECONDS
+            if SCHEDULE_ON_OPEN_REFRESH_ENABLED
+            else SCHEDULE_LEGACY_FRESHNESS_SECONDS
         )
+        freshness_result = await get_schedule_with_freshness(
+            client,
+            entity_type,
+            resolved_id,
+            start,
+            finish,
+            freshness_seconds=freshness_seconds,
+            live_wait_seconds=SCHEDULE_INTERACTIVE_LIVE_WAIT_SECONDS,
+            initial_live_wait_seconds=SCHEDULE_INITIAL_LIVE_WAIT_SECONDS,
+            lock_ttl_seconds=SCHEDULE_REFRESH_LOCK_TTL_SECONDS,
+            failure_cooldown_seconds=SCHEDULE_REFRESH_FAILURE_COOLDOWN_SECONDS,
+            force_refresh=refresh,
+        )
+        schedule = freshness_result.schedule
 
         short_names = await get_all_short_names()
         discipline_to_module = await get_discipline_modules_map()
@@ -490,13 +525,21 @@ async def get_schedule_data(
             lesson["module"] = mapped_mod if mapped_mod else explicit_mod
 
         modules = await get_unique_modules_hybrid(schedule)
-        source_updated_at = await get_cached_schedule_updated_at(type, resolved_id)
+        source_checked_at = freshness_result.source_checked_at
+        source_checked_at_value = (
+            source_checked_at.isoformat() if source_checked_at else None
+        )
 
         return {
             "schedule": schedule,
             "available_modules": modules,
-            "is_offline": is_offline,
-            "source_updated_at": source_updated_at.isoformat() if source_updated_at else None,
+            "is_offline": freshness_result.is_offline,
+            "source_updated_at": source_checked_at_value,
+            "source_checked_at": source_checked_at_value,
+            "freshness": freshness_result.freshness,
+            "refresh_in_progress": freshness_result.refresh_in_progress,
+            "cache_age_seconds": freshness_result.cache_age_seconds,
+            "content_changed": freshness_result.content_changed,
             "loaded_bounds": {
                 "start": start,
                 "end": finish,
@@ -504,6 +547,8 @@ async def get_schedule_data(
         }
     except HTTPException:
         raise
+    except ScheduleUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except ConnectionError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:

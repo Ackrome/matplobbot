@@ -23,6 +23,7 @@ class RuzAPIClient:
         max_retries: int = 4,
         initial_delay: float = 1.0,
         backoff_factor: float = 2.0,
+        request_timeout_seconds: float = 15.0,
     ):
         self.HOST = "https://ruz.fa.ru"
         self.session = session
@@ -30,6 +31,7 @@ class RuzAPIClient:
         self.max_retries = max_retries
         self.initial_delay = initial_delay
         self.backoff_factor = backoff_factor
+        self.request_timeout_seconds = request_timeout_seconds
 
     async def _request(
         self, path: str, params: dict[str, str] | None = None
@@ -45,12 +47,16 @@ class RuzAPIClient:
                     full_url,
                     params=params,
                     ssl=ssl_context,
-                    timeout=aiohttp.ClientTimeout(total=15),
+                    timeout=aiohttp.ClientTimeout(total=self.request_timeout_seconds),
                 ) as response:
                     if response.status == 200:
                         try:
                             json_response = await response.json()
-                            return json_response if isinstance(json_response, list) else []
+                            if not isinstance(json_response, list):
+                                raise RuzAPIError(
+                                    "API returned an unexpected JSON payload instead of a list"
+                                )
+                            return json_response
                         except aiohttp.ContentTypeError as exc:
                             # ВУЗ вернул HTML вместо JSON (падает прокси)
                             raise RuzAPIError(
@@ -90,9 +96,12 @@ class RuzAPIClient:
         )
 
 
-def create_ruz_api_client(session: aiohttp.ClientSession) -> RuzAPIClient:
+def create_ruz_api_client(
+    session: aiohttp.ClientSession,
+    **kwargs,
+) -> RuzAPIClient:
     """
     Creates and returns a RuzAPIClient instance.
     This function is intended to be called once during application startup.
     """
-    return RuzAPIClient(session)
+    return RuzAPIClient(session, **kwargs)
