@@ -1,4 +1,4 @@
-matplobbot-shared==0.1.339
+matplobbot-shared==0.1.340
 aiohttp==3.14.3
 aiohttp-socks==0.10.1
 aiogram==3.29.1
