@@ -18,6 +18,43 @@ This page is a full feature map of the project: bot, website, API, scheduler, wo
 
 This document is an OKF concept inside the [documentation bundle](index.md). It is kept as the global project wiki source and is mirrored to GitHub Wiki by the existing wiki sync workflow.
 
+## Sprint 3 P2 Reliability And Security (2026-09-24)
+
+Sprint 3 closes BUG-03, BUG-06, BUG-09, SEC-03, SEC-04, PROD-01, ARCH-01, ARCH-03,
+UX-06, and OPS-02.
+
+All Redis consumers now derive their connection from `REDIS_URL`, including password, TLS,
+database number, and URL parameters. `REDIS_HOST`, `REDIS_PORT`, and `REDIS_DB` remain the
+backward-compatible fallback. Aiogram uses a separate namespaced `RedisStorage` connection with
+`BOT_FSM_TTL_SECONDS` (24 hours by default), so in-progress dialogs survive process replacement;
+the existing `/cancel` handlers clear both state and data, and shutdown closes the storage pool.
+
+Stats profile misses now remain HTTP 404 while DB failures remain 500. Weekly WeasyPrint exports
+retain their Redis rate limit and execute the complete synchronous renderer through
+`asyncio.to_thread`, keeping the API event loop responsive. Worker resources resolve from a source
+checkout or `/app/bot`, can be overridden with `APP_BOT_DIR` and `APP_TEMPLATES_DIR`, and are
+validated on every worker-process start.
+
+Suggestion moderation stores every unique `(chat_id, message_id)` in a transactional Redis set.
+A short Redis decision lock makes simultaneous administrator clicks idempotent; the winning
+decision updates every stored admin message before deleting the state. Studio-originated HTML is
+parsed and emitted through a Telegram HTML allow-list rather than string replacement, preserving
+safe formatting while stripping unknown tags, executable link schemes, and unsupported attributes.
+
+Studio now has a dedicated enforcing CSP on `/studio` and `/studio.html`. Static inline scripts,
+styles, and HTML event attributes were moved to versioned same-origin assets; third-party library
+versions are pinned and carry SRI. The profile explicitly allows Monaco's required evaluated AMD
+modules/runtime styles, CDN worker/style/font assets, blob preview frames, and safe preview images,
+while `script-src-attr 'none'` blocks injected handlers. Browser QA covers Monaco, Markdown/KaTeX,
+Mermaid 9's string render contract, Telegram WebApp, desktop/mobile tab behavior, and artificial
+inline payload rejection.
+
+Single-lesson ICS downloads convert fixed Moscow time (UTC+3) into UTC `DTSTART`/`DTEND` values
+ending in `Z`, avoiding an invalid `TZID` reference without `VTIMEZONE`. Both Compose definitions
+now use the same bounded Celery ping healthcheck. Scheduler `/health` also exposes
+`celery_queue_depth` and returns 503 when it reaches `CELERY_QUEUE_ALERT_THRESHOLD` (default 100),
+which is the external monitoring signal; Compose `unhealthy` alone does not restart a worker.
+
 ## Sprint 2 Reliability Contracts (2026-09-24)
 
 Sprint 2 closes the production-correctness items BUG-01, BUG-02, BUG-04, BUG-05, BUG-07, and
@@ -550,7 +587,9 @@ What it does:
 - Uses no-cache network-first navigation so fresh pages win, then cached pages/offline fallback are used when the network is unavailable.
 - Uses network-first for same-origin JS/CSS assets so deployed frontend fixes are not served stale once before appearing on the next reload.
 - Avoids intercepting same-origin `/api/*` requests so authenticated API calls are not cached by the service worker.
-- Schedule frontend asset URLs use `?v=20260821-7`, Stats uses `stats.js?v=19` and `stats_ux.js?v=2`, shared navbar uses `?v=20260821-8`, and the service worker cache is `mpb-site-v26`; bump changed asset URLs and the service worker cache when changing cached frontend behavior.
+- Cached frontend URLs are versioned independently; Studio currently uses `studio.js?v=12` and
+  `studio.css?v=1`, while the service worker cache is `mpb-site-v34`. Bump the changed asset URL
+  and service-worker cache together whenever cached frontend behavior changes.
 
 How to use: (or not use)
 
@@ -844,6 +883,8 @@ Files:
 
 - `main_site_frontend/studio.html`
 - `main_site_frontend/js/studio.js`
+- `main_site_frontend/css/studio.css`
+- `main_site_frontend/default.conf`
 
 What it does:
 
@@ -859,6 +900,9 @@ What it does:
 - DOMPurify must load before Marked in `studio.html`. When either the sanitizer policy or the
   Studio script changes, bump both the `studio.js` query version and the service-worker cache
   version so installed clients cannot retain the vulnerable preview implementation.
+- The Studio response uses an enforcing CSP with `script-src-attr 'none'`. Monaco still requires
+  `unsafe-eval` for its AMD modules and runtime style attributes require `style-src 'unsafe-inline'`;
+  do not broaden the script policy to `unsafe-inline`. Pinned CDN tags use SRI.
 
 How to use:
 
@@ -1085,7 +1129,8 @@ Feature details:
 
 - Sort allowlists are strict and validated.
 - Export supports `json|csv|weekly_pdf`, `date_from`, `date_to`, `timezone`.
-- `weekly_pdf` export is Redis rate-limited because it renders a PDF in-process.
+- `weekly_pdf` export is Redis rate-limited and moves the complete synchronous WeasyPrint renderer
+  to a worker thread so it does not block the FastAPI event loop.
 - Admin send-message has Redis-backed per-admin rate limit and structured audit logs.
 - Legacy alias can be hard-disabled with `ENABLE_LEGACY_ACTION_USERS_ALIAS=false`.
 
@@ -1212,7 +1257,9 @@ Configured jobs:
 
 Other scheduler features:
 
-- Health endpoint on `:9584/health`.
+- Health endpoint on `:9584/health`; it checks PostgreSQL, scheduler state, and the Redis `celery`
+  queue. A queue depth at or above `CELERY_QUEUE_ALERT_THRESHOLD` returns HTTP 503 for external
+  monitoring and includes the measured depth and threshold in JSON.
 - Telegram calls can use `TELEGRAM_PROXY_URL` with `PROXY_URL` as a backward-compatible fallback.
 - Scheduler Telegram delivery uses the same normalized proxy selection as the bot, so the local mixed `proxy` listener is used as `http://proxy:20170` when applicable.
 - RUZ calls are forced direct and bypass proxy.
@@ -1427,6 +1474,15 @@ Tasks include:
 - Markdown to HTML render.
 - Full project compile with build cache.
 
+Worker operations:
+
+- `APP_BOT_DIR` defaults to the checkout `bot/` directory and falls back to `/app/bot` in the
+  image; `APP_TEMPLATES_DIR` defaults below it. Missing required filters/config/templates abort a
+  worker process at startup.
+- Local and production Compose use the same bounded `celery inspect ping` healthcheck. An external
+  monitor should alert on scheduler `/health` queue backlog because Docker health does not restart
+  an unhealthy container by itself.
+
 How to use:
 
 1. Bot/API enqueues task.
@@ -1606,8 +1662,8 @@ How to use:
 - Studio upload and rename endpoints accept one safe filename component only;
   path separators, control characters, absolute paths and traversal attempts are rejected.
 - Schedule notification lookups compare the native PostgreSQL `TIME` value and
-  use the `notification_time/is_active` index. `REDIS_HOST` and `REDIS_PORT`
-  control the shared Redis client in local and CI environments.
+  use the `notification_time/is_active` index. `REDIS_URL` is authoritative for the shared client,
+  Celery, and bot FSM; `REDIS_HOST`, `REDIS_PORT`, and `REDIS_DB` are the compatibility fallback.
 - Generated Telegram inline-button hashes use the bounded local
   `CallbackPathCache` first and Redis keys named `callback_path:<hash>` as a
   restart/replica-safe fallback. `CALLBACK_PATH_TTL_SECONDS` controls the

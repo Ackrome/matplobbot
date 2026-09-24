@@ -116,17 +116,23 @@ class SuggestionsManager:
             redis_key = f"suggestion_cache:{data_hash}"
             cached_payload = await redis_client.get_cache(redis_key)
 
-            if not cached_payload:
+            decision_lock_acquired = bool(cached_payload) and (
+                await redis_client.acquire_suggestion_decision_lock(data_hash)
+            )
+            if not decision_lock_acquired:
                 # This can happen if another admin already actioned it, or if the cache expired.
-                await callback.message.edit_text(
-                    f"<i>{translator.gettext(lang, 'admin_decision_already_made')}</i>"
+                await callback.answer(
+                    translator.gettext(lang, "admin_decision_already_made"),
+                    show_alert=True,
                 )
-                await callback.answer()
                 return
 
             # --- NEW: Unpack the more complex payload ---
             original_data = cached_payload["data"]
-            messages_to_update = cached_payload["messages"]
+            messages_to_update = await redis_client.get_suggestion_messages(data_hash)
+            if not messages_to_update:
+                # Backward compatibility for suggestion payloads created before Sprint 3.
+                messages_to_update = cached_payload.get("messages", [])
             user_id_str, full_name, short_name = original_data.split(":", 2)
             user_id = int(user_id_str)
             user_lang = await translator.get_language(user_id)
@@ -167,25 +173,20 @@ class SuggestionsManager:
                 )
             # --- NEW: Update the message for ALL admins ---
             for msg_info in messages_to_update:
-                # Only edit the message that this specific admin clicked on.
-                if (
-                    msg_info["chat_id"] == callback.message.chat.id
-                    and msg_info["message_id"] == callback.message.message_id
-                ):
-                    try:
-                        await self.bot.edit_message_text(
-                            final_text,
-                            chat_id=msg_info["chat_id"],
-                            message_id=msg_info["message_id"],
-                            parse_mode="Markdown",
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            f"Could not edit suggestion message {msg_info['message_id']} for admin {msg_info['chat_id']}: {e}"
-                        )
+                try:
+                    await self.bot.edit_message_text(
+                        final_text,
+                        chat_id=msg_info["chat_id"],
+                        message_id=msg_info["message_id"],
+                        parse_mode="Markdown",
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Could not edit suggestion message {msg_info['message_id']} for admin {msg_info['chat_id']}: {e}"
+                    )
 
             # --- REFACTOR: Remove from Redis cache ---
-            await redis_client.client.delete(redis_key)
+            await redis_client.clear_suggestion_state(data_hash)
 
             await callback.answer()
 

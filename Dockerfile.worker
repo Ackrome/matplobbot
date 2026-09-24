@@ -2,6 +2,8 @@
 FROM ghcr.io/ackrome/matplobbot-base-worker:latest
 
 WORKDIR /app
+ENV APP_BOT_DIR=/app/bot \
+    APP_TEMPLATES_DIR=/app/bot/templates
 
 # Copy shared lib and install
 COPY shared_lib/ /shared_lib/

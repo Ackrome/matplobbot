@@ -1,3 +1,4 @@
+import asyncio
 import csv
 import html
 import json
@@ -653,10 +654,14 @@ async def get_user_profile(
         profile_data = await get_user_profile_data_from_db(
             db, user_id, page, page_size, sort_by, sort_order
         )
+    except Exception as e:
+        logger.error(f"Database error fetching user profile {user_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Database Error") from e
 
-        if profile_data is None:
-            raise HTTPException(status_code=404, detail="User not found.")
+    if profile_data is None:
+        raise HTTPException(status_code=404, detail="User not found.")
 
+    try:
         total_actions = profile_data["total_actions"]
         total_pages = math.ceil(total_actions / page_size) if page_size > 0 else 0
 
@@ -680,8 +685,8 @@ async def get_user_profile(
 
         return response_data
 
-    except Exception as e:
-        logger.error(f"Database error fetching user profile {user_id}: {e}", exc_info=True)
+    except (KeyError, TypeError, ValueError) as e:
+        logger.error(f"Invalid user profile data for {user_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Database Error") from e
 
 
@@ -992,7 +997,7 @@ async def export_user_actions(
         timezone_name=str(export_timezone),
         weekly_actions=weekly_actions,
     )
-    pdf_bytes = _build_weekly_pdf_bytes(weekly_html)
+    pdf_bytes = await asyncio.to_thread(_build_weekly_pdf_bytes, weekly_html)
     filename = f"user_{user_id}_actions_{period_start.strftime('%Y%m%d')}_{period_end.strftime('%Y%m%d')}.pdf"
     return Response(
         content=pdf_bytes,

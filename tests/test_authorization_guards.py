@@ -1,4 +1,7 @@
 import os
+import re
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
@@ -173,8 +176,19 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
 
         sanitizer = "dompurify@3.4.16/dist/purify.min.js"
         self.assertIn(sanitizer, html)
-        self.assertLess(html.index(sanitizer), html.index("marked/marked.min.js"))
-        self.assertIn("/js/studio.js?v=11", html)
+        self.assertLess(html.index(sanitizer), html.index("marked@15.0.12/marked.min.js"))
+        self.assertIn("/js/studio.js?v=12", html)
+
+        cdn_tags = re.findall(
+            r"<(?:script|link)\b[^>]+(?:cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)[^>]*>",
+            html,
+            flags=re.IGNORECASE,
+        )
+        self.assertTrue(cdn_tags)
+        for tag in cdn_tags:
+            with self.subTest(tag=tag[:100]):
+                self.assertIn("integrity=", tag)
+                self.assertIn('crossorigin="anonymous"', tag)
 
     def test_studio_preview_sanitizes_html_and_renders_errors_as_text(self):
         script = (PROJECT_ROOT / "main_site_frontend" / "js" / "studio.js").read_text(
@@ -185,6 +199,9 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
         self.assertIn(".sanitize(renderedHtml, STUDIO_MARKDOWN_SANITIZE_CONFIG)", script)
         self.assertIn("errorElement.textContent", script)
         self.assertIn("container.replaceChildren(errorElement)", script)
+        self.assertIn("typeof renderedDiagram === 'string'", script)
+        self.assertIn("contentDiv.replaceChildren(diagramContainer)", script)
+        self.assertIn("typeof tokenOrHref === 'object'", script)
         self.assertNotIn("contentDiv.innerHTML = marked.parse", script)
         self.assertNotIn('contentDiv.innerHTML = `<pre class="text-red-500', script)
 
@@ -193,5 +210,58 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
             encoding="utf-8"
         )
 
-        self.assertIn('const CACHE_VERSION = "mpb-site-v33"', service_worker)
-        self.assertIn('"/js/studio.js?v=11"', service_worker)
+        self.assertIn('const CACHE_VERSION = "mpb-site-v34"', service_worker)
+        self.assertIn('"/css/studio.css?v=1"', service_worker)
+        self.assertIn('"/js/studio.js?v=12"', service_worker)
+
+    def test_studio_csp_rejects_inline_scripts_and_event_attributes(self):
+        html = (PROJECT_ROOT / "main_site_frontend" / "studio.html").read_text(encoding="utf-8")
+        nginx = (PROJECT_ROOT / "main_site_frontend" / "default.conf").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIsNone(re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html, re.IGNORECASE))
+        self.assertNotIn("<style", html.lower())
+        self.assertIsNone(re.search(r"\son[a-z]+\s*=", html, re.IGNORECASE))
+        self.assertIn('location = /studio {', nginx)
+        self.assertIn('location = /studio.html {', nginx)
+        self.assertIn("Content-Security-Policy", nginx)
+        self.assertIn("script-src-attr 'none'", nginx)
+        script_directive = nginx.split("script-src ", 1)[1].split(";", 1)[0]
+        self.assertNotIn("'unsafe-inline'", script_directive)
+        self.assertIn("'unsafe-eval'", script_directive)
+        self.assertIn("worker-src 'self' blob: https://cdnjs.cloudflare.com", nginx)
+        self.assertIn("frame-src 'self' blob: data:", nginx)
+
+    @unittest.skipUnless(shutil.which("node"), "node is required for frontend date tests")
+    def test_single_lesson_ics_converts_moscow_time_to_utc(self):
+        script_path = PROJECT_ROOT / "main_site_frontend" / "js" / "schedule_render.js"
+        node_script = """
+            const fs = require('fs');
+            const vm = require('vm');
+            const context = { window: {}, console, setTimeout, clearTimeout };
+            vm.createContext(context);
+            vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+            const convert = context.window.ScheduleRender.formatMoscowIcsUtc;
+            process.stdout.write(JSON.stringify([
+                convert('2026.09.24', '09:00'),
+                convert('2026-09-24', '02:15')
+            ]));
+        """
+        completed = subprocess.run(
+            ["node", "-e", node_script, str(script_path)],
+            cwd=PROJECT_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+
+        self.assertEqual(
+            completed.stdout,
+            '["20260924T060000Z","20260923T231500Z"]',
+        )
+        source = script_path.read_text(encoding="utf-8")
+        self.assertIn("`DTSTART:${formatMoscowIcsUtc", source)
+        self.assertIn("`DTEND:${formatMoscowIcsUtc", source)
+        self.assertNotIn("DTSTART;TZID=Europe/Moscow", source)

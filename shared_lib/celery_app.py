@@ -1,8 +1,7 @@
-import os
-
 from celery import Celery, Task
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
+from .redis_client import get_redis_url
 from .request_context import (
     generate_correlation_id,
     get_correlation_id,
@@ -17,7 +16,13 @@ from .telemetry import (
     inject_trace_context,
 )
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+
+def get_celery_redis_url() -> str:
+    """Resolve the broker/backend URL through the shared Redis configuration."""
+    return get_redis_url()
+
+
+REDIS_URL = get_celery_redis_url()
 CELERY_CORRELATION_HEADER = "x-correlation-id"
 
 

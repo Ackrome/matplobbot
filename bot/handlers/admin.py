@@ -326,10 +326,15 @@ class AdminManager:
                     payload_to_cache = {
                         "data": data_to_hash,
                         "user_name": offer["user_name"],  # Store the user_name
-                        "messages": [{"chat_id": admin_id, "message_id": sent_message.message_id}],
                     }
                     # We use set_cache which handles JSON serialization. TTL is in seconds.
                     await redis_client.set_cache(redis_key, payload_to_cache, ttl=604800)  # 7 days
+                    await redis_client.add_suggestion_message(
+                        data_hash,
+                        chat_id=admin_id,
+                        message_id=sent_message.message_id,
+                        ttl=604800,
+                    )
 
         except Exception as e:
             logging.error(f"Failed to process pending shorter name offers: {e}", exc_info=True)

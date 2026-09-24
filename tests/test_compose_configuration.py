@@ -139,6 +139,20 @@ class TestComposeConfiguration(unittest.TestCase):
         self.assertIn('trigger="interval"', outbox_job)
         self.assertIn("minutes=1", outbox_job)
 
+    def test_celery_worker_healthcheck_is_bounded_and_identical(self):
+        local_health = self.local["services"]["mpb-worker"]["healthcheck"]
+        production_health = self.production["services"]["mpb-worker"]["healthcheck"]
+
+        self.assertEqual(local_health, production_health)
+        command = " ".join(local_health["test"])
+        self.assertIn("celery -A shared_lib.celery_app inspect ping", command)
+        self.assertIn("--destination celery@$${HOSTNAME}", command)
+        self.assertIn("--timeout 5", command)
+        self.assertIn("grep -q pong", command)
+        self.assertEqual(local_health["timeout"], "10s")
+        self.assertEqual(local_health["retries"], 3)
+        self.assertEqual(local_health["start_period"], "30s")
+
 
 if __name__ == "__main__":
     unittest.main()

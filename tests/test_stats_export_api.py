@@ -1,4 +1,6 @@
+import asyncio
 import os
+import threading
 import unittest
 from datetime import date
 from unittest.mock import AsyncMock, patch
@@ -213,3 +215,49 @@ class TestStatsExportAPI(unittest.TestCase):
             activity_schema["items"]["$ref"],
             "#/components/schemas/ActivitySeriesEntry",
         )
+
+
+@unittest.skipUnless(FASTAPI_AVAILABLE, "fastapi is not installed in this environment")
+class TestStatsExportAsync(unittest.IsolatedAsyncioTestCase):
+    async def test_weekly_pdf_render_does_not_block_event_loop(self):
+        render_started = threading.Event()
+        release_render = threading.Event()
+
+        def slow_pdf_render(_html: str) -> bytes:
+            render_started.set()
+            if not release_render.wait(timeout=2):
+                raise TimeoutError("test did not release PDF renderer")
+            return b"%PDF-1.4\nasync"
+
+        with (
+            patch.object(stats_router, "enforce_rate_limit", new=AsyncMock()),
+            patch.object(stats_router, "get_all_user_actions", new=AsyncMock(return_value=[])),
+            patch.object(stats_router, "_build_weekly_pdf_html", return_value="<html></html>"),
+            patch.object(stats_router, "_build_weekly_pdf_bytes", side_effect=slow_pdf_render),
+        ):
+            export_task = asyncio.create_task(
+                stats_router.export_user_actions(
+                    user_id=1,
+                    request=object(),
+                    format="weekly_pdf",
+                    download=False,
+                    date_from=date(2026, 9, 21),
+                    date_to=date(2026, 9, 24),
+                    timezone="Europe/Moscow",
+                    db=object(),
+                    current_user={"id": 1, "role": "admin"},
+                )
+            )
+            for _ in range(100):
+                if render_started.is_set():
+                    break
+                await asyncio.sleep(0.001)
+
+            self.assertTrue(render_started.is_set())
+            await asyncio.wait_for(asyncio.sleep(0.01), timeout=0.1)
+            self.assertFalse(export_task.done())
+            release_render.set()
+            response = await asyncio.wait_for(export_task, timeout=1)
+
+        self.assertEqual(response.media_type, "application/pdf")
+        self.assertEqual(response.body, b"%PDF-1.4\nasync")

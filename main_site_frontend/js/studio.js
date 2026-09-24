@@ -67,7 +67,18 @@ function renderStudioPreviewError(container, error) {
 
 // Настройка парсера Markdown для поддержки локальных картинок
 const renderer = new marked.Renderer();
-renderer.image = function(href, title, text) {
+renderer.image = function(tokenOrHref, legacyTitle, legacyText) {
+    // Marked 15 передаёт объект-токен; старые версии передавали три аргумента.
+    let href;
+    let title;
+    let text;
+    if (tokenOrHref && typeof tokenOrHref === 'object') {
+        ({ href = '', title = '', text = '' } = tokenOrHref);
+    } else {
+        href = String(tokenOrHref || '');
+        title = legacyTitle || '';
+        text = legacyText || '';
+    }
     // Если мы в режиме проекта и ссылка относительная (не http/data)
     if (currentMode === 'project' && currentProjectId && !href.startsWith('http') && !href.startsWith('data:')) {
         // Убираем слеш в начале, если есть
@@ -253,12 +264,28 @@ function updateWordCount() {
 }
 
 // === 3. MODE SWITCHING (QUICK / PROJECT) ===
-document.getElementById('mode-quick').onclick = () => switchMode('quick');
-document.getElementById('mode-project').onclick = async () => {
+document.getElementById('mode-quick').addEventListener('click', () => switchMode('quick'));
+document.getElementById('mode-project').addEventListener('click', async () => {
     if (!(await ensureStudioAuth())) return;
     switchMode('project');
-};
+});
 document.getElementById('doc-type').addEventListener('change', (e) => setLanguage(e.target.value));
+document.getElementById('btn-send-tg').addEventListener('click', sendToTelegram);
+document.getElementById('btn-download-pdf').addEventListener('click', downloadPDF);
+document.getElementById('btn-download-zip').addEventListener('click', downloadZIP);
+document.getElementById('compile-btn').addEventListener('click', compileCurrent);
+document.getElementById('tab-btn-sidebar').addEventListener('click', () => switchMobileTab('sidebar-pane'));
+document.getElementById('tab-btn-editor').addEventListener('click', () => switchMobileTab('editor-pane'));
+document.getElementById('tab-btn-viewer').addEventListener('click', () => switchMobileTab('viewer-pane'));
+document.getElementById('create-project-button').addEventListener('click', createNewProject);
+document.getElementById('project-selector').addEventListener('change', (event) => openProject(event.target.value));
+document.getElementById('file-uploader').addEventListener('change', uploadAsset);
+document.getElementById('close-error-panel-button').addEventListener('click', () => {
+    document.getElementById('error-panel').classList.add('hidden');
+});
+document.getElementById('new-project-type').addEventListener('change', () => window.updateTemplateOptions());
+document.getElementById('cancel-create-project-button').addEventListener('click', closeCreateProjectModal);
+document.getElementById('submit-create-project-button').addEventListener('click', submitNewProject);
 
 function switchMode(mode) {
     currentMode = mode;
@@ -349,8 +376,22 @@ async function updateLivePreview() {
         }
     } else if (type === 'mermaid') {
         try {
-            const { svg } = await mermaid.render('mermaid-svg-' + Date.now(), code);
-            contentDiv.innerHTML = `<div class="flex items-center justify-center h-full">${svg}</div>`;
+            const renderedDiagram = await mermaid.render('mermaid-svg-' + Date.now(), code);
+            const svg = typeof renderedDiagram === 'string'
+                ? renderedDiagram
+                : renderedDiagram.svg;
+            if (!svg) {
+                throw new Error(studioTranslate(
+                    'studio.preview.mermaidEmpty',
+                    'Mermaid returned an empty diagram.'
+                ));
+            }
+            const diagramContainer = document.createElement('div');
+            diagramContainer.className = 'flex items-center justify-center h-full';
+            diagramContainer.innerHTML = getStudioHtmlSanitizer().sanitize(svg, {
+                USE_PROFILES: { svg: true, svgFilters: true },
+            });
+            contentDiv.replaceChildren(diagramContainer);
         } catch (e) {
             renderStudioPreviewError(contentDiv, e);
         }

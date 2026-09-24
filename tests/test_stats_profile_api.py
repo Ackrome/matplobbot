@@ -101,6 +101,28 @@ class TestStatsProfileAPI(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 422)
 
+    def test_missing_profile_returns_404(self):
+        with patch.object(
+            stats_router,
+            "get_user_profile_data_from_db",
+            new=AsyncMock(return_value=None),
+        ):
+            response = self.client.get("/api/stats/users/404/profile")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "User not found.")
+
+    def test_profile_database_failure_returns_500(self):
+        with patch.object(
+            stats_router,
+            "get_user_profile_data_from_db",
+            new=AsyncMock(side_effect=RuntimeError("database unavailable")),
+        ):
+            response = self.client.get("/api/stats/users/42/profile")
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json()["detail"], "Internal Database Error")
+
     def test_messages_history_is_paginated_and_keeps_direction(self):
         fake_messages = {
             "messages": [

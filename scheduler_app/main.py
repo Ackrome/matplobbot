@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env before importing config modules that read os.getenv().
 load_dotenv()
 
-from scheduler_app.config import BOT_TOKEN, TELEGRAM_PROXY_URL
+from scheduler_app.config import BOT_TOKEN, CELERY_QUEUE_ALERT_THRESHOLD, TELEGRAM_PROXY_URL
 from scheduler_app.http_client import build_telegram_http_client_config
 from scheduler_app.jobs import (
     check_for_schedule_updates,
@@ -22,6 +22,7 @@ from scheduler_app.jobs import (
 )
 from shared_lib.database import close_db_pool, get_session, init_db_pool
 from shared_lib.logging_config import configure_logging
+from shared_lib.redis_client import redis_client
 from shared_lib.services.university_api import create_ruz_api_client
 
 # --- Logging Setup ---
@@ -32,6 +33,27 @@ if aps_logger.handlers:
     aps_logger.handlers.clear()
 
 logger = logging.getLogger(__name__)
+
+
+async def build_scheduler_health(scheduler_running: bool) -> tuple[dict[str, object], int]:
+    """Build the externally monitored scheduler/DB/Celery queue health signal."""
+    async with get_session() as db_session:
+        from sqlalchemy import text
+
+        await db_session.execute(text("SELECT 1"))
+
+    celery_queue_depth = int(await redis_client.client.llen("celery"))
+    queue_backlogged = celery_queue_depth >= CELERY_QUEUE_ALERT_THRESHOLD
+    healthy = scheduler_running and not queue_backlogged
+    payload: dict[str, object] = {
+        "status": "ok" if healthy else "unhealthy",
+        "scheduler": "running" if scheduler_running else "stopped",
+        "database": "connected",
+        "celery_queue": "backlogged" if queue_backlogged else "ok",
+        "celery_queue_depth": celery_queue_depth,
+        "celery_queue_alert_threshold": CELERY_QUEUE_ALERT_THRESHOLD,
+    }
+    return payload, 200 if healthy else 503
 
 
 async def main():
@@ -128,20 +150,8 @@ async def main():
 
             async def health_check(request):
                 try:
-                    async with get_session() as db_session:
-                        from sqlalchemy import text
-
-                        await db_session.execute(text("SELECT 1"))
-
-                    if scheduler.running:
-                        return aiohttp.web.json_response(
-                            {"status": "ok", "scheduler": "running", "database": "connected"}
-                        )
-
-                    return aiohttp.web.json_response(
-                        {"status": "unhealthy", "scheduler": "stopped", "database": "connected"},
-                        status=503,
-                    )
+                    payload, status_code = await build_scheduler_health(scheduler.running)
+                    return aiohttp.web.json_response(payload, status=status_code)
                 except Exception as exc:
                     logger.error("Health check failed with an exception: %s", exc, exc_info=True)
                     return aiohttp.web.json_response(

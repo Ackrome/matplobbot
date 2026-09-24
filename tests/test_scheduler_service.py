@@ -719,3 +719,96 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             await jobs.refresh_schedule_entity_ids(ruz_api_client)
 
         refresh_service.assert_awaited_once_with(ruz_api_client)
+
+    async def test_suggestion_decision_updates_all_admins_and_second_click_is_idempotent(self):
+        from bot.handlers import suggestions as suggestions_module
+
+        data_hash = "a" * 24
+        bot = SimpleNamespace(
+            send_message=AsyncMock(),
+            edit_message_text=AsyncMock(),
+        )
+        callback = SimpleNamespace(
+            data=f"shorter_name_admin:approve:{data_hash}",
+            from_user=SimpleNamespace(id=101),
+            message=SimpleNamespace(
+                chat=SimpleNamespace(id=101),
+                message_id=501,
+                text="Suggestion",
+            ),
+            answer=AsyncMock(),
+        )
+        redis = SimpleNamespace(
+            get_cache=AsyncMock(
+                return_value={
+                    "data": "42:Full discipline:Short",
+                    "user_name": "Student",
+                }
+            ),
+            acquire_suggestion_decision_lock=AsyncMock(side_effect=[True, False]),
+            get_suggestion_messages=AsyncMock(
+                return_value=[
+                    {"chat_id": 101, "message_id": 501},
+                    {"chat_id": 202, "message_id": 902},
+                ]
+            ),
+            clear_suggestion_state=AsyncMock(),
+            client=SimpleNamespace(lrem=AsyncMock()),
+        )
+        manager = suggestions_module.SuggestionsManager(bot)
+
+        with (
+            patch.object(suggestions_module, "redis_client", redis),
+            patch.object(suggestions_module, "add_short_name", new=AsyncMock()) as add_name,
+            patch.object(
+                suggestions_module.translator,
+                "get_language",
+                new=AsyncMock(return_value="en"),
+            ),
+            patch.object(
+                suggestions_module.translator,
+                "gettext",
+                side_effect=lambda _lang, key, **_kwargs: key,
+            ),
+            patch(
+                "shared_lib.services.schedule_service.short_name_cache.clear"
+            ) as clear_short_name_cache,
+        ):
+            await manager.handle_admin_decision(callback)
+            await manager.handle_admin_decision(callback)
+
+        add_name.assert_awaited_once_with("Full discipline", "Short", 101)
+        clear_short_name_cache.assert_called_once_with()
+        self.assertEqual(bot.edit_message_text.await_count, 2)
+        edited_targets = {
+            (call.kwargs["chat_id"], call.kwargs["message_id"])
+            for call in bot.edit_message_text.await_args_list
+        }
+        self.assertEqual(edited_targets, {(101, 501), (202, 902)})
+        redis.clear_suggestion_state.assert_awaited_once_with(data_hash)
+        self.assertEqual(callback.answer.await_count, 2)
+        self.assertTrue(callback.answer.await_args_list[1].kwargs["show_alert"])
+
+    async def test_scheduler_health_exposes_backlogged_celery_queue_for_external_alerting(self):
+        scheduler_main = importlib.import_module("scheduler_app.main")
+        db_session = SimpleNamespace(execute=AsyncMock())
+
+        with (
+            patch.object(
+                scheduler_main,
+                "get_session",
+                return_value=_BoundAsyncSessionContext(db_session),
+            ),
+            patch.object(scheduler_main, "CELERY_QUEUE_ALERT_THRESHOLD", 10),
+            patch.object(
+                scheduler_main.redis_client.client,
+                "llen",
+                new=AsyncMock(return_value=12),
+            ),
+        ):
+            payload, status_code = await scheduler_main.build_scheduler_health(True)
+
+        self.assertEqual(status_code, 503)
+        self.assertEqual(payload["celery_queue"], "backlogged")
+        self.assertEqual(payload["celery_queue_depth"], 12)
+        self.assertEqual(payload["celery_queue_alert_threshold"], 10)

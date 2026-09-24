@@ -10,6 +10,7 @@ load_dotenv()
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.exceptions import TelegramNetworkError
+from aiogram.fsm.storage.redis import DefaultKeyBuilder, RedisStorage
 
 from shared_lib.database import init_db_pool
 from shared_lib.egress import (
@@ -18,6 +19,7 @@ from shared_lib.egress import (
     get_telegram_proxy_url,
 )
 from shared_lib.i18n import translator
+from shared_lib.redis_client import get_redis_url
 from shared_lib.services.university_api import create_ruz_api_client
 from shared_lib.telegram_bot_session import TelegramBotSession
 from shared_lib.telegram_http import normalize_proxy_url
@@ -33,6 +35,7 @@ from .tracing import BotTracingMiddleware
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 TELEGRAM_PROXY_URL = get_telegram_proxy_url()
 POLLING_RETRY_DELAY_SECONDS = float(os.getenv("BOT_POLLING_RETRY_DELAY_SECONDS", "15"))
+FSM_TTL_SECONDS = int(os.getenv("BOT_FSM_TTL_SECONDS", "86400"))
 _BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 configure_process_http_proxy_env(
@@ -40,6 +43,19 @@ configure_process_http_proxy_env(
     no_proxy_hosts=("ruz.fa.ru",),
 )
 configure_service_telemetry("matplobbot-bot")
+
+
+def create_fsm_storage() -> RedisStorage:
+    """Create restart-safe FSM storage isolated under the bot namespace."""
+    if FSM_TTL_SECONDS <= 0:
+        raise ValueError("BOT_FSM_TTL_SECONDS must be positive")
+    return RedisStorage.from_url(
+        get_redis_url(),
+        connection_kwargs={"decode_responses": True},
+        key_builder=DefaultKeyBuilder(prefix="matplobbot:fsm", with_bot_id=True),
+        state_ttl=FSM_TTL_SECONDS,
+        data_ttl=FSM_TTL_SECONDS,
+    )
 
 
 def _log_background_task_result(task: asyncio.Task) -> None:
@@ -174,7 +190,7 @@ async def run_bot_once(ruz_api_client_instance) -> None:
         bot_session = TelegramBotSession(timeout=600)
 
     bot = Bot(BOT_TOKEN, session=bot_session)
-    dp = Dispatcher()
+    dp = Dispatcher(storage=create_fsm_storage())
     dp.update.outer_middleware(BotTracingMiddleware())
     dp.update.outer_middleware(GroupMentionCommandMiddleware())
     dp.update.middleware(UserLoggingMiddleware())

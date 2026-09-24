@@ -4,6 +4,7 @@
   "nav.schedule": "Расписание",
   "nav.studio": "Студия",
   "studio.preview.sanitizerUnavailable": "Средство защиты предпросмотра Markdown недоступно.",
+  "studio.preview.mermaidEmpty": "Mermaid вернул пустую диаграмму.",
   "nav.admin": "Админ",
   "nav.signIn": "Войти",
   "nav.profile": "Профиль",

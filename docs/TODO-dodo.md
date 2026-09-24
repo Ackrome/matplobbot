@@ -1,7 +1,7 @@
 # Matplobbot: проверенный технический backlog (`TODO-dodo`)
 
 Дата повторной проверки: 2026-09-24
-Проверенная ревизия: `361e8a5` (`main`)
+Проверенная базовая ревизия: `e769006` (`main`)
 Статус: актуализирован по текущему коду
 
 ## 1. Как читать этот документ
@@ -22,19 +22,19 @@
 
 | Категория | P0 | P1 | P2 | P3 | Всего |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Bugs & Runtime Failures | 0 | 0 | 3 | 0 | 3 |
-| Security & Data Isolation | 0 | 0 | 2 | 0 | 2 |
-| Product & Business Logic | 0 | 0 | 1 | 0 | 1 |
-| UI/UX & Frontend | 0 | 0 | 1 | 5 | 6 |
-| Technical Debt & Architecture | 0 | 0 | 2 | 2 | 4 |
+| Bugs & Runtime Failures | 0 | 0 | 0 | 0 | 0 |
+| Security & Data Isolation | 0 | 0 | 0 | 0 | 0 |
+| Product & Business Logic | 0 | 0 | 0 | 0 | 0 |
+| UI/UX & Frontend | 0 | 0 | 0 | 5 | 5 |
+| Technical Debt & Architecture | 0 | 0 | 0 | 2 | 2 |
 | Database & Performance | 0 | 0 | 0 | 1 | 1 |
-| DevOps & Infrastructure | 0 | 0 | 1 | 2 | 3 |
-| **Итого активных** | **0** | **0** | **10** | **10** | **20** |
+| DevOps & Infrastructure | 0 | 0 | 0 | 2 | 2 |
+| **Итого активных** | **0** | **0** | **0** | **10** | **10** |
 
 В первоначальном варианте было описано 33, а не 39 уникальных задач. Шесть пунктов исключены
-из активного backlog после проверки, два пункта Sprint 1 и шесть пунктов Sprint 2 выполнены, а
-оставшийся CSP-hardening выделен из SEC-02 в отдельный SEC-04. Причины и результаты приведены в
-разделе 7.
+из активного backlog после проверки, два пункта Sprint 1, шесть пунктов Sprint 2 и десять пунктов
+Sprint 3 выполнены. CSP-hardening был выделен из SEC-02 в отдельный SEC-04 и также закрыт в
+Sprint 3. Причины и результаты приведены в разделе 7.
 
 ## 3. P0 — активных задач нет
 
@@ -122,7 +122,10 @@ SEC-01 закрыт в Sprint 1 и перенесён в журнал выпол
 - **Критерии приёмки:** shell-тест или тест шаблона проверяет удалённый путь; post-deploy
   проверка подтверждает наличие заданных ключей без вывода их значений.
 
-## 5. P2 — подтверждённые функциональные дефекты
+## 5. P2 — активных задач нет (Sprint 3 выполнен)
+
+Ниже сохранены исходные формулировки и критерии приёмки закрытых задач Sprint 3. Реализация,
+регрессионные тесты и browser QA завершены 2026-09-24; сводка результата добавлена в раздел 7.
 
 ### BUG-03: ожидаемый HTTP 404 профиля превращается в 500
 
@@ -351,13 +354,17 @@ SEC-01 закрыт в Sprint 1 и перенесён в журнал выпол
 | SEC-01 | Выполнен в Sprint 1 | Добавлена зависимость `require_ws_admin`: `/ws/stats/total_actions` проверяет роль до `accept()` и отклоняет обычного пользователя кодом `1008`. Интеграционные тесты проверяют отказ без payload и успешное подключение администратора. |
 | SEC-02 | Выполнен в Sprint 1; CSP выделен в SEC-04 | Markdown проходит через закреплённый DOMPurify с allow-list до вставки в DOM, ошибки выводятся через `textContent`, Mermaid работает в strict mode. Статические и браузерные XSS-проверки покрывают script, event-handler, `javascript:` и SVG payload; разрешённый Markdown сохраняется. |
 | BUG-01/02/04/05/07/08 | Выполнены в Sprint 2 | ZIP-экспорт использует RFC 6266 `filename`/`filename*`; frontend Nginx и runtime-конфигурация поддерживают WebSocket с проверкой `101`; уведомления об изменениях проходят через атомарный PostgreSQL outbox и ограниченные Telegram retry; ежедневная рассылка использует помеченный временем DB-cache fallback; все записи времени кэша стали UTC-aware; Jenkins атомарно формирует полный удалённый `.env` и проверяет имена ключей без вывода секретов. Добавлена миграция `f5b6c7d8e9f0` и регрессионные тесты. |
+| BUG-03/06/09 | Выполнены в Sprint 3 | Отсутствующий stats-профиль возвращает 404, а DB-сбой — 500; ссылки на сообщения предложения атомарно накапливаются в Redis set, решение защищено коротким lock и обновляет сообщения всех администраторов; HTML Studio разбирается стандартным parser и сводится к безопасному Telegram allow-list с обработкой списков, таблиц, ссылок и неизвестных тегов. |
+| SEC-03/04 | Выполнены в Sprint 3 | Shared Redis и Celery используют один `REDIS_URL` с поддержкой password/TLS/DB и host/port fallback. Studio удалил inline script/style/event attributes, закрепил CDN-версии с SRI, получил отдельный enforcing CSP в Nginx и успешно прошёл browser QA для Monaco, KaTeX, Mermaid и Telegram WebApp; искусственные inline script/handler не исполняются. |
+| PROD-01/ARCH-01/ARCH-03 | Выполнены в Sprint 3 | Aiogram FSM хранится в namespaced RedisStorage с TTL и корректным закрытием; WeasyPrint PDF вынесен через `asyncio.to_thread` без потери rate limit; worker resources разрешаются из checkout или `/app/bot`, могут переопределяться через `APP_BOT_DIR`/`APP_TEMPLATES_DIR` и валидируются при старте процесса. |
+| UX-06/OPS-02 | Выполнены в Sprint 3 | Одиночный iCalendar event экспортирует московское время как UTC `DTSTART/DTEND ...Z`; worker получил одинаковый bounded `celery inspect ping` healthcheck в обоих Compose, а scheduler health публикует глубину очереди и возвращает 503 при пороге `CELERY_QUEUE_ALERT_THRESHOLD` для внешнего мониторинга. |
 | PROD-02 | Исключён как текущий дефект | Установленная версия APScheduler уже использует `coalesce=True` и `max_instances=1` по умолчанию. Распределённый lock понадобится при запуске нескольких scheduler replicas — такого topology сейчас нет. |
 | UX-01 | Исключён | Защищённый `GET /` относится к API-приложению и намеренно ведёт в admin stats. Публичный корень сайта обслуживается отдельным Nginx. Это не ошибка входа нового посетителя на сайт. |
 | PERF-01 | Выполнен / исходное утверждение неверно | У `UserAction` есть индексы по `user_id`, `action_type`, `timestamp` и составной `(user_id, timestamp)`; существует Alembic migration `f2c63d4e5f60`. Новый `(timestamp, action_type)` можно добавлять только после `EXPLAIN ANALYZE`, а не по предположению о Seq Scan. |
 | PROD-03 | Выполнен | API уже возвращает `freshness`, `source_checked_at`, `cache_age_seconds`, `is_offline`; frontend показывает отдельные состояния live/fresh/refreshing/stale fallback. |
 | PERF-02 | Исключён | `check_for_schedule_updates()` получает подписки одним запросом и не вызывает `get_user_settings()` для каждого подписчика. Описанный N+1 в указанном пути не воспроизводится. |
 | ARCH-05 | Исключён | `bot/services/text_utils.py` занимается разбиением Markdown и не содержит заявленной логики форматирования расписания. API уже нормализует `discipline_short`, `discipline_full` и `module`; отличие серверного и UI-представления само по себе не является дублированием business logic. |
-| Сводка «39 задач» | Исправлена | В документе фактически было 33 уникальных ID. После исключения шести, выполнения двух задач Sprint 1 и шести задач Sprint 2 осталось 19 исходных активных задач; отдельный CSP follow-up SEC-04 доводит текущий backlog до 20. |
+| Сводка «39 задач» | Исправлена | В документе фактически было 33 уникальных ID. После исключения шести, выполнения двух задач Sprint 1, шести задач Sprint 2 и девяти исходных задач Sprint 3 осталось 10 исходных P3-задач. Отдельный CSP follow-up SEC-04 также выполнен в Sprint 3. |
 
 ## 8. Рекомендуемый порядок выполнения
 
@@ -383,9 +390,13 @@ Sprint 2 выполнен 2026-09-24. Production smoke для WebSocket начн
 
 ### Этап 3 — локальные дефекты P2
 
-1. BUG-03, SEC-03, SEC-04 и PROD-01.
-2. ARCH-01, BUG-06 и BUG-09.
-3. UX-06, ARCH-03 и OPS-02.
+1. [x] BUG-03, SEC-03, SEC-04 и PROD-01.
+2. [x] ARCH-01, BUG-06 и BUG-09.
+3. [x] UX-06, ARCH-03 и OPS-02.
+
+Sprint 3 выполнен 2026-09-24. Все P2-пункты закрыты кодом и регрессионными тестами; Studio
+дополнительно проверен в реальном Chromium на desktop/mobile, включая CSP-блокировку inline
+script/event-handler payload. Production CSP и worker healthcheck вступят в силу после deploy.
 
 ### Этап 4 — только после метрик или UX-проверки
 

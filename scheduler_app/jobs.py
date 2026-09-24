@@ -881,16 +881,16 @@ async def send_admin_summary(
                                 payload_to_cache = {
                                     "data": data_to_hash,
                                     "user_name": offer["user_name"],
-                                    "messages": [
-                                        {
-                                            "chat_id": admin_id,
-                                            "message_id": msg_result["message_id"],
-                                        }
-                                    ],
                                 }
                                 await redis_client.set_cache(
                                     redis_key, payload_to_cache, ttl=604800
                                 )  # 7 days
+                                await redis_client.add_suggestion_message(
+                                    data_hash,
+                                    chat_id=admin_id,
+                                    message_id=msg_result["message_id"],
+                                    ttl=604800,
+                                )
                             else:
                                 send_failures += 1
 

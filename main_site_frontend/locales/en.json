@@ -4,6 +4,7 @@
   "nav.schedule": "Schedule",
   "nav.studio": "Studio",
   "studio.preview.sanitizerUnavailable": "Markdown preview sanitizer is unavailable.",
+  "studio.preview.mermaidEmpty": "Mermaid returned an empty diagram.",
   "nav.admin": "Admin",
   "nav.signIn": "Sign In",
   "nav.profile": "Profile",

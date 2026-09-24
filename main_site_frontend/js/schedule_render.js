@@ -149,11 +149,21 @@
         `;
     }
 
-    function formatIcsDate(dateValue, timeValue) {
+    function formatMoscowIcsUtc(dateValue, timeValue) {
         const date = String(dateValue || "").replace(/\./g, "-");
         const [year, month, day] = date.split("-");
         const [hour = "00", minute = "00"] = String(timeValue || "00:00").split(":");
-        return `${year}${month}${day}T${hour.padStart(2, "0")}${minute.padStart(2, "0")}00`;
+        const utcDate = new Date(Date.UTC(
+            Number(year),
+            Number(month) - 1,
+            Number(day),
+            Number(hour) - 3,
+            Number(minute),
+        ));
+        if (Number.isNaN(utcDate.getTime())) {
+            throw new Error("Invalid lesson date or time for iCalendar export");
+        }
+        return utcDate.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
     }
 
     function escapeIcs(value) {
@@ -181,8 +191,8 @@
             "BEGIN:VEVENT",
             `UID:${uid}`,
             `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")}`,
-            `DTSTART;TZID=Europe/Moscow:${formatIcsDate(lesson.date, lesson.beginLesson)}`,
-            `DTEND;TZID=Europe/Moscow:${formatIcsDate(lesson.date, lesson.endLesson || lesson.beginLesson)}`,
+            `DTSTART:${formatMoscowIcsUtc(lesson.date, lesson.beginLesson)}`,
+            `DTEND:${formatMoscowIcsUtc(lesson.date, lesson.endLesson || lesson.beginLesson)}`,
             `SUMMARY:${escapeIcs(title)}`,
             `LOCATION:${escapeIcs(lesson.auditorium || "")}`,
             `DESCRIPTION:${escapeIcs(description)}`,
@@ -202,6 +212,7 @@
 
     window.ScheduleRender = {
         downloadSingleLessonIcs,
+        formatMoscowIcsUtc,
         renderLessonActions,
     };
 })();

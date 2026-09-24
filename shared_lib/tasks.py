@@ -9,7 +9,10 @@ import shutil
 import subprocess
 import tempfile
 import zipfile
+from collections.abc import Mapping
+from pathlib import Path
 
+from celery.signals import worker_process_init
 from markdown_it import MarkdownIt
 
 # texmath_plugin REMOVED to manually handle display math robustly
@@ -22,19 +25,55 @@ from .constants import LATEX_POSTAMBLE, LATEX_PREAMBLE
 
 logger = logging.getLogger(__name__)
 
-# Пути к конфигам
-BASE_DIR = "/app/bot"
-MERMAID_FILTER_PATH = os.path.join(BASE_DIR, "pandoc_mermaid_filter.py")
-MATH_FILTER_PATH = os.path.join(BASE_DIR, "pandoc_math_filter.lua")
-PUPPETEER_CONFIG_PATH = os.path.join(BASE_DIR, "puppeteer-config.json")
-PANDOC_HEADER_PATH = os.path.join(BASE_DIR, "templates", "pandoc_header.tex")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-CSS_TEMPLATE_PATH = os.path.join(BASE_DIR, "templates", "report.css")
-JS_TEMPLATE_PATH = os.path.join(BASE_DIR, "templates", "report.js")
+
+def resolve_worker_resource_paths(
+    environ: Mapping[str, str] | None = None,
+    *,
+    project_root: Path = PROJECT_ROOT,
+) -> dict[str, Path]:
+    """Resolve worker assets in a checkout, image, or explicit deployment layout."""
+    env = environ if environ is not None else os.environ
+    checkout_bot_dir = project_root / "bot"
+    default_bot_dir = checkout_bot_dir if checkout_bot_dir.is_dir() else Path("/app/bot")
+    bot_dir = Path(env.get("APP_BOT_DIR", str(default_bot_dir))).expanduser().resolve()
+    templates_dir = Path(
+        env.get("APP_TEMPLATES_DIR", str(bot_dir / "templates"))
+    ).expanduser().resolve()
+    return {
+        "mermaid_filter": bot_dir / "pandoc_mermaid_filter.py",
+        "math_filter": bot_dir / "pandoc_math_filter.lua",
+        "puppeteer_config": bot_dir / "puppeteer-config.json",
+        "pandoc_header": templates_dir / "pandoc_header.tex",
+        "css_template": templates_dir / "report.css",
+        "js_template": templates_dir / "report.js",
+    }
+
+
+WORKER_RESOURCE_PATHS = resolve_worker_resource_paths()
+MERMAID_FILTER_PATH = WORKER_RESOURCE_PATHS["mermaid_filter"]
+MATH_FILTER_PATH = WORKER_RESOURCE_PATHS["math_filter"]
+PUPPETEER_CONFIG_PATH = WORKER_RESOURCE_PATHS["puppeteer_config"]
+PANDOC_HEADER_PATH = WORKER_RESOURCE_PATHS["pandoc_header"]
+CSS_TEMPLATE_PATH = WORKER_RESOURCE_PATHS["css_template"]
+JS_TEMPLATE_PATH = WORKER_RESOURCE_PATHS["js_template"]
+
+
+def validate_worker_resources() -> None:
+    """Fail worker startup early when an image or mount omitted required assets."""
+    missing = [str(path) for path in WORKER_RESOURCE_PATHS.values() if not path.is_file()]
+    if missing:
+        raise RuntimeError(f"Missing required worker resources: {', '.join(missing)}")
+
+
+@worker_process_init.connect
+def _validate_worker_resources_on_start(**_kwargs) -> None:
+    validate_worker_resources()
 
 # Читаем хедер для Pandoc
 PANDOC_HEADER_INCLUDES = ""
-if os.path.exists(PANDOC_HEADER_PATH):
+if PANDOC_HEADER_PATH.exists():
     with open(PANDOC_HEADER_PATH, encoding="utf-8") as f:
         PANDOC_HEADER_INCLUDES = f.read()
 

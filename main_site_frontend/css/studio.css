@@ -1,0 +1,41 @@
+body {
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    overflow: hidden;
+}
+
+.split { display: flex; flex-direction: row; height: calc(100vh - 64px); }
+.gutter { background-color: #f1f5f9; cursor: col-resize; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; }
+html.dark .gutter { background-color: #0f172a; border-left-color: #334155; border-right-color: #334155; }
+.file-item.active { background-color: #e0e7ff; border-left: 3px solid #4f46e5; font-weight: 600; }
+html.dark .file-item.active { background-color: #1e3a8a; color: #dbeafe; }
+.nav-hidden { transform: translateY(-100%); opacity: 0; }
+.nav-visible { transform: translateY(0); opacity: 1; }
+
+#live-preview-content { font-family: inherit; line-height: 1.6; padding: 2rem; max-width: 800px; margin: 0 auto; background: white; min-height: 100%; box-shadow: 0 0 15px rgba(0, 0, 0, 0.05); }
+html.dark #live-preview-content { background: #0f172a; color: #e2e8f0; box-shadow: 0 0 15px rgba(0, 0, 0, 0.35); }
+#live-preview-content h1, #live-preview-content h2 { border-bottom: 1px solid #eee; padding-bottom: 0.3em; margin-top: 1em; }
+html.dark #live-preview-content h1, html.dark #live-preview-content h2 { border-bottom-color: #334155; }
+#live-preview-content pre { background: #f8fafc; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; }
+html.dark #live-preview-content pre { background: #020617; }
+
+html.tg-webapp,
+html.tg-webapp body {
+    height: 100dvh;
+    background: var(--tg-theme-bg-color, #0f172a) !important;
+    color: var(--tg-theme-text-color, #e2e8f0) !important;
+    overscroll-behavior: none;
+}
+
+html.tg-webapp #navbar {
+    height: 56px;
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+    background: var(--tg-theme-secondary-bg-color, #0f172a);
+}
+
+html.tg-webapp #navbar > div:first-child > a,
+html.tg-webapp #desktop-nav-links,
+html.tg-webapp #mobile-menu-button { display: none; }
+
+html.tg-webapp .split { height: calc(100dvh - 56px - env(safe-area-inset-bottom)); }
+html.tg-webapp #compile-btn { padding-left: 0.85rem; padding-right: 0.85rem; }

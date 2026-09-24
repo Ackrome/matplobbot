@@ -9,16 +9,52 @@ logger = logging.getLogger(__name__)
 # TTL для кэша в секундах (например, 1 час)
 CACHE_TTL = 3600
 CALLBACK_PATH_KEY_PREFIX = "callback_path:"
+SUGGESTION_MESSAGE_KEY_PREFIX = "suggestion_messages:"
+SUGGESTION_DECISION_LOCK_PREFIX = "suggestion_decision_lock:"
+DEFAULT_REDIS_HOST = "redis"
+DEFAULT_REDIS_PORT = 6379
+DEFAULT_REDIS_DB = 0
+
+
+def get_redis_url() -> str:
+    """Return the shared Redis URL, preserving host/port compatibility."""
+    configured_url = os.getenv("REDIS_URL", "").strip()
+    if configured_url:
+        return configured_url
+
+    host = os.getenv("REDIS_HOST", DEFAULT_REDIS_HOST).strip() or DEFAULT_REDIS_HOST
+    port = int(os.getenv("REDIS_PORT", str(DEFAULT_REDIS_PORT)))
+    database = int(os.getenv("REDIS_DB", str(DEFAULT_REDIS_DB)))
+    return f"redis://{host}:{port}/{database}"
 
 
 def _is_callback_path_hash(value: str) -> bool:
     return len(value) == 16 and all(char in "0123456789abcdef" for char in value)
 
 
+def _is_suggestion_hash(value: str) -> bool:
+    return len(value) == 24 and all(char in "0123456789abcdef" for char in value)
+
+
 class RedisClient:
-    def __init__(self, host="localhost", port=6379):
+    def __init__(
+        self,
+        host: str = "localhost",
+        port: int = DEFAULT_REDIS_PORT,
+        *,
+        url: str | None = None,
+        database: int = DEFAULT_REDIS_DB,
+    ):
         # Используем connection_pool для более эффективного управления соединениями
-        self.pool = redis.ConnectionPool(host=host, port=port, db=0, decode_responses=True)
+        if url:
+            self.pool = redis.ConnectionPool.from_url(url, decode_responses=True)
+        else:
+            self.pool = redis.ConnectionPool(
+                host=host,
+                port=port,
+                db=database,
+                decode_responses=True,
+            )
         self.client = redis.Redis(connection_pool=self.pool)
 
     async def set_user_cache(self, user_id: int, key: str, data: dict, ttl: int = CACHE_TTL):
@@ -105,9 +141,74 @@ class RedisClient:
         except Exception as e:
             logger.error("Ошибка при очистке callback path mappings в Redis: %s", e)
 
+    async def add_suggestion_message(
+        self,
+        data_hash: str,
+        *,
+        chat_id: int,
+        message_id: int,
+        ttl: int,
+    ) -> None:
+        """Atomically add one admin message reference to a suggestion set."""
+        if not _is_suggestion_hash(data_hash):
+            raise ValueError("invalid suggestion hash")
+        if ttl <= 0:
+            raise ValueError("suggestion message TTL must be positive")
+
+        redis_key = f"{SUGGESTION_MESSAGE_KEY_PREFIX}{data_hash}"
+        member = json.dumps(
+            {"chat_id": int(chat_id), "message_id": int(message_id)},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        async with self.client.pipeline(transaction=True) as pipeline:
+            pipeline.sadd(redis_key, member)
+            pipeline.expire(redis_key, ttl)
+            await pipeline.execute()
+
+    async def get_suggestion_messages(self, data_hash: str) -> list[dict[str, int]]:
+        """Load all unique admin message references for a suggestion."""
+        if not _is_suggestion_hash(data_hash):
+            return []
+        redis_key = f"{SUGGESTION_MESSAGE_KEY_PREFIX}{data_hash}"
+        members = await self.client.smembers(redis_key)
+        messages: list[dict[str, int]] = []
+        for member in members:
+            try:
+                parsed = json.loads(member)
+                messages.append(
+                    {
+                        "chat_id": int(parsed["chat_id"]),
+                        "message_id": int(parsed["message_id"]),
+                    }
+                )
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                logger.warning("Ignoring malformed suggestion message reference")
+        return sorted(messages, key=lambda item: (item["chat_id"], item["message_id"]))
+
+    async def acquire_suggestion_decision_lock(self, data_hash: str, ttl: int = 30) -> bool:
+        """Allow only one administrator to decide a suggestion at a time."""
+        if not _is_suggestion_hash(data_hash):
+            return False
+        return bool(
+            await self.client.set(
+                f"{SUGGESTION_DECISION_LOCK_PREFIX}{data_hash}",
+                "1",
+                ex=ttl,
+                nx=True,
+            )
+        )
+
+    async def clear_suggestion_state(self, data_hash: str) -> None:
+        """Delete decision metadata, message references, and the short-lived lock."""
+        if not _is_suggestion_hash(data_hash):
+            return
+        await self.client.delete(
+            f"cache:suggestion_cache:{data_hash}",
+            f"{SUGGESTION_MESSAGE_KEY_PREFIX}{data_hash}",
+            f"{SUGGESTION_DECISION_LOCK_PREFIX}{data_hash}",
+        )
+
 
 # Создаем единственный экземпляр клиента
-redis_client = RedisClient(
-    host=os.getenv("REDIS_HOST", "redis"),
-    port=int(os.getenv("REDIS_PORT", "6379")),
-)
+redis_client = RedisClient(url=get_redis_url())

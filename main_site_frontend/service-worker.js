@@ -1,4 +1,4 @@
-const CACHE_VERSION = "mpb-site-v33";
+const CACHE_VERSION = "mpb-site-v34";
 const CORE_CACHE = `${CACHE_VERSION}-core`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const OFFLINE_URL = "/offline.html";
@@ -19,6 +19,7 @@ const CORE_ASSETS = [
     OFFLINE_URL,
     "/site.webmanifest",
     "/css/tailwind.css?v=20260924-1",
+    "/css/studio.css?v=1",
     "/js/runtime_config.js?v=20260821-6",
     "/js/ui_utils.js?v=2",
     "/js/frontend_i18n.js?v=1",
@@ -28,13 +29,13 @@ const CORE_ASSETS = [
     "/js/schedule_state.js?v=20260821-6",
     "/js/schedule_api.js?v=20260924-1",
     "/js/schedule_filters.js?v=20260821-6",
-    "/js/schedule_render.js?v=20260821-6",
+    "/js/schedule_render.js?v=20260924-2",
     "/js/schedule.js?v=20260924-1",
     "/js/calendar_sync.js?v=20260821-6",
     "/js/schedule_ux.js?v=20260831-10",
     "/js/stats.js?v=22",
     "/js/stats_ux.js?v=2",
-    "/js/studio.js?v=11",
+    "/js/studio.js?v=12",
     "/js/auth.js?v=6",
     "/locales/en.json",
     "/locales/ru.json",

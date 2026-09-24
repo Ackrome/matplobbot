@@ -33,6 +33,10 @@ SCHEDULE_OUTBOX_MAX_ATTEMPTS = max(
 SCHEDULE_OUTBOX_BASE_DELAY_SECONDS = _read_non_negative_float(
     "SCHEDULE_OUTBOX_BASE_DELAY_SECONDS", 60.0
 )
+CELERY_QUEUE_ALERT_THRESHOLD = max(
+    1,
+    _read_non_negative_int("CELERY_QUEUE_ALERT_THRESHOLD", 100),
+)
 
 # --- PostgreSQL Database Configuration ---
 # The DATABASE_URL is now the single source of truth, read from the environment.
