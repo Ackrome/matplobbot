@@ -35,9 +35,7 @@ class TestProxyConfig(unittest.TestCase):
             providers["something-telegram"]["health-check"]["url"],
             "https://api.telegram.org",
         )
-        self.assertEqual(
-            providers["something-telegram"]["health-check"]["interval"], 300
-        )
+        self.assertEqual(providers["something-telegram"]["health-check"]["interval"], 300)
         self.assertEqual(
             providers["something-openai"]["health-check"]["url"],
             "https://api.openai.com/v1/models",
