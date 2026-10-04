@@ -1318,10 +1318,14 @@ What it does:
 - The Mihomo proxy now routes by exact target domain instead of catch-all proxying: Telegram domains use `TELEGRAM-AUTO`, OpenAI/ChatGPT domains use `OPENAI-AUTO`, and everything else stays direct.
 - The Telegram provider/group health checks probe Telegram directly (`https://api.telegram.org`), and the `TELEGRAM-AUTO` `url-test` group picks the lowest-latency Telegram-capable node instead of just the first alive node.
 - The OpenAI provider/group health checks probe `https://api.openai.com/v1/models`, accept `401`/`403` style responses, and the `OPENAI-AUTO` `url-test` group independently picks the lowest-latency OpenAI-capable node.
-- The bundled production proxy image pins a current Mihomo core version so modern subscription node formats and Telegram-facing HTTP proxy behavior stay compatible.
-- The subscription cleaner preserves more VLESS Reality fields when converting provider JSON to Mihomo YAML, including `servername`, `alpn`, `skip-cert-verify`, `packet-encoding`, `encryption`, and ML-KEM support flags.
+- The bundled production proxy image pins Mihomo `v1.19.32` and verifies the official amd64/arm64 archive SHA-256 before installation, so a changed or corrupted release artifact fails the image build.
+- The subscription cleaner preserves every supported outbound from Happ/Xray JSON instead of only the last VLESS outbound. VLESS (including WebSocket, gRPC, XHTTP, TLS, and Reality), Hysteria2, Shadowsocks, and SOCKS chains are converted to uniquely named Mihomo nodes.
+- Plain and base64-encoded URI bundles are also supported for VLESS, VMess, Trojan, Shadowsocks, Hysteria/Hysteria2, TUIC, AnyTLS, and Mieru. Unknown schemes are skipped and counted in `/diagnostics`; Mihomo does not document a Naive outbound, so `naive://` entries are intentionally reported as unsupported instead of being translated incorrectly.
+- XHTTP conversion preserves the documented transport fields and XMUX reuse settings. TLS certificate verification remains enabled unless the source explicitly sets `allowInsecure`/`insecure`.
 - The proxy bootstrap can also use `OUTLINE_ACCESS_KEY` directly, including plain `ss://...` access keys and `ssconf://...` dynamic Outline links that resolve to an access payload.
-- The proxy cleaner now merges nodes from both `SUB_URL` and `OUTLINE_ACCESS_KEY` into one served provider document, so Mihomo can choose across the union of Happ subscription nodes and the Outline access key instead of forcing an either/or choice.
+- The proxy cleaner merges legacy `SUB_URL`, all URLs from an owner-readable JSON file outside Git, and `OUTLINE_ACCESS_KEY` into one served provider document. Exact duplicate URLs and duplicate downloaded payloads are ignored, and diagnostics identify sources only as `source-N` so bearer URLs never enter application logs.
+- Subscription sources are downloaded in parallel. The cleaner serves the last valid mode-`0600` provider cache immediately, refreshes it atomically in the background, and asks Mihomo to reload both providers after a successful refresh; a slow or unavailable legacy source therefore no longer blocks both provider startup requests.
+- Imported legacy Clash YAML is normalized from JSON UTF-16 surrogate escapes to real UTF-8 and maps legacy `obfs-local` option names to Mihomo fields. URI conversion also preserves boolean plugin options such as `v2ray-plugin;mux=0` as booleans rather than invalid strings.
 - The Outline cleaner emits JSON-escaped YAML scalars for dynamic access keys, so provider values such as Shadowsocks `prefix` strings with CRLF control characters stay valid for Mihomo parsing.
 - The proxy keeps localhost and RFC1918 addresses direct so its own subscription refresh path does not recurse back through remote proxy nodes.
 - The proxy cleaner now exposes internal diagnostics endpoints on port `8080`: `/health`, `/diagnostics`, `/summary`, and `/recheck?group=telegram|openai|all`.
@@ -1331,7 +1335,7 @@ What it does:
 - `/recheck` triggers Mihomo provider health checks and group delay tests immediately, which the bot now uses before retrying a failed Telegram request.
 - Keeps `ruz.fa.ru` out of process-level proxy env via `NO_PROXY`, and creates RUZ aiohttp sessions with `trust_env=False` so schedule fetches stay direct.
 - The bot session retries a small number of transport-level Telegram request failures before surfacing an error, which helps when a proxy node briefly resets or times out before the request reaches Telegram.
-- The proxy groups probe more aggressively (`interval: 15`, `max-failed-times: 1`, `lazy: false`) so Mihomo re-checks bad nodes quickly after a transport failure instead of waiting through several broken requests.
+- Route groups probe their real destinations every 60 seconds (`max-failed-times: 1`, `lazy: false`), while provider-level checks run every 300 seconds. This avoids continuously flooding Telegram/OpenAI when the merged pool contains hundreds of nodes; the bot can still request an immediate targeted recheck after a transport failure.
 - Treats Telegram/proxy transport failures during startup as retryable instead of fatal.
 - Recreates the aiogram bot session for each retry so shutdown cleanup from a failed polling attempt does not poison the next one.
 
@@ -1346,7 +1350,7 @@ How to use:
 7. If the proxy container has many nodes, keep its health-check target aligned with the real destination (`api.telegram.org`) so Mihomo does not prefer nodes that only pass generic web probes.
 8. Rebuild the `proxy` container when `proxy/Dockerfile.proxy` or `proxy/proxy_config.yaml` changes, because the production stack builds that service locally instead of pulling it from GHCR.
 9. If your provider ships Xray-style JSON configs, keep the converter in `proxy/proxy_cleaner.py` aligned with the subscription format so Reality and chained dialer settings survive the translation into Mihomo YAML.
-10. If your provider gives an Outline link, set `OUTLINE_ACCESS_KEY` alongside `SUB_URL` in `.env` and rebuild the `proxy` service; the cleaner now merges both sources into one provider output instead of choosing one and ignoring the other.
+10. For multiple Happ/provider subscriptions, create `/home/deploy/.config/matplobbot/proxy-subscriptions.json` as `{"urls":["https://provider.example/private-subscription"]}`, owned by the production deploy account with mode `0600` inside a mode-`0700` directory. Keep this bearer-secret file outside Git. Override its host path with `PROXY_SUBSCRIPTIONS_FILE` only when needed; Compose mounts it read-only at `/run/secrets/proxy-subscriptions.json`. Legacy `SUB_URL` and `OUTLINE_ACCESS_KEY` may remain in `.env` and are merged with this file.
 11. Keep the Mihomo rules domain-specific: `api.telegram.org` and related Telegram domains through `TELEGRAM-AUTO`, `chatgpt.com`/`openai.com` domains through `OPENAI-AUTO`, and `MATCH,DIRECT` as the default so unrelated traffic does not consume fragile VPN nodes.
 12. If the proxy path is flaky, tune `TELEGRAM_REQUEST_RETRY_ATTEMPTS` and `TELEGRAM_REQUEST_RETRY_DELAY_SECONDS` to retry only transport-level Telegram request failures before a response starts; this reduces failures from brief proxy resets without broadly retrying completed Bot API sends.
 13. If you want Mihomo to choose the fastest available provider node for Telegram or OpenAI, keep `TELEGRAM-AUTO` and `OPENAI-AUTO` as `url-test` groups pointed at the real target domains instead of `fallback` groups.
@@ -1356,6 +1360,7 @@ How to use:
 17. Use `http://proxy:8080/summary` for a compact operational view of which Telegram/OpenAI nodes are currently selected and which candidates are next in line by delay.
 18. Use `http://proxy:8080/recheck?group=telegram` to force an immediate Telegram-side health recheck when troubleshooting provider failover.
 19. The repo includes `scripts/proxy_summary.py`, which fetches `/summary` and prints the merged entry counts plus the top Telegram/OpenAI candidates in a human-readable CLI format.
+20. After editing the external JSON file, recreate the proxy (`docker compose -f docker-compose.prod.yml up -d --build --no-deps proxy`) and confirm `/diagnostics` reports the expected source, duplicate-payload, unsupported-protocol, and merged-node counts without exposing subscription URLs.
 
 ### Stats Proxy Diagnostics Panel
 
@@ -1582,6 +1587,15 @@ Jenkins + deploy features:
 - The Jenkins quality gate creates `.jenkins-venv`, installs project and validation dependencies, checks critical FastAPI/test imports (including `yaml`), runs `ruff check . --select E9,F63,F7,F82`, and runs `python -m unittest discover -s tests -v`.
 - The gate fails if unittest output shows dependency-driven skips/import errors such as missing FastAPI modules.
 - `Jenkinsfile.groovy` performs production deploy and smoke checks.
+- Production CI traffic stays on the Proxmox LAN: the self-hosted GitHub runner calls
+  `http://192.168.1.130:8080` by default, and Jenkins reaches `app-vm` through the
+  `DEPLOY_HOST` build parameter, whose default is `192.168.1.40`. Before either connection,
+  `scripts/resolve_private_ipv4.sh` requires exactly one RFC1918 address; `*.ts.net`, Tailscale's
+  `100.64/10`, public, loopback, unresolved, and ambiguous results are rejected. GitHub's cURL
+  call is pinned to the validated Jenkins IP with `--resolve` and bypasses process-wide HTTP
+  proxies with `--noproxy`; Jenkins SSH uses the validated app-vm IP. Repository variables
+  `JENKINS_LAN_URL` and `APP_VM_LAN_HOST` can override these defaults if the VMs receive new
+  stable private addresses.
 - Deploy host fingerprint pinning via `APP_VM_SHA256` (with optional one-off override).
 - Jenkins streams the complete production environment into `deploy.sh --write-env`; that mode
   creates a permission-`0600` temporary file beside the target, validates every required key,
@@ -1598,9 +1612,20 @@ How to use:
 1. Push to `main` to run CI and image publishing.
 2. Start the Jenkins deploy job; it must pass the pre-deploy quality gate before deployment starts.
 3. Jenkins deploy job pre-pulls the tagged GHCR app images and runs smoke checks; routine deploys reuse already-cached `redis`, `postgres`, `nginx`, and `caddy` images instead of re-pulling them every time.
-4. If you changed a pinned infra image tag or are deploying onto a fresh host with no cached infra images, pre-pull them once before the rollout, for example:
+4. Confirm that `github-runner-vm`, `jenkins-vm`, and `app-vm` share a reachable Proxmox LAN.
+   If the VM addresses change from the tracked defaults, set GitHub repository variables
+   `JENKINS_LAN_URL=http://<jenkins-private-ip>:8080` and
+   `APP_VM_LAN_HOST=<app-private-ip>`. The old `JENKINS_URL` secret is no longer used.
+5. Pin the LAN-facing OpenSSH ED25519 fingerprint in the Jenkins `APP_VM_SHA256` credential.
+   From `jenkins-vm`, obtain it with
+   `ssh-keyscan -T 5 -t ed25519 192.168.1.40 2>/dev/null | ssh-keygen -lf - -E sha256`.
+   Do not reuse a Tailscale SSH fingerprint unless it is verified to be identical, and make sure
+   the public half of Jenkins credential `app-vm-ssh-key` is authorized for the deploy user in
+   app-vm's regular OpenSSH server. The build parameter `DEPLOY_HOST_FINGERPRINT` remains
+   available for a deliberate one-off rotation.
+6. If you changed a pinned infra image tag or are deploying onto a fresh host with no cached infra images, pre-pull them once before the rollout, for example:
    `docker compose -f docker-compose.prod.yml pull redis postgres main-site-frontend caddy`
-5. Keep `WIKI_PUSH_TOKEN` configured for automatic wiki mirror updates.
+7. Keep `WIKI_PUSH_TOKEN` configured for automatic wiki mirror updates.
 
 ## Practical Notes
 

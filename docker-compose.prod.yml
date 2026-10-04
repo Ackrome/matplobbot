@@ -203,10 +203,18 @@ services:
         max-size: "10m"
         max-file: "3"
     env_file: ./.env
+    environment:
+      - SUB_URLS_FILE=/run/secrets/proxy-subscriptions.json
     ports:
       - "127.0.0.1:20170:20170"
     volumes:
       - proxy_cache:/app/cache
+      - type: bind
+        source: ${PROXY_SUBSCRIPTIONS_FILE:-/home/deploy/.config/matplobbot/proxy-subscriptions.json}
+        target: /run/secrets/proxy-subscriptions.json
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD", "nc", "-z", "127.0.0.1", "20170"]
       interval: 30s

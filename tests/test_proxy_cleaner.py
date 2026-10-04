@@ -1,14 +1,25 @@
 import json
+import os
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+import yaml
 
 from proxy.proxy_cleaner import (
     _build_group_summary,
     build_outline_mihomo_yaml,
     build_summary_payload,
+    load_or_build_provider_yaml,
+    load_subscription_urls,
     merge_proxy_yaml_documents,
     parse_outline_ss_uri,
     process_outline_dynamic_payload,
     process_something_json,
+    process_subscription_payload,
+    process_uri_subscription,
+    write_cached_provider_yaml,
 )
 
 
@@ -179,8 +190,238 @@ class TestProxyCleaner(unittest.TestCase):
         self.assertIn('client-fingerprint: "chrome"', rendered)
         self.assertIn('public-key: "pubkey-123"', rendered)
         self.assertIn('short-id: "abcd1234"', rendered)
-        self.assertIn('dialer-proxy: "provider-chain"', rendered)
+        self.assertIn('dialer-proxy: "json-0-0-provider-chain"', rendered)
         self.assertIn("alpn:", rendered)
+
+    def test_process_something_json_preserves_all_supported_outbounds(self):
+        raw = json.dumps(
+            [
+                {
+                    "remarks": "Combined profile",
+                    "outbounds": [
+                        {
+                            "protocol": "vless",
+                            "settings": {
+                                "vnext": [
+                                    {
+                                        "address": "first.example.com",
+                                        "port": 443,
+                                        "users": [{"id": "uuid-first"}],
+                                    }
+                                ]
+                            },
+                            "streamSettings": {
+                                "network": "xhttp",
+                                "security": "tls",
+                                "xhttpSettings": {
+                                    "path": "/xhttp",
+                                    "host": "cdn.example.com",
+                                    "mode": "packet-up",
+                                    "extra": {
+                                        "xPaddingObfsMode": True,
+                                        "sessionPlacement": "path",
+                                        "xmux": {"maxConnections": "1-2"},
+                                    },
+                                },
+                                "tlsSettings": {"serverName": "cdn.example.com"},
+                            },
+                        },
+                        {
+                            "protocol": "vless",
+                            "settings": {
+                                "vnext": [
+                                    {
+                                        "address": "second.example.com",
+                                        "port": 8443,
+                                        "users": [{"id": "uuid-second"}],
+                                    }
+                                ]
+                            },
+                            "streamSettings": {"network": "tcp", "security": "reality"},
+                        },
+                        {
+                            "protocol": "hysteria",
+                            "settings": {"address": "hy2.example.com", "port": 443, "version": 2},
+                            "streamSettings": {
+                                "network": "hysteria",
+                                "security": "tls",
+                                "hysteriaSettings": {"auth": "hy2-password", "version": 2},
+                                "tlsSettings": {
+                                    "serverName": "hy2.example.com",
+                                    "alpn": ["h3"],
+                                },
+                            },
+                        },
+                        {
+                            "protocol": "shadowsocks",
+                            "settings": {
+                                "servers": [
+                                    {
+                                        "address": "ss.example.com",
+                                        "port": 8388,
+                                        "method": "chacha20-ietf-poly1305",
+                                        "password": "ss-password",
+                                        "uot": True,
+                                        "UoTVersion": 2,
+                                    }
+                                ]
+                            },
+                        },
+                    ],
+                }
+            ]
+        )
+
+        rendered = process_something_json(raw, name_prefix="source")
+
+        self.assertIsNotNone(rendered)
+        self.assertEqual(rendered.count("  - name:"), 4)
+        self.assertEqual(rendered.count("type: vless"), 2)
+        self.assertIn("type: hysteria2", rendered)
+        self.assertIn("type: ss", rendered)
+        self.assertIn("xhttp-opts:", rendered)
+        self.assertIn("x-padding-obfs-mode: true", rendered)
+        self.assertIn('session-placement: "path"', rendered)
+        self.assertIn('max-connections: "1-2"', rendered)
+        self.assertIn("udp-over-tcp: true", rendered)
+        self.assertIn("udp-over-tcp-version: 2", rendered)
+
+    def test_subscription_url_file_extends_legacy_url_without_duplicates(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "subscriptions.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "urls": [
+                            "https://one.example/sub",
+                            "https://two.example/sub",
+                            "https://one.example/sub",
+                            "file:///not-allowed",
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                patch.dict(os.environ, {"SUB_URL": "https://legacy.example/sub"}),
+                patch("proxy.proxy_cleaner.SUB_URLS_FILE", str(path)),
+            ):
+                urls = load_subscription_urls()
+
+        self.assertEqual(
+            urls,
+            [
+                "https://legacy.example/sub",
+                "https://one.example/sub",
+                "https://two.example/sub",
+            ],
+        )
+
+    def test_stale_provider_cache_is_served_before_background_refresh(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache_path = Path(temp_dir) / "provider.yaml"
+            with (
+                patch("proxy.proxy_cleaner.CACHE_FILE", str(cache_path)),
+                patch("proxy.proxy_cleaner.start_background_refresh") as start_refresh,
+                patch("proxy.proxy_cleaner.build_combined_provider_yaml") as build_provider,
+            ):
+                write_cached_provider_yaml('proxies:\n  - name: "cached"')
+                os.utime(cache_path, (0, 0))
+                rendered = load_or_build_provider_yaml()
+
+        self.assertIn('name: "cached"', rendered)
+        start_refresh.assert_called_once_with()
+        build_provider.assert_not_called()
+
+    def test_uri_subscription_supports_mixed_happ_protocols(self):
+        vmess_payload = json.dumps(
+            {
+                "v": "2",
+                "ps": "VMess",
+                "add": "vmess.example.com",
+                "port": "443",
+                "id": "00000000-0000-0000-0000-000000000001",
+                "aid": "0",
+                "scy": "auto",
+                "net": "ws",
+                "host": "cdn.example.com",
+                "path": "/ws",
+                "tls": "tls",
+                "sni": "cdn.example.com",
+            }
+        )
+        import base64
+
+        vmess = base64.urlsafe_b64encode(vmess_payload.encode()).decode().rstrip("=")
+        raw = "\n".join(
+            [
+                "vless://00000000-0000-0000-0000-000000000002@vless.example.com:443?security=reality&type=xhttp&mode=stream-up&path=%2Fx&sni=cover.example.com&pbk=public-key&sid=abcd&extra=%7B%22xmux%22%3A%7B%22maxConnections%22%3A1%2C%22cMaxReuseTimes%22%3A0%7D%7D#VLESS",
+                "trojan://secret@trojan.example.com:443?security=tls&type=grpc&serviceName=svc&sni=trojan.example.com#Trojan",
+                f"vmess://{vmess}",
+                "ss://chacha20-ietf-poly1305:secret@ss.example.com:8388?plugin=v2ray-plugin%3Bmode%3Dwebsocket%3Bmux%3D0#SS",
+                "hysteria2://secret@hy2.example.com:443?sni=hy2.example.com&obfs=salamander&obfs-password=obfs#HY2",
+                "tuic://00000000-0000-0000-0000-000000000003:secret@tuic.example.com:443?sni=tuic.example.com&udp_relay_mode=native#TUIC",
+                "anytls://secret@anytls.example.com:443?sni=anytls.example.com#AnyTLS",
+                "hysteria://hysteria.example.com:443?auth=secret&protocol=udp&upmbps=20&downmbps=50#Hysteria",
+                "mierus://user:secret@mieru.example.com?port=2999&protocol=TCP&multiplexing=MULTIPLEXING_LOW#Mieru",
+                "naive://user:secret@naive.example.com:443#Unsupported",
+            ]
+        )
+
+        rendered, details = process_uri_subscription(raw, name_prefix="test")
+
+        self.assertIsNotNone(rendered)
+        for proxy_type in (
+            "vless",
+            "trojan",
+            "vmess",
+            "ss",
+            "hysteria2",
+            "tuic",
+            "anytls",
+            "hysteria",
+            "mieru",
+        ):
+            self.assertIn(f"type: {proxy_type}", rendered)
+        self.assertIn("reuse-settings:", rendered)
+        self.assertIn("max-connections: 1", rendered)
+        self.assertIn("c-max-reuse-times: 0", rendered)
+        self.assertIn("mux: false", rendered)
+        self.assertEqual(details["unsupported_protocols"], {"naive": 1})
+
+    def test_base64_uri_subscription_is_decoded_locally(self):
+        import base64
+
+        uri = "vless://00000000-0000-0000-0000-000000000004@example.com:443?security=tls#Node"
+        encoded = base64.urlsafe_b64encode(uri.encode()).decode()
+
+        rendered, details = process_subscription_payload(encoded, name_prefix="encoded")
+
+        self.assertIsNotNone(rendered)
+        self.assertIn("type: vless", rendered)
+        self.assertEqual(details["valid_nodes"], 1)
+
+    def test_direct_yaml_normalizes_json_surrogate_pairs_for_mihomo(self):
+        raw = r"""proxies:
+  - name: "Legacy node"
+    type: ss
+    server: "example.com"
+    port: 8388
+    cipher: "chacha20-ietf-poly1305"
+    password: "secret"
+    plugin: "obfs-local"
+    plugin-opts:
+      obfs-host: "example.com/\ud83c\udde8"
+"""
+
+        rendered, details = process_subscription_payload(raw, name_prefix="legacy")
+
+        self.assertNotIn(r"\ud83c", rendered.lower())
+        self.assertIn("\U0001f1e8", rendered)
+        self.assertEqual(yaml.safe_load(rendered)["proxies"][0]["type"], "ss")
+        self.assertEqual(yaml.safe_load(rendered)["proxies"][0]["plugin"], "obfs")
+        self.assertIn("host", yaml.safe_load(rendered)["proxies"][0]["plugin-opts"])
+        self.assertEqual(details["valid_nodes"], 1)
 
     def test_build_group_summary_sorts_candidates_by_delay(self):
         group_snapshot = {"now": "node-b", "all": ["node-a", "node-b", "node-c"]}

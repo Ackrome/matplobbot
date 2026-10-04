@@ -26,7 +26,7 @@ proxy-providers:
     health-check:
       enable: true
       url: https://api.telegram.org
-      interval: 15
+      interval: 300
       timeout: 7000
       lazy: false
       expected-status: 200-499
@@ -37,8 +37,8 @@ proxy-providers:
     path: ./something-openai.yaml
     health-check:
       enable: true
-      url: https://api.telegram.org
-      interval: 15
+      url: https://api.openai.com/v1/models
+      interval: 300
       timeout: 7000
       lazy: false
       expected-status: 200-499
@@ -47,7 +47,7 @@ proxy-groups:
     type: url-test
     use: [something-telegram]
     url: https://api.telegram.org
-    interval: 15
+    interval: 60
     tolerance: 100
     timeout: 7000
     lazy: false
@@ -57,7 +57,7 @@ proxy-groups:
     type: url-test
     use: [something-openai]
     url: https://api.openai.com/v1/models
-    interval: 15
+    interval: 60
     tolerance: 100
     timeout: 7000
     lazy: false

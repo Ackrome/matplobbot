@@ -422,12 +422,41 @@ jobs:
       github.event_name == 'push' &&
       needs.build-services.result == 'success'
     runs-on: self-hosted
+    env:
+      JENKINS_LAN_URL: ${{ vars.JENKINS_LAN_URL || 'http://192.168.1.130:8080' }}
+      APP_VM_LAN_HOST: ${{ vars.APP_VM_LAN_HOST || '192.168.1.40' }}
     steps:
+      - uses: actions/checkout@v5
+
       - name: Trigger Jenkins Job via cURL
         run: |
-          curl -X POST "${{ secrets.JENKINS_URL }}/job/matplobbot-deploy/buildWithParameters" \
+          if [[ "$JENKINS_LAN_URL" =~ ^(https?)://([^/:]+)(:([0-9]+))?/?$ ]]; then
+            JENKINS_SCHEME="${BASH_REMATCH[1]}"
+            JENKINS_HOST="${BASH_REMATCH[2]}"
+            JENKINS_PORT="${BASH_REMATCH[4]}"
+          else
+            echo "ERROR: JENKINS_LAN_URL must be an HTTP(S) origin without a path."
+            exit 1
+          fi
+
+          if [ -z "$JENKINS_PORT" ]; then
+            if [ "$JENKINS_SCHEME" = "https" ]; then
+              JENKINS_PORT=443
+            else
+              JENKINS_PORT=80
+            fi
+          fi
+
+          JENKINS_LAN_IP="$(bash scripts/resolve_private_ipv4.sh "$JENKINS_HOST")"
+          APP_VM_LAN_IP="$(bash scripts/resolve_private_ipv4.sh "$APP_VM_LAN_HOST")"
+
+          curl --fail-with-body --show-error --silent \
+            --noproxy "$JENKINS_HOST,$JENKINS_LAN_IP" \
+            --resolve "$JENKINS_HOST:$JENKINS_PORT:$JENKINS_LAN_IP" \
+            -X POST "$JENKINS_SCHEME://$JENKINS_HOST:$JENKINS_PORT/job/matplobbot-deploy/buildWithParameters" \
             --user "${{ secrets.JENKINS_USER }}:${{ secrets.JENKINS_TOKEN }}" \
             --data-urlencode "BOT_IMAGE_TAG=${{ github.sha }}" \
             --data-urlencode "WORKER_IMAGE_TAG=${{ github.sha }}" \
             --data-urlencode "API_IMAGE_TAG=${{ github.sha }}" \
-            --data-urlencode "SCHEDULER_IMAGE_TAG=${{ github.sha }}"
+            --data-urlencode "SCHEDULER_IMAGE_TAG=${{ github.sha }}" \
+            --data-urlencode "DEPLOY_HOST=$APP_VM_LAN_IP"

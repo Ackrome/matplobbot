@@ -14,11 +14,13 @@ PRODUCTION_COMPOSE = PROJECT_ROOT / "docker-compose.prod.yml"
 GITHUB_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "ci-cd.yml"
 JENKINSFILE = PROJECT_ROOT / "Jenkinsfile.groovy"
 DEPLOY_SCRIPT = PROJECT_ROOT / "deploy.sh"
+PRIVATE_IPV4_RESOLVER = PROJECT_ROOT / "scripts" / "resolve_private_ipv4.sh"
 VALIDATION_REQUIREMENTS = PROJECT_ROOT / "requirements-validation.txt"
 FRONTEND_NGINX = PROJECT_ROOT / "main_site_frontend" / "default.conf"
 FRONTEND_UI_UTILS = PROJECT_ROOT / "main_site_frontend" / "js" / "ui_utils.js"
 FRONTEND_STATS = PROJECT_ROOT / "main_site_frontend" / "js" / "stats.js"
 SCHEDULER_MAIN = PROJECT_ROOT / "scheduler_app" / "main.py"
+PROXY_DOCKERFILE = PROJECT_ROOT / "proxy" / "Dockerfile.proxy"
 COMMON_LONG_RUNNING_SERVICES = {
     "redis",
     "postgres",
@@ -92,6 +94,30 @@ class TestComposeConfiguration(unittest.TestCase):
                     self.assertEqual(logging_config["options"]["max-size"], "10m")
                     self.assertEqual(logging_config["options"]["max-file"], "3")
 
+    def test_proxy_uses_external_read_only_subscription_secret(self):
+        proxy = self.production["services"]["proxy"]
+        secret_mount = next(
+            volume
+            for volume in proxy["volumes"]
+            if isinstance(volume, dict)
+            and volume.get("target") == "/run/secrets/proxy-subscriptions.json"
+        )
+
+        self.assertTrue(secret_mount["read_only"])
+        self.assertFalse(secret_mount["bind"]["create_host_path"])
+        self.assertIn(
+            "SUB_URLS_FILE=/run/secrets/proxy-subscriptions.json",
+            proxy["environment"],
+        )
+
+    def test_proxy_core_download_is_versioned_and_hash_verified(self):
+        dockerfile = PROXY_DOCKERFILE.read_text(encoding="utf-8")
+
+        self.assertIn("ARG MIHOMO_VERSION=v1.19.32", dockerfile)
+        self.assertIn("sha256sum -c -", dockerfile)
+        self.assertIn("MIHOMO_AMD64_SHA256", dockerfile)
+        self.assertIn("MIHOMO_ARM64_SHA256", dockerfile)
+
     def test_structured_python_services_run_in_production_mode(self):
         for service_name in (
             "mpb-telegram-bot",
@@ -112,6 +138,69 @@ class TestComposeConfiguration(unittest.TestCase):
         self.assertIn(f"python -m {install_command}", jenkinsfile)
         self.assertIn("PyYAML==6.0.3", validation_requirements)
         self.assertIn('"yaml",', jenkinsfile)
+
+    def test_deployment_uses_proxmox_lan_without_tailscale_auth_gate(self):
+        github_workflow = GITHUB_WORKFLOW.read_text(encoding="utf-8")
+        jenkinsfile = JENKINSFILE.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "string(name: 'DEPLOY_HOST', defaultValue: '192.168.1.40'",
+            jenkinsfile,
+        )
+        self.assertNotIn("app-vm.panthera-banjo.ts.net", jenkinsfile)
+        self.assertEqual(
+            jenkinsfile.count(
+                'DEPLOY_HOST="$(bash "$WORKSPACE/scripts/resolve_private_ipv4.sh" '
+                '"${DEPLOY_HOST:-192.168.1.40}")"'
+            ),
+            3,
+        )
+        self.assertIn("DEFAULT_DEPLOY_HOST_FINGERPRINT = credentials('APP_VM_SHA256')", jenkinsfile)
+        self.assertIn(
+            "JENKINS_LAN_URL: ${{ vars.JENKINS_LAN_URL || 'http://192.168.1.130:8080' }}",
+            github_workflow,
+        )
+        self.assertIn(
+            "APP_VM_LAN_HOST: ${{ vars.APP_VM_LAN_HOST || '192.168.1.40' }}",
+            github_workflow,
+        )
+        self.assertIn('JENKINS_LAN_IP="$(bash scripts/resolve_private_ipv4.sh', github_workflow)
+        self.assertIn('APP_VM_LAN_IP="$(bash scripts/resolve_private_ipv4.sh', github_workflow)
+        self.assertIn('--noproxy "$JENKINS_HOST,$JENKINS_LAN_IP"', github_workflow)
+        self.assertIn('--resolve "$JENKINS_HOST:$JENKINS_PORT:$JENKINS_LAN_IP"', github_workflow)
+        self.assertIn('--data-urlencode "DEPLOY_HOST=$APP_VM_LAN_IP"', github_workflow)
+        self.assertNotIn("secrets.JENKINS_URL", github_workflow)
+        self.assertEqual(jenkinsfile.count("ssh-keyscan -T 5 -t ed25519"), 3)
+
+    def test_private_ipv4_resolver_rejects_non_lan_deployment_hosts(self):
+        bash = _find_bash()
+        if bash is None:
+            self.skipTest("bash is unavailable")
+
+        accepted = subprocess.run(
+            [bash, _bash_path(PRIVATE_IPV4_RESOLVER), "192.168.1.25"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertEqual(accepted.stdout.strip(), "192.168.1.25")
+
+        for rejected_host in (
+            "app-vm.panthera-banjo.ts.net",
+            "100.126.36.2",
+            "127.0.0.1",
+            "203.0.113.25",
+        ):
+            with self.subTest(host=rejected_host):
+                rejected = subprocess.run(
+                    [bash, _bash_path(PRIVATE_IPV4_RESOLVER), rejected_host],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertNotEqual(rejected.returncode, 0)
+                self.assertEqual(rejected.stdout, "")
 
     def test_jenkins_writes_complete_remote_env_atomically(self):
         jenkinsfile = JENKINSFILE.read_text(encoding="utf-8")

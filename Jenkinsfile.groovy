@@ -6,13 +6,13 @@ pipeline {
         string(name: 'WORKER_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag for the worker')
         string(name: 'API_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag for the API')
         string(name: 'SCHEDULER_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag for the scheduler')
+        string(name: 'DEPLOY_HOST', defaultValue: '192.168.1.40', description: 'LAN hostname or private IP of app-vm; it must resolve to exactly one RFC1918 address')
         string(name: 'DEPLOY_HOST_FINGERPRINT', defaultValue: '', description: 'Optional override for pinned SHA256 host key fingerprint from APP_VM_SHA256')
     }
 
 
     environment {
         DEFAULT_DEPLOY_HOST_FINGERPRINT = credentials('APP_VM_SHA256')
-        DEPLOY_HOST = 'app-vm.panthera-banjo.ts.net'
         DEPLOY_PATH = '~/matplobbot'
 
         PROD_BOT_TOKEN = credentials('PROD_BOT_TOKEN')
@@ -138,6 +138,7 @@ BASH
                                 {
 
                                 chmod 600 "$SSH_KEY_FILE"
+                                DEPLOY_HOST="$(bash "$WORKSPACE/scripts/resolve_private_ipv4.sh" "${DEPLOY_HOST:-192.168.1.40}")"
 
                                 mkdir -p "$HOME/.ssh"
                                 touch "$HOME/.ssh/known_hosts"
@@ -151,7 +152,7 @@ BASH
                                   exit 1
                                 fi
 
-                                SCANNED_FP="$(ssh-keyscan -t ed25519 "$DEPLOY_HOST" 2>/dev/null | ssh-keygen -lf - -E sha256 | awk 'NR==1 {print $2}')"
+                                SCANNED_FP="$(ssh-keyscan -T 5 -t ed25519 "$DEPLOY_HOST" 2>/dev/null | ssh-keygen -lf - -E sha256 2>/dev/null | awk 'NR==1 {print $2}' || true)"
                                 if [ -z "$SCANNED_FP" ]; then
                                   echo "ERROR: failed to read host fingerprint for $DEPLOY_HOST"
                                   exit 1
@@ -269,6 +270,7 @@ BASH
                             {
 
                             chmod 600 "$SSH_KEY_FILE"
+                            DEPLOY_HOST="$(bash "$WORKSPACE/scripts/resolve_private_ipv4.sh" "${DEPLOY_HOST:-192.168.1.40}")"
                             mkdir -p "$HOME/.ssh"
                             touch "$HOME/.ssh/known_hosts"
 
@@ -278,7 +280,7 @@ BASH
                               exit 1
                             fi
 
-                            SCANNED_FP="$(ssh-keyscan -t ed25519 "$DEPLOY_HOST" 2>/dev/null | ssh-keygen -lf - -E sha256 | awk 'NR==1 {print $2}')"
+                            SCANNED_FP="$(ssh-keyscan -T 5 -t ed25519 "$DEPLOY_HOST" 2>/dev/null | ssh-keygen -lf - -E sha256 2>/dev/null | awk 'NR==1 {print $2}' || true)"
                             if [ -z "$SCANNED_FP" ]; then
                               echo "ERROR: failed to read host fingerprint for $DEPLOY_HOST"
                               exit 1
@@ -460,6 +462,7 @@ ${clippedLogTail}
                             echo "Direct Telegram notify failed; trying deploy-host SOCKS proxy..."
 
                             chmod 600 "$SSH_KEY_FILE"
+                            DEPLOY_HOST="$(bash "$WORKSPACE/scripts/resolve_private_ipv4.sh" "${DEPLOY_HOST:-192.168.1.40}")"
                             mkdir -p "$HOME/.ssh"
                             touch "$HOME/.ssh/known_hosts"
 
@@ -469,7 +472,7 @@ ${clippedLogTail}
                               exit 1
                             fi
 
-                            SCANNED_FP="$(ssh-keyscan -t ed25519 "$DEPLOY_HOST" 2>/dev/null | ssh-keygen -lf - -E sha256 | awk 'NR==1 {print $2}')"
+                            SCANNED_FP="$(ssh-keyscan -T 5 -t ed25519 "$DEPLOY_HOST" 2>/dev/null | ssh-keygen -lf - -E sha256 2>/dev/null | awk 'NR==1 {print $2}' || true)"
                             if [ -z "$SCANNED_FP" ]; then
                               echo "ERROR: failed to read host fingerprint for $DEPLOY_HOST"
                               exit 1
