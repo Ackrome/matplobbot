@@ -343,6 +343,8 @@ Command:
 What it does:
 
 - Aggregates active subscriptions into one personal timeline.
+- Uses the same interactive freshness policy as the Web schedule page: cache verified within the last 3 minutes is reused, while older data starts one coalesced full-semester RUZ refresh shared across Web and Telegram callers.
+- Waits briefly for a live answer, then shows the saved schedule with an explicit background-refresh or cache-fallback notice instead of blocking the bot; duplicate subscriptions for the same entity still cause only one response and one refresh path.
 - Includes filter controls:
 - include/exclude subscriptions
 - include/exclude lesson types
@@ -1102,8 +1104,8 @@ How to use:
 
 Operator controls:
 
-- `SCHEDULE_ON_OPEN_REFRESH_ENABLED` provides a rollback switch to the legacy six-hour freshness window.
-- `SCHEDULE_INTERACTIVE_FRESHNESS_SECONDS`, `SCHEDULE_INTERACTIVE_LIVE_WAIT_SECONDS`, and `SCHEDULE_INITIAL_LIVE_WAIT_SECONDS` tune freshness and user wait budgets.
+- `SCHEDULE_ON_OPEN_REFRESH_ENABLED` provides a shared Web and `/myschedule` rollback switch to the legacy six-hour freshness window.
+- `SCHEDULE_INTERACTIVE_FRESHNESS_SECONDS`, `SCHEDULE_INTERACTIVE_LIVE_WAIT_SECONDS`, and `SCHEDULE_INITIAL_LIVE_WAIT_SECONDS` tune the shared Web and Telegram freshness and user wait budgets.
 - `SCHEDULE_INTERACTIVE_UPSTREAM_TIMEOUT_SECONDS`, `SCHEDULE_REFRESH_LOCK_TTL_SECONDS`, and `SCHEDULE_REFRESH_FAILURE_COOLDOWN_SECONDS` bound upstream and coordination behavior.
 - `FASTAPI_RATE_LIMIT_SCHEDULE_DATA_LIMIT` and `FASTAPI_RATE_LIMIT_SCHEDULE_DATA_WINDOW_SECONDS` control per-client data reads.
 

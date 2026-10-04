@@ -190,6 +190,7 @@
     "schedule_api_timeout_error": "The university's server is taking too long to respond. Please try a more specific query or try again in a moment.",
     "schedule_offline_results_warning": "⚠️ <i>University API is unavailable. Showing cached search results.</i>",
     "schedule_offline_cache_warning": "⚠️ <i>University API is unavailable. Showing the latest cached schedule copy.</i>",
+    "schedule_refreshing_cache_warning": "🔄 <i>Showing the saved schedule while checking for updates in the background.</i>",
     "schedule_no_lessons_today": "There are no lessons scheduled for this day.",
     "schedule_select_date": "Please select a date to view the schedule:",
     "schedule_date_today": "Today",

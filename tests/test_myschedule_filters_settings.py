@@ -1,11 +1,16 @@
 import unittest
+from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 SHARED_DB_AVAILABLE = True
 try:
+    from bot.handlers import schedule as schedule_handler
     from bot.services import settings_keyboard
     from bot.services.myschedule_filters import MyScheduleFilterService
     from shared_lib import database as shared_database
+    from shared_lib.schedule_freshness_config import ScheduleFreshnessSettings
+    from shared_lib.services.schedule_freshness import ScheduleFreshnessResult
 except ModuleNotFoundError:
     SHARED_DB_AVAILABLE = False
 
@@ -14,6 +19,81 @@ except ModuleNotFoundError:
     SHARED_DB_AVAILABLE, "database dependencies are not installed in this environment"
 )
 class TestMyScheduleFiltersSettings(unittest.IsolatedAsyncioTestCase):
+    async def test_myschedule_uses_shared_interactive_freshness_policy(self):
+        manager = schedule_handler.ScheduleManager.__new__(schedule_handler.ScheduleManager)
+        manager.api_client = object()
+        manager.schedule_freshness_settings = ScheduleFreshnessSettings(
+            on_open_refresh_enabled=True,
+            interactive_freshness_seconds=180,
+            legacy_freshness_seconds=21600,
+            live_wait_seconds=1.5,
+            initial_live_wait_seconds=8.0,
+            upstream_timeout_seconds=6.0,
+            lock_ttl_seconds=30,
+            failure_cooldown_seconds=30,
+        )
+        manager._append_source_parsed_time = AsyncMock(side_effect=lambda text, *_args: text)
+        message = SimpleNamespace(
+            from_user=SimpleNamespace(id=42),
+            answer=AsyncMock(),
+        )
+        subscription = {
+            "id": 7,
+            "entity_type": "group",
+            "entity_id": "123",
+            "entity_name": "ПМ23-1",
+        }
+        freshness_result = ScheduleFreshnessResult(
+            schedule=[{"date": "2026-10-05", "discipline": "Math"}],
+            freshness="refreshing",
+            source_checked_at=None,
+            refresh_in_progress=True,
+            cache_age_seconds=600,
+        )
+
+        with (
+            patch.object(
+                schedule_handler,
+                "get_schedule_with_freshness",
+                new=AsyncMock(return_value=freshness_result),
+            ) as freshness_loader,
+            patch.object(
+                schedule_handler,
+                "format_schedule",
+                new=AsyncMock(return_value="rendered schedule"),
+            ),
+            patch.object(
+                schedule_handler.translator,
+                "gettext",
+                return_value="refreshing schedule",
+            ),
+        ):
+            response_sent = await manager._send_single_schedule_update(
+                message,
+                "en",
+                subscription,
+                datetime(2026, 10, 5, 9, 0),
+            )
+
+        self.assertTrue(response_sent)
+        freshness_loader.assert_awaited_once_with(
+            manager.api_client,
+            "group",
+            "123",
+            "2026-10-05",
+            "2026-10-05",
+            freshness_seconds=180,
+            live_wait_seconds=1.5,
+            initial_live_wait_seconds=8.0,
+            lock_ttl_seconds=30,
+            failure_cooldown_seconds=30,
+            upstream_timeout_seconds=6.0,
+        )
+        message.answer.assert_awaited_once_with(
+            "refreshing schedule\n\nrendered schedule",
+            parse_mode="HTML",
+        )
+
     async def test_extracted_builtin_filter_presets_preserve_behavior(self):
         active_subscriptions = [
             {"id": 1, "entity_type": "group"},

@@ -205,6 +205,47 @@ class TestScheduleFreshness(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.is_offline)
         self.assertEqual(result.schedule, cached)
 
+    async def test_upstream_timeout_serves_stale_cache_and_releases_lease(self):
+        cached = [{"date": "2026-09-24", "discipline": "Cached"}]
+
+        async def never_finishes(*_args, **_kwargs):
+            await asyncio.Event().wait()
+
+        client = SimpleNamespace(get_schedule=AsyncMock(side_effect=never_finishes))
+        release_lock = AsyncMock()
+
+        with (
+            patch.object(
+                schedule_freshness,
+                "get_cached_schedule_snapshot",
+                AsyncMock(return_value=(cached, datetime.now(UTC) - timedelta(days=1))),
+            ),
+            patch.object(
+                schedule_freshness,
+                "_failure_cooldown_active",
+                AsyncMock(return_value=False),
+            ),
+            patch.object(
+                schedule_freshness,
+                "_acquire_distributed_lock",
+                AsyncMock(return_value="lease-token"),
+            ),
+            patch.object(schedule_freshness, "_release_distributed_lock", release_lock),
+            patch.object(schedule_freshness, "_mark_refresh_failure", AsyncMock()),
+        ):
+            result = await schedule_freshness.get_schedule_with_freshness(
+                client,
+                "group",
+                "42",
+                "2026-09-20",
+                "2026-09-30",
+                **_policy(upstream_timeout_seconds=0.01),
+            )
+
+        self.assertEqual(result.freshness, "stale_fallback")
+        self.assertEqual(result.schedule, cached)
+        release_lock.assert_awaited_once_with("group:42", "lease-token")
+
     async def test_no_cache_and_upstream_failure_is_unavailable(self):
         client = SimpleNamespace(get_schedule=AsyncMock(side_effect=RuntimeError("down")))
 

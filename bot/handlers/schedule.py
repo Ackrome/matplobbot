@@ -41,6 +41,10 @@ from shared_lib.database import (
 )
 from shared_lib.i18n import translator
 from shared_lib.redis_client import redis_client
+from shared_lib.schedule_freshness_config import (
+    ScheduleFreshnessSettings,
+    load_schedule_freshness_settings,
+)
 from shared_lib.services.calendar_sync_state import (
     CALENDAR_PROFILE_LIMIT,
     CALENDAR_SYNC_KEY,
@@ -51,6 +55,10 @@ from shared_lib.services.calendar_sync_state import (
     normalize_calendar_sync_state,
     serialize_calendar_sync_state,
     upsert_custom_profile,
+)
+from shared_lib.services.schedule_freshness import (
+    ScheduleUnavailableError,
+    get_schedule_with_freshness,
 )
 from shared_lib.services.schedule_service import (
     format_schedule,
@@ -80,6 +88,7 @@ class ScheduleManager:
         self.router = Router()
         self.api_client = ruz_api_client
         self.myschedule_filters = MyScheduleFilterService()
+        self.schedule_freshness_settings = load_schedule_freshness_settings()
         self._background_tasks: set[asyncio.Task] = set()
         self._register_handlers()
 
@@ -923,20 +932,33 @@ class ScheduleManager:
 
     async def _send_single_schedule_update(
         self, message: Message, lang: str, sub: dict, today_dt: datetime
-    ):
+    ) -> bool:
         user_id = message.from_user.id
         today_str = today_dt.strftime("%Y-%m-%d")
         try:
-            # --- ИСПОЛЬЗУЕМ УМНЫЙ ФЕТЧЕР ---
             try:
-                schedule_data, is_offline = await get_schedule_with_cache_fallback(
-                    self.api_client, sub["entity_type"], sub["entity_id"], today_str, today_str
+                settings: ScheduleFreshnessSettings = self.schedule_freshness_settings
+                freshness_result = await get_schedule_with_freshness(
+                    self.api_client,
+                    sub["entity_type"],
+                    sub["entity_id"],
+                    today_str,
+                    today_str,
+                    freshness_seconds=settings.effective_freshness_seconds,
+                    live_wait_seconds=settings.live_wait_seconds,
+                    initial_live_wait_seconds=settings.initial_live_wait_seconds,
+                    lock_ttl_seconds=settings.lock_ttl_seconds,
+                    failure_cooldown_seconds=settings.failure_cooldown_seconds,
+                    upstream_timeout_seconds=settings.upstream_timeout_seconds,
                 )
-            except ConnectionError:
+            except ScheduleUnavailableError:
                 logging.warning(
                     f"Could not update schedule for {sub['entity_name']}: API down & no cache."
                 )
-                return
+                await message.answer(translator.gettext(lang, "schedule_api_unavailable_no_cache"))
+                return True
+
+            schedule_data = freshness_result.schedule
 
             formatted_text = await format_schedule(
                 schedule_data=schedule_data,
@@ -948,8 +970,14 @@ class ScheduleManager:
                 subscription_id=sub["id"],
             )
 
-            if is_offline:
+            if freshness_result.freshness == "stale_fallback":
                 formatted_text = self._offline_warning_text(lang) + "\n\n" + formatted_text
+            elif freshness_result.freshness == "refreshing":
+                formatted_text = (
+                    translator.gettext(lang, "schedule_refreshing_cache_warning")
+                    + "\n\n"
+                    + formatted_text
+                )
 
             formatted_text = await self._append_source_parsed_time(
                 formatted_text,
@@ -959,6 +987,7 @@ class ScheduleManager:
             )
 
             await message.answer(formatted_text, parse_mode="HTML")
+            return True
         except TelegramForbiddenError:
             logging.warning(f"Bot is blocked by user {user_id}. Cannot send schedule.")
             raise
@@ -967,6 +996,7 @@ class ScheduleManager:
                 f"Failed to send schedule to user {user_id} for entity {sub['entity_name']}: {e}",
                 exc_info=True,
             )
+            return False
 
     async def cmd_my_schedule(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
@@ -992,9 +1022,9 @@ class ScheduleManager:
             if entity_key in processed_entities:
                 continue
             try:
-                await self._send_single_schedule_update(message, lang, sub, today_dt)
+                response_sent = await self._send_single_schedule_update(message, lang, sub, today_dt)
                 processed_entities.add(entity_key)
-                sent_at_least_one = True
+                sent_at_least_one = response_sent or sent_at_least_one
                 await asyncio.sleep(0.2)
             except TelegramForbiddenError:
                 break

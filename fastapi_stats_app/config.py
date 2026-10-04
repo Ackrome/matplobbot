@@ -2,6 +2,8 @@ import logging
 import os
 from dataclasses import dataclass
 
+from shared_lib.schedule_freshness_config import load_schedule_freshness_settings
+
 DEFAULT_CORS_ALLOWED_ORIGINS = (
     "https://ivantishchenko.ru",
     "http://ivantishchenko.ru",
@@ -155,38 +157,12 @@ RATE_LIMIT_STATS_PDF_EXPORT = RateLimitSettings(
 )
 
 # --- Interactive schedule freshness ---
-SCHEDULE_ON_OPEN_REFRESH_ENABLED = _read_bool_env(
-    "SCHEDULE_ON_OPEN_REFRESH_ENABLED",
-    True,
-)
-SCHEDULE_INTERACTIVE_FRESHNESS_SECONDS = _read_int_env(
-    "SCHEDULE_INTERACTIVE_FRESHNESS_SECONDS",
-    180,
-)
-SCHEDULE_LEGACY_FRESHNESS_SECONDS = _read_int_env(
-    "SCHEDULE_LEGACY_FRESHNESS_SECONDS",
-    21600,
-)
-SCHEDULE_INTERACTIVE_LIVE_WAIT_SECONDS = _read_float_env(
-    "SCHEDULE_INTERACTIVE_LIVE_WAIT_SECONDS",
-    1.5,
-    minimum=0.1,
-)
-SCHEDULE_INITIAL_LIVE_WAIT_SECONDS = _read_float_env(
-    "SCHEDULE_INITIAL_LIVE_WAIT_SECONDS",
-    8.0,
-    minimum=0.1,
-)
-SCHEDULE_INTERACTIVE_UPSTREAM_TIMEOUT_SECONDS = _read_float_env(
-    "SCHEDULE_INTERACTIVE_UPSTREAM_TIMEOUT_SECONDS",
-    6.0,
-    minimum=0.5,
-)
-SCHEDULE_REFRESH_LOCK_TTL_SECONDS = _read_int_env(
-    "SCHEDULE_REFRESH_LOCK_TTL_SECONDS",
-    30,
-)
-SCHEDULE_REFRESH_FAILURE_COOLDOWN_SECONDS = _read_int_env(
-    "SCHEDULE_REFRESH_FAILURE_COOLDOWN_SECONDS",
-    30,
-)
+_SCHEDULE_FRESHNESS = load_schedule_freshness_settings()
+SCHEDULE_ON_OPEN_REFRESH_ENABLED = _SCHEDULE_FRESHNESS.on_open_refresh_enabled
+SCHEDULE_INTERACTIVE_FRESHNESS_SECONDS = _SCHEDULE_FRESHNESS.interactive_freshness_seconds
+SCHEDULE_LEGACY_FRESHNESS_SECONDS = _SCHEDULE_FRESHNESS.legacy_freshness_seconds
+SCHEDULE_INTERACTIVE_LIVE_WAIT_SECONDS = _SCHEDULE_FRESHNESS.live_wait_seconds
+SCHEDULE_INITIAL_LIVE_WAIT_SECONDS = _SCHEDULE_FRESHNESS.initial_live_wait_seconds
+SCHEDULE_INTERACTIVE_UPSTREAM_TIMEOUT_SECONDS = _SCHEDULE_FRESHNESS.upstream_timeout_seconds
+SCHEDULE_REFRESH_LOCK_TTL_SECONDS = _SCHEDULE_FRESHNESS.lock_ttl_seconds
+SCHEDULE_REFRESH_FAILURE_COOLDOWN_SECONDS = _SCHEDULE_FRESHNESS.failure_cooldown_seconds

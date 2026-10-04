@@ -11,6 +11,7 @@ Regression tests for website schedule stale-while-revalidate behavior and per-en
 - Twenty concurrent viewers produce one upstream call.
 - RUZ failure serves stale data when available and fails clearly when no cache exists.
 - A successful empty RUZ list authoritatively removes old lessons.
+- A bounded upstream timeout falls back to cached data and still releases the Redis lease.
 
 ## Usage
 

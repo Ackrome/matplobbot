@@ -196,6 +196,7 @@ async def _refresh_schedule(
     *,
     lock_ttl_seconds: int,
     failure_cooldown_seconds: int,
+    upstream_timeout_seconds: float | None,
 ) -> _RefreshOutcome:
     key = _entity_key(entity_type, entity_id)
     lock_token = await _acquire_distributed_lock(key, lock_ttl_seconds)
@@ -204,12 +205,16 @@ async def _refresh_schedule(
 
     try:
         semester_start, semester_end = get_semester_bounds()
-        schedule = await ruz_api_client.get_schedule(
-            entity_type,
-            entity_id,
-            start=semester_start,
-            finish=semester_end,
+        schedule_request = ruz_api_client.get_schedule(
+            entity_type, entity_id, start=semester_start, finish=semester_end
         )
+        if upstream_timeout_seconds is None:
+            schedule = await schedule_request
+        else:
+            schedule = await asyncio.wait_for(
+                schedule_request,
+                timeout=upstream_timeout_seconds,
+            )
         if not isinstance(schedule, list):
             raise TypeError("University schedule response must be a list")
 
@@ -257,6 +262,7 @@ def _get_or_start_refresh_task(
     *,
     lock_ttl_seconds: int,
     failure_cooldown_seconds: int,
+    upstream_timeout_seconds: float | None,
 ) -> asyncio.Task[_RefreshOutcome]:
     key = _entity_key(entity_type, entity_id)
     task = _refresh_tasks.get(key)
@@ -271,6 +277,7 @@ def _get_or_start_refresh_task(
             cached_schedule,
             lock_ttl_seconds=lock_ttl_seconds,
             failure_cooldown_seconds=failure_cooldown_seconds,
+            upstream_timeout_seconds=upstream_timeout_seconds,
         ),
         name=f"schedule-refresh:{key}",
     )
@@ -312,6 +319,7 @@ async def get_schedule_with_freshness(
     lock_ttl_seconds: int,
     failure_cooldown_seconds: int,
     force_refresh: bool = False,
+    upstream_timeout_seconds: float | None = None,
 ) -> ScheduleFreshnessResult:
     """Return cached data immediately while coalescing a live refresh when needed."""
 
@@ -357,6 +365,7 @@ async def get_schedule_with_freshness(
         cached_schedule,
         lock_ttl_seconds=lock_ttl_seconds,
         failure_cooldown_seconds=failure_cooldown_seconds,
+        upstream_timeout_seconds=upstream_timeout_seconds,
     )
     wait_seconds = initial_live_wait_seconds if not has_cache else live_wait_seconds
     try:

@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from shared_lib.celery_app import get_celery_redis_url
 from shared_lib.redis_client import RedisClient, get_redis_url
+from shared_lib.schedule_freshness_config import load_schedule_freshness_settings
 
 
 class TestFastAPIConfig(unittest.TestCase):
@@ -47,6 +48,22 @@ class TestFastAPIConfig(unittest.TestCase):
         self.assertEqual(reloaded.RATE_LIMIT_SCHEDULE_DATA.limit, 80)
         self.assertEqual(reloaded.SCHEDULE_INTERACTIVE_FRESHNESS_SECONDS, 240)
         self.assertEqual(reloaded.SCHEDULE_INTERACTIVE_LIVE_WAIT_SECONDS, 2.5)
+
+    def test_shared_schedule_freshness_settings_preserve_legacy_rollback(self):
+        with patch.dict(
+            os.environ,
+            {
+                "SCHEDULE_ON_OPEN_REFRESH_ENABLED": "false",
+                "SCHEDULE_INTERACTIVE_FRESHNESS_SECONDS": "180",
+                "SCHEDULE_LEGACY_FRESHNESS_SECONDS": "12345",
+                "SCHEDULE_REFRESH_LOCK_TTL_SECONDS": "44",
+            },
+        ):
+            settings = load_schedule_freshness_settings()
+
+        self.assertFalse(settings.on_open_refresh_enabled)
+        self.assertEqual(settings.effective_freshness_seconds, 12345)
+        self.assertEqual(settings.lock_ttl_seconds, 44)
 
 
 class TestRedisConfig(unittest.TestCase):
