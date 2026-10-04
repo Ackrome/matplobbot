@@ -1022,7 +1022,9 @@ class ScheduleManager:
             if entity_key in processed_entities:
                 continue
             try:
-                response_sent = await self._send_single_schedule_update(message, lang, sub, today_dt)
+                response_sent = await self._send_single_schedule_update(
+                    message, lang, sub, today_dt
+                )
                 processed_entities.add(entity_key)
                 sent_at_least_one = response_sent or sent_at_least_one
                 await asyncio.sleep(0.2)
