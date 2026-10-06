@@ -12,6 +12,10 @@ Regression tests for website schedule stale-while-revalidate behavior and per-en
 - RUZ failure serves stale data when available and fails clearly when no cache exists.
 - A successful empty RUZ list authoritatively removes old lessons.
 - A bounded upstream timeout falls back to cached data and still releases the Redis lease.
+- Telegram follow-up waiting reuses an existing local refresh task or observes the
+  newer shared snapshot written by another process, without starting a second RUZ call.
+- A shared refresh failure leaves the caller on the cached schedule with the
+  `stale_fallback` state.
 
 ## Usage
 

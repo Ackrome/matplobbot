@@ -345,6 +345,7 @@ What it does:
 - Aggregates active subscriptions into one personal timeline.
 - Uses the same interactive freshness policy as the Web schedule page: cache verified within the last 3 minutes is reused, while older data starts one coalesced full-semester RUZ refresh shared across Web and Telegram callers.
 - Waits briefly for a live answer, then shows the saved schedule with an explicit background-refresh or cache-fallback notice instead of blocking the bot; duplicate subscriptions for the same entity still cause only one response and one refresh path.
+- When that brief wait expires, the bot keeps watching the already running shared refresh and edits the same Telegram message with the checked schedule or confirmed cache-fallback state. This follow-up never starts a second RUZ request.
 - Includes filter controls:
 - include/exclude subscriptions
 - include/exclude lesson types

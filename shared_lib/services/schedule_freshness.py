@@ -81,6 +81,16 @@ def _cache_age_seconds(value: datetime | None) -> int | None:
     return max(0, int((datetime.now(UTC) - normalized).total_seconds()))
 
 
+def _is_newer_source_check(current: datetime | None, previous: datetime | None) -> bool:
+    normalized_current = _as_utc(current)
+    normalized_previous = _as_utc(previous)
+    if normalized_current is None:
+        return False
+    if normalized_previous is None:
+        return True
+    return normalized_current > normalized_previous
+
+
 def _forget_metric_task(task: asyncio.Task[None]) -> None:
     _metric_tasks.discard(task)
     if not task.cancelled():
@@ -431,6 +441,113 @@ async def get_schedule_with_freshness(
             refresh_in_progress=False,
         )
     raise ScheduleUnavailableError("University schedule is unavailable and no cached copy exists.")
+
+
+async def wait_for_schedule_refresh(
+    entity_type: str,
+    entity_id: str,
+    requested_start: str,
+    requested_end: str,
+    *,
+    previous_schedule: list[dict],
+    previous_source_checked_at: datetime | None,
+    timeout_seconds: float,
+    poll_interval_seconds: float = 0.25,
+) -> ScheduleFreshnessResult:
+    """Wait for an existing refresh without starting another university API request."""
+
+    key = _entity_key(entity_type, entity_id)
+    deadline = time.monotonic() + max(0.0, timeout_seconds)
+    task = _refresh_tasks.get(key)
+
+    if task is not None:
+        remaining = max(0.0, deadline - time.monotonic())
+        try:
+            outcome = await asyncio.wait_for(asyncio.shield(task), timeout=remaining)
+        except TimeoutError:
+            outcome = None
+
+        if outcome is not None and outcome.status == "success" and outcome.schedule is not None:
+            return _build_result(
+                outcome.schedule,
+                "live",
+                outcome.source_checked_at,
+                requested_start,
+                requested_end,
+                refresh_in_progress=False,
+                content_changed=outcome.content_changed,
+            )
+        if outcome is not None and outcome.status == "failed":
+            cached_payload, checked_at = await get_cached_schedule_snapshot(entity_type, entity_id)
+            fallback = cached_payload if isinstance(cached_payload, list) else previous_schedule
+            return _build_result(
+                fallback,
+                "stale_fallback",
+                checked_at or previous_source_checked_at,
+                requested_start,
+                requested_end,
+                refresh_in_progress=False,
+            )
+
+    poll_interval = max(0.05, poll_interval_seconds)
+    latest_payload: list[dict] = previous_schedule
+    latest_checked_at = previous_source_checked_at
+
+    while time.monotonic() < deadline:
+        cached_payload, checked_at = await get_cached_schedule_snapshot(entity_type, entity_id)
+        if isinstance(cached_payload, list):
+            latest_payload = cached_payload
+            latest_checked_at = checked_at or latest_checked_at
+            if _is_newer_source_check(checked_at, previous_source_checked_at):
+                return _build_result(
+                    cached_payload,
+                    "live",
+                    checked_at,
+                    requested_start,
+                    requested_end,
+                    refresh_in_progress=False,
+                    content_changed=(
+                        _filter_schedule_window(cached_payload, requested_start, requested_end)
+                        != previous_schedule
+                    ),
+                )
+
+        if await _failure_cooldown_active(key):
+            break
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        await asyncio.sleep(min(poll_interval, remaining))
+
+    # One last read closes the race where another process commits the refreshed
+    # snapshot immediately after the final poll but before our timeout expires.
+    cached_payload, checked_at = await get_cached_schedule_snapshot(entity_type, entity_id)
+    if isinstance(cached_payload, list):
+        latest_payload = cached_payload
+        latest_checked_at = checked_at or latest_checked_at
+        if _is_newer_source_check(checked_at, previous_source_checked_at):
+            return _build_result(
+                cached_payload,
+                "live",
+                checked_at,
+                requested_start,
+                requested_end,
+                refresh_in_progress=False,
+                content_changed=(
+                    _filter_schedule_window(cached_payload, requested_start, requested_end)
+                    != previous_schedule
+                ),
+            )
+
+    return _build_result(
+        latest_payload,
+        "stale_fallback",
+        latest_checked_at,
+        requested_start,
+        requested_end,
+        refresh_in_progress=False,
+    )
 
 
 async def shutdown_schedule_refresh_tasks() -> None:

@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 SHARED_DB_AVAILABLE = True
 try:
@@ -33,10 +33,12 @@ class TestMyScheduleFiltersSettings(unittest.IsolatedAsyncioTestCase):
             failure_cooldown_seconds=30,
         )
         manager._append_source_parsed_time = AsyncMock(side_effect=lambda text, *_args: text)
+        sent_message = SimpleNamespace(message_id=99)
         message = SimpleNamespace(
             from_user=SimpleNamespace(id=42),
-            answer=AsyncMock(),
+            answer=AsyncMock(return_value=sent_message),
         )
+        manager._start_myschedule_message_refresh = MagicMock()
         subscription = {
             "id": 7,
             "entity_type": "group",
@@ -91,6 +93,89 @@ class TestMyScheduleFiltersSettings(unittest.IsolatedAsyncioTestCase):
         )
         message.answer.assert_awaited_once_with(
             "refreshing schedule\n\nrendered schedule",
+            parse_mode="HTML",
+        )
+        manager._start_myschedule_message_refresh.assert_called_once_with(
+            sent_message,
+            42,
+            "en",
+            subscription,
+            datetime(2026, 10, 5, 9, 0),
+            freshness_result,
+            "refreshing schedule\n\nrendered schedule",
+        )
+
+    async def test_myschedule_edits_same_message_after_shared_refresh(self):
+        manager = schedule_handler.ScheduleManager.__new__(schedule_handler.ScheduleManager)
+        manager.schedule_freshness_settings = ScheduleFreshnessSettings(
+            on_open_refresh_enabled=True,
+            interactive_freshness_seconds=180,
+            legacy_freshness_seconds=21600,
+            live_wait_seconds=1.5,
+            initial_live_wait_seconds=8.0,
+            upstream_timeout_seconds=6.0,
+            lock_ttl_seconds=30,
+            failure_cooldown_seconds=30,
+        )
+        manager._append_source_parsed_time = AsyncMock(side_effect=lambda text, *_args: text)
+        sent_message = SimpleNamespace(edit_text=AsyncMock())
+        subscription = {
+            "id": 7,
+            "entity_type": "group",
+            "entity_id": "123",
+            "entity_name": "ПМ23-1",
+        }
+        previous_checked_at = datetime(2026, 10, 5, 5, 0)
+        initial_result = ScheduleFreshnessResult(
+            schedule=[{"date": "2026-10-05", "discipline": "Cached"}],
+            freshness="refreshing",
+            source_checked_at=previous_checked_at,
+            refresh_in_progress=True,
+            cache_age_seconds=600,
+        )
+        final_result = ScheduleFreshnessResult(
+            schedule=[{"date": "2026-10-05", "discipline": "Live"}],
+            freshness="live",
+            source_checked_at=datetime(2026, 10, 5, 6, 0),
+            refresh_in_progress=False,
+            cache_age_seconds=0,
+            content_changed=True,
+        )
+        today_dt = datetime(2026, 10, 5, 9, 0)
+
+        with (
+            patch.object(
+                schedule_handler,
+                "wait_for_schedule_refresh",
+                new=AsyncMock(return_value=final_result),
+            ) as refresh_waiter,
+            patch.object(
+                schedule_handler,
+                "format_schedule",
+                new=AsyncMock(return_value="updated schedule"),
+            ),
+        ):
+            await manager._refresh_myschedule_message(
+                sent_message,
+                42,
+                "en",
+                subscription,
+                today_dt,
+                initial_result,
+                "initial schedule",
+            )
+
+        refresh_waiter.assert_awaited_once_with(
+            "group",
+            "123",
+            "2026-10-05",
+            "2026-10-05",
+            previous_schedule=initial_result.schedule,
+            previous_source_checked_at=previous_checked_at,
+            timeout_seconds=7.0,
+        )
+        sent_message.edit_text.assert_awaited_once_with(
+            "updated schedule",
             parse_mode="HTML",
         )
 

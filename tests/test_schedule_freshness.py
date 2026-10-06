@@ -322,6 +322,112 @@ class TestScheduleFreshness(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.content_changed)
         upsert.assert_awaited_once_with("group", "42", [])
 
+    async def test_wait_for_refresh_reuses_existing_local_task(self):
+        cached = [{"date": "2026-09-24", "discipline": "Cached"}]
+        live = [{"date": "2026-09-24", "discipline": "Live"}]
+        checked_at = datetime.now(UTC)
+        refresh_task = asyncio.create_task(
+            asyncio.sleep(
+                0,
+                result=schedule_freshness._RefreshOutcome(
+                    status="success",
+                    schedule=live,
+                    source_checked_at=checked_at,
+                    content_changed=True,
+                ),
+            )
+        )
+        schedule_freshness._refresh_tasks["group:42"] = refresh_task
+
+        with patch.object(
+            schedule_freshness,
+            "get_cached_schedule_snapshot",
+            AsyncMock(),
+        ) as cache_loader:
+            result = await schedule_freshness.wait_for_schedule_refresh(
+                "group",
+                "42",
+                "2026-09-24",
+                "2026-09-24",
+                previous_schedule=cached,
+                previous_source_checked_at=checked_at - timedelta(hours=1),
+                timeout_seconds=0.2,
+            )
+
+        self.assertEqual(result.freshness, "live")
+        self.assertEqual(result.schedule, live)
+        self.assertTrue(result.content_changed)
+        cache_loader.assert_not_awaited()
+
+    async def test_wait_for_refresh_observes_refresh_from_another_process(self):
+        cached = [{"date": "2026-09-24", "discipline": "Cached"}]
+        live = [{"date": "2026-09-24", "discipline": "Live"}]
+        previous_checked_at = datetime.now(UTC) - timedelta(hours=1)
+        refreshed_at = datetime.now(UTC)
+
+        with (
+            patch.object(
+                schedule_freshness,
+                "get_cached_schedule_snapshot",
+                AsyncMock(
+                    side_effect=[
+                        (cached, previous_checked_at),
+                        (live, refreshed_at),
+                    ]
+                ),
+            ) as cache_loader,
+            patch.object(
+                schedule_freshness,
+                "_failure_cooldown_active",
+                AsyncMock(return_value=False),
+            ),
+        ):
+            result = await schedule_freshness.wait_for_schedule_refresh(
+                "group",
+                "42",
+                "2026-09-24",
+                "2026-09-24",
+                previous_schedule=cached,
+                previous_source_checked_at=previous_checked_at,
+                timeout_seconds=0.2,
+                poll_interval_seconds=0.01,
+            )
+
+        self.assertEqual(result.freshness, "live")
+        self.assertEqual(result.schedule, live)
+        self.assertTrue(result.content_changed)
+        self.assertEqual(cache_loader.await_count, 2)
+
+    async def test_wait_for_refresh_returns_stale_cache_after_shared_failure(self):
+        cached = [{"date": "2026-09-24", "discipline": "Cached"}]
+        previous_checked_at = datetime.now(UTC) - timedelta(hours=1)
+
+        with (
+            patch.object(
+                schedule_freshness,
+                "get_cached_schedule_snapshot",
+                AsyncMock(return_value=(cached, previous_checked_at)),
+            ),
+            patch.object(
+                schedule_freshness,
+                "_failure_cooldown_active",
+                AsyncMock(return_value=True),
+            ),
+        ):
+            result = await schedule_freshness.wait_for_schedule_refresh(
+                "group",
+                "42",
+                "2026-09-24",
+                "2026-09-24",
+                previous_schedule=cached,
+                previous_source_checked_at=previous_checked_at,
+                timeout_seconds=0.2,
+            )
+
+        self.assertEqual(result.freshness, "stale_fallback")
+        self.assertEqual(result.schedule, cached)
+        self.assertFalse(result.refresh_in_progress)
+
 
 if __name__ == "__main__":
     unittest.main()

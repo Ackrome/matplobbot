@@ -57,8 +57,10 @@ from shared_lib.services.calendar_sync_state import (
     upsert_custom_profile,
 )
 from shared_lib.services.schedule_freshness import (
+    ScheduleFreshnessResult,
     ScheduleUnavailableError,
     get_schedule_with_freshness,
+    wait_for_schedule_refresh,
 )
 from shared_lib.services.schedule_service import (
     format_schedule,
@@ -958,35 +960,25 @@ class ScheduleManager:
                 await message.answer(translator.gettext(lang, "schedule_api_unavailable_no_cache"))
                 return True
 
-            schedule_data = freshness_result.schedule
-
-            formatted_text = await format_schedule(
-                schedule_data=schedule_data,
-                lang=lang,
-                entity_name=sub["entity_name"],
-                entity_type=sub["entity_type"],
-                user_id=user_id,
-                start_date=today_dt.date(),
-                subscription_id=sub["id"],
-            )
-
-            if freshness_result.freshness == "stale_fallback":
-                formatted_text = self._offline_warning_text(lang) + "\n\n" + formatted_text
-            elif freshness_result.freshness == "refreshing":
-                formatted_text = (
-                    translator.gettext(lang, "schedule_refreshing_cache_warning")
-                    + "\n\n"
-                    + formatted_text
-                )
-
-            formatted_text = await self._append_source_parsed_time(
-                formatted_text,
+            formatted_text = await self._format_myschedule_entity_message(
+                user_id,
                 lang,
-                sub["entity_type"],
-                sub["entity_id"],
+                sub,
+                today_dt,
+                freshness_result,
             )
 
-            await message.answer(formatted_text, parse_mode="HTML")
+            sent_message = await message.answer(formatted_text, parse_mode="HTML")
+            if freshness_result.freshness == "refreshing":
+                self._start_myschedule_message_refresh(
+                    sent_message,
+                    user_id,
+                    lang,
+                    sub,
+                    today_dt,
+                    freshness_result,
+                    formatted_text,
+                )
             return True
         except TelegramForbiddenError:
             logging.warning(f"Bot is blocked by user {user_id}. Cannot send schedule.")
@@ -997,6 +989,115 @@ class ScheduleManager:
                 exc_info=True,
             )
             return False
+
+    async def _format_myschedule_entity_message(
+        self,
+        user_id: int,
+        lang: str,
+        sub: dict,
+        today_dt: datetime,
+        freshness_result: ScheduleFreshnessResult,
+    ) -> str:
+        formatted_text = await format_schedule(
+            schedule_data=freshness_result.schedule,
+            lang=lang,
+            entity_name=sub["entity_name"],
+            entity_type=sub["entity_type"],
+            user_id=user_id,
+            start_date=today_dt.date(),
+            subscription_id=sub["id"],
+        )
+
+        if freshness_result.freshness == "stale_fallback":
+            formatted_text = self._offline_warning_text(lang) + "\n\n" + formatted_text
+        elif freshness_result.freshness == "refreshing":
+            formatted_text = (
+                translator.gettext(lang, "schedule_refreshing_cache_warning")
+                + "\n\n"
+                + formatted_text
+            )
+
+        return await self._append_source_parsed_time(
+            formatted_text,
+            lang,
+            sub["entity_type"],
+            sub["entity_id"],
+        )
+
+    def _start_myschedule_message_refresh(
+        self,
+        sent_message: Message,
+        user_id: int,
+        lang: str,
+        sub: dict,
+        today_dt: datetime,
+        freshness_result: ScheduleFreshnessResult,
+        initial_text: str,
+    ) -> None:
+        message_id = getattr(sent_message, "message_id", "unknown")
+        task = asyncio.create_task(
+            self._refresh_myschedule_message(
+                sent_message,
+                user_id,
+                lang,
+                sub,
+                today_dt,
+                freshness_result,
+                initial_text,
+            ),
+            name=(
+                "myschedule-message-refresh:"
+                f"{sub['entity_type']}:{sub['entity_id']}:{message_id}"
+            ),
+        )
+        self._track_background_task(task)
+
+    async def _refresh_myschedule_message(
+        self,
+        sent_message: Message,
+        user_id: int,
+        lang: str,
+        sub: dict,
+        today_dt: datetime,
+        initial_result: ScheduleFreshnessResult,
+        initial_text: str,
+    ) -> None:
+        settings = self.schedule_freshness_settings
+        final_result = await wait_for_schedule_refresh(
+            sub["entity_type"],
+            sub["entity_id"],
+            today_dt.strftime("%Y-%m-%d"),
+            today_dt.strftime("%Y-%m-%d"),
+            previous_schedule=initial_result.schedule,
+            previous_source_checked_at=initial_result.source_checked_at,
+            timeout_seconds=settings.upstream_timeout_seconds + 1.0,
+        )
+        updated_text = await self._format_myschedule_entity_message(
+            user_id,
+            lang,
+            sub,
+            today_dt,
+            final_result,
+        )
+        if updated_text == initial_text:
+            return
+
+        try:
+            await sent_message.edit_text(updated_text, parse_mode="HTML")
+        except TelegramBadRequest as exc:
+            error_message = str(getattr(exc, "message", exc)).lower()
+            if "message is not modified" not in error_message:
+                logging.warning(
+                    "Could not edit refreshed /myschedule message for %s:%s: %s",
+                    sub["entity_type"],
+                    sub["entity_id"],
+                    exc,
+                )
+        except TelegramForbiddenError:
+            logging.info(
+                "Could not edit refreshed /myschedule message for user %s: bot is blocked.",
+                user_id,
+            )
 
     async def cmd_my_schedule(self, message: Message, state: FSMContext):
         user_id = message.from_user.id
