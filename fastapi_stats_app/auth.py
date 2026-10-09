@@ -110,17 +110,26 @@ def create_account_export_token(account_id: int) -> str:
     """Short-lived export receipt; its audience deliberately cannot authenticate requests."""
     now = datetime.now(UTC)
     return jwt.encode(
-        {"sub": str(account_id), "iat": now, "nbf": now,
-         "exp": now + timedelta(minutes=15), "iss": JWT_ISSUER,
-         "aud": f"{JWT_AUDIENCE}:account-export"},
-        SECRET_KEY, algorithm=ALGORITHM,
+        {
+            "sub": str(account_id),
+            "iat": now,
+            "nbf": now,
+            "exp": now + timedelta(minutes=15),
+            "iss": JWT_ISSUER,
+            "aud": f"{JWT_AUDIENCE}:account-export",
+        },
+        SECRET_KEY,
+        algorithm=ALGORITHM,
     )
 
 
 def verify_account_export_token(token: str, account_id: int) -> bool:
     try:
         claims = jwt.decode(
-            token, SECRET_KEY, algorithms=[ALGORITHM], issuer=JWT_ISSUER,
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            issuer=JWT_ISSUER,
             audience=f"{JWT_AUDIENCE}:account-export",
             options={"require": ["sub", "iat", "nbf", "exp", "iss", "aud"]},
         )

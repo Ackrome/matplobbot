@@ -371,7 +371,9 @@ class GitHubManager:
         if not results:
             # Fallback на старый поиск через GitHub API, если векторы не дали результата (или база пуста)
             # await self._search_github_md(query, repo_to_search) # Старый метод
-            await status_msg.edit_text(translator.gettext(lang, "github_search_no_results", query=query))
+            await status_msg.edit_text(
+                translator.gettext(lang, "github_search_no_results", query=query)
+            )
             return
 
         # Формируем результаты для кэша и клавиатуры

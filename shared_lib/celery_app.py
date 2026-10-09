@@ -71,12 +71,16 @@ class TracedTask(Task):
             finally:
                 reset_correlation_id(token)
                 if self.name.rsplit(".", 1)[-1] in {
-                    "compile_full_latex", "compile_project", "render_pdf", "render_mermaid",
+                    "compile_full_latex",
+                    "compile_project",
+                    "render_pdf",
+                    "render_mermaid",
                 }:
                     from .operational_metrics import record_operation_sync
 
                     record_operation_sync(
-                        "studio_compile", successful=successful,
+                        "studio_compile",
+                        successful=successful,
                         duration_seconds=time.monotonic() - started,
                         error_code=None if successful else "compile_failed",
                     )

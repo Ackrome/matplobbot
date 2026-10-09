@@ -210,12 +210,16 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
     def test_widget_accepts_only_fresh_signed_payloads(self):
         now = 2_000_000_000
         with patch.object(fastapi_auth.time, "time", return_value=now):
-            self.assertTrue(fastapi_auth.verify_telegram_authorization(self._build_widget_payload(now)))
+            self.assertTrue(
+                fastapi_auth.verify_telegram_authorization(self._build_widget_payload(now))
+            )
             for timestamp in (now - 86401, now + 61, "bad", None, True):
                 with self.subTest(timestamp=timestamp):
-                    self.assertFalse(fastapi_auth.verify_telegram_authorization(
-                        self._build_widget_payload(timestamp)
-                    ))
+                    self.assertFalse(
+                        fastapi_auth.verify_telegram_authorization(
+                            self._build_widget_payload(timestamp)
+                        )
+                    )
             payload = self._build_widget_payload(now)
             payload["first_name"] = "Tampered"
             self.assertFalse(fastapi_auth.verify_telegram_authorization(payload))
@@ -223,9 +227,9 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
     def test_widget_endpoint_rejects_stale_signature_before_database_write(self):
         db = self._mock_db()
         self.app.dependency_overrides[auth_router.get_db_session_dependency] = lambda: db
-        response = self.client.post("/api/auth/telegram", json=self._build_widget_payload(
-            int(time.time()) - 365 * 86400
-        ))
+        response = self.client.post(
+            "/api/auth/telegram", json=self._build_widget_payload(int(time.time()) - 365 * 86400)
+        )
         self.assertEqual(response.status_code, 403)
         db.execute.assert_not_awaited()
 
@@ -240,12 +244,19 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
 
     def test_account_delete_requires_explicit_confirmation_and_recent_export(self):
         self.app.dependency_overrides[auth_router.get_current_user] = lambda: {"id": 7}
-        self.app.dependency_overrides[auth_router.get_db_session_dependency] = lambda: self._mock_db()
+        self.app.dependency_overrides[auth_router.get_db_session_dependency] = (
+            lambda: self._mock_db()
+        )
         with patch.object(auth_router, "delete_account_data", AsyncMock()) as erase:
             missing = self.client.request("DELETE", "/api/auth/account", json={})
-            bad = self.client.request("DELETE", "/api/auth/account", json={
-                "confirmation": "DELETE", "export_token": "not-a-receipt",
-            })
+            bad = self.client.request(
+                "DELETE",
+                "/api/auth/account",
+                json={
+                    "confirmation": "DELETE",
+                    "export_token": "not-a-receipt",
+                },
+            )
         self.assertEqual(missing.status_code, 422)
         self.assertEqual(bad.status_code, 409)
         erase.assert_not_awaited()
@@ -254,14 +265,29 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
         db = self._mock_db()
         self.app.dependency_overrides[auth_router.get_current_user] = lambda: {"id": 7}
         self.app.dependency_overrides[auth_router.get_db_session_dependency] = lambda: db
-        with patch.object(auth_router, "export_account_data", AsyncMock(return_value={
-            "account": {"id": 7}, "projects": [],
-        })) as export, patch.object(auth_router, "delete_account_data", AsyncMock(return_value=True)) as erase:
+        with (
+            patch.object(
+                auth_router,
+                "export_account_data",
+                AsyncMock(
+                    return_value={
+                        "account": {"id": 7},
+                        "projects": [],
+                    }
+                ),
+            ) as export,
+            patch.object(auth_router, "delete_account_data", AsyncMock(return_value=True)) as erase,
+        ):
             downloaded = self.client.get("/api/auth/account/export")
-            response = self.client.request("DELETE", "/api/auth/account", json={
-                "confirmation": "DELETE", "export_token": downloaded.json()["deletion_token"],
-                "account_id": 999,
-            })
+            response = self.client.request(
+                "DELETE",
+                "/api/auth/account",
+                json={
+                    "confirmation": "DELETE",
+                    "export_token": downloaded.json()["deletion_token"],
+                    "account_id": 999,
+                },
+            )
         self.assertEqual(downloaded.headers["cache-control"], "no-store")
         self.assertEqual(response.status_code, 200)
         export.assert_awaited_once_with(db, account_id=7)

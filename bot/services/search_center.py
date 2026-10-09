@@ -184,15 +184,26 @@ async def search_linked_github_markdown(
         *[
             search_repository_markdown(query, repo_path, limit=per_repo_limit)
             for repo_path in repo_paths
-        ], return_exceptions=True,
+        ],
+        return_exceptions=True,
     )
-    failed_sources = [repo for repo, result in zip(repo_paths, results_per_repo)
-                      if isinstance(result, BaseException)]
-    merged_results = [item for result in results_per_repo
-                      if not isinstance(result, BaseException) for item in result]
+    failed_sources = [
+        repo
+        for repo, result in zip(repo_paths, results_per_repo)
+        if isinstance(result, BaseException)
+    ]
+    merged_results = [
+        item
+        for result in results_per_repo
+        if not isinstance(result, BaseException)
+        for item in result
+    ]
     merged_results.sort(key=lambda item: float(item.get("score") or 0), reverse=True)
-    return SearchResults(merged_results[:limit], failed_sources=failed_sources,
-                         successful_sources=len(repo_paths) - len(failed_sources))
+    return SearchResults(
+        merged_results[:limit],
+        failed_sources=failed_sources,
+        successful_sources=len(repo_paths) - len(failed_sources),
+    )
 
 
 async def search_global_sources(
@@ -228,6 +239,7 @@ async def search_global_sources(
             successful_sources += getattr(outcome, "successful_sources", 1)
     results = SearchResults(
         merge_global_results(merged, [], limit=limit),
-        failed_sources=failed_sources, successful_sources=successful_sources,
+        failed_sources=failed_sources,
+        successful_sources=successful_sources,
     )
     return results, normalized_filters

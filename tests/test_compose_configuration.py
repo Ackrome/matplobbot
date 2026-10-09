@@ -319,7 +319,7 @@ class TestComposeConfiguration(unittest.TestCase):
         script = jenkinsfile.rsplit("<<'REMOTE_EOF'", 1)[1].split("REMOTE_EOF", 1)[0]
         # The pipeline's Groovy string consumes one layer of escaped backslashes.
         script = script.replace("\\\\", "\\")
-        fake_curl = r'''
+        fake_curl = r"""
 curl() {
   local output="" url="" arg="" previous="" authenticated=0
   for arg in "$@"; do
@@ -342,19 +342,27 @@ curl() {
   esac
   return 0
 }
-'''
+"""
         for login_status, expected_returncode in (("200", 0), ("500", 1), ("401", 1)):
-            with self.subTest(login_status=login_status), tempfile.TemporaryDirectory() as directory:
+            with (
+                self.subTest(login_status=login_status),
+                tempfile.TemporaryDirectory() as directory,
+            ):
                 root = Path(directory)
                 (root / ".env").write_text("STATS_USER=test\nSTATS_PASS=test\n", encoding="utf-8")
                 smoke = root / "smoke.sh"
                 smoke.write_text(fake_curl + script, encoding="utf-8")
                 result = subprocess.run(
-                    [_find_bash(), _bash_path(smoke)], cwd=root,
+                    [_find_bash(), _bash_path(smoke)],
+                    cwd=root,
                     env={**os.environ, "FAKE_LOGIN_STATUS": login_status},
-                    capture_output=True, text=True, timeout=10,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
                 )
-                self.assertEqual(result.returncode, expected_returncode, result.stdout + result.stderr)
+                self.assertEqual(
+                    result.returncode, expected_returncode, result.stdout + result.stderr
+                )
                 ws_calls = root / "smoke-ws-calls.txt"
                 if login_status == "200":
                     self.assertIn("127.0.0.1:8080/ws/", ws_calls.read_text(encoding="utf-8"))

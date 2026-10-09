@@ -200,10 +200,12 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
         sanitizer = "dompurify@3.4.16/dist/purify.min.js"
         self.assertIn(sanitizer, html)
         self.assertIn('id="studio-library-manifest"', html)
-        self.assertIn('/js/studio_libraries.js?v=1', html)
+        self.assertIn("/js/studio_libraries.js?v=1", html)
         self.assertLess(html.index(sanitizer), html.index("marked@15.0.12/marked.min.js"))
         self.assertIn("/js/studio.js?v=13", html)
-        frame = (PROJECT_ROOT / "main_site_frontend" / "studio-editor.html").read_text(encoding="utf-8")
+        frame = (PROJECT_ROOT / "main_site_frontend" / "studio-editor.html").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("monaco-editor/0.38.0/min/vs/loader.min.js", frame)
         self.assertIn('integrity="sha384-', frame)
         self.assertIn("/js/studio_monaco.js?v=1", frame)

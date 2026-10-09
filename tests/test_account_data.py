@@ -19,6 +19,7 @@ from shared_lib.services import account_data
 
 class _AsyncSessionAdapter:
     """Run ordinary SQLAlchemy statements unchanged, without an extra async DB dependency."""
+
     def __init__(self, session):
         self.session = session
 
@@ -37,30 +38,67 @@ class TestAccountData(unittest.IsolatedAsyncioTestCase):
         def enable_foreign_keys(connection, _record):
             connection.execute("PRAGMA foreign_keys=ON")
 
-        tables = [table for table in models.Base.metadata.sorted_tables
-                  if table.name not in {"cached_schedules", "search_documents"}]
+        tables = [
+            table
+            for table in models.Base.metadata.sorted_tables
+            if table.name not in {"cached_schedules", "search_documents"}
+        ]
         models.Base.metadata.create_all(self.engine, tables=tables)
         self.sync = Session(self.engine, expire_on_commit=False)
         self.db = _AsyncSessionAdapter(self.sync)
-        self.sync.add_all([models.User(user_id=100, full_name="Owner", calendar_secret="secret"),
-                           models.User(user_id=200, full_name="Other")])
+        self.sync.add_all(
+            [
+                models.User(user_id=100, full_name="Owner", calendar_secret="secret"),
+                models.User(user_id=200, full_name="Other"),
+            ]
+        )
         self.sync.flush()
-        self.sync.add_all([models.WebAccount(id=1, telegram_id=100, role="user", preferences={"theme":"dark"}, password_hash="private-hash"),
-                           models.WebAccount(id=2, telegram_id=200, role="user", preferences={})])
+        self.sync.add_all(
+            [
+                models.WebAccount(
+                    id=1,
+                    telegram_id=100,
+                    role="user",
+                    preferences={"theme": "dark"},
+                    password_hash="private-hash",
+                ),
+                models.WebAccount(id=2, telegram_id=200, role="user", preferences={}),
+            ]
+        )
         self.sync.flush()
-        self.sync.add_all([models.Project(id=10, owner_id=1, name="Owner project", build_cache=b"cache"),
-                           models.Project(id=20, owner_id=2, name="Other project")])
+        self.sync.add_all(
+            [
+                models.Project(id=10, owner_id=1, name="Owner project", build_cache=b"cache"),
+                models.Project(id=20, owner_id=2, name="Other project"),
+            ]
+        )
         self.sync.flush()
-        self.sync.add_all([
-            models.ProjectFile(id=11, project_id=10, file_path="main.tex", content_text="My work"),
-            models.ProjectFile(id=12, project_id=10, file_path="image.png", content_binary=b"image"),
-            models.ProjectFile(id=21, project_id=20, file_path="main.tex", content_text="Other work"),
-            models.UserAction(id=1, user_id=100, action_type="test"),
-            models.UserFavorite(id=1, user_id=100, code_path="my/example"),
-            models.MailAccount(id=1, user_id=100, address="me@example.test", host="mail.example.test", protocol="imap", credential=b"encrypted-secret", checkpoint=b"mail-checkpoint"),
-            models.ProductEvent(id=1, telegram_user_id=100, event_name="search_started"),
-            models.ProductEvent(id=2, web_account_id=1, event_name="studio_started"),
-        ])
+        self.sync.add_all(
+            [
+                models.ProjectFile(
+                    id=11, project_id=10, file_path="main.tex", content_text="My work"
+                ),
+                models.ProjectFile(
+                    id=12, project_id=10, file_path="image.png", content_binary=b"image"
+                ),
+                models.ProjectFile(
+                    id=21, project_id=20, file_path="main.tex", content_text="Other work"
+                ),
+                models.UserAction(id=1, user_id=100, action_type="test"),
+                models.UserFavorite(id=1, user_id=100, code_path="my/example"),
+                models.MailAccount(
+                    id=1,
+                    user_id=100,
+                    address="me@example.test",
+                    host="mail.example.test",
+                    protocol="imap",
+                    credential=b"encrypted-secret",
+                    checkpoint=b"mail-checkpoint",
+                ),
+                models.ProductEvent(id=1, telegram_user_id=100, event_name="search_started"),
+                models.ProductEvent(id=2, web_account_id=1, event_name="studio_started"),
+            ]
+        )
         self.sync.commit()
         self.cache_patch = patch.object(account_data, "_clear_owner_cache", AsyncMock())
         self.cache_patch.start()
@@ -88,7 +126,13 @@ class TestAccountData(unittest.IsolatedAsyncioTestCase):
         token = create_access_token({"sub": "1"})
         self.assertTrue(await account_data.delete_account_data(self.db, 1))
         self.sync.expire_all()
-        for model in (models.ProjectFile, models.UserAction, models.UserFavorite, models.MailAccount, models.ProductEvent):
+        for model in (
+            models.ProjectFile,
+            models.UserAction,
+            models.UserFavorite,
+            models.MailAccount,
+            models.ProductEvent,
+        ):
             rows = self.sync.execute(select(model)).scalars().all()
             self.assertEqual(len(rows), 1 if model is models.ProjectFile else 0)
         self.assertIsNone(self.sync.get(models.WebAccount, 1))

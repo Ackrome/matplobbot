@@ -16,7 +16,9 @@ class TestSearchAvailability(unittest.IsolatedAsyncioTestCase):
                 await semantic_search.search_engine.search("algebra", source_type="lib")
 
     async def test_single_source_outage_propagates_explicit_error(self):
-        with patch.object(search_center.search_engine, "search", AsyncMock(side_effect=RuntimeError("offline"))):
+        with patch.object(
+            search_center.search_engine, "search", AsyncMock(side_effect=RuntimeError("offline"))
+        ):
             with self.assertRaises(semantic_search.SearchUnavailableError):
                 await search_center.search_library_examples("algebra")
             with self.assertRaises(semantic_search.SearchUnavailableError):
@@ -40,16 +42,26 @@ class TestSearchAvailability(unittest.IsolatedAsyncioTestCase):
     async def test_successful_zero_results_differs_from_total_outage(self):
         with patch.object(search_center.search_engine, "search", AsyncMock(return_value=[])):
             empty, _ = await search_center.search_global_sources("algebra", {}, ["owner/notes"])
-        with patch.object(search_center.search_engine, "search", AsyncMock(side_effect=RuntimeError("offline"))):
-            unavailable, _ = await search_center.search_global_sources("algebra", {}, ["owner/notes"])
+        with patch.object(
+            search_center.search_engine, "search", AsyncMock(side_effect=RuntimeError("offline"))
+        ):
+            unavailable, _ = await search_center.search_global_sources(
+                "algebra", {}, ["owner/notes"]
+            )
         self.assertEqual(empty, [])
         self.assertEqual(unavailable, [])
         self.assertEqual(empty.status, "empty")
         self.assertEqual(unavailable.status, "unavailable")
 
     async def test_partial_zero_results_does_not_claim_complete_empty(self):
-        with patch.object(search_center, "search_library_examples", AsyncMock(return_value=[])), \
-             patch.object(search_center, "search_repository_markdown", AsyncMock(side_effect=RuntimeError("offline"))):
+        with (
+            patch.object(search_center, "search_library_examples", AsyncMock(return_value=[])),
+            patch.object(
+                search_center,
+                "search_repository_markdown",
+                AsyncMock(side_effect=RuntimeError("offline")),
+            ),
+        ):
             results, _ = await search_center.search_global_sources("algebra", {}, ["owner/notes"])
         self.assertFalse(results)
         self.assertEqual(results.status, "partial")

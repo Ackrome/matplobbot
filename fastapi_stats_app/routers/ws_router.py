@@ -29,15 +29,18 @@ logger = logging.getLogger(__name__)
 
 
 async def websocket_account_is_active(
-    user: dict, *, admin_only: bool = False, target_user_id: int | None = None,
+    user: dict,
+    *,
+    admin_only: bool = False,
+    target_user_id: int | None = None,
 ) -> bool:
     """Recheck the live DB identity with a bounded timeout, including after deletion."""
     try:
         async with asyncio.timeout(2):
             async with get_session() as session:
-                account = (await session.execute(select(WebAccount).where(
-                    WebAccount.id == user["id"]
-                ))).scalar_one_or_none()
+                account = (
+                    await session.execute(select(WebAccount).where(WebAccount.id == user["id"]))
+                ).scalar_one_or_none()
         if account is None:
             return False
         role = resolve_account_role(account)
@@ -56,11 +59,15 @@ class ConnectionManager:
         self.identities: dict[WebSocket, dict] = {}
         self.guards: dict[WebSocket, asyncio.Task] = {}
 
-    async def connect(self, websocket: WebSocket, user: dict, *, admin_only=False, target_user_id=None):
+    async def connect(
+        self, websocket: WebSocket, user: dict, *, admin_only=False, target_user_id=None
+    ):
         await websocket.accept()
         self.active_connections.add(websocket)
         self.identities[websocket] = {
-            "user": user, "admin_only": admin_only, "target_user_id": target_user_id,
+            "user": user,
+            "admin_only": admin_only,
+            "target_user_id": target_user_id,
         }
         self.guards[websocket] = asyncio.create_task(self._watch_identity(websocket))
         logger.info(

@@ -52,20 +52,27 @@ async def account_export(
     except LookupError as exc:
         raise HTTPException(status_code=404, detail="Account not found") from exc
     payload["deletion_token"] = create_account_export_token(current_user["id"])
-    return JSONResponse(payload, headers={
-        "Content-Disposition": 'attachment; filename="matplobbot-account.json"',
-        "Cache-Control": "no-store",
-    })
+    return JSONResponse(
+        payload,
+        headers={
+            "Content-Disposition": 'attachment; filename="matplobbot-account.json"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
-@router.delete("/account", response_model=StatusResponse, summary="Permanently delete your full account")
+@router.delete(
+    "/account", response_model=StatusResponse, summary="Permanently delete your full account"
+)
 async def account_delete(
     data: AccountDeleteRequest,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session_dependency),
 ):
     if not verify_account_export_token(data.export_token, current_user["id"]):
-        raise HTTPException(status_code=409, detail="Download a fresh account export before deleting.")
+        raise HTTPException(
+            status_code=409, detail="Download a fresh account export before deleting."
+        )
     if not await delete_account_data(db, current_user["id"]):
         raise HTTPException(status_code=404, detail="Account not found")
     return {"status": "success"}

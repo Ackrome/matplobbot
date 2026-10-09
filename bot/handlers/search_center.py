@@ -134,17 +134,24 @@ class SearchCenterManager:
         )
         search_status = getattr(results, "status", "ok" if results else "empty")
         await record_product_event(
-            "search_succeeded" if results else "search_failed"
-            if search_status in {"unavailable", "partial"} else "search_empty",
+            "search_succeeded"
+            if results
+            else "search_failed"
+            if search_status in {"unavailable", "partial"}
+            else "search_empty",
             telegram_user_id=user_id,
         )
 
         await redis_client.set_user_cache(
             user_id,
             "global_search",
-            {"query": query, "filters": normalized_filters, "results": results,
-             "search_status": search_status,
-             "failed_sources": getattr(results, "failed_sources", [])},
+            {
+                "query": query,
+                "filters": normalized_filters,
+                "results": results,
+                "search_status": search_status,
+                "failed_sources": getattr(results, "failed_sources", []),
+            },
         )
         keyboard = await self._build_global_search_keyboard(user_id, page=0)
         text = await self._build_global_search_text(user_id, page=0)
@@ -167,11 +174,16 @@ class SearchCenterManager:
         warning = ""
         if status == "partial":
             sources = ", ".join(
-                translator.gettext(lang, "global_search_source_library") if source == "library"
-                else translator.gettext(lang, "global_search_source_github") if source == "github"
-                else source for source in context.get("failed_sources", [])
+                translator.gettext(lang, "global_search_source_library")
+                if source == "library"
+                else translator.gettext(lang, "global_search_source_github")
+                if source == "github"
+                else source
+                for source in context.get("failed_sources", [])
             )
-            warning = translator.gettext(lang, "global_search_partial", sources=html.escape(sources))
+            warning = translator.gettext(
+                lang, "global_search_partial", sources=html.escape(sources)
+            )
 
         if not results:
             if warning:

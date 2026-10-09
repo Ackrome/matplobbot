@@ -251,7 +251,9 @@ class SettingsManager:
             ("account_full_delete_button", "account_delete_prompt"),
             ("btn_cancel", "back_to_settings"),
         ):
-            builder.row(InlineKeyboardButton(text=translator.gettext(lang, key), callback_data=data))
+            builder.row(
+                InlineKeyboardButton(text=translator.gettext(lang, key), callback_data=data)
+            )
         await callback.message.edit_text(
             translator.gettext(lang, "account_data_scope"), reply_markup=builder.as_markup()
         )
@@ -274,14 +276,19 @@ class SettingsManager:
             BufferedInputFile(content, filename="matplobbot-account.json"),
             caption=translator.gettext(lang, "account_export_done"),
         )
-        await state.update_data(account_exported_at=time.time(), account_export_owner=user_id,
-                                account_export_id=(payload.get("account") or {}).get("id"))
+        await state.update_data(
+            account_exported_at=time.time(),
+            account_export_owner=user_id,
+            account_export_id=(payload.get("account") or {}).get("id"),
+        )
 
     async def _has_recent_account_export(self, callback: CallbackQuery, state: FSMContext) -> bool:
         data = await state.get_data()
-        return (callback.message.chat.id == callback.from_user.id
-                and data.get("account_export_owner") == callback.from_user.id
-                and 0 <= time.time() - data.get("account_exported_at", 0) <= 900)
+        return (
+            callback.message.chat.id == callback.from_user.id
+            and data.get("account_export_owner") == callback.from_user.id
+            and 0 <= time.time() - data.get("account_exported_at", 0) <= 900
+        )
 
     async def cq_delete_account_prompt(self, callback: CallbackQuery, state: FSMContext):
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
@@ -292,7 +299,9 @@ class SettingsManager:
         builder = InlineKeyboardBuilder()
         builder.row(
             InlineKeyboardButton(
-                text=translator.gettext(lang, "account_full_delete_button" if full else "account_telegram_delete_button"),
+                text=translator.gettext(
+                    lang, "account_full_delete_button" if full else "account_telegram_delete_button"
+                ),
                 callback_data="account_delete_confirm" if full else "delete_my_data_confirm",
             ),
             InlineKeyboardButton(
@@ -300,7 +309,9 @@ class SettingsManager:
             ),
         )
         await callback.message.edit_text(
-            translator.gettext(lang, "account_full_delete_confirm" if full else "settings_delete_my_data_confirm"),
+            translator.gettext(
+                lang, "account_full_delete_confirm" if full else "settings_delete_my_data_confirm"
+            ),
             reply_markup=builder.as_markup(),
         )
         await callback.answer()
@@ -331,16 +342,18 @@ class SettingsManager:
             account = await get_telegram_web_account(session, user_id)
             account_id = account.id if account is not None else None
             if account_id != data.get("account_export_id"):
-                await callback.answer(translator.gettext(lang, "account_export_first"), show_alert=True)
+                await callback.answer(
+                    translator.gettext(lang, "account_export_first"), show_alert=True
+                )
                 return
             if account is not None:
                 success = await delete_account_data(session, account.id)
             else:
                 success = await delete_all_user_data(user_id)
         await state.clear()
-        await callback.message.edit_text(translator.gettext(
-            lang, "account_delete_done" if success else "delete_my_data_error"
-        ))
+        await callback.message.edit_text(
+            translator.gettext(lang, "account_delete_done" if success else "delete_my_data_error")
+        )
         await callback.answer()
 
     # --- NEW: Modular Keyboard Building Functions ---

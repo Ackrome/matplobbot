@@ -15,7 +15,14 @@ from shared_lib.redis_client import redis_client
 
 logger = logging.getLogger(__name__)
 
-_PRIVATE_FIELDS = {"password_hash", "credential", "checkpoint", "pending", "calendar_secret", "build_cache"}
+_PRIVATE_FIELDS = {
+    "password_hash",
+    "credential",
+    "checkpoint",
+    "pending",
+    "calendar_secret",
+    "build_cache",
+}
 
 
 def _export_record(record) -> dict:
@@ -46,7 +53,9 @@ async def export_account_data(
     """Export only the resolved owner's data; caller must authenticate that owner."""
     if account_id is not None:
         account = (
-            await session.execute(select(models.WebAccount).where(models.WebAccount.id == account_id))
+            await session.execute(
+                select(models.WebAccount).where(models.WebAccount.id == account_id)
+            )
         ).scalar_one_or_none()
         if account is None:
             raise LookupError("Account not found")
@@ -64,29 +73,44 @@ async def export_account_data(
         "telegram_user": None,
         "projects": [],
         "project_files": [],
-        "excluded": ["password hashes", "mail credentials and mailbox message cache", "calendar bearer secrets", "generated build cache", "shared public indexes", "operational logs and backups"],
+        "excluded": [
+            "password hashes",
+            "mail credentials and mailbox message cache",
+            "calendar bearer secrets",
+            "generated build cache",
+            "shared public indexes",
+            "operational logs and backups",
+        ],
     }
     if account_id is not None:
         for key, model, condition in (
             ("projects", models.Project, models.Project.owner_id == account_id),
-            ("project_files", models.ProjectFile, models.ProjectFile.project_id.in_(
-                select(models.Project.id).where(models.Project.owner_id == account_id)
-            )),
+            (
+                "project_files",
+                models.ProjectFile,
+                models.ProjectFile.project_id.in_(
+                    select(models.Project.id).where(models.Project.owner_id == account_id)
+                ),
+            ),
         ):
             rows = (await session.execute(select(model).where(condition))).scalars().all()
             payload[key] = [_export_record(row) for row in rows]
 
     if telegram_user_id is not None:
-        user = (await session.execute(select(models.User).where(
-            models.User.user_id == telegram_user_id
-        ))).scalar_one_or_none()
+        user = (
+            await session.execute(
+                select(models.User).where(models.User.user_id == telegram_user_id)
+            )
+        ).scalar_one_or_none()
         payload["telegram_user"] = _export_record(user) if user is not None else None
         for model in _telegram_owned_models():
             if model is getattr(models, "ProductEvent", None):
                 continue
-            rows = (await session.execute(select(model).where(
-                model.user_id == telegram_user_id
-            ))).scalars().all()
+            rows = (
+                (await session.execute(select(model).where(model.user_id == telegram_user_id)))
+                .scalars()
+                .all()
+            )
             payload[model.__tablename__] = [_export_record(row) for row in rows]
 
     product_event = getattr(models, "ProductEvent", None)
@@ -96,9 +120,12 @@ async def export_account_data(
             conditions.append(product_event.web_account_id == account_id)
         if telegram_user_id is not None:
             conditions.append(product_event.telegram_user_id == telegram_user_id)
-        payload["product_events"] = [_export_record(row) for row in (
-            await session.execute(select(product_event).where(or_(*conditions)))
-        ).scalars().all()]
+        payload["product_events"] = [
+            _export_record(row)
+            for row in (await session.execute(select(product_event).where(or_(*conditions))))
+            .scalars()
+            .all()
+        ]
     return payload
 
 
@@ -110,7 +137,8 @@ def _telegram_owned_models() -> list:
         if mapper.class_ is not models.WebAccount
         and any(
             fk.target_fullname == "users.user_id" and fk.ondelete == "CASCADE"
-            for column in mapper.local_table.columns for fk in column.foreign_keys
+            for column in mapper.local_table.columns
+            for fk in column.foreign_keys
         )
         and hasattr(mapper.class_, "user_id")
     ]
@@ -126,14 +154,22 @@ async def delete_telegram_data(session: AsyncSession, user_id: int) -> bool:
             await session.execute(delete(model).where(model.user_id == user_id))
         product_event = getattr(models, "ProductEvent", None)
         if product_event is not None:
-            await session.execute(delete(product_event).where(
-                product_event.telegram_user_id == user_id
-            ))
+            await session.execute(
+                delete(product_event).where(product_event.telegram_user_id == user_id)
+            )
         # Keeping this minimal identity avoids orphaning Telegram-only website login.
-        result = await session.execute(update(models.User).where(models.User.user_id == user_id).values(
-            settings={}, onboarding_completed=False, calendar_secret=None,
-            full_name="User", username=None, avatar_pic_url=None,
-        ))
+        result = await session.execute(
+            update(models.User)
+            .where(models.User.user_id == user_id)
+            .values(
+                settings={},
+                onboarding_completed=False,
+                calendar_secret=None,
+                full_name="User",
+                username=None,
+                avatar_pic_url=None,
+            )
+        )
     await session.commit()
     await _clear_owner_cache(user_id)
     return bool(result.rowcount)
@@ -141,9 +177,11 @@ async def delete_telegram_data(session: AsyncSession, user_id: int) -> bool:
 
 async def delete_account_data(session: AsyncSession, account_id: int) -> bool:
     """Atomically erase the website account, Studio and linked Telegram owner data."""
-    account = (await session.execute(select(models.WebAccount).where(
-        models.WebAccount.id == account_id
-    ).with_for_update())).scalar_one_or_none()
+    account = (
+        await session.execute(
+            select(models.WebAccount).where(models.WebAccount.id == account_id).with_for_update()
+        )
+    ).scalar_one_or_none()
     if account is None:
         return False
     telegram_user_id = account.telegram_id
@@ -161,6 +199,7 @@ async def _clear_owner_cache(user_id: int) -> None:
     async def clear():
         async for key in redis_client.client.scan_iter(match=f"user_cache:{int(user_id)}:*"):
             await redis_client.client.delete(key)
+
     try:
         await asyncio.wait_for(clear(), timeout=2)
     except Exception:
@@ -190,7 +229,10 @@ async def _clear_studio_jobs(account_id: int) -> None:
                 continue
             await redis_client.client.delete(key)
             await asyncio.to_thread(revoke_and_forget, job_id)
+
     try:
         await asyncio.wait_for(clear(), timeout=3)
     except Exception:
-        logger.warning("Studio cleanup deferred to 24-hour expiry after account deletion", exc_info=True)
+        logger.warning(
+            "Studio cleanup deferred to 24-hour expiry after account deletion", exc_info=True
+        )
