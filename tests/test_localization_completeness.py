@@ -106,7 +106,9 @@ class TestLocalizationCompleteness(unittest.TestCase):
         for locale in ("en", "ru"):
             self.assertIn(f'"/locales/{locale}.json?v={version}"', worker)
         for page in root.glob("*.html"):
-            for asset in re.findall(r'src="(/js/frontend_i18n\.js[^\"]*)"', page.read_text(encoding="utf-8")):
+            for asset in re.findall(
+                r'src="(/js/frontend_i18n\.js[^\"]*)"', page.read_text(encoding="utf-8")
+            ):
                 self.assertIn(f'"{asset}"', worker, str(page))
                 self.assertIn("?v=", asset)
 
