@@ -683,6 +683,8 @@
   "ux.readmeLoading": "Loading README…",
   "ux.readmeCached": "Showing a saved README. Refresh to check for updates.",
   "ux.readmeReady": "README loaded from GitHub.",
+  "ux.readmeFallback": "The Russian README is not available on GitHub yet. Showing English.",
+  "ux.readmeFallbackCached": "Could not refresh the Russian README. Showing the saved English version.",
   "ux.readmeFailed": "Could not display the README. Retry or open the GitHub link above.",
   "ux.contents": "Contents",
   "ux.copy": "Copy code",

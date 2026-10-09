@@ -42,7 +42,8 @@ async def provision_admin(db: AsyncSession, username: str, password: str) -> str
     if account.role != "admin" or account.telegram_id is not None:
         raise AdminProvisioningError(
             "STATS_USER is already owned by a non-admin or Telegram-linked account. "
-            "Choose a dedicated deployment admin username."
+            "Choose a dedicated deployment admin username "
+            "(Jenkins parameter: DEPLOY_ADMIN_USERNAME). The existing account was not changed."
         )
 
     if account.password_hash:

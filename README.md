@@ -1,7 +1,8 @@
 <div align="center">
   <img src="image/logo/thelogo.png" alt="Matplobbot Logo" width="320">
   <h1>Matplobbot</h1>
-  <strong>Telegram bot and web dashboard for browsing study materials, rendering technical content, and tracking usage in real time.</strong>
+  <p><a href="README.md">English</a> | <a href="README.ru.md">Русский</a></p>
+  <strong>Study materials, university schedules and document creation — in Telegram and on the web.</strong>
 
   <p align="center">
     <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
@@ -15,7 +16,9 @@
     <img src="https://img.shields.io/github/actions/workflow/status/Ackrome/matplobbot/ci-cd.yml?style=for-the-badge&label=Build&logo=github" alt="Build status">
   </p>
 
-  <h3>Try it on Telegram</h3>
+  <p><a href="https://ivantishchenko.ru/schedule">Schedule</a> · <a href="https://ivantishchenko.ru/studio">Document Studio</a> · <a href="https://github.com/Ackrome/matplobbot">GitHub</a></p>
+
+  <h3>Open in Telegram</h3>
   <p align="center">
     <a href="https://t.me/matplobbot"><img src="https://img.shields.io/badge/STABLE_TELEGRAM_BOT-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Stable Telegram bot"></a>
     <a href="https://t.me/test_matplobbot"><img src="https://img.shields.io/badge/DEVELOPMENT_TELEGRAM_BOT-ff8800?style=for-the-badge&logo=telegram&logoColor=white" alt="Development Telegram bot"></a>
@@ -24,281 +27,220 @@
 
 ## Overview
 
-Matplobbot is a multi-service platform built around a Telegram bot for technical and educational workflows. It combines interactive content browsing, Markdown and document rendering, university schedule tools, background processing, and a live analytics dashboard in one Docker-based stack.
+Matplobbot brings study materials, university schedules and document creation into one Telegram bot and web application. Search your notes, compare timetables, subscribe to a calendar, or turn a draft into a PDF without switching between unrelated tools.
 
-The project currently includes:
+The website supports English and Russian, light and dark themes, desktop and mobile layouts, and Telegram Mini Apps. The capabilities below describe the current repository; availability on a deployed instance depends on its version and configuration.
 
-1. A Telegram bot built with `aiogram 3`.
-2. A scheduler service for notifications and background schedule checks.
-3. A FastAPI analytics dashboard with live stats and user drill-down pages.
-4. A Celery worker for heavy rendering tasks such as LaTeX, Mermaid, and document conversion.
-5. Supporting infrastructure via PostgreSQL, Redis, Docker Compose, and optional frontend/reverse-proxy services.
+## What you can do
 
-## Key Features
+### Schedules and calendars
 
-### Telegram Bot
+- Find a group, lecturer or auditorium from Telegram or the website. Use keyboard search, recent entries and favorites, then jump directly to today's classes.
+- Filter by modules and class type, switch between day and week views, and open full lesson details.
+- Compare up to six schedules across a period of up to 14 days. See overlapping classes and common free windows on a shared timeline. Missing source data is not treated as free time.
+- Keep schedule subscriptions in sync between the website and Telegram. Receive daily notifications and alerts about changed, added or cancelled classes.
+- Subscribe through a private WebCal/iCalendar link, or download a one-time ICS snapshot. Calendar profiles support different selections and filters.
+- Reopen cached schedules when the upstream source is unavailable, with visible freshness information. The installable web app also caches its interface for offline access.
 
-- Browse `matplobblib` modules and topics interactively with `/matp_all`.
-- Search `matplobblib` content with `/matp_search`.
-- Browse and search user-linked GitHub repositories with `/lec_all` and `/lec_search`.
-- Render LaTeX formulas to PNG with `/latex`.
-- Render Mermaid diagrams to PNG with `/mermaid`.
-- Convert Markdown into raw Markdown, HTML, or PDF output.
-- Save favorites, manage repositories, and configure personal settings from inline menus.
-- Use university schedule search, calendar navigation, daily and weekly views, and subscription-based notifications.
+### Document Studio
 
-### Schedule Tools
+- Start with a local LaTeX, Markdown or Mermaid draft, then save its contents as a project after signing in.
+- Edit with Monaco, use document and presentation templates with visual previews, manage project files, and rename, copy or delete projects.
+- Preview Markdown and diagrams live, compile documents asynchronously, download PDF/PNG results, or send a result to Telegram.
+- Recover browser drafts after a reload, compare local and server versions, and download both before choosing which to keep.
+- Open a source file and line from a build error. Review recent builds, retrieve results, or cancel a running compilation.
+- Upload several files with per-file status and retry failed uploads. Save with `Ctrl/Cmd+S`; build with `Ctrl/Cmd+Enter`.
 
-- Search schedules by group, teacher, or auditorium.
-- Navigate dates through an inline calendar.
-- Receive next-day schedule notifications at a chosen time.
-- Get update alerts when lessons change, are added, or are cancelled.
+Drafts and the last 20 build records are stored on the current device. Build results are retained for up to 24 hours; this is recovery support, not permanent version history. Offline access does not include server compilation.
 
-### Web Dashboard
+### Telegram materials and tools
 
-- View live usage stats over WebSockets.
-- See popular commands, text activity, action-type breakdowns, and activity trends.
-- Inspect user-specific pages with paginated history, filtering, and CSV export.
-- View bot logs with `docker compose logs -f mpb-telegram-bot`; the legacy log WebSocket is intentionally disabled.
-- Configure private mailbox forwarding with `/mail` (requires `MAIL_CREDENTIAL_KEY`).
+- Browse and search `matplobblib` topics and Markdown notes from linked GitHub repositories.
+- Search both sources from one screen, save search presets, and keep favorite materials.
+- Render LaTeX formulas and Mermaid diagrams to PNG, and convert Markdown to HTML or PDF.
+- Manage subscriptions, repositories, language and personal preferences through inline menus.
+- Optionally forward mail from private IMAP/POP3 mailboxes to Telegram, with encrypted credentials, per-mailbox controls and delivery retries.
 
-## Screenshots
+### Account and administration
 
-### Dashboard
+- Open the account page from your signed-in avatar/name card. Manage language and theme, return to your tools, or jump to Telegram settings.
+- Export account data as JSON or as a ZIP containing project sources. Account deletion is separated from everyday actions and requires a recent export and confirmation.
+- Administrators have separate views for service health, usage and discipline-to-module mappings, plus user activity pages and CSV export.
+- Operational status covers schedule freshness, rendering and notification delivery. Usage includes aggregate workflow timings without document contents or search text.
+- Live statistics use WebSockets. If the chart library is unavailable, the underlying data remains available as a table.
 
-<div align="center">
-  <img src="image/notes/Dashboard.png" alt="Dashboard overview" width="800">
-</div>
+## Interface
 
-### User Details
+Screenshots show the current interface with demonstration data.
 
-<div align="center">
-  <img src="image/notes/User.png" alt="User details page" width="700">
-</div>
+### Weekly schedule
 
-### Schedule Flow
+![Weekly timetable with lesson times, modules and locations](image/notes/ui/schedule-desktop.png)
 
-<div align="center">
-  <img src="image/notes/schedule_en_1.png" alt="Schedule search" width="260">
-  <img src="image/notes/schedule_en_2.png" alt="Schedule results" width="260">
-  <img src="image/notes/schedule_en_3.png" alt="Schedule day view" width="260">
-</div>
+### Studio with live Markdown and formulas
 
-<div align="center">
-  <img src="image/notes/calendar_screenshot.png" alt="Inline calendar" width="320">
-</div>
+![Studio editor alongside a live Markdown and mathematical formula preview](image/notes/ui/studio-markdown.png)
 
-## Quickstart
+### Mobile account and service health
 
-### Prerequisites
+<p>
+  <img src="image/notes/ui/account-mobile.png" alt="Mobile account settings with language, theme and data export" width="300">
+  <img src="image/notes/ui/admin-health-mobile.png" alt="Mobile administration view showing service health" width="300">
+</p>
 
-- Docker
-- Docker Compose
+## Run locally
 
-### Minimal `.env` example
+You need Docker with Docker Compose v2 and a Telegram bot token. The service builds use the project's GHCR base images; Docker must be able to pull them.
 
-Create a `.env` file in the project root. This is a minimal example for local startup; your production setup may require additional variables.
-
-```env
-BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
-ADMIN_USER_IDS=123456789,987654321
-GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-JWT_SECRET_KEY=change_this_to_a_secure_random_jwt_secret_in_production
-STATS_USER=admin
-STATS_PASS=change_this_admin_password_in_production
-ENVIRONMENT=development
-
-POSTGRES_USER=user
-POSTGRES_PASSWORD=password
-POSTGRES_DB=matplobbot_db
-POSTGRES_HOST=postgres
-POSTGRES_PORT=5432
-```
-
-### Run locally
+### 1. Get the repository and configure the environment
 
 ```bash
 git clone https://github.com/Ackrome/matplobbot.git
 cd matplobbot
-docker compose up --build -d
+cp .env.example .env
 ```
 
-### Access services
+In PowerShell, use `Copy-Item .env.example .env` for the final command. Edit `.env` before starting containers:
 
-- Telegram bot: available through Telegram after `BOT_TOKEN` is configured.
-- Analytics dashboard: `http://localhost:9583`
-- Static site frontend: `http://localhost:8080`
-- Scheduler health endpoint: `http://localhost:9584/health` for operational checks
+| Variable | Configuration |
+| --- | --- |
+| `BOT_TOKEN` | Token for your own Telegram bot. |
+| `ADMIN_USER_IDS` | Comma-separated Telegram IDs for bot administrators. |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Database credentials and database name. |
+| `DATABASE_URL` | Required SQLAlchemy URL, using the same credentials; inside Compose the host is `postgres`. URL-encode special characters in credentials. |
+| `REDIS_URL` | Inside Compose: `redis://redis:6379/0`. |
+| `JWT_SECRET_KEY` | A random secret of at least 32 characters. |
+| `STATS_USER`, `STATS_PASS` | A dedicated password administrator and a strong password; create the account in step 3. |
+| `PUBLIC_SITE_URL`, `CORS_ALLOWED_ORIGINS` | Keep the template's localhost values for local use; set your public HTTPS origin for deployment. |
+| `GITHUB_TOKEN` | A token for GitHub-backed features, when used; remove the example value if unused. |
+| `MAIL_CREDENTIAL_KEY` | Leave empty when mail forwarding is unused. Otherwise use a valid Fernet key and keep it stable. |
 
-### Stop the stack
+For local development, keep `ENVIRONMENT=development`. The complete template also documents logging, schedule freshness, notification delivery and operational limits.
+
+### 2. Start the application
 
 ```bash
+docker compose up --build -d main-site-frontend mpb-fastapi-stats mpb-scheduler
+```
+
+Compose starts their bot, worker, database, Redis and migrator dependencies. The migrator applies `alembic upgrade head`. This local command does not start Caddy, whose checked-in configuration uses deployment-specific domains.
+
+If you need to build the base images locally first:
+
+```bash
+docker build -f Dockerfile.base-python -t ghcr.io/ackrome/matplobbot-base-python:latest .
+docker build -f Dockerfile.base-worker -t ghcr.io/ackrome/matplobbot-base-worker:latest .
+```
+
+### 3. Create the password administrator
+
+After the API container and database migrations are ready:
+
+```bash
+docker compose exec mpb-fastapi-stats python -m fastapi_stats_app.bootstrap_admin
+```
+
+The command reads `STATS_USER` and `STATS_PASS` from the container. It creates a dedicated administrator or updates an existing unlinked administrator; it refuses to overwrite an ordinary or Telegram-linked account. Public login does not create this account automatically. The example username is `matplobbot-deploy`. Jenkins selects it through the `DEPLOY_ADMIN_USERNAME` parameter, with the password in `PROD_STATS_PASS`; the legacy `PROD_STATS_USER` credential is no longer used. If the selected name is already linked to Telegram or belongs to an ordinary account, choose another dedicated name.
+
+On the login page, expand the administrator password form. Telegram sign-in additionally requires a bot/domain configuration appropriate for your deployment; the checked-in frontend points to the project's bot. See [authentication and Mini Apps](docs/wiki.md#auth-and-account-sessions) before configuring your own instance.
+
+### 4. Open the services
+
+| Service | Local address |
+| --- | --- |
+| Website | [localhost:8080](http://localhost:8080) |
+| Schedule | [localhost:8080/schedule](http://localhost:8080/schedule) |
+| Studio | [localhost:8080/studio](http://localhost:8080/studio) |
+| Account and data | [localhost:8080/account](http://localhost:8080/account) |
+| Admin dashboard | [localhost:8080/stats](http://localhost:8080/stats) |
+| Interactive API documentation | [localhost:9583/docs](http://localhost:9583/docs) |
+| API health | [localhost:9583/api/stats/health](http://localhost:9583/api/stats/health) |
+| Scheduler health | [localhost:9584/health](http://localhost:9584/health) |
+
+The frontend proxies `/api/` and `/ws/` to FastAPI. The bot is available in Telegram using the token you configured.
+
+```bash
+docker compose ps
+docker compose logs -f mpb-telegram-bot mpb-fastapi-stats mpb-worker
 docker compose down
 ```
 
-To remove named volumes as well:
+Stopping the stack keeps named database and Redis volumes. Production uses the separate [docker-compose.prod.yml](docker-compose.prod.yml) and [deploy.sh](deploy.sh); see the [deployment notes](docs/wiki.md#ci-deploy-and-wiki-sync).
 
-```bash
-docker compose down -v
-```
-
-## Popular Commands
+## Telegram commands
 
 | Command | Purpose |
-| :--- | :--- |
-| `/start` | Start the bot and initialize the main flow |
-| `/help` | Show the command/help menu |
-| `/schedule` | Search for a schedule by entity |
-| `/myschedule` | Show today's schedule for the saved entity |
-| `/matp_all` | Browse library content |
-| `/matp_search` | Search inside `matplobblib` |
-| `/lec_all` | Browse configured GitHub repositories |
-| `/lec_search` | Search Markdown files in a linked repository |
-| `/latex` | Render a LaTeX expression to PNG |
-| `/mermaid` | Render a Mermaid diagram to PNG |
-| `/favorites` | Open saved favorites |
-| `/settings` | Manage personal preferences and repositories |
+| --- | --- |
+| `/start`, `/help` | Onboarding and available commands |
+| `/search`, `/search_presets` | Search across sources and reuse saved searches |
+| `/matp_all`, `/matp_search` | Browse and search the library |
+| `/lec_all`, `/lec_search` | Browse and search linked GitHub notes |
+| `/schedule`, `/myschedule` | Find a timetable or open your combined schedule |
+| `/plan`, `/conflicts`, `/free` | Compare schedules and find conflicts or free windows |
+| `/calendar_sync` | Manage calendar links and profiles |
+| `/studio` | Open Document Studio |
+| `/latex`, `/mermaid` | Render a formula or diagram |
+| `/mail` | Configure private mailbox forwarding when enabled |
+| `/favorites`, `/settings` | Saved materials and personal preferences |
+| `/cancel` | Leave the current bot dialog |
 
 ## Architecture
 
-### Tech Stack
+| Component | Responsibility |
+| --- | --- |
+| `bot/` | Aiogram 3 handlers, inline flows and Telegram delivery |
+| `main_site_frontend/` | Static HTML/JavaScript application, Tailwind CSS, PWA shell and Nginx proxy |
+| `fastapi_stats_app/` | FastAPI authentication, schedule/calendar, Studio and admin APIs; WebSockets |
+| `scheduler_app/` | Schedule refresh, daily notifications, durable delivery retries and mailbox polling |
+| `shared_lib/` | SQLAlchemy models, services, rendering tasks, localization and shared infrastructure |
+| `alembic/` | Database migrations |
+| PostgreSQL | Accounts, projects, subscriptions, indexed materials and operational data |
+| Redis + Celery | Caches, bot dialog state, background rendering jobs and temporary results |
 
-| Category | Technology |
-| :--- | :--- |
-| Backend | Python 3.11+ |
-| Bot | Aiogram 3 |
-| API | FastAPI, Uvicorn |
-| Database | PostgreSQL, asyncpg |
-| Queue | Celery, Redis |
-| Frontend | HTML, CSS, JavaScript, Chart.js |
-| Rendering | Pandoc, TeX Live, Mermaid CLI, Puppeteer |
-| Deployment | Docker, Docker Compose, Caddy, Nginx |
+Python services use PostgreSQL through SQLAlchemy/asyncpg. Rendering workers contain Pandoc, TeX Live, Mermaid CLI and browser rendering tools. Heavy compilation runs outside the bot and API processes. The frontend loads Monaco and preview libraries as needed.
 
-### Project Structure
+The `/project` page renders the README in the selected website language directly from GitHub, sanitizes its HTML, resolves repository-relative links and images, and keeps a separate local cached copy for each language. Local README edits appear there after publication to the repository and refresh of the page's cache.
 
-```text
-.
-|-- bot/                  # Telegram bot logic, handlers, services, templates
-|-- fastapi_stats_app/    # Dashboard API, static assets, templates, routers
-|-- scheduler_app/        # Scheduled jobs and notification service
-|-- shared_lib/           # Shared database, schemas, services, tasks, i18n
-|-- main_site_frontend/   # Static frontend served by nginx
-|-- proxy/                # Proxy-related utilities/config
-|-- alembic/              # Database migrations
-|-- docker-compose.yml    # Local orchestration
-`-- docker-compose.prod.yml
-```
+## Development and checks
 
-### Rendering Flow
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Bot
-    participant Redis as Redis Broker
-    participant Worker as Celery Worker
-    participant DB as Database
-
-    User->>Bot: Sends /latex \frac{a}{b}
-    Bot->>Redis: Enqueues render task
-    Bot-->>User: Sends temporary status message
-    Redis->>Worker: Delivers task
-    Worker->>Worker: Compiles output
-    Worker->>Redis: Stores result
-    Bot->>Redis: Retrieves result
-    Bot->>User: Sends rendered image
-    Bot->>DB: Caches result
-```
-
-### Architectural Notes
-
-- Shared logic lives in `shared_lib`, including database access, schemas, Redis integration, tasks, and localization.
-- Services are separated by responsibility and communicate through PostgreSQL and Redis.
-- Heavy rendering work is moved off the bot process to keep interactions responsive.
-- The stack is asynchronous end-to-end for API calls, database work, and bot interactions.
-
-## Development Notes
-
-### Database Migrations
-
-Alembic is used for schema changes.
-
-- In Docker Compose, migrations are applied automatically by the `migrator` service during startup.
-- Manual Alembic commands are mainly useful during development when you are changing models or preparing a new migration.
+Use Python 3.11 or 3.12 with a repository-root `.venv`; CI validates on Python 3.11 and the Python base image uses 3.12. Install the project, runtime dependencies and shared validation tools in that environment:
 
 ```bash
-alembic revision --autogenerate -m "Add new table"
-alembic upgrade head
+python -m venv .venv
 ```
 
-### Dependency Locking
-
-- `requirements.in` is the editable dependency source file for base bot/worker images.
-- `requirements.txt` is the lockfile consumed by Docker builds.
-- Regenerate the lockfile after changing `requirements.in`:
+Activate with `source .venv/bin/activate` on Linux/macOS or `.venv\Scripts\Activate.ps1` in PowerShell, then run:
 
 ```bash
-python -m pip install --upgrade pip pip-tools
-pip-compile --resolver=backtracking --output-file requirements.txt requirements.in
+python -m pip install -e .
+python -m pip install -r requirements.txt -r fastapi_stats_app/requirements.txt -r scheduler_app/requirements.txt
+python -m pip install -r requirements-validation.txt
+python -m ruff check . --select E9,F63,F7,F82
+python -X utf8 -m coverage run --branch -m unittest discover -s tests -v
+python -m coverage report --skip-covered
 ```
 
-Run the same dependency audit input builder used by CI before merging
-requirement changes:
+To rebuild the committed frontend CSS, install Node.js/npm and run:
 
 ```bash
-python scripts/build_audit_requirements.py
-python -m pip install pip-audit==2.10.1
-python -m pip_audit --strict -r audit-requirements.txt --ignore-vuln PYSEC-2024-277
+npm ci
+npm run build:tailwind
 ```
 
-`PYSEC-2024-277` is the only documented audit ignore; keep any new ignore next
-to the CI/Jenkins audit command with a concrete rationale.
+`requirements.in` is the editable dependency source for base images; `requirements.txt` is its lockfile. API, scheduler and validation dependencies have their own files. After changing dependencies, follow the [dependency audit procedure](docs/wiki.md#dependency-audit) and the current [CI workflow](.github/workflows/ci-cd.yml).
 
-### Auto-Lint (Remote + Local)
+GitHub Actions validates changes, publishes the shared package and builds service images. Jenkins performs deployment validation and smoke checks; `deploy.sh` applies migrations and provisions the dedicated administrator. Optional local pre-commit hooks use [.pre-commit-config.yaml](.pre-commit-config.yaml).
 
-`.github/workflows/autolint-autofix.yml` runs on:
-- pull requests to `main`
-- direct pushes to `main`
+When contributing, keep RU/EN locale keys synchronized, test the affected workflow, and document new functionality in `docs/wiki.md`. New code files also require a colocated `wiki_<filename>.md`, as described in the project's contribution instructions. Update both README language versions together.
 
-It executes `pre-commit --all-files` and pushes auto-fixes back automatically.
-To avoid infinite loops, the job skips commits authored by `github-actions[bot]`.
-The autofix run is non-blocking: it commits all available automatic fixes even if
-some lint issues still require manual refactoring.
-Workflow files under `.github/workflows/` are intentionally excluded from auto-fix
-commits due GitHub token permission limits for workflow updates.
+## Documentation
 
-Local hooks are still optional and useful for faster feedback:
-
-```bash
-python -m pip install --upgrade pip pre-commit
-pre-commit install
-pre-commit run --all-files
-```
-
-- Hook config lives in `.pre-commit-config.yaml`.
-- Lint/type tool settings live in `pyproject.toml`.
-
-### CI/CD Summary
-
-The repository uses GitHub Actions for CI and image publishing, with Jenkins handling deployment orchestration. The shared library is versioned and published before updated service images are built and deployed.
-
-## Roadmap
-
-- [x] Integrate SQLAlchemy Core instead of raw SQL
-- [x] Add PostgreSQL text search for project materials
-- [ ] Add plugin-based support for multiple universities
-- [ ] Support voice-driven schedule requests
-
-## Contributing
-
-Contributions are welcome.
-
-1. Fork the repository.
-2. Create a feature branch.
-3. Commit your changes.
-4. Push the branch.
-5. Open a pull request.
+- [Full feature wiki](docs/wiki.md): workflows, APIs, configuration and operational contracts.
+- [Environment template](.env.example): supported settings and defaults.
+- [Studio implementation notes](main_site_frontend/js/wiki_studio_workspace.md): recovery, project management and builds.
+- [Account administrator provisioning](fastapi_stats_app/wiki_bootstrap_admin.md): setup and collision handling.
+- [Backlog and recorded decisions](docs/TODO.md): active ideas alongside historical and declined items.
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+Matplobbot is licensed under the [MIT License](LICENSE).

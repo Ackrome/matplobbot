@@ -8,6 +8,7 @@ pipeline {
         string(name: 'SCHEDULER_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag for the scheduler')
         string(name: 'DEPLOY_HOST', defaultValue: '192.168.1.40', description: 'LAN hostname or private IP of app-vm; it must resolve to exactly one RFC1918 address')
         string(name: 'DEPLOY_HOST_FINGERPRINT', defaultValue: '', description: 'Optional override for pinned SHA256 host key fingerprint from APP_VM_SHA256')
+        string(name: 'DEPLOY_ADMIN_USERNAME', defaultValue: 'matplobbot-deploy', description: 'Dedicated unlinked password administrator for deployment smoke checks; never use a Telegram or ordinary account')
     }
 
 
@@ -22,7 +23,6 @@ pipeline {
         PROD_POSTGRES_PASSWORD = credentials('PROD_POSTGRES_PASSWORD')
         PROD_POSTGRES_DB = credentials('PROD_POSTGRES_DB')
         PROD_STATS_PASS = credentials('PROD_STATS_PASS')
-        PROD_STATS_USER = credentials('PROD_STATS_USER')
         PROD_PUBLIC_API_URL = credentials('PROD_PUBLIC_API_URL')
         PROD_PUBLIC_SITE_URL = credentials('PROD_PUBLIC_SITE_URL')
         PROD_JWT_SECRET_KEY = credentials('PROD_JWT_SECRET_KEY')
@@ -219,7 +219,7 @@ REMOTE_EOF
                                     printf 'POSTGRES_PASSWORD=%s\n' "$PROD_POSTGRES_PASSWORD"
                                     printf 'POSTGRES_DB=%s\n' "$PROD_POSTGRES_DB"
                                     printf 'DATABASE_URL=postgresql://%s:%s@postgres:5432/%s\n' "$PROD_POSTGRES_USER" "$PROD_POSTGRES_PASSWORD" "$PROD_POSTGRES_DB"
-                                    printf 'STATS_USER=%s\n' "$PROD_STATS_USER"
+                                    printf 'STATS_USER=%s\n' "${DEPLOY_ADMIN_USERNAME:-matplobbot-deploy}"
                                     printf 'STATS_PASS=%s\n' "$PROD_STATS_PASS"
                                     printf 'PUBLIC_API_URL=%s\n' "$PROD_PUBLIC_API_URL"
                                     printf 'PUBLIC_SITE_URL=%s\n' "$PROD_PUBLIC_SITE_URL"

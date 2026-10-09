@@ -210,6 +210,48 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
                 db.add.assert_not_called()
                 db.flush.assert_not_awaited()
 
+    async def test_dedicated_deployment_admin_preserves_existing_telegram_account(self):
+        engine = create_engine("sqlite://")
+        bootstrap_admin.WebAccount.__table__.create(engine)
+        session = Session(engine, expire_on_commit=False)
+        self.addCleanup(engine.dispose)
+        self.addCleanup(session.close)
+        existing = bootstrap_admin.WebAccount(
+            username="admin",
+            role="admin",
+            telegram_id=123,
+            password_hash="existing-user-hash",
+            preferences={"language": "ru"},
+        )
+        session.add(existing)
+        session.commit()
+        original_id = existing.id
+        db = self._mock_db()
+        db.execute = AsyncMock(side_effect=session.execute)
+        db.add = Mock(side_effect=session.add)
+        db.flush = AsyncMock(side_effect=session.flush)
+
+        result = await bootstrap_admin.provision_admin(
+            db, "matplobbot-deploy", "deployment-only-secret"
+        )
+        session.commit()
+        session.expire_all()
+        self.assertEqual(result, "created")
+        old = session.get(bootstrap_admin.WebAccount, original_id)
+        self.assertEqual(
+            (old.username, old.role, old.telegram_id, old.password_hash, old.preferences),
+            ("admin", "admin", 123, "existing-user-hash", {"language": "ru"}),
+        )
+        new = session.scalar(
+            select(bootstrap_admin.WebAccount).where(
+                bootstrap_admin.WebAccount.username == "matplobbot-deploy"
+            )
+        )
+        self.assertNotEqual(new.id, original_id)
+        self.assertEqual(new.role, "admin")
+        self.assertIsNone(new.telegram_id)
+        self.assertTrue(fastapi_auth.verify_password("deployment-only-secret", new.password_hash))
+
     async def test_deployment_admin_rejects_empty_and_default_credentials(self):
         for username, password in (
             ("", "secret"),

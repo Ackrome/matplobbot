@@ -683,6 +683,8 @@
   "ux.readmeLoading": "Загружаем README…",
   "ux.readmeCached": "Показана сохранённая копия README. Для проверки обновлений нажмите «Обновить».",
   "ux.readmeReady": "README загружен из GitHub.",
+  "ux.readmeFallback": "Русский README ещё недоступен в GitHub. Показана английская версия.",
+  "ux.readmeFallbackCached": "Не удалось обновить русский README. Показана сохранённая английская версия.",
   "ux.readmeFailed": "Не удалось показать README. Повторите загрузку или откройте GitHub по ссылке выше.",
   "ux.contents": "Содержание",
   "ux.copy": "Копировать код",

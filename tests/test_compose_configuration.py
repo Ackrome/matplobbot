@@ -59,6 +59,32 @@ def _bash_path(path: Path) -> str:
 
 
 class TestComposeConfiguration(unittest.TestCase):
+    @unittest.skipUnless(_find_bash(), "bash is required for the deployment username check")
+    def test_deployment_uses_dedicated_username_instead_of_legacy_credential(self):
+        pipeline = JENKINSFILE.read_text(encoding="utf-8")
+        self.assertNotIn("credentials('PROD_STATS_USER')", pipeline)
+        self.assertIn("string(name: 'DEPLOY_ADMIN_USERNAME'", pipeline)
+        emit_username = next(
+            line.strip() for line in pipeline.splitlines() if "printf 'STATS_USER=%s" in line
+        )
+        for override, expected in (
+            ("", "matplobbot-deploy"),
+            ("dedicated-admin", "dedicated-admin"),
+        ):
+            with self.subTest(override=override):
+                result = subprocess.run(
+                    [_find_bash(), "-c", emit_username],
+                    env={
+                        **os.environ,
+                        "PROD_STATS_USER": "existing-telegram-account",
+                        "DEPLOY_ADMIN_USERNAME": override,
+                    },
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                self.assertEqual(result.stdout, f"STATS_USER={expected}\n")
+
     @classmethod
     def setUpClass(cls):
         cls.local = _load_compose(LOCAL_COMPOSE)

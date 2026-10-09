@@ -24,8 +24,11 @@ docker compose -f docker-compose.prod.yml exec -T mpb-fastapi-stats \
   python -m fastapi_stats_app.bootstrap_admin
 ```
 
-Configure a dedicated username and a strong password through the existing Jenkins
-`PROD_STATS_USER` / `PROD_STATS_PASS` credentials. Password rotation becomes effective
+Configure the Jenkins `DEPLOY_ADMIN_USERNAME` parameter (default `matplobbot-deploy`)
+and the `PROD_STATS_PASS` credential. The legacy `PROD_STATS_USER` credential is no
+longer read: it may refer to an existing person's Telegram account. A custom
+deployment username must also be unused or belong to an unlinked administrator.
+Password rotation becomes effective
 on the next deployment. A direct invocation of this command also changes the database;
 it is not a read-only diagnostic. No credentials are accepted as command-line arguments.
 

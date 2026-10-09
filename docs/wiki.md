@@ -275,6 +275,7 @@ may run the API first, but schedule-change polling must not use the new code unt
 | [Calendar sync panel](#calendar-sync-panel) | Schedule page calendar section | Manage private iCal feeds and website sync profiles |
 | [Stats dashboard](#stats-dashboard) | `/stats` (admin) | Live and REST analytics, degradations, drill-downs |
 | [Studio page](#studio-page) | `/studio` | Document compile, project files, exports, send to Telegram |
+| [Project README page](#project-readme-page) | `/project` | Render the repository introduction, current capabilities and setup instructions |
 | [Runtime API base and popup UX](#runtime-api-base-and-popup-ux) | `runtime_config.js`, `ui_utils.js` | Environment-specific API host and unified notifications |
 
 ### API Features
@@ -1030,6 +1031,28 @@ How to use:
 4. Export user actions in needed format and filter window.
 5. Use `Refresh schedule cache` after semester id changes to remap cached schedule entities and refresh current-semester data immediately.
 
+### Project README Page
+
+`/project` renders the public repository's `README.md` or `README.ru.md` through
+GitHub's Contents API, according to the website language. Both documents contain
+English/Russian links; on the site they switch the locale without leaving the page.
+Marked parses Markdown; DOMPurify sanitizes the result. Relative links and images
+resolve against the repository, and headings populate an adaptive table of contents.
+The browser reuses separate language caches for ten minutes before revalidation,
+offers an explicit refresh, and can retain an older copy when GitHub is unavailable.
+A missing Russian file (HTTP 404) falls back to English with a visible notice;
+English content never overwrites the Russian cache. Switching language cancels
+older requests and ignores late responses.
+
+The README describes the current repository, not a verified production release.
+It covers schedule/calendar workflows, Studio recovery and builds, account data,
+administration, local Compose startup and explicit password-admin provisioning.
+Its interface screenshots in `image/notes/ui/` use demonstration data. Keep local
+paths and heading links valid, and check the page at desktop and mobile widths
+when changing document structure or screenshots. Local edits appear on the public
+page only after publication to GitHub and a content refresh. Mermaid code fences
+are shown as source code by this reader.
+
 ### Studio Page
 
 Files:
@@ -1747,7 +1770,10 @@ Jenkins + deploy features:
   gap where Jenkins supplied environment credentials but `/api/auth/login` required
   a matching `web_accounts` row. Repeated provisioning preserves the ID, preferences,
   and an already matching hash. Ordinary and Telegram-linked username collisions
-  fail without mutation; configure a different dedicated `PROD_STATS_USER` in Jenkins.
+  fail without mutation; choose an unused `DEPLOY_ADMIN_USERNAME` parameter in Jenkins
+  (default `matplobbot-deploy`). The old `PROD_STATS_USER` credential is no longer
+  copied into `STATS_USER`, preventing a personal account from blocking deployment.
+  The password still comes from `PROD_STATS_PASS`.
   Blank/default credentials and invalid stored hashes also fail closed. Changing
   `STATS_USER` does not remove the previous account. See
   [the provisioning module](../fastapi_stats_app/wiki_bootstrap_admin.md).
@@ -1917,7 +1943,7 @@ How to use:
   календаре сайту недоступно. Метрики best effort и не являются SLA.
 - API расписания возвращает исходные нормализованные интервалы `lessons` для
   визуализации. Прежние ограничения: до шести сущностей, до 14 дней, текущий семестр.
-- Офлайн-кэш `mpb-site-v37` включает новые оболочки, скрипты и общие стили.
+- Офлайн-кэш `mpb-site-v38` включает новые оболочки, скрипты и общие стили.
   Текст публичного README кэшируется отдельно на устройстве. Доступность библиотеки
   рендеринга и внешних изображений зависит от сети; предусмотрены понятные состояния.
 
