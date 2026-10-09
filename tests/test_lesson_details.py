@@ -1,10 +1,10 @@
 """Exercise the browser model in Node without browser/API dependencies."""
+
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import unittest
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -12,7 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 @unittest.skipUnless(shutil.which("node"), "node is required for lesson-details tests")
 class LessonDetailsTests(unittest.TestCase):
     def run_model(self, assertions):
-        script = """
+        script = (
+            """
             const assert = require('node:assert/strict');
             const fs = require('node:fs'), vm = require('node:vm');
             const sandbox = {window: {}, URL};
@@ -24,11 +25,17 @@ class LessonDetailsTests(unittest.TestCase):
                 discipline:'Short', discipline_full:'Полное название', discipline_short:'ПН',
                 module:'Module', lecturer:'123', lecturer_title:'Иванов_Иван_Иванович',
                 auditorium:'B4/10', group:'ПМ23-1'};
-        """ + assertions
+        """
+            + assertions
+        )
         result = subprocess.run(
             ["node", "-e", script, str(ROOT / "main_site_frontend/js/lesson_details.js")],
-            cwd=ROOT, env={**os.environ, "TZ": "America/Los_Angeles"},
-            capture_output=True, text=True, encoding="utf-8", timeout=20,
+            cwd=ROOT,
+            env={**os.environ, "TZ": "America/Los_Angeles"},
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=20,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
