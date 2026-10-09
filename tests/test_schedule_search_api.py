@@ -319,11 +319,19 @@ class TestScheduleSearchAPI(unittest.TestCase):
         ]
         self.app.dependency_overrides.pop(schedule_router.get_shared_http_session)
         with (
-            patch.object(schedule_router, "get_cached_schedule_snapshot", AsyncMock(
-                return_value=(snapshot, checked_at)
-            )) as read_cache,
-            patch.object(schedule_router, "get_all_short_names", AsyncMock(return_value={"Math": "M"})),
-            patch.object(schedule_router, "get_discipline_modules_map", AsyncMock(return_value={"Math": "Module"})),
+            patch.object(
+                schedule_router,
+                "get_cached_schedule_snapshot",
+                AsyncMock(return_value=(snapshot, checked_at)),
+            ) as read_cache,
+            patch.object(
+                schedule_router, "get_all_short_names", AsyncMock(return_value={"Math": "M"})
+            ),
+            patch.object(
+                schedule_router,
+                "get_discipline_modules_map",
+                AsyncMock(return_value={"Math": "Module"}),
+            ),
             patch.object(schedule_router, "create_ruz_api_client") as upstream,
             patch.object(schedule_router, "get_schedule_with_freshness", AsyncMock()) as refresh,
         ):
@@ -332,7 +340,9 @@ class TestScheduleSearchAPI(unittest.TestCase):
                     response = self.client.get(f"/api/schedule/cache/{entity_type}/162426")
                     self.assertEqual(response.status_code, 200, response.text)
                     data = response.json()
-                    self.assertEqual([row["date"] for row in data["schedule"]], [row["date"] for row in snapshot])
+                    self.assertEqual(
+                        [row["date"] for row in data["schedule"]], [row["date"] for row in snapshot]
+                    )
                     self.assertEqual(data["source_checked_at"], checked_at.isoformat())
                     self.assertEqual(data["entity_id"], "162426")
                     self.assertEqual(data["schedule"][0]["module"], "Module")
@@ -344,14 +354,23 @@ class TestScheduleSearchAPI(unittest.TestCase):
         refresh.assert_not_awaited()
 
     def test_cached_schedule_distinguishes_empty_missing_and_invalid_snapshots(self):
-        for snapshot, status in (([], 200), (None, 404), ({"error": "invalid"}, 503), ([None], 503)):
+        for snapshot, status in (
+            ([], 200),
+            (None, 404),
+            ({"error": "invalid"}, 503),
+            ([None], 503),
+        ):
             with (
                 self.subTest(snapshot=snapshot),
-                patch.object(schedule_router, "get_cached_schedule_snapshot", AsyncMock(
-                    return_value=(snapshot, None)
-                )),
+                patch.object(
+                    schedule_router,
+                    "get_cached_schedule_snapshot",
+                    AsyncMock(return_value=(snapshot, None)),
+                ),
                 patch.object(schedule_router, "get_all_short_names", AsyncMock(return_value={})),
-                patch.object(schedule_router, "get_discipline_modules_map", AsyncMock(return_value={})),
+                patch.object(
+                    schedule_router, "get_discipline_modules_map", AsyncMock(return_value={})
+                ),
             ):
                 response = self.client.get("/api/schedule/cache/group/123")
                 self.assertEqual(response.status_code, status)
@@ -361,16 +380,24 @@ class TestScheduleSearchAPI(unittest.TestCase):
 
     def test_cached_schedule_validates_entity_and_applies_data_rate_limit(self):
         with (
-            patch.object(schedule_router, "get_cached_schedule_snapshot", AsyncMock()) as read_cache,
+            patch.object(
+                schedule_router, "get_cached_schedule_snapshot", AsyncMock()
+            ) as read_cache,
             patch.object(schedule_router, "enforce_rate_limit", AsyncMock()) as limit,
         ):
             response = self.client.get("/api/schedule/cache/unknown/123")
             self.assertEqual(response.status_code, 400)
             read_cache.assert_not_awaited()
             self.assertEqual(limit.await_args.kwargs["scope"], "schedule_data")
-        with patch.object(schedule_router, "enforce_rate_limit", AsyncMock(
-            side_effect=schedule_router.HTTPException(status_code=429, detail="Too many requests")
-        )):
+        with patch.object(
+            schedule_router,
+            "enforce_rate_limit",
+            AsyncMock(
+                side_effect=schedule_router.HTTPException(
+                    status_code=429, detail="Too many requests"
+                )
+            ),
+        ):
             self.assertEqual(self.client.get("/api/schedule/cache/group/123").status_code, 429)
 
     def test_schedule_semester_refresh_resolves_entity_label_and_updates_cache(self):
