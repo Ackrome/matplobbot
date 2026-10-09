@@ -2309,3 +2309,5 @@ API; сохранение создаёт календарный профиль. 
 вид проверяются браузером. `tests/test_subscription_entrypoints.py` проверяет
 переходы, владельца, callback-кнопки и гонки ответа общего календаря. Реальные
 сообщения Telegram в локальных проверках не отправляются.
+
+Reviewed assessment sources may be curriculum plans or separately registered BRS documents. RU/EN lesson-card labels therefore say “Assessment type” and “Official document”, preserving each source title and page; locale generation 20261009-14 is synchronized with offline cache v47.

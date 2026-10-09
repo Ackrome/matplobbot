@@ -8,7 +8,7 @@
   "programme": "01.03.02 Прикладная математика и информатика",
   "profile": "Прикладное машинное обучение",
   "publication_file": "publish-2023.json",
-  "publication_file_sha256": "69e282ed67c074d66f0c39b1e89796d5801c7895044f975ce8717f54934c456c",
+  "publication_file_sha256": "5eccd4c29180d95c21052dd80df577c90ef1fd0c76620aaeed2ff60424f1ecff",
   "publication_method": "reviewed scanned-PDF pipeline candidates",
   "assessment_count": 79,
   "distinct_discipline_count": 61,
@@ -22,11 +22,13 @@
   "ground_truth_files": [
     {
       "path": "tests/fixtures/curriculum_ocr/fa_pmo_2023_page1_gt.json",
-      "sha256": "2f74f884ea24106bd13ee7663a7fc4a53e99520204fd28be4027f6dc690c3cff"
+      "sha256": "1678ec952b402a29e26a7627ce256b9ebc8bb97b44622ab1222f93c7eef25859",
+      "sha256_at_review": "2f74f884ea24106bd13ee7663a7fc4a53e99520204fd28be4027f6dc690c3cff"
     },
     {
       "path": "tests/fixtures/curriculum_ocr/fa_pmo_2023_page2_gt.json",
-      "sha256": "6f76fed2c973faff846629ee652596d0bee4d9150e6a714d35796fb4ab29550d"
+      "sha256": "4760511b70ba2a6ec105361181c717cff71901e0aaca2f5240033c1df917ea54",
+      "sha256_at_review": "6f76fed2c973faff846629ee652596d0bee4d9150e6a714d35796fb4ab29550d"
     }
   ],
   "numeric_model_changed_by_review": false,
@@ -1486,5 +1488,7 @@
   "parser_source_sha256": "19da2e2344da1f7c813cea3587214c705c6229bcb35e5294aa665fa9ff460e16",
   "visual_proof_files": [
     "publication-proof/title-2023-server.png"
-  ]
+  ],
+  "file_hash_convention": "SHA256 of committed Git blob bytes (UTF-8 with LF). Original local review hashes are retained separately; JSON facts are unchanged.",
+  "publication_file_sha256_at_review": "69e282ed67c074d66f0c39b1e89796d5801c7895044f975ce8717f54934c456c"
 }

@@ -736,7 +736,7 @@
     "migration_head": "fb1b2c3d4e5f",
     "isolated_sqlite_upgrade_model_parity_downgrade": true,
     "direct_onnxruntime_pin_audit": "1.23.2: no known vulnerabilities; full transitive audit is separate",
-    "runtime_sources_match_current_checkout": {
+    "runtime_sources_match_checkout_at_measurement": {
       "curriculum_ocr.py": true,
       "curriculum_control_cells.py": true,
       "curriculum_processing.py": true,
@@ -749,7 +749,7 @@
     }
   },
   "measurement_notes": [
-    "Whole-PDF timing includes imports, native PDF scan detection, PDFium rasterization, OpenCV geometry, name OCR and numeric CNN; Linux workers use same source as checkout.",
+    "Whole-PDF timing includes imports, native PDF scan detection, PDFium rasterization, OpenCV geometry, name OCR and numeric CNN; Linux workers use same source as the checkout at measurement time, before publication fixes and formatting.",
     "Sampled tree RSS sums current Python process and descendant Tesseract processes every50ms; separate getrusage child peak may include inherited parent RSS around fork and must not be added to parent peak.",
     "Numeric export probes run all455 control cells across91 physical rows, including totals/sections and upscaled raw/clean exports. Their abstentions are not the production discipline-cell quality metric.",
     "General OCR differs across Tesseract versions: one 2023 course title has a server spelling error; numeric source-row/kind/semester identities match79/79.",

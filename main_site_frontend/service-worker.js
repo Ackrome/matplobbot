@@ -1,4 +1,4 @@
-const CACHE_VERSION = "mpb-site-v46";
+const CACHE_VERSION = "mpb-site-v47";
 const CORE_CACHE = `${CACHE_VERSION}-core`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const OFFLINE_URL = "/offline.html";
@@ -46,7 +46,7 @@ const CORE_ASSETS = [
     "/css/studio.css?v=2",
     "/js/runtime_config.js?v=20260821-6",
     "/js/ui_utils.js?v=2",
-    "/js/frontend_i18n.js?v=20261009-13",
+    "/js/frontend_i18n.js?v=20261009-14",
     "/js/navbar.js?v=20261009-4",
     "/js/theme_bootstrap.js?v=20260821-6",
     "/js/telegram_webapp.js?v=20260821-6",
@@ -67,8 +67,8 @@ const CORE_ASSETS = [
     "/js/insights.js?v=20261009-4",
     "/css/feature_panels.css?v=20261009-1",
     "/js/auth.js?v=20261009-4",
-    "/locales/en.json?v=20261009-13",
-    "/locales/ru.json?v=20261009-13",
+    "/locales/en.json?v=20261009-14",
+    "/locales/ru.json?v=20261009-14",
     "/favicon.ico",
     "/favicon-16x16.png",
     "/favicon-32x32.png",

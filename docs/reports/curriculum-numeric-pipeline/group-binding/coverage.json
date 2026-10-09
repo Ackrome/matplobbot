@@ -14,7 +14,7 @@
         "162434"
       ],
       "publication_file": "docs/reports/curriculum-numeric-pipeline/publish-2023.json",
-      "publication_sha256": "69e282ed67c074d66f0c39b1e89796d5801c7895044f975ce8717f54934c456c",
+      "publication_sha256": "5eccd4c29180d95c21052dd80df577c90ef1fd0c76620aaeed2ff60424f1ecff",
       "expected_source_hash": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3",
       "unique_schedule_titles": 17,
       "matched_titles": 14,
@@ -416,7 +416,8 @@
             41264
           ]
         }
-      ]
+      ],
+      "publication_sha256_at_comparison": "69e282ed67c074d66f0c39b1e89796d5801c7895044f975ce8717f54934c456c"
     },
     {
       "cohort": 2025,
@@ -431,7 +432,7 @@
         "164559"
       ],
       "publication_file": "docs/reports/curriculum-numeric-pipeline/publish-2025.json",
-      "publication_sha256": "2a748aa337319ca697790606820fbb8e726d4b6a4988718ae7630b3d315c4440",
+      "publication_sha256": "2f477eb5d6e80d644bb1471f387725dd25456bc94e3ba1b70b7325bfb2bf7132",
       "expected_source_hash": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86",
       "unique_schedule_titles": 13,
       "matched_titles": 11,
@@ -832,7 +833,9 @@
             45623
           ]
         }
-      ]
+      ],
+      "publication_sha256_at_comparison": "2a748aa337319ca697790606820fbb8e726d4b6a4988718ae7630b3d315c4440"
     }
-  ]
+  ],
+  "file_hash_convention": "Publication file hashes use committed Git blob bytes (UTF-8 with LF). Comparison-time working-copy hashes are retained separately."
 }
