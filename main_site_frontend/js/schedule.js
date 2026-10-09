@@ -17,7 +17,7 @@ const FIXED_TIMES =[
     { start: '18:55', end: '20:25' },
     { start: '20:30', end: '22:00' }
 ];
-const TABLE_SLOT_ROW_HEIGHT_PX = 200;
+const TABLE_SLOT_ROW_HEIGHT_PX = 156;
 const TABLE_TIMELINE_VERTICAL_INSET_PX = 6;
 const TABLE_TIMELINE_LANE_GAP_PX = 8;
 const SPECIAL_MODULE_FALLBACKS = [
@@ -2739,8 +2739,8 @@ function renderCard(l, isDesktop, detailIndex = -1) {
                 ${safeDiscipline}
             </button>
             ${showOffSlotTimeLabel ? `
-            <div class="lesson-table-time">
-                <span>${safeTimeRange}</span>
+            <div class="lesson-table-time" aria-label="${safeTimeRange}">
+                <time>${escapeHtml(l.beginLesson || '')}</time><span class="lesson-table-time-separator"> - </span><time>${escapeHtml(l.endLesson || '')}</time>
             </div>` : ''}
             <div class="lesson-table-meta ${showLessonActions ? 'has-actions' : ''}">
                 ${safeAuditorium ? `
