@@ -1,0 +1,2732 @@
+{
+  "checked_at": "2026-10-09T21:26:19Z",
+  "base_url": "https://api.ivantishchenko.ru",
+  "groups": [
+    {
+      "group_name": "ПМ23-1",
+      "group_id": "162426",
+      "checks": [
+        {
+          "discipline": "Архитектура и дизайн программного обеспечения",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Военная подготовка",
+          "status": "not_found",
+          "semester": 7,
+          "forms": [],
+          "ok": true
+        },
+        {
+          "discipline": "Машинное обучение на графах",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 13,
+              "source_sha256": "812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Микросервисная архитектура",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы деловой и публичной коммуникации",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы математического моделирования",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы мобильной разработки",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы технологий интернета вещей",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы численных методов",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Прикладные задачи машинного обучения",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Программирование для встраиваемых систем",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Разработка приложений в системе 1С Предприятие",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Семантические технологии",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Тестирование программного обеспечения",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Технологии и алгоритмы анализа сетевых моделей",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 35,
+              "source_sha256": "812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Технологии работы с открытыми данными",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Электронные деньги",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        }
+      ]
+    },
+    {
+      "group_name": "ПМ23-2",
+      "group_id": "162428",
+      "checks": [
+        {
+          "discipline": "Архитектура и дизайн программного обеспечения",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Военная подготовка",
+          "status": "not_found",
+          "semester": 7,
+          "forms": [],
+          "ok": true
+        },
+        {
+          "discipline": "Машинное обучение на графах",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 13,
+              "source_sha256": "812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Микросервисная архитектура",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы деловой и публичной коммуникации",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы математического моделирования",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы мобильной разработки",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы технологий интернета вещей",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы численных методов",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Прикладные задачи машинного обучения",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Программирование для встраиваемых систем",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Разработка приложений в системе 1С Предприятие",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Семантические технологии",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Тестирование программного обеспечения",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Технологии и алгоритмы анализа сетевых моделей",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 35,
+              "source_sha256": "812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Технологии работы с открытыми данными",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Электронные деньги",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        }
+      ]
+    },
+    {
+      "group_name": "ПМ23-3",
+      "group_id": "162430",
+      "checks": [
+        {
+          "discipline": "Архитектура и дизайн программного обеспечения",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Военная подготовка",
+          "status": "not_found",
+          "semester": 7,
+          "forms": [],
+          "ok": true
+        },
+        {
+          "discipline": "Машинное обучение на графах",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 13,
+              "source_sha256": "812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Микросервисная архитектура",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы деловой и публичной коммуникации",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы математического моделирования",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы мобильной разработки",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы технологий интернета вещей",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы численных методов",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Прикладные задачи машинного обучения",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Программирование для встраиваемых систем",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Разработка приложений в системе 1С Предприятие",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Семантические технологии",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Тестирование программного обеспечения",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Технологии и алгоритмы анализа сетевых моделей",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 35,
+              "source_sha256": "812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Технологии работы с открытыми данными",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Электронные деньги",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        }
+      ]
+    },
+    {
+      "group_name": "ПМ23-4",
+      "group_id": "162432",
+      "checks": [
+        {
+          "discipline": "Архитектура и дизайн программного обеспечения",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Военная подготовка",
+          "status": "not_found",
+          "semester": 7,
+          "forms": [],
+          "ok": true
+        },
+        {
+          "discipline": "Машинное обучение на графах",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 13,
+              "source_sha256": "812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Микросервисная архитектура",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы деловой и публичной коммуникации",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы математического моделирования",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы мобильной разработки",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы технологий интернета вещей",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы численных методов",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Прикладные задачи машинного обучения",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Программирование для встраиваемых систем",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Разработка приложений в системе 1С Предприятие",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Семантические технологии",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Тестирование программного обеспечения",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Технологии и алгоритмы анализа сетевых моделей",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 35,
+              "source_sha256": "812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Технологии работы с открытыми данными",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Электронные деньги",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        }
+      ]
+    },
+    {
+      "group_name": "ПМ23-5",
+      "group_id": "162434",
+      "checks": [
+        {
+          "discipline": "Архитектура и дизайн программного обеспечения",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Военная подготовка",
+          "status": "not_found",
+          "semester": 7,
+          "forms": [],
+          "ok": true
+        },
+        {
+          "discipline": "Машинное обучение на графах",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 13,
+              "source_sha256": "812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Микросервисная архитектура",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы деловой и публичной коммуникации",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы математического моделирования",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы мобильной разработки",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы технологий интернета вещей",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Основы численных методов",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Прикладные задачи машинного обучения",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Программирование для встраиваемых систем",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Разработка приложений в системе 1С Предприятие",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Семантические технологии",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Тестирование программного обеспечения",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Технологии и алгоритмы анализа сетевых моделей",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "pass",
+              "page": 35,
+              "source_sha256": "812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Технологии работы с открытыми данными",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Электронные деньги",
+          "status": "confirmed",
+          "semester": 7,
+          "forms": [
+            {
+              "semester": 7,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3"
+            }
+          ],
+          "ok": true
+        }
+      ]
+    },
+    {
+      "group_name": "ПМ25-1",
+      "group_id": "164554",
+      "checks": [
+        {
+          "discipline": "Алгебра и геометрия",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Военная подготовка",
+          "status": "not_found",
+          "semester": 3,
+          "forms": [],
+          "ok": true
+        },
+        {
+          "discipline": "Дифференциальные уравнения",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Иностранный язык",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 1,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Математика искусственного интеллекта",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Машинное обучение",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "course_project",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Практикум по программированию",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 1,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Практическая подготовка ",
+          "status": "not_found",
+          "semester": 3,
+          "forms": [],
+          "ok": true
+        },
+        {
+          "discipline": "Системы управления базами данных",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Теория вероятностей и математическая статистика",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Учебно-научный семинар",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 6,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Эконометрика",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Элективные дисциплины по физической культуре и спорту",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        }
+      ]
+    },
+    {
+      "group_name": "ПМ25-2",
+      "group_id": "164555",
+      "checks": [
+        {
+          "discipline": "Алгебра и геометрия",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Военная подготовка",
+          "status": "not_found",
+          "semester": 3,
+          "forms": [],
+          "ok": true
+        },
+        {
+          "discipline": "Дифференциальные уравнения",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Иностранный язык",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 1,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Математика искусственного интеллекта",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Машинное обучение",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "course_project",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Практикум по программированию",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 1,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Практическая подготовка ",
+          "status": "not_found",
+          "semester": 3,
+          "forms": [],
+          "ok": true
+        },
+        {
+          "discipline": "Системы управления базами данных",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Теория вероятностей и математическая статистика",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Учебно-научный семинар",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 6,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Эконометрика",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Элективные дисциплины по физической культуре и спорту",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        }
+      ]
+    },
+    {
+      "group_name": "ПМ25-3",
+      "group_id": "164556",
+      "checks": [
+        {
+          "discipline": "Алгебра и геометрия",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Военная подготовка",
+          "status": "not_found",
+          "semester": 3,
+          "forms": [],
+          "ok": true
+        },
+        {
+          "discipline": "Дифференциальные уравнения",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Иностранный язык",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 1,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Математика искусственного интеллекта",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Машинное обучение",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "course_project",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Практикум по программированию",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 1,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Практическая подготовка ",
+          "status": "not_found",
+          "semester": 3,
+          "forms": [],
+          "ok": true
+        },
+        {
+          "discipline": "Системы управления базами данных",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Теория вероятностей и математическая статистика",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Учебно-научный семинар",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 6,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Эконометрика",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Элективные дисциплины по физической культуре и спорту",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        }
+      ]
+    },
+    {
+      "group_name": "ПМ25-4",
+      "group_id": "164557",
+      "checks": [
+        {
+          "discipline": "Алгебра и геометрия",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Военная подготовка",
+          "status": "not_found",
+          "semester": 3,
+          "forms": [],
+          "ok": true
+        },
+        {
+          "discipline": "Дифференциальные уравнения",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Иностранный язык",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 1,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Математика искусственного интеллекта",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Машинное обучение",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "course_project",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Практикум по программированию",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 1,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Практическая подготовка ",
+          "status": "not_found",
+          "semester": 3,
+          "forms": [],
+          "ok": true
+        },
+        {
+          "discipline": "Системы управления базами данных",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Теория вероятностей и математическая статистика",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Учебно-научный семинар",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 6,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Эконометрика",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Элективные дисциплины по физической культуре и спорту",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        }
+      ]
+    },
+    {
+      "group_name": "ПМ25-5",
+      "group_id": "164558",
+      "checks": [
+        {
+          "discipline": "Алгебра и геометрия",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Военная подготовка",
+          "status": "not_found",
+          "semester": 3,
+          "forms": [],
+          "ok": true
+        },
+        {
+          "discipline": "Дифференциальные уравнения",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Иностранный язык",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 1,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Математика искусственного интеллекта",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Машинное обучение",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "course_project",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Практикум по программированию",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 1,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Практическая подготовка ",
+          "status": "not_found",
+          "semester": 3,
+          "forms": [],
+          "ok": true
+        },
+        {
+          "discipline": "Системы управления базами данных",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Теория вероятностей и математическая статистика",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Учебно-научный семинар",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 6,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Эконометрика",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Элективные дисциплины по физической культуре и спорту",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        }
+      ]
+    },
+    {
+      "group_name": "ПМ25-6",
+      "group_id": "164559",
+      "checks": [
+        {
+          "discipline": "Алгебра и геометрия",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Военная подготовка",
+          "status": "not_found",
+          "semester": 3,
+          "forms": [],
+          "ok": true
+        },
+        {
+          "discipline": "Дифференциальные уравнения",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Иностранный язык",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 1,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Математика искусственного интеллекта",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Машинное обучение",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "course_project",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Практикум по программированию",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 1,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Практическая подготовка ",
+          "status": "not_found",
+          "semester": 3,
+          "forms": [],
+          "ok": true
+        },
+        {
+          "discipline": "Системы управления базами данных",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Теория вероятностей и математическая статистика",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 3,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Учебно-научный семинар",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 6,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Эконометрика",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 3,
+              "kind": "pass",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            },
+            {
+              "semester": 4,
+              "kind": "exam",
+              "page": 1,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "discipline": "Элективные дисциплины по физической культуре и спорту",
+          "status": "confirmed",
+          "semester": 3,
+          "forms": [
+            {
+              "semester": 2,
+              "kind": "pass",
+              "page": 2,
+              "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+            }
+          ],
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "snapshots": [
+    {
+      "url": "https://api.ivantishchenko.ru/api/schedule/curriculum/documents/1/73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3.pdf",
+      "bytes": 2735776,
+      "sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3",
+      "ok": true
+    },
+    {
+      "url": "https://api.ivantishchenko.ru/api/schedule/curriculum/documents/3/812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac.pdf",
+      "bytes": 1905421,
+      "sha256": "812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac",
+      "ok": true
+    },
+    {
+      "url": "https://api.ivantishchenko.ru/api/schedule/curriculum/documents/2/26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86.pdf",
+      "bytes": 575272,
+      "sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86",
+      "ok": true
+    }
+  ],
+  "failures": [],
+  "execution_host": "app-vm",
+  "tls_certificate_verification": true,
+  "transport_retries": [],
+  "expected_lookup_count": 163,
+  "expected_snapshot_count": 3,
+  "lookup_count": 163,
+  "snapshot_count": 3,
+  "status": "passed"
+}

@@ -135,7 +135,10 @@ API (the administrator routes require `require_admin`):
 
 Course matching normalizes whitespace and case only. Same-title elective rows
 with different course codes remain ambiguous. Teacher/room timetables require
-an explicit group ID on the selected lesson. Source absence, missing term dates,
+an explicit group ID on the selected lesson. On a group timetable, the selected
+group supplies the assessment context even when RUZ names a shared module group
+on the lesson itself; the assessment heading shows that same selected group.
+Source absence, missing term dates,
 or an empty cached exam schedule never establishes that a course has no exam.
 
 Historical all-OCR baseline validation (2026-10-09): the real two-page 2023 PDF produced 70 review candidates
@@ -2310,4 +2313,4 @@ API; сохранение создаёт календарный профиль. 
 переходы, владельца, callback-кнопки и гонки ответа общего календаря. Реальные
 сообщения Telegram в локальных проверках не отправляются.
 
-Reviewed assessment sources may be curriculum plans or separately registered BRS documents. RU/EN lesson-card labels therefore say “Assessment type” and “Official document”, preserving each source title and page; locale generation 20261009-14 is synchronized with offline cache v47.
+Reviewed assessment sources may be curriculum plans or separately registered BRS documents. RU/EN lesson-card labels therefore say “Assessment type” and “Official document”, preserving each source title and page; locale generation 20261009-14 is synchronized with offline cache v48. Lesson details generation 20261010-1 preserves the selected group for modular lessons.

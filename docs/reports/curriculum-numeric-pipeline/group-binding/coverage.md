@@ -48,6 +48,9 @@ checked and retained as PNG evidence.
 These two supplemental facts are saved in `supplemental-brs-evidence.json` with
 their own source URL/hash. The numbered semester 7 is established by RUZ; the
 source's wording “first semester studying the discipline” must not be parsed as
-numbered semester 1. They are not yet part of the base `coverage.json` expectation
-and must not be presented as pages of the two-page curriculum PDF. Integration
-must preserve the separate document provenance.
+numbered semester 1. The base `coverage.json` deliberately excludes these
+supplemental facts. Production publication on 2026-10-10 registered this BRS as
+document 3, linked to the 2023 curriculum (document 1), preserving its own PDF and
+pages. Combined coverage is **16/17** current ПМ23 titles and **11/13** ПМ25 titles.
+The [public verification](../production-verification.json) checked all 163
+group/title combinations and all three published PDF hashes without discrepancy.

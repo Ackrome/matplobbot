@@ -140,8 +140,48 @@ class LessonDetailsTests(unittest.TestCase):
             assert.equal(context(normalize({...base, date:'not-a-date'}, entity), entity), null);
             assert.equal(context(normalize({...base, discipline:'', discipline_full:'', discipline_short:''}, entity), entity), null);
             const other = context(normalize({...base, group:'ПМ23-2', groupOid:8, date:'2027.03.05'}, entity), entity);
-            assert.equal(other.group_id, '8');
+            assert.equal(other.group_id, '7');
             assert.equal(other.lesson_date, '2027-03-05');
+        """)
+
+    def test_group_timetable_curriculum_uses_parent_for_module_and_shared_classes(self):
+        self.run_model("""
+            const {curriculumContext: context, curriculumGroup: group} = sandbox.window.MpbLessonDetails;
+            const main = {type:'group', id:'162426', name:'ПМ23-1'};
+            for (const label of ['003860_4 Модуль "Машинное обучение на графах" - 1',
+                '003860_4 Модуль "Разработка распределенных при - 1',
+                '006088_2 Иностранный язык (КАЯиПК)-1', 'ПМ23-2']) {
+                const selected = normalize({...base, group:label, groupOid:162215,
+                    discipline_full:'Машинное обучение на графах'}, main);
+                assert.equal(context(selected, main).group_id, '162426');
+                assert.equal(context(selected, main).discipline, 'Машинное обучение на графах');
+                assert.equal(group(selected, main).name, 'ПМ23-1');
+                // Preserve the actual lesson group for occurrence/action navigation.
+                assert.equal(selected.groupId, '162215');
+                assert.equal(selected.group, label);
+            }
+            const selected = normalize({...base, group:'Module', groupOid:162215}, main);
+            assert.equal(group(selected, {...main, name:''}).name, '162426');
+            for (const id of ['', '0', '162426,162428', 'unknown']) {
+                assert.equal(context(selected, {...main, id}), null);
+                assert.equal(group(selected, {...main, id}), null);
+            }
+        """)
+
+    def test_teacher_and_room_curriculum_keep_lesson_group_and_label(self):
+        self.run_model("""
+            const {curriculumContext: context, curriculumGroup: group} = sandbox.window.MpbLessonDetails;
+            for (const type of ['person', 'auditorium']) {
+                const entity = {type, id:'999', name:'Not a student group'};
+                const raw = {...base, group:'003860_4 Модуль "Машинное обучение на графах" - 1', groupOid:162215};
+                const selected = normalize(raw, entity);
+                assert.equal(context(selected, entity).group_id, '162215');
+                assert.equal(group(selected, entity).name, raw.group);
+                for (const groupOid of [undefined, '0', '162426,162428']) {
+                    assert.equal(context(normalize({...raw, groupOid}, entity), entity), null);
+                }
+                assert.equal(group(normalize({...raw, group:''}, entity), entity).name, '162215');
+            }
         """)
 
     def test_curriculum_assessments_preserve_terms_and_reject_untrusted_provenance(self):

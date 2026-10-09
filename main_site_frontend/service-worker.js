@@ -1,4 +1,4 @@
-const CACHE_VERSION = "mpb-site-v47";
+const CACHE_VERSION = "mpb-site-v48";
 const CORE_CACHE = `${CACHE_VERSION}-core`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const OFFLINE_URL = "/offline.html";
@@ -34,7 +34,7 @@ const CORE_ASSETS = [
     "/js/schedule_workspace.js?v=20261009-9",
     "/js/account_subscriptions.js?v=20261009-9",
     "/css/account_subscriptions.css?v=20261009-9",
-    "/js/lesson_details.js?v=20261009-12",
+    "/js/lesson_details.js?v=20261010-1",
     "/css/lesson_details.css?v=20261009-12",
     "/js/stats_workspace.js?v=20261009-4",
     "/js/studio_workspace.js?v=20261009-4",

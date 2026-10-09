@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "mode": "apply",
+  "status": "complete",
+  "documents": [
+    {
+      "id": 1,
+      "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3",
+      "published_hash": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3",
+      "assessment_count": 79,
+      "group_ids": [
+        "162426",
+        "162428",
+        "162430",
+        "162432",
+        "162434"
+      ],
+      "parent_document_id": null,
+      "status": "verified"
+    },
+    {
+      "id": 2,
+      "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86",
+      "published_hash": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86",
+      "assessment_count": 89,
+      "group_ids": [
+        "164554",
+        "164555",
+        "164556",
+        "164557",
+        "164558",
+        "164559"
+      ],
+      "parent_document_id": null,
+      "status": "verified"
+    },
+    {
+      "id": 3,
+      "source_sha256": "812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac",
+      "published_hash": "812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac",
+      "assessment_count": 2,
+      "group_ids": [],
+      "parent_document_id": 1,
+      "status": "verified"
+    }
+  ],
+  "backup_file": "/tmp/curriculum-reviewed/publication-result.json.before-20261009T211646088188Z.json"
+}

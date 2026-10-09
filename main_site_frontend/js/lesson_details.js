@@ -53,12 +53,19 @@
             item.kind, item.module, item.room, item.roomId, item.building, item.teacher, item.teacherId,
             item.group, item.groupId, item.subgroup, item.emails, item.links, item.notes]);
     }
+    function curriculumGroup(item, entity = {}) {
+        // The caller supplies rows from this entity's server-scoped timetable.
+        // Module/language/shared classes can have their own RUZ group identity.
+        // Teacher and room timetables still require the lesson's explicit group.
+        const currentGroup = entity.type === 'group';
+        const id = text(currentGroup ? entity.id : item.groupId);
+        if (!/^[1-9]\d*$/.test(id)) return null;
+        return { id, name: text(currentGroup ? entity.name : item.group) || id };
+    }
     function curriculumContext(item, entity = {}) {
-        // A teacher or room ID must never be interpreted as the student's group.
-        const currentGroup = entity.type === 'group' && canonical(item.group) === canonical(entity.name);
-        const groupId = currentGroup ? text(entity.id) : item.groupId;
-        if (!/^[1-9]\d*$/.test(groupId) || !item.title || !item.date) return null;
-        return { group_id: groupId, discipline: item.title, lesson_date: item.date };
+        const group = curriculumGroup(item, entity);
+        if (!group || !item.title || !item.date) return null;
+        return { group_id: group.id, discipline: item.title, lesson_date: item.date };
     }
     function curriculumSnapshotUrl(value) {
         const path = text(value);
@@ -335,7 +342,7 @@
                 panel.append(status); return panel;
             }
             const data = curriculumData;
-            const group = selected.group || text(context.entity?.name) || request.group_id;
+            const group = curriculumGroup(selected, context.entity).name;
             panel.append(node('p', 'ld-curriculum-context', [group, data?.semester ? t('curriculum.semester', { number: data.semester }) : ''].filter(Boolean).join(' · ')));
             if (!data || data.status !== 'confirmed') {
                 status.append(node('p', 'ld-curriculum-hint', t(`curriculum.${data?.status || 'unavailable'}`)));
@@ -496,5 +503,5 @@
         dialog.showModal();
         active = { dialog, cleanup };
     }
-    window.MpbLessonDetails = { open, normalizeLesson, relatedLessons, curriculumContext, normalizeCurriculum };
+    window.MpbLessonDetails = { open, normalizeLesson, relatedLessons, curriculumGroup, curriculumContext, normalizeCurriculum };
 })();
