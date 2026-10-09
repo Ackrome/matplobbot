@@ -1,0 +1,183 @@
+{
+  "observed_at": "2026-10-09T22:29:56.477719+00:00",
+  "services": [
+    {
+      "service": "matplobbot-mpb-fastapi-stats-1",
+      "image_ref": "ghcr.io/ackrome/matplobbot-api:9fac7e87bc025508397664083a4df75302a61583",
+      "image_id": "sha256:d02e6f7fe19e70b3a7890da10e7a00e5df1a99c42f9fcec2101ff5c8a2d280fa",
+      "running_status": "running",
+      "docker_health": "healthy",
+      "target_sha_matches": true
+    },
+    {
+      "service": "matplobbot-mpb-telegram-bot-1",
+      "image_ref": "ghcr.io/ackrome/matplobbot-bot:9fac7e87bc025508397664083a4df75302a61583",
+      "image_id": "sha256:79cb7480a7245b9e6572d9e1dc74ef468aefcad6b656110ae8369ae3e1fdd9c4",
+      "running_status": "running",
+      "docker_health": "none",
+      "target_sha_matches": true
+    },
+    {
+      "service": "matplobbot-mpb-scheduler-1",
+      "image_ref": "ghcr.io/ackrome/matplobbot-scheduler:9fac7e87bc025508397664083a4df75302a61583",
+      "image_id": "sha256:fcd5d30f636e5364c5e9cab2a1b93f964815cbfc62e92b0d3a1e2762174f71c3",
+      "running_status": "running",
+      "docker_health": "unhealthy",
+      "target_sha_matches": true
+    },
+    {
+      "service": "matplobbot-mpb-worker-1",
+      "image_ref": "ghcr.io/ackrome/matplobbot-worker:9fac7e87bc025508397664083a4df75302a61583",
+      "image_id": "sha256:f3498c55f3bd89970fab3f51068f50cb7e4a7f05f6acf993e30d55b5fca03b4c",
+      "running_status": "running",
+      "docker_health": "healthy",
+      "target_sha_matches": true
+    }
+  ],
+  "schema": {
+    "exit_code": 0,
+    "revisions": [
+      "fc2c3d4e5f60 (head)"
+    ]
+  },
+  "checkout": {
+    "head_sha": "a76bdf98cfd71f8af9c87a121a88e5f06629d677",
+    "contains_target_commit": true,
+    "schedule_js_sha256": "bc9207750af038f2a8b1640c784ff8dd3a5fc64c49ef789341882a40ff50ff0e",
+    "schedule_script_refs": [
+      "/js/schedule.js?v=20261010-2"
+    ],
+    "schedule_js_matches_target": true,
+    "checked_at": "2026-10-09T22:30:45.402512+00:00"
+  },
+  "scheduler": {
+    "observed_at": "2026-10-09T22:29:56.374661+00:00",
+    "http_status": 503,
+    "status": "unhealthy",
+    "scheduler": "running",
+    "database": "connected",
+    "celery_queue": "ok",
+    "celery_queue_depth": 0,
+    "stale_or_failed_jobs": [],
+    "schedule_outbox": {
+      "pending": 1,
+      "processing": 0,
+      "failed": 18,
+      "oldest_pending_age_seconds": 5456
+    },
+    "schedule_outbox_alert_age_seconds": 1800,
+    "operations_available": true,
+    "jobs": [
+      {
+        "name": "daily_schedules",
+        "status": "success",
+        "stale_after_seconds": 180
+      },
+      {
+        "name": "schedule_refresh",
+        "status": "success",
+        "stale_after_seconds": 46800
+      },
+      {
+        "name": "schedule_updates",
+        "status": "success",
+        "stale_after_seconds": 10800
+      },
+      {
+        "name": "outbox_delivery",
+        "status": "success",
+        "stale_after_seconds": 300
+      },
+      {
+        "name": "studio_compile",
+        "status": "success",
+        "stale_after_seconds": null
+      }
+    ]
+  },
+  "public_smoke": {
+    "tls_certificate_verification": true,
+    "checks": [
+      {
+        "case": "pm23_graph",
+        "http_status": 200,
+        "status": "confirmed",
+        "semester": 7,
+        "stale": false,
+        "review_pending": false,
+        "forms": [
+          {
+            "semester": 7,
+            "kind": "pass",
+            "page": 13,
+            "snapshot_url": "/api/schedule/curriculum/documents/3/812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac.pdf",
+            "source_sha256": "812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac"
+          }
+        ],
+        "ok": true
+      },
+      {
+        "case": "pm25_algebra",
+        "http_status": 200,
+        "status": "confirmed",
+        "semester": 3,
+        "stale": false,
+        "review_pending": false,
+        "forms": [
+          {
+            "semester": 3,
+            "kind": "exam",
+            "page": 1,
+            "snapshot_url": "/api/schedule/curriculum/documents/2/26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86.pdf",
+            "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+          }
+        ],
+        "ok": true
+      }
+    ]
+  },
+  "deployment": {
+    "target_sha": "9fac7e87bc025508397664083a4df75302a61583",
+    "github": {
+      "id": 37997851966,
+      "head_sha": "9fac7e87bc025508397664083a4df75302a61583",
+      "html_url": "https://github.com/Ackrome/matplobbot/actions/runs/37997851966",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-09T22:11:37Z",
+      "updated_at": "2026-10-09T22:23:32Z"
+    },
+    "jenkins": {
+      "job": "matplobbot-deploy",
+      "number": 345,
+      "result": "SUCCESS",
+      "duration_ms": 212831,
+      "url": "http://jenkins-vm.panthera-banjo.ts.net:8080/job/matplobbot-deploy/345/"
+    }
+  },
+  "preexisting_scheduler_warning": {
+    "observed_after_jenkins_build": 344,
+    "observed_before_target_deployment": true,
+    "http_status": 503,
+    "scheduler": "running",
+    "database": "connected",
+    "celery_queue": "ok",
+    "stale_or_failed_jobs": [],
+    "schedule_outbox": {
+      "pending": 1,
+      "processing": 0,
+      "failed": 18,
+      "oldest_pending_age_seconds": 4356
+    },
+    "alert_age_seconds": 1800,
+    "note": "The pending/failed notification backlog predates build 345. All heartbeat jobs were successful. No resend, delete or reset was performed."
+  },
+  "checks": {
+    "all_four_service_image_tags_match": true,
+    "schema_current": true,
+    "public_smoke_passed": true,
+    "checkout_contains_target_and_asset_matches": true,
+    "exact_target_ci_passed": true
+  },
+  "status": "deployment_verified_with_preexisting_scheduler_warning"
+}
