@@ -5,7 +5,6 @@ const NAV_ITEMS =[
     { href: "/#projects", key: "nav.projects" },
     { href: "/schedule", key: "nav.schedule" },
     { href: "/studio", key: "nav.studio" },
-    { href: "/account", key: "nav.account", signedInOnly: true },
     { href: "/stats", key: "nav.admin", adminOnly: true }
 ];
 const navState = {
@@ -100,7 +99,7 @@ function shouldShowNavItem(item) {
 }
 function getProfileLink() {
     if (!navState.user) return "/login";
-    return navState.user.role === "admin" ? "/stats" : "/schedule";
+    return "/account";
 }
 function getLoginLink() {
     const target = window.location.pathname + window.location.search + window.location.hash;
@@ -124,7 +123,7 @@ function renderDesktopAuth() {
         `;
     }
     return `
-        <a href="${getProfileLink()}" class="flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors max-w-[220px] dark:border-slate-700 dark:hover:bg-slate-800 dark:hover:border-blue-500">
+        <a href="${getProfileLink()}" title="${escapeHtml(translate("nav.account"))}" aria-label="${escapeHtml(navState.user.username || "")} — ${escapeHtml(translate("nav.account"))}" class="flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-colors max-w-[220px] dark:border-slate-700 dark:hover:bg-slate-800 dark:hover:border-blue-500">
             ${getAvatarHtml("w-6 h-6", "text-xs")}
             <span class="text-sm font-bold text-slate-700 truncate dark:text-slate-200">${escapeHtml(navState.user.username || "")}</span>
         </a>
@@ -141,11 +140,11 @@ function renderMobileAuth() {
     }
     return `
         <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-            <a href="${getProfileLink()}" class="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-slate-50 transition-colors dark:hover:bg-slate-800">
+            <a href="${getProfileLink()}" title="${escapeHtml(translate("nav.account"))}" aria-label="${escapeHtml(navState.user.username || "")} — ${escapeHtml(translate("nav.account"))}" class="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-slate-50 transition-colors dark:hover:bg-slate-800">
                 ${getAvatarHtml("w-8 h-8", "text-sm")}
                 <div class="overflow-hidden">
                     <div class="text-sm font-bold text-slate-900 truncate dark:text-slate-100">${escapeHtml(navState.user.username || "")}</div>
-                    <div class="text-xs text-slate-500 dark:text-slate-400">${translate("nav.profile")}</div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">${translate("nav.account")}</div>
                 </div>
             </a>
             <button type="button" data-logout-btn class="w-full text-left mt-2 px-3 py-3 rounded-lg text-red-500 font-medium hover:bg-red-50 transition-colors dark:text-red-300 dark:hover:bg-red-950/40">

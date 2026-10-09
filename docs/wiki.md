@@ -32,7 +32,10 @@ below describe earlier contracts; the refinements in this section take precedenc
   `TELEGRAM_WIDGET_AUTH_CLOCK_SKEW_SECONDS` to 60.
 - Login/registration preserve a same-origin `next` path, including query/hash,
   and reject external/protocol-relative redirects. Studio sends unauthenticated
-  users through this flow. Signed-in navbar users can open `/account`.
+  users through this flow. The signed-in avatar/name card opens `/account` for
+  both ordinary users and administrators, on desktop and mobile. Its localized
+  tooltip/accessibility label explains "Account and data"; the mobile card also
+  shows this subtitle. Account management has no duplicate top-level menu item.
 - `GET /api/auth/account/export` downloads owner-scoped JSON with Studio text
   and base64 assets, preferences, linked Telegram data and retained product
   events. Secrets, mailbox message buffers, generated build caches, shared
