@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import io
 import json
 import os
 import time
@@ -13,11 +14,15 @@ FASTAPI_AVAILABLE = True
 try:
     from fastapi import Depends, FastAPI, HTTPException
     from fastapi.testclient import TestClient
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import Session
+    from sqlalchemy.pool import StaticPool
 
     os.environ.setdefault("JWT_SECRET_KEY", "test-secret-for-unit-tests-at-least-32-bytes")
     os.environ.setdefault("BOT_TOKEN", "123456:test-token")
 
     from fastapi_stats_app import auth as fastapi_auth
+    from fastapi_stats_app import bootstrap_admin
     from fastapi_stats_app.routers import auth_router
 except ModuleNotFoundError:
     FASTAPI_AVAILABLE = False
@@ -120,6 +125,144 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
         self.assertIn("iat", decoded)
         self.assertIn("nbf", decoded)
         self.assertIn("exp", decoded)
+
+    async def test_deployment_admin_can_log_in_and_provisioning_is_idempotent(self):
+        # Exercise real persistence and the login query without a live PostgreSQL service.
+        engine = create_engine(
+            "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+        )
+        bootstrap_admin.WebAccount.__table__.create(engine)
+        session = Session(engine, expire_on_commit=False)
+        self.addCleanup(engine.dispose)
+        self.addCleanup(session.close)
+        db = self._mock_db()
+        db.execute = AsyncMock(side_effect=session.execute)
+        db.add = Mock(side_effect=session.add)
+        db.flush = AsyncMock(side_effect=session.flush)
+        password = "a deployment secret with $pecial ' characters"
+        result = await bootstrap_admin.provision_admin(db, "deployment-admin", password)
+        session.commit()
+        self.assertEqual(result, "created")
+        session.expire_all()
+        account = session.scalar(
+            select(bootstrap_admin.WebAccount).where(
+                bootstrap_admin.WebAccount.username == "deployment-admin"
+            )
+        )
+        self.assertEqual(account.role, "admin")
+        self.assertIsNone(account.telegram_id)
+        self.assertNotEqual(account.password_hash, password)
+        original_hash = account.password_hash
+        self.app.dependency_overrides[auth_router.get_db_session_dependency] = lambda: db
+
+        response = self.client.post(
+            "/api/auth/login", data={"username": "deployment-admin", "password": password}
+        )
+        self.assertEqual(response.status_code, 200)
+        claims = fastapi_auth.decode_access_token(response.json()["access_token"])
+        self.assertEqual((claims["sub"], claims["role"]), (str(account.id), "admin"))
+        for username, supplied_password in (
+            ("absent-account", password),
+            ("deployment-admin", "wrong"),
+        ):
+            response = self.client.post(
+                "/api/auth/login", data={"username": username, "password": supplied_password}
+            )
+            self.assertEqual(response.status_code, 401)
+        result = await bootstrap_admin.provision_admin(db, "deployment-admin", password)
+        self.assertEqual(result, "unchanged")
+        self.assertEqual(account.password_hash, original_hash)
+        db.add.assert_called_once()
+        db.flush.assert_awaited_once()
+
+    async def test_deployment_admin_password_rotation_preserves_identity_and_preferences(self):
+        account = SimpleNamespace(
+            id=70,
+            role="admin",
+            telegram_id=None,
+            password_hash=fastapi_auth.get_password_hash("previous-secret"),
+            preferences={"language": "ru"},
+        )
+        db = self._mock_db(account=account)
+        self.assertEqual(
+            await bootstrap_admin.provision_admin(db, "deployment-admin", "rotated-secret"),
+            "password synchronized",
+        )
+        self.assertTrue(fastapi_auth.verify_password("rotated-secret", account.password_hash))
+        self.assertFalse(fastapi_auth.verify_password("previous-secret", account.password_hash))
+        self.assertEqual(account.id, 70)
+        self.assertEqual(account.preferences, {"language": "ru"})
+        db.add.assert_not_called()
+
+    async def test_deployment_admin_rejects_account_collisions_without_mutation(self):
+        for role, telegram_id in (("user", None), ("admin", 123), ("user", 123)):
+            with self.subTest(role=role, telegram_id=telegram_id):
+                account = SimpleNamespace(
+                    role=role, telegram_id=telegram_id, password_hash="original-hash"
+                )
+                db = self._mock_db(account=account)
+                with self.assertRaisesRegex(
+                    bootstrap_admin.AdminProvisioningError, "dedicated deployment admin"
+                ):
+                    await bootstrap_admin.provision_admin(db, "taken-name", "secret-value")
+                self.assertEqual(account.password_hash, "original-hash")
+                self.assertEqual((account.role, account.telegram_id), (role, telegram_id))
+                db.add.assert_not_called()
+                db.flush.assert_not_awaited()
+
+    async def test_deployment_admin_rejects_empty_and_default_credentials(self):
+        for username, password in (
+            ("", "secret"),
+            (" ", "secret"),
+            ("admin", ""),
+            ("admin", " "),
+            ("admin", "admin"),
+            ("admin", "PASSWORD"),
+            ("admin", "123456"),
+        ):
+            with self.subTest(username=username, password=password):
+                db = self._mock_db()
+                with self.assertRaises(bootstrap_admin.AdminProvisioningError):
+                    await bootstrap_admin.provision_admin(db, username, password)
+                db.execute.assert_not_awaited()
+                db.add.assert_not_called()
+
+    async def test_deployment_admin_invalid_stored_hash_fails_closed(self):
+        account = SimpleNamespace(role="admin", telegram_id=None, password_hash="invalid")
+        db = self._mock_db(account=account)
+        with self.assertRaisesRegex(bootstrap_admin.AdminProvisioningError, "hash is invalid"):
+            await bootstrap_admin.provision_admin(db, "admin", "secret-value")
+        self.assertEqual(account.password_hash, "invalid")
+        db.flush.assert_not_awaited()
+
+    async def test_deployment_admin_transaction_rolls_back_on_failure_and_closes_pool(self):
+        db_context = AsyncMock()
+        db = self._mock_db()
+        transaction = AsyncMock()
+        db.begin = Mock(return_value=transaction)
+        db_context.__aenter__.return_value = db
+        with (
+            patch.object(bootstrap_admin, "init_db_pool", new_callable=AsyncMock),
+            patch.object(bootstrap_admin, "close_db_pool", new_callable=AsyncMock) as close,
+            patch.object(bootstrap_admin, "get_session", return_value=db_context),
+            patch.object(bootstrap_admin, "provision_admin", new_callable=AsyncMock) as provision,
+            patch.dict(os.environ, {"STATS_USER": "configured", "STATS_PASS": "secret"}),
+        ):
+            provision.side_effect = RuntimeError("database unavailable")
+            with self.assertRaises(RuntimeError):
+                await bootstrap_admin.bootstrap_admin()
+            provision.assert_awaited_once_with(db, "configured", "secret")
+            self.assertIs(transaction.__aexit__.call_args.args[0], RuntimeError)
+            close.assert_awaited_once()
+
+    def test_deployment_admin_cli_suppresses_secret_bearing_database_errors(self):
+        with (
+            patch.object(bootstrap_admin, "bootstrap_admin", new_callable=AsyncMock) as provision,
+            patch("sys.stderr", new_callable=io.StringIO) as stderr,
+        ):
+            provision.side_effect = RuntimeError("SQL parameters contain a secret password hash")
+            self.assertEqual(bootstrap_admin.main(), 1)
+            self.assertEqual(stderr.getvalue(), "Admin provisioning FAILED (RuntimeError).\n")
 
     def test_jwt_decoder_rejects_tampered_signature(self):
         token = fastapi_auth.create_access_token({"sub": "7", "role": "user"})
@@ -244,8 +387,8 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
 
     def test_account_delete_requires_explicit_confirmation_and_recent_export(self):
         self.app.dependency_overrides[auth_router.get_current_user] = lambda: {"id": 7}
-        self.app.dependency_overrides[auth_router.get_db_session_dependency] = (
-            lambda: self._mock_db()
+        self.app.dependency_overrides[auth_router.get_db_session_dependency] = lambda: (
+            self._mock_db()
         )
         with patch.object(auth_router, "delete_account_data", AsyncMock()) as erase:
             missing = self.client.request("DELETE", "/api/auth/account", json={})

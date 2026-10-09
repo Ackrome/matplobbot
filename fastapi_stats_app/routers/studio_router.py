@@ -8,12 +8,14 @@ import os
 import re
 import unicodedata
 import zipfile
+from datetime import UTC, datetime
+from typing import Literal
 from urllib.parse import quote
 
 import aiohttp
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,9 +80,26 @@ async def get_owned_project_or_404(db: AsyncSession, project_id: int, owner_id: 
 
 
 class ProjectCreate(BaseModel):
-    name: str
-    project_type: str = "latex"
+    name: str = Field(min_length=1, max_length=160)
+    project_type: Literal["latex", "markdown", "mermaid"] = "latex"
     template_id: str = "latex_blank"
+    initial_content: str | None = Field(default=None, max_length=2_000_000)
+
+    @field_validator("name")
+    @classmethod
+    def trim_name(cls, value):
+        if not value.strip():
+            raise ValueError("Project name is required")
+        return value.strip()
+
+
+class ProjectRename(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+
+    @field_validator("name")
+    @classmethod
+    def trim_name(cls, value):
+        return ProjectCreate.trim_name(value)
 
 
 class FileSave(BaseModel):
@@ -238,14 +257,18 @@ async def create_project(
     db: AsyncSession = Depends(get_db_session_dependency),
     current_user: dict = Depends(get_current_user),
 ):
+    template = data.template_id if data.project_type == "latex" else data.project_type
+    if template not in DEFAULT_TEMPLATES or (
+        data.project_type == "latex" and not template.startswith("latex_")
+    ):
+        raise HTTPException(400, "Template does not match the project type")
+    file_path, content_text = DEFAULT_TEMPLATES.get(template, DEFAULT_TEMPLATES["latex_blank"])
+    if data.initial_content is not None:
+        content_text = data.initial_content
+
     new_proj = Project(owner_id=current_user["id"], name=data.name, project_type=data.project_type)
     db.add(new_proj)
     await db.flush()
-
-    # Выбираем шаблон (если шаблон не найден, берем blank)
-    file_path, content_text = DEFAULT_TEMPLATES.get(
-        data.template_id, DEFAULT_TEMPLATES["latex_blank"]
-    )
 
     main_file = ProjectFile(
         project_id=new_proj.id, file_path=file_path, content_text=content_text, is_main=True
@@ -253,6 +276,64 @@ async def create_project(
     db.add(main_file)
     await db.commit()
     return {"id": new_proj.id, "name": new_proj.name, "type": new_proj.project_type}
+
+
+@router.patch("/projects/{project_id}", response_model=StudioProjectSummary)
+async def rename_project(
+    project_id: int,
+    data: ProjectRename,
+    db: AsyncSession = Depends(get_db_session_dependency),
+    current_user: dict = Depends(get_current_user),
+):
+    project = await get_owned_project_or_404(db, project_id, current_user["id"])
+    project.name = data.name
+    await db.commit()
+    return {"id": project.id, "name": data.name, "type": project.project_type}
+
+
+@router.post("/projects/{project_id}/duplicate", response_model=StudioProjectSummary)
+async def duplicate_project(
+    project_id: int,
+    data: ProjectRename,
+    db: AsyncSession = Depends(get_db_session_dependency),
+    current_user: dict = Depends(get_current_user),
+):
+    project = await get_owned_project_or_404(db, project_id, current_user["id"])
+    files = (
+        (await db.execute(select(ProjectFile).where(ProjectFile.project_id == project_id)))
+        .scalars()
+        .all()
+    )
+    copy = Project(owner_id=current_user["id"], name=data.name, project_type=project.project_type)
+    db.add(copy)
+    await db.flush()
+    for file in files:
+        db.add(
+            ProjectFile(
+                project_id=copy.id,
+                file_path=file.file_path,
+                content_text=file.content_text,
+                content_binary=file.content_binary,
+                is_main=file.is_main,
+            )
+        )
+    await db.commit()
+    return {"id": copy.id, "name": data.name, "type": copy.project_type}
+
+
+@router.delete("/projects/{project_id}", response_model=StatusResponse)
+async def delete_project(
+    project_id: int,
+    db: AsyncSession = Depends(get_db_session_dependency),
+    current_user: dict = Depends(get_current_user),
+):
+    await get_owned_project_or_404(db, project_id, current_user["id"])
+    await db.execute(delete(ProjectFile).where(ProjectFile.project_id == project_id))
+    await db.execute(
+        delete(Project).where(Project.id == project_id, Project.owner_id == current_user["id"])
+    )
+    await db.commit()
+    return {"status": "success"}
 
 
 @router.get(
@@ -306,6 +387,9 @@ async def save_file(
     )
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="File not found")
+    await db.execute(
+        update(Project).where(Project.id == project_id).values(updated_at=datetime.now(UTC))
+    )
     await db.commit()
     return {"status": "success"}
 

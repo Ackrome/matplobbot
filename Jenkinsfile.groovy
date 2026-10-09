@@ -301,7 +301,16 @@ BASH
                             ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && bash -s" <<'REMOTE_EOF'
 set -eu
 
-. ./.env
+# Use the same effective credentials as the API. Dotenv is not a shell script:
+# sourcing it can expand special characters in passwords or execute substitutions.
+SMOKE_ENV="$(docker compose -f docker-compose.prod.yml exec -T mpb-fastapi-stats python -c '
+import os
+import shlex
+for name in ("STATS_USER", "STATS_PASS", "PUBLIC_SITE_URL"):
+    print(name + "=" + shlex.quote(os.environ.get(name, "")))
+')"
+eval "$SMOKE_ENV"
+unset SMOKE_ENV
 
 retry_http() {
   url="$1"
@@ -380,7 +389,7 @@ if [ -n "${STATS_USER:-}" ] && [ -n "${STATS_PASS:-}" ]; then
 
   rm -f "$LOGIN_RESP_FILE"
 else
-  echo "Smoke check FAILED: expected admin credentials are missing in .env"
+  echo "Smoke check FAILED: expected admin credentials are missing in the API container"
   exit 1
 fi
 

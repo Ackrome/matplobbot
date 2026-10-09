@@ -13,6 +13,10 @@ from .models import ProductEvent, WebAccount
 logger = logging.getLogger(__name__)
 EVENT_NAMES = frozenset(
     {
+        "ux_schedule_first",
+        "ux_studio_first",
+        "ux_calendar_connected",
+        "ux_error_recovered",
         "search_started",
         "search_succeeded",
         "search_empty",
@@ -32,8 +36,11 @@ async def record_product_event(
     web_account_id: int | None = None,
     telegram_user_id: int | None = None,
     dedupe_key: str | None = None,
+    duration_ms: int | None = None,
 ) -> None:
     """Record an allowlisted outcome, never query text, documents, names or credentials."""
+    if duration_ms is not None and not 0 <= duration_ms <= 3_600_000:
+        raise ValueError("Invalid duration")
     if event_name not in EVENT_NAMES:
         raise ValueError("Unknown product event")
     if (web_account_id is None) == (telegram_user_id is None):
@@ -59,6 +66,7 @@ async def record_product_event(
                         web_account_id=web_account_id,
                         telegram_user_id=telegram_user_id,
                         dedupe_key=dedupe_key,
+                        duration_ms=duration_ms,
                     )
                     .on_conflict_do_nothing()
                 )
@@ -141,7 +149,22 @@ async def get_product_snapshot(session, days: int = 30) -> dict:
     completed_searches = sum(
         counts[name] for name in ("search_succeeded", "search_empty", "search_failed")
     )
+    timings = (
+        await session.execute(
+            select(ProductEvent.event_name, func.count(), func.avg(ProductEvent.duration_ms))
+            .where(condition, ProductEvent.duration_ms.is_not(None))
+            .group_by(ProductEvent.event_name)
+        )
+    ).all()
     return {
+        "ux_timings": [
+            {
+                "journey": name.removeprefix("ux_"),
+                "samples": int(count),
+                "average_ms": round(float(average)),
+            }
+            for name, count, average in timings
+        ],
         "days": days,
         "since": since.isoformat(),
         "timezone": "UTC",

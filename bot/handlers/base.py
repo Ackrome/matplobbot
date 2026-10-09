@@ -371,6 +371,12 @@ class BaseManager:
         if message.text:
             parts = message.text.split(maxsplit=1)
             payload = parts[1].strip() if len(parts) > 1 else ""
+        if payload == "web_settings":
+            await self.settings_manager.command_settings_private(message)
+            return
+        if payload == "web_account":
+            await self.settings_manager.command_account_data(message)
+            return
         if payload in {"calendar_sync", "cal_sync"}:
             await self.schedule_manager.cmd_calendar_sync(message)
             return

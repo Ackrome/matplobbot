@@ -19,6 +19,7 @@
         statusKey = key;
         statusFallback = fallback;
         byId("account-status").textContent = t(key, fallback);
+        if(key.startsWith("account.export")) byId("account-export-status").textContent=t(key,fallback);
     }
     function updateControls() {
         const ready = receipt && Date.now() < receiptExpires && token() === exportAuthToken;
@@ -55,14 +56,11 @@
             const prefix = `mpb-studio-v1:${encodeURIComponent(String(accountId))}:`;
             data.local_studio_drafts = Object.fromEntries(Object.keys(localStorage)
                 .filter((key) => key.startsWith(prefix)).map((key) => [key, localStorage.getItem(key)]));
-            const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = "matplobbot-account.json";
-            document.body.append(link);
-            link.click();
-            link.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            if(byId('account-export-format').value==='zip'){
+                const files=[{name:'account.json',text:JSON.stringify(data,null,2)},{name:'README.txt',text:t('ux.exportReadme','Your data export. account.json contains settings and local drafts; projects/ contains the original Studio files. Keep this archive private.')}];
+                for(const file of data.project_files||[]){const project=(data.projects||[]).find(p=>p.id===file.project_id);const name=`projects/${file.project_id}-${MpbArchive.safePath(project?.name||'project')}/${MpbArchive.safePath(file.file_path)}`;const binary=file.content_binary;files.push(binary?.encoding==='base64'?{name,bytes:Uint8Array.from(atob(binary.data),c=>c.charCodeAt(0))}:{name,text:file.content_text||''});}
+                MpbArchive.download(MpbArchive.zip(files),'matplobbot-account.zip');
+            }else MpbArchive.download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),'matplobbot-account.json');
             receipt = data.deletion_token;
             receiptExpires = Date.now() + 15 * 60 * 1000;
             exportAuthToken = authToken;
@@ -90,6 +88,7 @@
             const prefix = `mpb-studio-v1:${encodeURIComponent(String(accountId))}:`;
             Object.keys(localStorage).filter((key) => key.startsWith(prefix))
                 .forEach((key) => localStorage.removeItem(key));
+            localStorage.removeItem("mpb-last-project:" + encodeURIComponent(String(accountId)));
             if (token() === exportAuthToken) localStorage.removeItem("jwt_token");
             byId("account-controls").hidden = true;
             byId("account-identity").textContent = "";
@@ -103,7 +102,8 @@
     });
     function translateRuntime() {
         if (signedIn) byId("account-identity").textContent = t("account.signedIn", "Signed in as {name}", { name: accountName });
-        if (statusKey) byId("account-status").textContent = t(statusKey, statusFallback);
+        if (statusKey) status(statusKey, statusFallback);
+        byId("account-language").value=window.mpbI18n.getLanguage();
     }
     window.addEventListener("mpb-language-change", translateRuntime);
     window.addEventListener("mpb-auth-token-changed", () => {
@@ -112,6 +112,8 @@
     window.addEventListener("storage", (event) => {
         if (event.key === "jwt_token") { receipt = null; location.reload(); }
     });
+    byId('account-language').addEventListener('change',event=>window.mpbI18n.setLanguage(event.target.value));
+    byId('account-theme').addEventListener('change',event=>{const isDark=event.target.value==='dark';localStorage.setItem('theme',event.target.value);document.documentElement.classList.toggle('dark',isDark);document.documentElement.dataset.theme=event.target.value;window.dispatchEvent(new CustomEvent('mpb-theme-change',{detail:{isDark}}));});
     setInterval(updateControls, 15000);
     (async () => {
         await window.mpbI18n?.ready;
@@ -124,6 +126,9 @@
             profileAuthToken = authToken;
             accountId = user.id;
             accountName = user.username || "User";
+            byId('account-telegram').dataset.i18n=user.telegram_id?'ux.telegramLinked':'ux.telegramUnlinked';byId('account-telegram').textContent=t(byId('account-telegram').dataset.i18n,'');
+            byId('account-language').value=window.mpbI18n.getLanguage();
+            byId('account-theme').value=document.documentElement.classList.contains('dark')?'dark':'light';
             translateRuntime();
             byId("account-controls").hidden = false;
         } catch (error) {

@@ -85,6 +85,39 @@ class TestStudioJobs(unittest.TestCase):
         calls = jobs.record_product_event.await_args_list
         self.assertEqual(calls[0].kwargs["dedupe_key"], calls[1].kwargs["dedupe_key"])
 
+    def test_cancellation_is_owner_scoped_and_waits_for_worker(self):
+        job_id = str(uuid4())
+        self.redis.get.return_value = json.dumps({"owner_id": 8})
+        response = self.client.post(f"/api/studio/jobs/{job_id}/cancel")
+        self.assertEqual(response.status_code, 404)
+        self.redis.set.assert_not_awaited()
+        self.redis.get.return_value = json.dumps({"owner_id": 7, "expires_at": "2099-01-01"})
+        with (
+            patch.object(jobs, "_task_status", return_value=("running", None)),
+            patch.object(jobs.celery_app.control, "revoke") as revoke,
+        ):
+            response = self.client.post(f"/api/studio/jobs/{job_id}/cancel")
+        self.assertEqual(response.json()["status"], "cancelling")
+        self.assertEqual(self.redis.set.await_args_list[0].args[0], jobs.CANCEL_PREFIX + job_id)
+        revoke.assert_not_called()
+        task = SimpleNamespace(state="SUCCESS", result={"status": "cancelled"})
+        with patch.object(jobs.celery_app, "AsyncResult", return_value=task):
+            self.assertEqual(jobs._task_status(job_id), ("cancelled", None))
+
+    def test_completed_job_is_not_cancelled_and_storage_failure_is_not_success(self):
+        job_id = str(uuid4())
+        self.redis.get.return_value = json.dumps({"owner_id": 7})
+        with patch.object(jobs, "_task_status", return_value=("success", {})):
+            self.assertEqual(
+                self.client.post(f"/api/studio/jobs/{job_id}/cancel").json()["status"], "success"
+            )
+        self.redis.set.assert_not_awaited()
+        self.redis.set.side_effect = ConnectionError("private endpoint")
+        with patch.object(jobs, "_task_status", return_value=("running", None)):
+            response = self.client.post(f"/api/studio/jobs/{job_id}/cancel")
+        self.assertEqual(response.status_code, 503)
+        self.assertNotIn("private endpoint", response.text)
+
     def test_types_and_payloads_are_validated(self):
         for payload in [{"type": "shell", "content": "ls"}, {"type": "latex", "content": ""}]:
             response = self.client.post("/api/studio/jobs", json=payload)

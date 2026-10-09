@@ -38,6 +38,7 @@
             if (restore && draft && typeof draft.content === 'string' && draft.content !== record.content) {
                 current.conflict = Boolean(record.projectId && draft.baseContent !== record.content);
                 current.draftContent = draft.content;
+                current.draftUpdatedAt = draft.updatedAt;
                 if (!current.conflict) { current.content = draft.content; current.recovered = true; }
             }
             return { ...current };

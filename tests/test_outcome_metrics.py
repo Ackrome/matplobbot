@@ -28,7 +28,7 @@ class TestProductAggregates(unittest.IsolatedAsyncioTestCase):
                 "CREATE TABLE web_accounts (id INTEGER PRIMARY KEY, telegram_id INTEGER)"
             )
             connection.exec_driver_sql(
-                "CREATE TABLE product_events (id INTEGER PRIMARY KEY, event_name TEXT, web_account_id INTEGER, telegram_user_id INTEGER, dedupe_key TEXT, created_at DATETIME)"
+                "CREATE TABLE product_events (id INTEGER PRIMARY KEY, event_name TEXT, web_account_id INTEGER, telegram_user_id INTEGER, dedupe_key TEXT, created_at DATETIME, duration_ms INTEGER)"
             )
             now = datetime.now(UTC)
             rows = [
@@ -52,11 +52,29 @@ class TestProductAggregates(unittest.IsolatedAsyncioTestCase):
                 ],
             )
 
+            connection.execute(
+                ProductEvent.__table__.insert(),
+                [
+                    {
+                        "id": 100 + i,
+                        "event_name": "ux_studio_first",
+                        "web_account_id": 1,
+                        "created_at": now - timedelta(days=age),
+                        "duration_ms": duration,
+                    }
+                    for i, (age, duration) in enumerate([(0, 1000), (0, 2000), (95, 9000)])
+                ],
+            )
+
             class AsyncConnection:
                 async def execute(self, query):
                     return connection.execute(query)
 
             result = await product_metrics.get_product_snapshot(AsyncConnection(), 30)
+            self.assertEqual(
+                result["ux_timings"],
+                [{"journey": "studio_first", "samples": 2, "average_ms": 1500}],
+            )
             self.assertEqual(result["active_users"], 2)
             self.assertEqual(result["returning_users"], 1)
             self.assertEqual(result["counts"]["subscription_created"], 0)
@@ -79,7 +97,7 @@ class TestProductAggregates(unittest.IsolatedAsyncioTestCase):
             )
             connection.exec_driver_sql("INSERT INTO web_accounts VALUES (7, 99), (8, NULL)")
             connection.exec_driver_sql(
-                "CREATE TABLE product_events (id INTEGER PRIMARY KEY, event_name TEXT, web_account_id INTEGER, telegram_user_id INTEGER, dedupe_key TEXT, created_at DATETIME)"
+                "CREATE TABLE product_events (id INTEGER PRIMARY KEY, event_name TEXT, web_account_id INTEGER, telegram_user_id INTEGER, dedupe_key TEXT, created_at DATETIME, duration_ms INTEGER)"
             )
             now = datetime.now(UTC)
             records = [

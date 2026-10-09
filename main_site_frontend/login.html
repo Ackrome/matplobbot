@@ -13,8 +13,8 @@
     <link rel="icon" sizes="512x512" href="/android-chrome-512x512.png">
     <link rel="manifest" href="/site.webmanifest">
 
-    <script src="/js/theme_bootstrap.js?v=1"></script>
-    <link rel="stylesheet" href="/css/tailwind.css?v=6">
+    <script src="/js/theme_bootstrap.js?v=20260821-6"></script>
+    <link rel="stylesheet" href="/css/tailwind.css?v=20261009-4">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -29,6 +29,7 @@
             }
         }
     </style>
+<link rel="stylesheet" href="/css/product_ui.css?v=20261009-4">
 </head>
 <body class="bg-gradient-to-b from-slate-100 via-slate-50 to-white text-slate-900 flex flex-col min-h-screen dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-slate-100">
 
@@ -87,26 +88,22 @@
                 </p>
             </div>
 
-            <div class="relative flex py-4 sm:py-5 items-center">
-                <div class="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
-                <span data-i18n="login.password.alt" class="flex-shrink-0 mx-3 sm:mx-4 text-slate-400 text-xs sm:text-sm font-medium text-center dark:text-slate-500">или по паролю (для админов)</span>
-                <div class="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
-            </div>
-
-            <form id="loginForm" class="space-y-4">
+<details id="admin-login"><summary class="ui-button" data-i18n="ux.adminLogin">Вход администратора</summary>            <form id="loginForm" class="space-y-4">
                 <div>
-                    <label data-i18n="login.form.username" class="block text-sm font-medium text-slate-700 mb-1 dark:text-slate-300">Логин</label>
-                    <input type="text" id="username" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500" placeholder="admin" required>
+                    <label for="username" data-i18n="login.form.username" class="block text-sm font-medium text-slate-700 mb-1 dark:text-slate-300">Логин</label>
+                    <input type="text" id="username" name="username" autocomplete="username" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500" placeholder="admin" required>
                 </div>
                 <div>
-                    <label data-i18n="login.form.password" class="block text-sm font-medium text-slate-700 mb-1 dark:text-slate-300">Пароль</label>
-                    <input type="password" id="password" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500" placeholder="********" required>
+                    <label for="password" data-i18n="login.form.password" class="block text-sm font-medium text-slate-700 mb-1 dark:text-slate-300">Пароль</label>
+                    <input type="password" id="password" name="password" autocomplete="current-password" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-base dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500" placeholder="********" required>
                 </div>
+<button type="button" id="show-password" class="ui-button" aria-pressed="false" data-i18n="ux.showPassword">Показать пароль</button>
                 <button type="submit" data-i18n="login.form.submit" class="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 dark:bg-blue-600 dark:hover:bg-blue-500 dark:shadow-blue-950/30">
                     Войти по паролю
                 </button>
+
             </form>
-            <div id="error" class="mt-4 text-red-500 text-center text-sm hidden"></div>
+            <div role="alert" id="error" class="mt-4 text-red-500 text-center text-sm hidden"></div></details>
 
             <div class="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
                 <span data-i18n="login.password.help">Парольный вход доступен только уже выданным админ-аккаунтам.</span>
@@ -119,10 +116,11 @@
             window.handleTelegramLogin(user);
         }
     </script>
-    <script src="/js/runtime_config.js?v=2"></script>
+    <script src="/js/runtime_config.js?v=20260821-6"></script>
     <script src="/js/ui_utils.js?v=2"></script>
     <script src="/js/frontend_i18n.js?v=1"></script>
-    <script src="/js/navbar.js?v=20261009-2"></script>
-    <script src="/js/auth.js?v=7"></script>
+<script src="/js/product_ui.js?v=20261009-4"></script>
+    <script src="/js/navbar.js?v=20261009-4"></script>
+    <script src="/js/auth.js?v=20261009-4"></script>
 </body>
 </html>

@@ -73,6 +73,7 @@ function setStatus(key, params = {}) {
     $('status-icon-sync').classList.toggle('hidden', !['saving','uploading','creating'].includes(key));
 }
 function showError(error) {
+    window.MpbUI?.start('error_recovered');
     $('error-text').textContent = error.message || String(error);
     $('error-panel').classList.remove('hidden');
     $('retry-studio-button').classList.remove('hidden');
@@ -111,7 +112,7 @@ function createFallbackEditor(content = '') {
     textarea.spellcheck = false;
     textarea.value = content;
     textarea.addEventListener('input', onEditorChange);
-    textarea.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); run(compileCurrent); } });
+    textarea.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && ['s','Enter'].includes(event.key)) { event.preventDefault(); run(event.key==='Enter'?compileCurrent:saveCurrentFile); } });
     $('monaco-container').replaceChildren(textarea);
     return {getValue:()=>textarea.value,setValue:value=>{textarea.value=value;},updateOptions:options=>{textarea.readOnly=Boolean(options.readOnly);},layout(){},getModel(){return null;},dispose(){textarea.remove();}};
 }
@@ -147,7 +148,8 @@ async function upgradeEditor() {
             {label:'\\includegraphics',kind:monaco.languages.CompletionItemKind.Snippet,insertText:'\\includegraphics[width=${1:0.8}\\textwidth]{${2:image.png}}',insertTextRules:monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet}
         ]};}});
         editor.onDidChangeModelContent(onEditorChange);
-        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,()=>run(compileCurrent));
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,()=>run(saveCurrentFile));
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,()=>run(compileCurrent));
         $('editor-fallback-notice').classList.add('hidden');
         performance.mark?.('studio-editor-ready');
     } catch (_) {
@@ -161,10 +163,11 @@ function editorLanguage() { return currentMode==='quick' ? ($('doc-type').value=
 function setModelLanguage() { if (window.monaco && editor.getModel()) monaco.editor.setModelLanguage(editor.getModel(),editorLanguage()); }
 async function saveCurrentFile() {
     clearTimeout(saveTimer);
-    if (!session?.dirty()) return;
+    if (!session?.dirty()) {if(currentMode==='quick')setStatus('localDraft');return;}
     setStatus('saving');
     await session.flush();
     setStatus('saved');
+    window.MpbUI?.finish('error_recovered');
     $('retry-studio-button').classList.add('hidden');
 }
 function transition(action) {
@@ -172,21 +175,21 @@ function transition(action) {
         transitionBusy=true;
         editor.updateOptions({readOnly:true});
         try { await saveCurrentFile(); await action(); }
-        finally { transitionBusy=false; editor.updateOptions({readOnly:Boolean(currentMode==='project'&&(!currentProjectId||currentFile()?.is_binary))});renderProjectList(); }
+        finally { transitionBusy=false; editor.updateOptions({readOnly:Boolean(session.snapshot()?.conflict||currentMode==='project'&&(!currentProjectId||currentFile()?.is_binary))});renderProjectList(); }
     });
     transitionQueue=next;
     return next;
 }
-function activateDocument(record) {
+async function activateDocument(record) {
     let restored = session.open(record);
-    if (restored.conflict) restored=session.resolveConflict(confirm(t('draftConflict')));
+    if (restored.conflict) restored=session.resolveConflict(await MpbStudioUX.conflict(restored));
     setEditorContent(restored.content);
     setModelLanguage();
     setStatus(restored.recovered?'recovered':record.projectId?'saved':'ready');
     if (restored.recovered && record.projectId) saveTimer=setTimeout(()=>run(saveCurrentFile),900);
     run(updateLivePreview);
 }
-function activateFile(id) {
+async function activateFile(id) {
     const file=projectFiles.find(item=>item.id===id);
     if (!file) return;
     currentFileId=id;
@@ -194,7 +197,7 @@ function activateFile(id) {
         session.open({type:'binary',content:'',projectId:null});
         setEditorContent(t('binaryFile',{name:file.path}),true);
         setModelLanguage();
-    } else activateDocument({projectId:currentProjectId,fileId:id,type:currentProjectType,content:file.content||''});
+    } else await activateDocument({projectId:currentProjectId,fileId:id,type:currentProjectType,content:file.content||''});
     renderFileList();
 }
 async function activateProject(id) {
@@ -203,13 +206,14 @@ async function activateProject(id) {
     const preserveId=String(currentProjectId)===String(id)?currentFileId:null;
     currentMode='project';
     currentProjectId=id;
+    const recent=projectsList.find(project=>String(project.id)===String(id));if(recent)try{storage().setItem('mpb-last-project:'+sessionScope,JSON.stringify({id:recent.id,name:recent.name}));}catch{}
     projectFiles=files;
     currentProjectType=projectsList.find(project=>String(project.id)===String(id))?.type||'latex';
     currentFileId=null;
     $('project-selector').value=id;
     resetPreview();
     const file=files.find(item=>item.id===preserveId)||files.find(item=>item.is_main)||files[0];
-    if (file) activateFile(file.id);
+    if (file) await activateFile(file.id);
     else { session.open({type:'empty',content:''});setEditorContent('',true);renderFileList(); }
 }
 function openProject(id) { return transition(()=>activateProject(id)); }
@@ -232,13 +236,14 @@ function switchMode(mode) { return transition(async()=>{
     if(mode==='quick') {
         currentMode=mode;
         currentProjectId=currentFileId=null;
-        activateDocument({type:$('doc-type').value,content:TEMPLATES[$('doc-type').value]});
+        await activateDocument({type:$('doc-type').value,content:TEMPLATES[$('doc-type').value]});
     } else if(projectsList.length) await activateProject(projectsList[0].id);
     else { currentMode=mode;currentProjectId=currentFileId=null;session.open({type:'empty',content:''});setEditorContent('',true); }
     resetPreview();updateModeUi();run(updateLivePreview);
 }); }
-function setLanguage(type) { return transition(()=>{ activateDocument({type,content:TEMPLATES[type]});resetPreview();run(updateLivePreview); }); }
+function setLanguage(type) { return transition(async()=>{ await activateDocument({type,content:TEMPLATES[type]});resetPreview();run(updateLivePreview); }); }
 function updateModeUi() {
+    MpbStudioUX.mode();
     const project=currentMode==='project';
     $('mode-quick').setAttribute('aria-pressed',String(!project));
     $('mode-project').setAttribute('aria-pressed',String(project));
@@ -274,7 +279,7 @@ function setupSplit() {
         ['editor-pane','viewer-pane'].forEach(id=>$(id).classList.remove('hidden'));
         $('sidebar-pane').classList.toggle('hidden',currentMode!=='project');
         if(window.Split) splitInstance=Split(currentMode==='project'?['#sidebar-pane','#editor-pane','#viewer-pane']:['#editor-pane','#viewer-pane'],
-            {sizes:currentMode==='project'?[20,40,40]:[50,50],minSize:currentMode==='project'?[130,240,240]:[260,260],gutterSize:6});
+            {sizes:currentMode==='project'?[26,37,37]:[50,50],minSize:currentMode==='project'?[210,240,240]:[260,260],gutterSize:6});
     }
     editor?.layout();
 }
@@ -349,11 +354,12 @@ async function compileCurrent() {
         const type=currentMode==='quick'?$('doc-type').value:currentProjectType;
         if(currentMode==='project'&&!currentProjectId)throw new Error(t('chooseProject'));
         const path=currentMode==='quick'?'/studio/jobs':`/studio/projects/${currentProjectId}/jobs`;
-        const snapshot={mode:currentMode,projectId:currentProjectId,fileId:currentFileId,type,sourceContent:editor.getValue()};
+        const sourceContent=editor.getValue();
+        const snapshot={mode:currentMode,projectId:currentProjectId,fileId:currentFileId,type,sourceContent,fingerprint:await MpbStudioUX.hash(sourceContent),name:MpbStudioUX.filename(),created_at:new Date().toISOString()};
         const response=await api(path,{method:'POST',headers:{'Content-Type':'application/json'},
             ...(currentMode==='quick'?{body:JSON.stringify({type,content:snapshot.sourceContent})}:{})});
         const job=await response.json();
-        activeJob={...job,...snapshot};session.storeValue('active-job',activeJob);
+        activeJob={...job,...snapshot,fingerprint:job.source_fingerprint||snapshot.fingerprint};session.storeValue('active-job',activeJob);MpbStudioUX.remember(activeJob);
     });} finally {jobStarting=false;updateJobUi();}
     $('error-panel').classList.add('hidden');
     return pollJob();
@@ -363,13 +369,17 @@ async function pollJob() {
     jobPolling=true;$('job-resume-button').disabled=true;
     try {
         while(activeJob) {
-            const job=await (await api(`/studio/jobs/${encodeURIComponent(activeJob.job_id)}`)).json();
-            activeJob.status=job.status;updateJobUi();
-            if(['success','error'].includes(job.status)) {
+            const jobId=activeJob.job_id;
+            const job=await (await api(`/studio/jobs/${encodeURIComponent(jobId)}`)).json();
+            if(!activeJob||activeJob.job_id!==jobId)return;
+            activeJob.status=job.status;MpbStudioUX.remember(activeJob);updateJobUi();
+            if(['success','error','cancelled'].includes(job.status)) {
                 const completed=activeJob;
                 activeJob=null;session.removeValue('active-job');updateJobUi();
+                if(job.status==='cancelled'){setStatus('cancelled');return;}
                 if(job.status==='error'){
                     const errors=job.result?.errors||[];
+                    MpbStudioUX.errorLinks(errors,completed);
                     if(window.monaco&&editor.getModel()&&String(completed.fileId)===String(currentFileId)) monaco.editor.setModelMarkers(editor.getModel(),'latex',errors.map(error=>({severity:monaco.MarkerSeverity.Error,startLineNumber:Math.max(1,error.line||1),startColumn:1,endLineNumber:Math.max(1,error.line||1),endColumn:1000,message:error.message||t('buildFailed')})));
                     throw new Error(errors.length?errors.map(error=>`${error.line||1}: ${error.message}`).join('\n'):job.error||t('buildFailed'));
                 }
@@ -393,11 +403,13 @@ function showBuildResult(data,job) {
     currentBlobUrl=URL.createObjectURL(new Blob([bytes],{type:data.pdf?'application/pdf':'image/png'}));
     $('pdf-viewer').src=currentBlobUrl+(data.pdf?'#toolbar=0&view=FitH':'');
     $('pdf-viewer').classList.remove('hidden');$('live-preview').classList.add('hidden');$('empty-state').classList.add('hidden');
-    $('btn-download-pdf').classList.remove('hidden');$('btn-download-pdf').dataset.extension=data.pdf?'pdf':'png';
+    $('btn-download-pdf').classList.remove('hidden');$('btn-download-pdf').dataset.extension=data.pdf?'pdf':'png';$('btn-download-pdf').dataset.filename=job.name||MpbStudioUX.filename();
     $('pdf-stale').classList.toggle('hidden',job.mode===currentMode&&String(job.projectId)===String(currentProjectId)&&job.sourceContent===editor.getValue());
     setStatus('built');
+    window.MpbUI?.finish('studio_first');window.MpbUI?.finish('error_recovered');
 }
 function createNewProject() {
+    MpbStudioUX.resetCreate();
     lastFocus=document.activeElement;
     $('new-project-name').value='';$('new-project-type').value='latex';updateTemplateOptions();
     $('create-project-modal').classList.remove('hidden');$('new-project-name').focus();
@@ -408,6 +420,7 @@ function updateTemplateOptions() {
     select.replaceChildren();
     (type==='latex'?['latex_blank','latex_beamer','latex_report']:[type]).forEach(id=>select.add(new Option(t(`template.${id}`),id)));
     if([...select.options].some(option=>option.value===previous))select.value=previous;
+    MpbStudioUX.templatePreview();
 }
 async function submitNewProject() {
     const name=$('new-project-name').value.trim();if(!name){$('new-project-name').focus();return;}
@@ -415,32 +428,26 @@ async function submitNewProject() {
     try {
         await transition(async()=>{
             setStatus('creating');
-            const created=await(await api('/studio/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,project_type:$('new-project-type').value,template_id:$('new-project-template').value})})).json();
+            const created=await(await api('/studio/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,project_type:$('new-project-type').value,template_id:$('new-project-template').value,...(MpbStudioUX.draft()?{initial_content:MpbStudioUX.draft().content}:{})})})).json();
             await loadProjects();currentMode='project';await activateProject(created.id);updateModeUi();closeCreateProjectModal();
         });
     } finally {$('submit-create-project-button').disabled=false;}
 }
 async function renameFile(id,path) {
-    const name=prompt(t('renamePrompt',{name:path}),path);if(!name||name===path)return;
+    const name=await MpbUI.prompt(t('renamePrompt',{name:path}),path);if(!name||name===path)return;
     return transition(async()=>{await api(`/studio/projects/${currentProjectId}/files/${id}/rename`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({new_name:name})});await activateProject(currentProjectId);});
 }
 async function deleteFile(id,path) {
-    if(!confirm(t('deletePrompt',{name:path})))return;
+    if(!await MpbUI.confirm(t('delete'),t('deletePrompt',{name:path})))return;
     return transition(async()=>{await api(`/studio/projects/${currentProjectId}/files/${id}`,{method:'DELETE'});await activateProject(currentProjectId);});
 }
-async function uploadFiles(files) {
-    if(!currentProjectId)throw new Error(t('chooseProject'));
-    return transition(async()=>{
-        for(const file of files){setStatus('uploading');const body=new FormData();body.append('file',file);await api(`/studio/projects/${currentProjectId}/upload`,{method:'POST',body});}
-        await activateProject(currentProjectId);setStatus('saved');
-    });
-}
+async function uploadFiles(files) {return MpbStudioUX.upload(files);}
 function downloadBlob(blob,name) {
     const url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=name;anchor.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
-async function downloadZIP() {return transition(async()=>{if(!currentProjectId)throw new Error(t('chooseProject'));downloadBlob(await(await api(`/studio/projects/${currentProjectId}/export/zip`)).blob(),`Project_${currentProjectId}.zip`);});}
-function downloadPDF() {if(!currentBlobUrl)return;const anchor=document.createElement('a');anchor.href=currentBlobUrl;anchor.download=`Document.${$('btn-download-pdf').dataset.extension||'pdf'}`;anchor.click();}
+async function downloadZIP() {return transition(async()=>{if(!currentProjectId)throw new Error(t('chooseProject'));downloadBlob(await(await api(`/studio/projects/${currentProjectId}/export/zip`)).blob(),`${MpbStudioUX.filename()}.zip`);});}
+function downloadPDF() {if(!currentBlobUrl)return;const anchor=document.createElement('a');anchor.href=currentBlobUrl;anchor.download=`${MpbArchive.safePath($('btn-download-pdf').dataset.filename||MpbStudioUX.filename()).replaceAll('/','_')}.${$('btn-download-pdf').dataset.extension||'pdf'}`;anchor.click();}
 async function sendToTelegram() {
     $('btn-send-tg').disabled=true;
     try {await transition(async()=>{if(!currentProjectId)throw new Error(t('chooseProject'));await api(`/studio/projects/${currentProjectId}/send_telegram`,{method:'POST',timeoutMs:65000});window.mpbPopup?.(t('sent'));});}
@@ -497,7 +504,8 @@ async function initStudio() {
         save:async record=>{await api(`/studio/projects/${record.projectId}/files/${record.fileId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:record.content})});
             const file=projectFiles.find(item=>item.id===record.fileId);if(file)file.content=record.content;},
         onStorageError:()=>{if(!storageWarningShown){storageWarningShown=true;window.mpbPopup?.(t('storageUnavailable'),{type:'warning'});}}});
-    editor=createFallbackEditor();bind();activateDocument({type:'latex',content:TEMPLATES.latex});updateModeUi();
+    editor=createFallbackEditor();MpbStudioUX.init();bind();await activateDocument({type:'latex',content:TEMPLATES.latex});updateModeUi();
+    const params=new URLSearchParams(location.search);if(params.has('project')){await loadProjects();if(projectsList.some(p=>String(p.id)===params.get('project'))){await openProject(params.get('project'));updateModeUi();}}else if(params.has('projects'))await MpbStudioUX.manageProjects();
     window.mpbI18n?.registerTranslator(translateStudio);
     activeJob=session.readValue('active-job');
     if(activeJob?.job_id){updateJobUi();run(pollJob);}

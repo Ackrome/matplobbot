@@ -186,7 +186,7 @@ function renderNavbar() {
                 const classes = active
                     ? "text-blue-700 bg-blue-50 border border-blue-200 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
                     : "text-slate-600 hover:text-blue-600 hover:bg-blue-50 border border-transparent dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300";
-                return `<a href="${item.href}" class="px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${classes}">${translate(item.key)}</a>`;
+                return `<a href="${item.href}" ${active ? 'aria-current="page"' : ''} class="px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${classes}">${translate(item.key)}</a>`;
             })
             .join("");
         desktopRoot.innerHTML = `
@@ -203,7 +203,7 @@ function renderNavbar() {
                 const classes = active
                     ? "text-blue-700 bg-blue-50 border border-blue-200 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
                     : "text-slate-700 hover:text-blue-600 hover:bg-blue-50 border border-transparent dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-blue-300";
-                return `<a href="${item.href}" class="block px-3 py-3 rounded-lg text-base font-medium transition-colors ${classes}">${translate(item.key)}</a>`;
+                return `<a href="${item.href}" ${active ? 'aria-current="page"' : ''} class="block px-3 py-3 rounded-lg text-base font-medium transition-colors ${classes}">${translate(item.key)}</a>`;
             })
             .join("");
         mobileRoot.innerHTML = `

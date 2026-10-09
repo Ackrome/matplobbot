@@ -20,6 +20,7 @@ from shared_lib.database import get_db_session_dependency
 from shared_lib.models import Project, ProjectFile
 from shared_lib.product_metrics import record_product_event
 from shared_lib.redis_client import redis_client
+from shared_lib.studio_process import CANCEL_PREFIX
 from shared_lib.tasks import (
     compile_full_latex_task,
     compile_project_task,
@@ -66,14 +67,22 @@ async def _enqueue(
             await redis_client.client.set(
                 JOB_PREFIX + job_id, json.dumps(metadata), ex=JOB_TTL_SECONDS
             )
-        await asyncio.to_thread(dispatch_traced_task, task, *args, _task_id=job_id)
+        await asyncio.to_thread(
+            dispatch_traced_task, task, *args, _task_id=job_id, studio_job_id=job_id
+        )
     except Exception as exc:
         logger.warning("Studio job publication failed (%s)", type(exc).__name__)
         raise HTTPException(503, "Compilation queue unavailable. Please retry.") from exc
     await record_product_event(
         "studio_started", web_account_id=current_user["id"], dedupe_key=f"studio-start:{job_id}"
     )
-    return {"job_id": job_id, "status": "queued", "expires_at": metadata["expires_at"]}
+    return {
+        "job_id": job_id,
+        "status": "queued",
+        "expires_at": metadata["expires_at"],
+        "created_at": metadata["created_at"],
+        "source_fingerprint": source_fingerprint,
+    }
 
 
 def _project_snapshot(files):
@@ -190,7 +199,7 @@ async def create_project_job(
             if project.project_type == "markdown"
             else (render_mermaid, (content,))
         )
-        return await _enqueue(task, args, current_user, project_id)
+        return await _enqueue(task, args, current_user, project_id, fingerprint)
     cache = base64.b64encode(project.build_cache).decode("ascii") if project.build_cache else None
     return await _enqueue(
         compile_project_task, (payload, main_file, cache), current_user, project_id, fingerprint
@@ -207,12 +216,49 @@ def _task_status(job_id: str) -> tuple[str, dict | None]:
     if state == "SUCCESS":
         payload = result.result
         if isinstance(payload, dict):
+            if payload.get("status") == "cancelled":
+                return "cancelled", None
             return "error" if payload.get("status") == "error" else "success", payload
         return "error", {"error": "Compilation returned an invalid result"}
-    if state in {"FAILURE", "REVOKED"}:
+    if state == "REVOKED":
+        return "cancelled", None
+    if state == "FAILURE":
         # Exception values can contain internal paths or credentials: do not expose them.
         return "error", {"error": "Compilation failed. Please retry or check the source."}
     return "running", None
+
+
+@router.post("/jobs/{job_id}/cancel", status_code=202)
+async def cancel_studio_job(
+    job_id: UUID,
+    response: Response,
+    current_user: dict = Depends(get_current_user),
+):
+    """Request cooperative cancellation of this job's compiler process group."""
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        async with asyncio.timeout(5):
+            raw = await redis_client.client.get(JOB_PREFIX + str(job_id))
+        metadata = json.loads(raw) if raw else None
+    except Exception as exc:
+        raise HTTPException(503, "Job storage unavailable") from exc
+    if not metadata or metadata.get("owner_id") != current_user["id"]:
+        raise HTTPException(404, "Job not found or expired")
+    try:
+        status, _ = await asyncio.to_thread(_task_status, str(job_id))
+        if status in {"success", "error", "cancelled"}:
+            return {"job_id": str(job_id), "status": status}
+        async with asyncio.timeout(5):
+            await redis_client.client.set(CANCEL_PREFIX + str(job_id), "1", ex=JOB_TTL_SECONDS)
+            metadata["cancel_requested"] = True
+            await redis_client.client.set(
+                JOB_PREFIX + str(job_id), json.dumps(metadata), xx=True, keepttl=True
+            )
+    except Exception as exc:
+        raise HTTPException(
+            503, "Cancellation could not be confirmed. Check the job again."
+        ) from exc
+    return {"job_id": str(job_id), "status": "cancelling"}
 
 
 @router.get("/jobs/{job_id}", summary="Resume or retrieve an owned compile result")
@@ -236,6 +282,10 @@ async def get_studio_job(
     except Exception as exc:
         raise HTTPException(503, "Job status unavailable. Please retry.") from exc
     body = {"job_id": str(job_id), "status": status, "expires_at": metadata["expires_at"]}
+    body["source_fingerprint"] = metadata.get("source_fingerprint")
+    body["created_at"] = metadata.get("created_at")
+    if metadata.get("cancel_requested") and status in {"queued", "running"}:
+        body["status"] = "cancelling"
     if result is not None:
         if result.get("build_cache"):
             await _save_build_cache(db, metadata, result["build_cache"])

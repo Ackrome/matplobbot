@@ -167,6 +167,7 @@ def analyze_schedules(
         "incomplete": incomplete,
         "warnings": sorted(warnings),
         "lesson_count": len(intervals),
+        "lessons": intervals,
     }
 
 

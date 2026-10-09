@@ -238,6 +238,22 @@ class SettingsManager:
         await state.clear()  # Clear any previous state
         await self.base_manager.onboarding_welcome(callback, state)
 
+    async def command_account_data(self, message: Message):
+        """Open the private data menu from a website link without mutating data."""
+        if message.chat.type != "private":
+            return
+        lang = await translator.get_language(message.from_user.id, message.chat.id)
+        builder = InlineKeyboardBuilder()
+        for text_key, action in (
+            ("account_export_button", "account_export"),
+            ("account_telegram_delete_button", "telegram_delete_prompt"),
+            ("account_full_delete_button", "account_delete_prompt"),
+            ("btn_cancel", "back_to_settings"),
+        ):
+            builder.button(text=translator.gettext(lang, text_key), callback_data=action)
+        builder.adjust(1)
+        await message.answer(translator.gettext(lang, "account_data_scope"), reply_markup=builder.as_markup())
+
     async def cq_delete_my_data_prompt(self, callback: CallbackQuery):
         """Explain Telegram-only and complete account deletion without ambiguity."""
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)

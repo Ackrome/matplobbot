@@ -128,6 +128,7 @@ function syncCalendarDrawerTriggers() {
 }
 
 function setCalendarDrawerVisibility(open, { immediate = false, dragging = false } = {}) {
+    window.MpbScheduleUX?.calendarFocus(open && !isDesktopCalendarRail());
     const container = document.getElementById('calendarSubscriptionSection');
     const backdrop = document.getElementById('calendarSubscriptionBackdrop');
     if (!container) return;
@@ -339,6 +340,7 @@ window.openCalendarSyncPanel = function() {
     hasUserToggledCalendarPanel = true;
     isCalendarPanelCollapsed = false;
     persistCalendarPanelCollapsed();
+    window.MpbUI?.start('calendar_connected');
     renderCalendarSubscription();
 }
 
@@ -783,7 +785,7 @@ function renderCalendarSubscription() {
                             class="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-600 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                         <div class="${connectionLinkActionsClass}">
                             ${renderCalendarButton(isRevealed ? 'schedule.calendar.hide' : 'schedule.calendar.reveal', isRevealed ? 'Hide' : 'Show', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="toggleCalendarProfileReveal('${escapeJsString(selectedProfile.id)}')"`) }
-                            ${renderCalendarButton('schedule.calendar.copy', 'Copy link', 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500', 'onclick="copyCalendarSubscriptionLink(event)"')}
+
                         </div>
                     </div>
                     <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/50">
@@ -885,7 +887,7 @@ function renderCalendarSubscription() {
                     ` : ''}
                 </div>
                 <div class="${bodyHeaderActionsClass}">
-                    ${!panelUsesCompactLayout && isReady ? renderCalendarButton('schedule.calendar.copy', 'Copy link', 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500', 'onclick="copyCalendarSubscriptionLink(event)"') : ''}
+
                     ${!state.sync_enabled ? renderCalendarButton('schedule.calendar.enable', 'Enable', 'bg-blue-600 text-white hover:bg-blue-700 dark:hover:bg-blue-500', `onclick="toggleCalendarSync(true)"`) : ''}
                     ${renderCalendarBotLink('border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50')}
                     <button type="button" onclick="toggleCalendarSubscriptionPanel()"
@@ -1089,7 +1091,7 @@ window.refreshCalendarSubscription = async function() {
 window.copyCalendarSubscriptionLink = function(event) {
     const selectedProfile = window.getSelectedCalendarProfile();
     if (!selectedProfile?.links?.http_url || !calendarSubscriptionState.sync_enabled) return;
-    copyToClipboard(selectedProfile.links.http_url, event);
+    navigator.clipboard.writeText(selectedProfile.links.http_url).then(()=>{window.MpbUI?.finish('calendar_connected');showScheduleNotice('success',t('schedule.copy.done','Copied'),t('schedule.copy.done','Copied'));}).catch(()=>showScheduleNotice('error',t('schedule.copy.failed','Could not copy'),t('schedule.copy.failed','Could not copy')));
 }
 
 window.openCalendarProfileLink = function(kind) {
@@ -1101,7 +1103,7 @@ window.openCalendarProfileLink = function(kind) {
             ? selectedProfile.links.webcal_url
             : selectedProfile.links.preview_url;
     if (!targetUrl) return;
-    if (kind === 'webcal') window.location.href = targetUrl;
+    if (kind === 'webcal') {window.MpbUI?.finish('calendar_connected');window.location.href = targetUrl;}
     else window.open(targetUrl, '_blank', 'noopener');
 }
 

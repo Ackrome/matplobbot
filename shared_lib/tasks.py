@@ -22,6 +22,7 @@ from PIL import Image
 
 from .celery_app import app
 from .constants import LATEX_POSTAMBLE, LATEX_PREAMBLE
+from .studio_process import StudioBuildCancelled, run_studio_process
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +134,7 @@ def render_latex(self, latex_string: str, padding: int, dpi: int, is_display: bo
                 [
                     "latex",
                     "-no-shell-escape",
+                    "-file-line-error",
                     "-interaction=nonstopmode",
                     "-output-directory",
                     temp_dir,
@@ -193,7 +195,7 @@ def render_latex(self, latex_string: str, padding: int, dpi: int, is_display: bo
 
 
 @app.task(bind=True, soft_time_limit=45, name="shared_lib.tasks.render_mermaid")
-def render_mermaid(self, mermaid_code: str):
+def render_mermaid(self, mermaid_code: str, studio_job_id: str | None = None):
     MMDC_PATH = shutil.which("mmdc") or "mmdc"
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -214,8 +216,13 @@ def render_mermaid(self, mermaid_code: str):
                 "-b",
                 "transparent",
             ]
-            process = subprocess.run(
-                command, capture_output=True, text=True, errors="ignore", timeout=30
+            process = run_studio_process(
+                studio_job_id=studio_job_id,
+                command=command,
+                capture_output=True,
+                text=True,
+                errors="ignore",
+                timeout=30,
             )
 
             if process.returncode != 0 or not os.path.exists(output_path):
@@ -225,12 +232,21 @@ def render_mermaid(self, mermaid_code: str):
             with open(output_path, "rb") as f:
                 img_str = base64.b64encode(f.read()).decode("utf-8")
                 return {"status": "success", "image": img_str}
+    except StudioBuildCancelled:
+        return {"status": "cancelled"}
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
 
 @app.task(bind=True, soft_time_limit=120, name="shared_lib.tasks.render_pdf")
-def render_pdf_task(self, markdown_string: str, title: str, author_string: str, date_string: str):
+def render_pdf_task(
+    self,
+    markdown_string: str,
+    title: str,
+    author_string: str,
+    date_string: str,
+    studio_job_id: str | None = None,
+):
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
             header_path = os.path.join(temp_dir, "header.tex")
@@ -268,8 +284,12 @@ def render_pdf_task(self, markdown_string: str, title: str, author_string: str, 
             if re.search(r"^# ", markdown_string, re.MULTILINE):
                 pandoc_cmd.append("--toc")
 
-            proc_pandoc = subprocess.run(
-                pandoc_cmd, input=markdown_string.encode("utf-8"), capture_output=True, timeout=45
+            proc_pandoc = run_studio_process(
+                studio_job_id=studio_job_id,
+                command=pandoc_cmd,
+                input=markdown_string.encode("utf-8"),
+                capture_output=True,
+                timeout=45,
             )
 
             if proc_pandoc.returncode != 0:
@@ -288,8 +308,9 @@ def render_pdf_task(self, markdown_string: str, title: str, author_string: str, 
                 tex_path,
             ]
 
-            proc_latex = subprocess.run(
-                compile_cmd,
+            proc_latex = run_studio_process(
+                studio_job_id=studio_job_id,
+                command=compile_cmd,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -316,6 +337,8 @@ def render_pdf_task(self, markdown_string: str, title: str, author_string: str, 
 
     except subprocess.TimeoutExpired:
         return {"status": "error", "error": "Process timed out."}
+    except StudioBuildCancelled:
+        return {"status": "cancelled"}
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
@@ -450,6 +473,20 @@ def parse_latex_log(log_path: str) -> list[dict]:
     i = 0
     while i < len(lines):
         line = lines[i].strip()
+        # latexmk -file-line-error identifies included project files precisely.
+        located = re.match(r"(.+?\.(?:tex|sty|cls)):(\d+):\s*(.+)", line)
+        if located:
+            path, number, message = located.groups()
+            path = path.replace("\\", "/")
+            root = str(Path(log_path).parent).replace("\\", "/") + "/"
+            if path.startswith(root):
+                path = path[len(root) :]
+            path = _safe_relative_path(path) or path.rsplit("/", 1)[-1]
+            errors.append(
+                {"file": path.removeprefix("./"), "line": int(number), "message": message}
+            )
+            i += 1
+            continue
         # Ошибки в LaTeX обычно начинаются с "!"
         if line.startswith("!"):
             error_msg = line[1:].strip()
@@ -471,7 +508,7 @@ def parse_latex_log(log_path: str) -> list[dict]:
 
 
 @app.task(bind=True, soft_time_limit=60, name="shared_lib.tasks.compile_full_latex")
-def compile_full_latex_task(self, latex_code: str):
+def compile_full_latex_task(self, latex_code: str, studio_job_id: str | None = None):
     """Быстрая компиляция одного файла (Quick Mode)"""
     is_safe, reason = _validate_latex_source(latex_code)
     if not is_safe:
@@ -490,13 +527,15 @@ def compile_full_latex_task(self, latex_code: str):
             with open(tex_path, "w", encoding="utf-8") as f:
                 f.write(latex_code)
 
-            subprocess.run(
-                [
+            run_studio_process(
+                studio_job_id=studio_job_id,
+                command=[
                     "latexmk",
                     "-pdf",
                     "-interaction=nonstopmode",
                     "-halt-on-error",
                     "-no-shell-escape",
+                    "-file-line-error",
                     f"-output-directory={temp_dir}",
                     tex_path,
                 ],
@@ -514,6 +553,8 @@ def compile_full_latex_task(self, latex_code: str):
 
             with open(pdf_path, "rb") as f:
                 return {"status": "success", "pdf": base64.b64encode(f.read()).decode("utf-8")}
+    except StudioBuildCancelled:
+        return {"status": "cancelled"}
     except Exception as e:
         return {"status": "error", "message": str(e), "errors": [{"line": 1, "message": str(e)}]}
 
@@ -622,7 +663,11 @@ def _validate_latex_source(text: str) -> tuple[bool, str | None]:
 
 @app.task(bind=True, soft_time_limit=60, name="shared_lib.tasks.compile_project")
 def compile_project_task(
-    self, project_files: list, main_file: str, build_cache_b64: str | None = None
+    self,
+    project_files: list,
+    main_file: str,
+    build_cache_b64: str | None = None,
+    studio_job_id: str | None = None,
 ):
     """Многофайловая компиляция с поддержкой Инкрементальной сборки и SyncTeX"""
     try:
@@ -708,12 +753,14 @@ def compile_project_task(
                 "-interaction=nonstopmode",
                 "-halt-on-error",
                 "-no-shell-escape",
+                "-file-line-error",
                 "-synctex=1",
                 f"-output-directory={temp_dir}",
                 tex_path,
             ]
-            subprocess.run(
-                compile_cmd,
+            run_studio_process(
+                studio_job_id=studio_job_id,
+                command=compile_cmd,
                 capture_output=True,
                 text=True,
                 errors="ignore",
@@ -764,5 +811,7 @@ def compile_project_task(
                 pdf_b64 = base64.b64encode(f.read()).decode("utf-8")
                 return {"status": "success", "pdf": pdf_b64, "build_cache": out_cache_b64}
 
+    except StudioBuildCancelled:
+        return {"status": "cancelled"}
     except Exception as e:
         return {"status": "error", "message": str(e), "errors": [{"line": 1, "message": str(e)}]}

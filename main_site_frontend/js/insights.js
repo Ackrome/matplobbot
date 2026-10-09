@@ -9,10 +9,10 @@
     const localTime=value=>new Date(value).toLocaleString(window.mpbI18n?.getLanguage() || 'ru');
     function cell(row,text,header=false) {const node=document.createElement(header?'th':'td');node.textContent=String(text);row.append(node);}
     function table(parent,headers,rows) {
-        const wrapper=document.createElement('div');wrapper.className='mpb-scroll';
+        const wrapper=document.createElement('div');wrapper.className='mpb-scroll insight-table';
         const element=document.createElement('table'),head=document.createElement('thead'),body=document.createElement('tbody'),row=document.createElement('tr');
         headers.forEach(value=>cell(row,value,true));head.append(row);
-        rows.forEach(values=>{const row=document.createElement('tr');values.forEach(value=>cell(row,value));body.append(row);});
+        rows.forEach(values=>{const row=document.createElement('tr');values.forEach((value,index)=>{cell(row,value);row.lastElementChild.dataset.label=headers[index];});body.append(row);});
         element.append(head,body);wrapper.append(element);parent.append(wrapper);
     }
     function render() {
@@ -43,6 +43,7 @@
             [tr('insights.compile','Successful compile results opened'),metrics.counts.studio_succeeded],
             [tr('insights.compileFailed','Failed compile results opened'),metrics.counts.studio_failed],
         ]);
+        table(product,[tr('ux.journey','Journey'),tr('ux.samples','Samples'),tr('ux.averageSeconds','Average, seconds')],(metrics.ux_timings||[]).map(item=>[tr('ux.journey.'+item.journey,item.journey),item.samples,(item.average_ms/1000).toFixed(1)]));
         table(product,[tr('insights.day','UTC date'),tr('insights.active','Active accounts'),tr('insights.events','Outcome events')],
             metrics.daily.map(day=>[day.date,day.active_users,day.events]));
         byId('insightStatus').textContent=tr('insights.updated','Updated: {time}',{time:localTime(ops.checked_at)});

@@ -1740,6 +1740,22 @@ Jenkins + deploy features:
 - The Jenkins quality gate creates `.jenkins-venv`, installs project and validation dependencies, checks critical FastAPI/test imports (including `yaml`), runs `ruff check . --select E9,F63,F7,F82`, and runs `python -m unittest discover -s tests -v`.
 - The gate fails if unittest output shows dependency-driven skips/import errors such as missing FastAPI modules.
 - `Jenkinsfile.groovy` performs production deploy and smoke checks.
+- After migrations and container startup, `deploy.sh` runs
+  `python -m fastapi_stats_app.bootstrap_admin` inside `mpb-fastapi-stats`. It creates
+  the dedicated password administrator from `STATS_USER` / `STATS_PASS`, or
+  synchronizes the password of an existing unlinked administrator. This closes the
+  gap where Jenkins supplied environment credentials but `/api/auth/login` required
+  a matching `web_accounts` row. Repeated provisioning preserves the ID, preferences,
+  and an already matching hash. Ordinary and Telegram-linked username collisions
+  fail without mutation; configure a different dedicated `PROD_STATS_USER` in Jenkins.
+  Blank/default credentials and invalid stored hashes also fail closed. Changing
+  `STATS_USER` does not remove the previous account. See
+  [the provisioning module](../fastapi_stats_app/wiki_bootstrap_admin.md).
+- Smoke checks read the effective API container environment with Python shell quoting,
+  rather than executing `.env` as a shell script. Special characters reach the login
+  request unchanged. HTTP `401` from the expected administrator remains a failure;
+  successful login, authenticated HTTP/WebSocket access, and anonymous rejection
+  are all mandatory. Provisioning errors stop deployment before these checks.
 - Production CI traffic stays on the Proxmox LAN: the self-hosted GitHub runner calls
   `http://192.168.1.130:8080` by default, and Jenkins reaches `app-vm` through the
   `DEPLOY_HOST` build parameter, whose default is `192.168.1.40`. Before either connection,
@@ -1862,3 +1878,68 @@ How to use:
 - Schedule snapshots keep only the three most recent entities and tolerate
   unavailable or quota-limited browser storage. Telegram Mini App BackButton is
   shown only when browser history has a previous entry.
+
+
+## UI/UX: выбранные улучшения от 9 октября 2026
+
+Реализованы пункты 1–15 и 17–35 согласованного UI/UX-аудита. Пункт 16
+(резервный сценарий при недоступном Telegram Widget) исключён по просьбе пользователя.
+Вход в аккаунт остаётся через плашку Telegram-профиля в общей навигации.
+
+| Пункты | Поведение |
+| --- | --- |
+| 1–2 | Компактная навигация до 1280 px; общие цвета, поверхности, фокус, кнопки и RU/EN/тёмная тема. |
+| 3–4 | Прямые действия и последние открытые объекты на главной; `/project` загружает настоящий README Ackrome/matplobbot через GitHub API с оглавлением, кодом, ссылками, санитизацией и сохранённой копией. |
+| 5–10 | Компактный первый экран расписания; «Сегодня» открывает и фокусирует день; поиск Arrow/Enter/Escape; более просторная таблица и полные сведения о занятии; подсказка пустого поиска; спокойный статус свежих данных, заметные предупреждения при сбое. |
+| 11–12 | Сохраняемое сравнение выбранных сущностей с модулями/режимом занятий, inline-валидацией дат и времени, шкалой занятий и общих свободных окон. Неизвестные данные не считаются свободным временем. |
+| 13, 34 | Основное действие календаря зависит от выбранного приложения; разовый ICS явно обозначен. Модальный мобильный календарь удерживает фокус и возвращает его к кнопке открытия. |
+| 14–15, 19 | Аккаунт объединяет инструменты, тему, язык и переходы к настройкам/данным Telegram. Выгрузка ZIP содержит account.json, описание и исходные файлы по исходным относительным путям; JSON доступен отдельно. Удаление вынесено в раскрываемую опасную зону с прежними проверками свежей выгрузки. |
+| 17–18 | Контекстный заголовок входа; пароль администратора раскрывается отдельно; поля имеют labels/autocomplete и переключатель видимости. |
+| 20–24 | Атомарное сохранение черновика как проекта; помощь до первой сборки; поиск/переименование/копия/удаление проектов; схемы шаблонов; отдельные сохранение Ctrl/Cmd+S и сборка Ctrl/Cmd+Enter; увеличенные цели действий. |
+| 25–26 | Ошибка сборки открывает файл/строку. Конфликт локальной и серверной версии показывает обе версии, отличия и скачивание обеих до выбора. Это восстановление черновика, не серверная история версий. |
+| 27–29 | Локальная история 20 сборок с датой/состоянием/отпечатком и получением результата в течение 24 часов; реальная кооперативная отмена компилятора; очередь файлов с частичным успехом и повтором в исходный проект; названия скачиваний связаны со снимком сборки. |
+| 30–32 | Админка разделена на состояние сервиса, использование и модули; действия зависят от контекста; при недоступном Chart.js данные остаются таблицей с повторной загрузкой графика. |
+| 33 | Локализованная офлайн-страница предлагает повтор и только действительно кэшированные оболочки. |
+| 35 | Авторизованные измерения времени до расписания, результата сборки, получения ссылки календаря и восстановления после ошибки. Без текстов документов/поиска; агрегаты доступны администратору, хранение 90 дней с удалением данных аккаунта. |
+
+### Контракты и ограничения
+
+- `PATCH /api/studio/projects/{id}`, `POST /api/studio/projects/{id}/duplicate` и
+  `DELETE /api/studio/projects/{id}` проверяют владельца. Создание принимает
+  `initial_content` и сохраняет проект с главным файлом одной транзакцией.
+- `POST /api/studio/jobs/{id}/cancel` записывает ограниченный по TTL маркер;
+  `cancelling` не означает завершение. Worker останавливает собственную группу
+  процессов компилятора и только затем возвращает `cancelled`. Завершённый результат
+  выигрывает гонку с поздней отменой. Поведение основано на
+  [ограничениях Celery revoke](https://docs.celeryq.dev/en/stable/userguide/workers.html#revoke-revoking-tasks).
+- Для измерений нужна миграция `f8e9f0a1b2c3`. Время подключения календаря означает
+  получение ссылки/запуск внешнего приложения; подтверждение импорта во внешнем
+  календаре сайту недоступно. Метрики best effort и не являются SLA.
+- API расписания возвращает исходные нормализованные интервалы `lessons` для
+  визуализации. Прежние ограничения: до шести сущностей, до 14 дней, текущий семестр.
+- Офлайн-кэш `mpb-site-v37` включает новые оболочки, скрипты и общие стили.
+  Текст публичного README кэшируется отдельно на устройстве. Доступность библиотеки
+  рендеринга и внешних изображений зависит от сети; предусмотрены понятные состояния.
+
+### Проверка
+
+UI проверяется локальным Chromium на синтетических API-данных при ширинах 390, 820 и
+1440 px, с RU/EN и тёмной темой. Скриншоты оцениваются после действий, включая
+неуспешную сборку, частичную загрузку, конфликт версий и блокировку CDN. README взят
+из публичного GitHub; Marked/DOMPurify используются реальные закреплённые версии.
+Скриншоты и временные сценарии не включаются в репозиторий.
+
+Backend-регрессии покрывают владельцев проектов/сборок, атомарный импорт черновика,
+копирование бинарных исходников, отмену до запуска/во время процесса, ограничение
+содержимого измерений и реальные SQL-агрегаты. ZIP читается стандартным zipfile с
+проверкой CRC/Unicode/бинарных данных. Общий gate — `coverage run --branch -m unittest
+discover -s tests -v`, ruff, JS syntax, сборка Tailwind, совпадение asset URL и precache.
+Эти проверки не означают развёртывания или реальной отправки документов в Telegram.
+
+Итог локального прогона: 381 тест прошёл, покрытие с учётом ветвлений — 58%; 14 браузерных
+сценариев и пять дополнительных проверок прошли без JavaScript-ошибок. Отдельно
+проверены реальные Monaco и Markdown/KaTeX, загрузка README с изображениями,
+копирование готовой календарной ссылки и восстановление Chart.js после сбоя CDN.
+После визуальной проверки добавлена подсказка горизонтальной прокрутки шкалы
+сравнения. Скриншоты покрывают все 34 включённых пункта; Telegram-переходы
+проверены по deep links и тестам обработчиков, без отправки в реальный чат.

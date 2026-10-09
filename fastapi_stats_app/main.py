@@ -37,6 +37,7 @@ from .routers import (
     schedule_router,
     stats_router,
     studio_jobs_router,
+    ux_router,
     studio_router,
     ws_router,
 )
@@ -132,6 +133,7 @@ app.include_router(schedule_router.router, prefix="/api")
 app.include_router(studio_router.router, prefix="/api")
 app.include_router(studio_jobs_router.router, prefix="/api")
 app.include_router(insights_router.router, prefix="/api")
+app.include_router(ux_router.router, prefix="/api")
 app.include_router(planning_router.router, prefix="/api")
 app.include_router(stats_router.router, prefix="/api")
 app.include_router(ws_router.router, tags=["websockets"])

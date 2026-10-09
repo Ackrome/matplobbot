@@ -82,6 +82,73 @@ class TestStudioRouterAPI(unittest.TestCase):
     def tearDown(self):
         self.app.dependency_overrides.clear()
 
+    def test_import_draft_is_atomic_and_invalid_templates_do_not_write(self):
+        self.db.add = Mock()
+
+        async def assign_id():
+            self.db.add.call_args_list[0].args[0].id = 50
+
+        self.db.flush.side_effect = assign_id
+        response = self.client.post(
+            "/api/studio/projects",
+            json={
+                "name": "Мой проект",
+                "project_type": "markdown",
+                "initial_content": "# Мой черновик",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        file = self.db.add.call_args_list[1].args[0]
+        self.assertEqual(
+            (file.project_id, file.file_path, file.content_text), (50, "main.md", "# Мой черновик")
+        )
+        self.db.commit.assert_awaited_once()
+        self.db.add.reset_mock()
+        response = self.client.post(
+            "/api/studio/projects",
+            json={"name": "Invalid", "project_type": "latex", "template_id": "markdown"},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.db.add.assert_not_called()
+
+    def test_project_crud_rejects_foreign_owner(self):
+        self.db.execute.return_value = _mock_scalar_result(None)
+        for method, path in [
+            ("patch", "/api/studio/projects/9"),
+            ("post", "/api/studio/projects/9/duplicate"),
+            ("delete", "/api/studio/projects/9"),
+        ]:
+            kwargs = {} if method == "delete" else {"json": {"name": "Copy"}}
+            self.assertEqual(getattr(self.client, method)(path, **kwargs).status_code, 404)
+        self.db.commit.assert_not_awaited()
+
+    def test_duplicate_preserves_sources_and_binary_files_without_build_cache(self):
+        project = SimpleNamespace(
+            id=9, owner_id=1, project_type="latex", build_cache=b"private cache"
+        )
+        files = [
+            SimpleNamespace(
+                file_path="main.tex", content_text="source", content_binary=None, is_main=True
+            ),
+            SimpleNamespace(
+                file_path="image.png", content_text=None, content_binary=b"\x00\xff", is_main=False
+            ),
+        ]
+        self.db.execute.side_effect = [_mock_scalar_result(project), _mock_scalars_result(files)]
+        self.db.add = Mock()
+
+        async def assign_id():
+            self.db.add.call_args_list[0].args[0].id = 60
+
+        self.db.flush.side_effect = assign_id
+        response = self.client.post("/api/studio/projects/9/duplicate", json={"name": "Copy"})
+        self.assertEqual(response.status_code, 200)
+        copy, text, binary = [call.args[0] for call in self.db.add.call_args_list]
+        self.assertIsNone(copy.build_cache)
+        self.assertEqual((text.content_text, binary.content_binary), ("source", b"\x00\xff"))
+        self.assertTrue(text.is_main)
+        self.assertEqual(binary.project_id, 60)
+
     def test_project_filename_rejects_paths_and_control_characters(self):
         self.assertEqual(studio_router._sanitize_project_filename("diagram.png"), "diagram.png")
         for filename in ("../secret.txt", "nested/image.png", r"nested\image.png", "bad\x00.txt"):

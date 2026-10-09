@@ -112,7 +112,7 @@ if (loginForm) {
         e.preventDefault();
 
         const errorEl = document.getElementById("error");
-        const btn = e.target.querySelector("button");
+        const btn = e.target.querySelector("button[type=submit]");
         const username = document.getElementById("username").value;
         const password = document.getElementById("password").value;
 
@@ -159,7 +159,7 @@ if (registerForm) {
 
         const errorEl = document.getElementById("reg_error");
         const successEl = document.getElementById("reg_success");
-        const btn = e.target.querySelector("button");
+        const btn = e.target.querySelector("button[type=submit]");
         const username = document.getElementById("reg_username").value;
         const password = document.getElementById("reg_password").value;
 
@@ -212,4 +212,11 @@ if (registerForm) {
             window.mpbPopup?.(authT("apiUnavailable"), { type: "error" });
         }
     });
+}
+
+if(loginForm){
+    const show=document.getElementById('show-password');
+    show?.addEventListener('click',()=>{const input=document.getElementById('password'),visible=input.type==='password';input.type=visible?'text':'password';show.setAttribute('aria-pressed',String(visible));show.textContent=window.MpbUI.t(visible?'hidePassword':'showPassword');});
+    const context=()=>{const next=new URLSearchParams(location.search).get('next')||'';const key=next.startsWith('/studio')?'loginStudio':next.startsWith('/schedule')?'loginSchedule':'loginAccount';const subtitle=document.getElementById('login-context')||document.querySelector('[data-i18n="login.subheading"]');if(show)show.textContent=window.MpbUI.t(document.getElementById('password').type==='text'?'hidePassword':'showPassword');if(subtitle){subtitle.id='login-context';subtitle.removeAttribute('data-i18n');subtitle.textContent=window.MpbUI.t(key);}};
+    window.mpbI18n.ready.then(context);window.addEventListener('mpb-language-change',context);
 }

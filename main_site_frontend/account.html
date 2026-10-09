@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title data-i18n="account.title">Your account | Matplobbot</title>
     <link rel="icon" href="/favicon.ico">
-    <script src="/js/theme_bootstrap.js?v=1"></script>
-    <link rel="stylesheet" href="/css/tailwind.css?v=6">
+    <script src="/js/theme_bootstrap.js?v=20260821-6"></script>
+    <link rel="stylesheet" href="/css/tailwind.css?v=20261009-4">
     <style>
         body { margin:0; font-family:Inter,system-ui,sans-serif; background:#f8fafc; color:#0f172a; }
         .dark body { background:#0f172a; color:#f1f5f9; }
@@ -28,11 +28,12 @@
         [hidden] { display:none !important; }
         @media(max-width:480px) { .account-card { padding:18px; } .account-main h1 { font-size:1.7rem; } }
     </style>
+<link rel="stylesheet" href="/css/product_ui.css?v=20261009-4">
 </head>
 <body>
     <nav id="navbar" class="fixed top-0 z-50 w-full bg-white border-b border-slate-200 dark:bg-slate-900 dark:border-slate-700">
         <div class="max-w-7xl mx-auto px-4 flex items-center justify-between h-16">
-            <a href="/" class="text-xl font-bold">ITISHCHENKO</a>
+            <a href="/" class="ui-brand"><span class="ui-brand-mark">IT</span><span>Ivan Tishchenko</span></a>
             <div id="desktop-nav-links" class="hidden md:flex items-center gap-3">
                 <a href="/schedule" data-i18n="nav.schedule">Schedule</a>
                 <div id="desktop-auth-container"></div>
@@ -46,16 +47,18 @@
         <p id="account-identity" class="account-status account-muted" aria-live="polite"></p>
         <p id="account-login" hidden><a href="/login" data-i18n="account.signIn">Sign in to manage your account.</a></p>
         <div id="account-controls" hidden>
+<section class="account-card"><h2 data-i18n="ux.accountProfile">Профиль и настройки</h2><p id="account-telegram" class="ui-muted"></p><div class="ui-row"><a class="ui-button primary" href="/schedule" data-i18n="ux.mySchedule">Моё расписание</a><a class="ui-button" href="/studio?projects=1" data-i18n="ux.myProjects">Мои проекты</a><a class="ui-button" href="https://t.me/matplobbot?start=web_settings" data-i18n="ux.botSettings">Настройки Telegram</a></div><div class="account-preferences"><label for="account-language" data-i18n="ux.language">Язык</label><select class="ui-input" id="account-language"><option value="ru">Русский</option><option value="en">English</option></select><label for="account-theme" data-i18n="ux.theme">Тема</label><select class="ui-input" id="account-theme"><option value="light" data-i18n="ux.light">Светлая</option><option value="dark" data-i18n="ux.dark">Тёмная</option></select></div></section>
             <section class="account-card" aria-labelledby="export-heading">
                 <h2 id="export-heading" data-i18n="account.exportHeading">1. Keep a copy of your data</h2>
                 <p data-i18n="account.exportDescription">Download your website settings, Studio projects and files, and linked Telegram data as JSON. Passwords, mail credentials and private calendar keys are excluded.</p>
-                <button id="account-export" type="button" data-i18n="account.exportButton">Download my data</button>
+                <label for="account-export-format" data-i18n="ux.exportFormat">Формат выгрузки</label><select class="ui-input" id="account-export-format"><option value="zip" data-i18n="ux.exportZip">Архив ZIP с файлами и описанием</option><option value="json">JSON</option></select><button id="account-export" type="button" data-i18n="account.exportButton">Download my data</button>
+<p id="account-export-status" class="ui-status" role="status" aria-live="polite"></p>
             </section>
-            <section class="account-card" aria-labelledby="delete-heading">
-                <h2 id="delete-heading" data-i18n="account.deleteHeading">2. Delete the entire account</h2>
+            <details class="account-card ui-danger-zone" aria-labelledby="delete-heading"><summary id="delete-heading" data-i18n="ux.dangerZone">Удаление аккаунта</summary>
+
                 <p data-i18n="account.deleteDescription">Permanently removes your website account, all Studio projects and assets, and linked Telegram data. Existing website sessions stop working. This cannot be undone.</p>
                 <p class="account-muted" data-i18n="account.retainedDescription">Messages already sent to Telegram, offline copies on other devices, operational logs and backups are not erased by this action.</p>
-                <p data-i18n="account.telegramOnly">To delete only Telegram history, settings, subscriptions and mail connections while keeping Studio, use Settings → My data and account in your private bot chat.</p>
+                <a class="ui-button" href="https://t.me/matplobbot?start=web_account" data-i18n="ux.botData">Данные Telegram</a><p data-i18n="account.telegramOnly">To delete only Telegram history, settings, subscriptions and mail connections while keeping Studio, use Settings → My data and account in your private bot chat.</p>
                 <fieldset id="account-delete-fields" disabled>
                     <label for="account-confirmation" data-i18n="account.typeDelete">After saving the export, type DELETE to confirm:</label>
                     <input id="account-confirmation" type="text" autocomplete="off" spellcheck="false" aria-describedby="account-export-requirement">
@@ -63,13 +66,15 @@
                     <button id="account-delete" class="danger-button" type="button" disabled data-i18n="account.deleteButton">Permanently delete my account</button>
                 </fieldset>
                 <p id="account-export-requirement" class="account-muted" data-i18n="account.exportRequirement">Download a fresh export first. Deletion confirmation is available for 15 minutes.</p>
-            </section>
+            </details>
         </div>
         <p id="account-status" class="account-status" role="status" aria-live="polite"></p>
     </main>
-    <script src="/js/runtime_config.js?v=2"></script>
+    <script src="/js/runtime_config.js?v=20260821-6"></script>
     <script src="/js/frontend_i18n.js?v=1"></script>
-    <script src="/js/navbar.js?v=20261009-2"></script>
-    <script src="/js/account.js?v=1"></script>
+<script src="/js/product_ui.js?v=20261009-4"></script>
+    <script src="/js/navbar.js?v=20261009-4"></script>
+    <script src="/js/archive_download.js?v=20261009-4"></script>
+    <script src="/js/account.js?v=20261009-4"></script>
 </body>
 </html>

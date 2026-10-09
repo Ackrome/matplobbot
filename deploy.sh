@@ -123,6 +123,10 @@ echo "--- Restarting services with new images ---"
 BOT_TAG=${BOT_TAG} API_TAG=${API_TAG} SCHEDULER_TAG=${SCHEDULER_TAG} WORKER_TAG=${WORKER_TAG} \
   docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
 
+echo "--- Synchronizing the deployment admin account ---"
+docker compose -f "$COMPOSE_FILE" exec -T mpb-fastapi-stats \
+  python -m fastapi_stats_app.bootstrap_admin
+
 echo "--- Reloading services that consume repo-mounted config files ---"
 docker compose -f "$COMPOSE_FILE" restart main-site-frontend caddy
 

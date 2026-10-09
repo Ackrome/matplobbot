@@ -14,9 +14,9 @@
     <link rel="icon" sizes="512x512" href="/android-chrome-512x512.png">
     <link rel="manifest" href="/site.webmanifest">
 
-    <script src="/js/theme_bootstrap.js?v=1"></script>
-    <link rel="stylesheet" href="/css/tailwind.css?v=6">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/js/theme_bootstrap.js?v=20260821-6"></script>
+    <link rel="stylesheet" href="/css/tailwind.css?v=20261009-4">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <style>
@@ -308,6 +308,7 @@
             window.location.href = '/login';
         }
     </script>
+<link rel="stylesheet" href="/css/product_ui.css?v=20261009-4">
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
 
@@ -332,7 +333,7 @@
     </nav>
 
     <main class="pt-28 pb-28 max-w-7xl mx-auto px-4 sm:px-6">
-        <details id="outcomeInsights" class="mpb-panel" hidden>
+        <details open id="outcomeInsights" class="mpb-panel" hidden>
             <summary data-insights-i18n="insights.title">Работа сервиса и полезные действия</summary>
             <p data-insights-i18n="insights.description">События без текстов запросов и документов. История до 90 дней, начиная с включения этой функции. Активность здесь учитывает поиск, создание подписок и асинхронные сборки.</p>
             <div class="mpb-fields">
@@ -340,13 +341,13 @@
                 <button type="button" id="insightRefresh" data-insights-i18n="insights.refresh">Обновить</button>
             </div>
             <p id="insightStatus" role="status" aria-live="polite"></p>
-            <h3 data-insights-i18n="insights.operations">Результаты фоновых операций</h3>
-            <div id="insightOperations"></div>
-            <h3 data-insights-i18n="insights.product">Успешность пользовательских сценариев</h3>
+            <section id="insightOperationsGroup"><h3 data-insights-i18n="insights.operations">Результаты фоновых операций</h3>
+            <div id="insightOperations"></div></section>
+            <section id="insightProductGroup"><h3 data-insights-i18n="insights.product">Успешность пользовательских сценариев</h3>
             <p data-insights-i18n="insights.definitions">Успешный поиск — завершённый поиск с результатом. Повторное использование — события в разные дни UTC выбранного периода. Сборка учитывается при открытии владельцем её результата. Это не полная посещаемость сайта.</p>
-            <div id="insightProduct"></div>
+            <div id="insightProduct"></div></section>
         </details>
-        <section class="mb-5" aria-live="polite">
+        <section id="statsControlsPanel" class="mb-5" aria-live="polite">
             <div class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm">
                 <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
                     <div class="flex flex-wrap items-center gap-3">
@@ -720,12 +721,14 @@
 
     <div id="toastContainer" class="fixed top-24 right-4 z-[130] flex flex-col gap-2 pointer-events-none" aria-live="polite" aria-atomic="true"></div>
 
-    <script src="/js/runtime_config.js?v=2"></script>
+    <script src="/js/runtime_config.js?v=20260821-6"></script>
     <script src="/js/ui_utils.js?v=2"></script>
     <script src="/js/frontend_i18n.js?v=1"></script>
-    <script src="/js/navbar.js?v=20261009-2"></script>
-    <script src="/js/stats.js?v=22"></script>
+<script src="/js/product_ui.js?v=20261009-4"></script>
+    <script src="/js/navbar.js?v=20261009-4"></script>
+    <script src="/js/stats.js?v=20261009-4"></script>
     <script src="/js/stats_ux.js?v=2"></script>
-    <script src="/js/insights.js?v=20261009-1"></script>
+    <script src="/js/insights.js?v=20261009-4"></script>
+<script src="/js/stats_workspace.js?v=20261009-4"></script>
 </body>
 </html>

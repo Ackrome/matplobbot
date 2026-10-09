@@ -17,7 +17,7 @@ const FIXED_TIMES =[
     { start: '18:55', end: '20:25' },
     { start: '20:30', end: '22:00' }
 ];
-const TABLE_SLOT_ROW_HEIGHT_PX = 132;
+const TABLE_SLOT_ROW_HEIGHT_PX = 200;
 const TABLE_TIMELINE_VERTICAL_INSET_PX = 6;
 const TABLE_TIMELINE_LANE_GAP_PX = 8;
 const SPECIAL_MODULE_FALLBACKS = [
@@ -110,7 +110,7 @@ function writeScheduleDayExpansionState(state) {
 
 function getDefaultExpandedScheduleDay(sortedDates) {
     if (!sortedDates.length) return '';
-    const requestedDate = normalizeScheduleDate(schedulePageState?.date) || getISODateStr(currentWeekStart);
+    const requestedDate = normalizeScheduleDate(schedulePageState?.date) || getISODateStr(new Date());
     return sortedDates.find((dateStr) => dateStr >= requestedDate) || sortedDates[0];
 }
 
@@ -1711,8 +1711,13 @@ async function changeWeek(offset) {
 }
 
 async function setTodayWeek() {
-    currentWeekStart = getMonday(new Date());
+    const today = new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+    setSchedulePageState({date:today});
+    currentWeekStart = getMonday(parseDate(today));
     await changeWeek(0);
+    const target=document.querySelector(`[data-schedule-day="${today}"]`);
+    if(target){if(target.querySelector('[data-schedule-day-toggle]')?.getAttribute('aria-expanded')!=='true')window.toggleScheduleDay(today);target.scrollIntoView({behavior:'smooth',block:'start'});target.querySelector('button')?.focus({preventScroll:true});}
+    else document.getElementById('scheduleGridContent').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 function copyToClipboard(text, event) {
@@ -1791,7 +1796,7 @@ function renderSearchEntityRow(item, sourceLabel = '') {
     const itemLabel = escapeJsString(normalized.label || normalized.name || normalized.id);
     return `
         <div class="group flex items-stretch border-b border-slate-100 last:border-none dark:border-slate-700">
-            <button type="button" class="min-w-0 flex-1 px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-slate-700"
+            <button type="button" data-search-option class="min-w-0 flex-1 px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-slate-700"
                 onclick="openScheduleFromSearch('${itemType}', '${itemId}', '${itemLabel}')">
                 <div class="flex flex-wrap items-center gap-2 font-bold text-slate-800 dark:text-slate-100">
                     <span class="truncate">${escapeHtml(normalized.label || normalized.name || normalized.id)}</span>
@@ -2333,6 +2338,7 @@ function filterAndRender() {
             offlineWarning.className = `m-3 flex items-center gap-2 rounded-xl border p-3 fade-in ${presentation.classes}`;
             if (freshnessIcon) freshnessIcon.className = `h-4 w-4 shrink-0 ${presentation.iconClasses}`;
             if (freshnessText) freshnessText.textContent = presentation.text;
+            offlineWarning.classList.toggle('freshness-quiet',['live','fresh_cache'].includes(state));
         } else {
             offlineWarning.classList.add('hidden');
         }
@@ -2348,6 +2354,7 @@ function filterAndRender() {
     lessonActionMap = new Map();
     renderDesktopGrid(filteredLessons);
     renderMobileFeed(filteredLessons);
+    if(currentEntity?.id&&sourceUpdatedAt)window.MpbUI?.finish('schedule_first');
     commitScheduleState({ urlMode: 'replace' });
     renderModuleFilters();
 }
@@ -2422,7 +2429,7 @@ function renderDesktopGrid(lessons) {
             <div class="schedule-day-head-inner">
                 <span class="schedule-day-label text-xs uppercase tracking-widest font-bold">${escapeHtml(formatUiDate(d, {weekday: 'short'}))}</span>
                 <span class="schedule-day-number text-xl font-black">${d.getDate()}</span>
-                <span class="schedule-day-count">${escapeHtml(count ? t('schedule.table.dayLessons', '{count} пар', { count }) : t('schedule.table.dayEmpty', 'нет пар'))}</span>
+                <span class="schedule-day-count">${escapeHtml(count ? formatScheduleDayLessonCount(count) : t('schedule.table.dayEmpty', 'нет пар'))}</span>
             </div>
         </th>`;
     });
@@ -2457,9 +2464,9 @@ function renderDesktopGrid(lessons) {
                             ? 'is-pinched'
                             : (safeLaneCount >= 3 ? 'is-narrow' : (safeLaneCount >= 2 ? 'is-split' : 'is-single'));
                         return `
-                            <div class="schedule-timeline-card ${densityClass} absolute z-20" data-lane-count="${safeLaneCount}"
+                            <div class="schedule-timeline-card ${densityClass} ${placement.heightPx < 140 ? 'is-short' : ''} absolute z-20" data-lane-count="${safeLaneCount}"
                                  style="top:${placement.topPx}px;height:${placement.heightPx}px;left:calc(${leftPercent}% + ${TABLE_TIMELINE_LANE_GAP_PX / 2}px);width:calc(${laneWidth}% - ${TABLE_TIMELINE_LANE_GAP_PX}px);">
-                                ${renderCard(lesson, true)}
+                                ${renderCard(lesson, true, lessons.indexOf(lesson))}
                             </div>
                         `;
                     }).join('')}
@@ -2470,6 +2477,7 @@ function renderDesktopGrid(lessons) {
     });
     html += `</tbody></table></div></div>`;
     container.innerHTML = html;
+    container.querySelectorAll('[data-lesson-details]').forEach(button=>button.addEventListener('click',()=>window.showLessonDetails?.(lessons[Number(button.dataset.lessonDetails)])));
 }
 
 function renderMobileFeed(lessons) {
@@ -2685,7 +2693,7 @@ window.runLessonAction = async function(action, lessonId, event) {
     }
 }
 
-function renderCard(l, isDesktop) {
+function renderCard(l, isDesktop, detailIndex = -1) {
     const lessonActionId = getLessonActionId(l);
     const color = getBadgeColor(l.kindOfWork);
     const discName = getPreferredDisciplineName(l);
@@ -2727,9 +2735,9 @@ function renderCard(l, isDesktop) {
                         ${safeModule}
                     </span>` : ''}
             </div>
-            <div class="lesson-title lesson-table-title" title="${safeDiscipline}">
+            <button type="button" data-lesson-details="${detailIndex}" class="lesson-title lesson-table-title lesson-details-button" title="${safeDiscipline}">
                 ${safeDiscipline}
-            </div>
+            </button>
             ${showOffSlotTimeLabel ? `
             <div class="lesson-table-time">
                 <span>${safeTimeRange}</span>

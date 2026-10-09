@@ -1246,6 +1246,16 @@ function renderActivityChart() {
         state.chart.destroy();
     }
 
+    let fallback=document.getElementById('chart-fallback');
+    if(typeof Chart==='undefined'){
+        if(!fallback){fallback=document.createElement('div');fallback.id='chart-fallback';fallback.className='chart-fallback';elements.activityCanvas.after(fallback);}
+        elements.activityCanvas.hidden=true;fallback.hidden=false;fallback.replaceChildren();
+        const message=document.createElement('p');message.className='ui-muted';message.textContent=window.MpbUI.t('chartUnavailable');fallback.append(message);
+        const table=document.createElement('table');table.className='ui-data-table';const head=document.createElement('tr');for(const label of [window.MpbUI.t('date'),window.MpbUI.t('actions')]){const th=document.createElement('th');th.textContent=label;head.append(th);}table.append(head);
+        filtered.forEach(item=>{const row=document.createElement('tr');for(const value of [item.period,item.count]){const cell=document.createElement('td');cell.textContent=value;row.append(cell);}table.append(row);});fallback.append(table);
+        const retry=document.createElement('button');retry.className='ui-button';retry.textContent=window.MpbUI.t('retryChart');retry.addEventListener('click',()=>{retry.disabled=true;const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js';script.integrity='sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ';script.crossOrigin='anonymous';script.onload=()=>renderActivityChart();script.onerror=()=>{retry.disabled=false;};document.head.append(script);});fallback.append(retry);return;
+    }
+    elements.activityCanvas.hidden=false;if(fallback)fallback.hidden=true;
     const chartPalette = getChartPalette();
 
     state.chart = new Chart(elements.activityCanvas.getContext("2d"), {
@@ -1633,9 +1643,7 @@ function connectWebSocket() {
         state.wsConnected = true;
         state.wsBackoffMs = 1000;
         updateDashboardHealthState();
-        if (state.activeStatsView === "dashboard") {
-            showToast("success", t("stats.toast.liveConnected", "Live stats connected"));
-        }
+        // Connection health is already visible in the status indicator.
     });
 
     socket.addEventListener("message", (event) => {

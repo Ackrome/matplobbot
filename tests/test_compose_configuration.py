@@ -3,6 +3,7 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -319,7 +320,12 @@ class TestComposeConfiguration(unittest.TestCase):
         script = jenkinsfile.rsplit("<<'REMOTE_EOF'", 1)[1].split("REMOTE_EOF", 1)[0]
         # The pipeline's Groovy string consumes one layer of escaped backslashes.
         script = script.replace("\\\\", "\\")
-        fake_curl = r"""
+        fake_commands = r"""
+docker() {
+  if [ "$FAKE_ENV_FAILURE" = 1 ]; then return 1; fi
+  STATS_USER="$TEST_STATS_USER" STATS_PASS="$TEST_STATS_PASS" PUBLIC_SITE_URL="" \
+    "$SMOKE_PYTHON" -c "${@: -1}"
+}
 curl() {
   local output="" url="" arg="" previous="" authenticated=0
   for arg in "$@"; do
@@ -327,6 +333,8 @@ curl() {
     case "$arg" in
       http*) url="$arg" ;;
       Authorization:*) authenticated=1 ;;
+      username=*) [ "$arg" = "username=$TEST_STATS_USER" ] || return 99 ;;
+      password=*) [ "$arg" = "password=$TEST_STATS_PASS" ] || return 99 ;;
     esac
     previous="$arg"
   done
@@ -343,19 +351,32 @@ curl() {
   return 0
 }
 """
-        for login_status, expected_returncode in (("200", 0), ("500", 1), ("401", 1)):
+        for login_status, env_failure, expected_returncode in (
+            ("200", "0", 0),
+            ("500", "0", 1),
+            ("401", "0", 1),
+            ("200", "1", 1),
+        ):
             with (
-                self.subTest(login_status=login_status),
+                self.subTest(login_status=login_status, env_failure=env_failure),
                 tempfile.TemporaryDirectory() as directory,
             ):
                 root = Path(directory)
-                (root / ".env").write_text("STATS_USER=test\nSTATS_PASS=test\n", encoding="utf-8")
+                (root / ".env").write_text("touch smoke-dotenv-executed\n", encoding="utf-8")
+                password = "space ' quote $HOME `touch smoke-secret-executed` $(touch smoke-secret-executed)"
                 smoke = root / "smoke.sh"
-                smoke.write_text(fake_curl + script, encoding="utf-8")
+                smoke.write_text(fake_commands + script, encoding="utf-8")
                 result = subprocess.run(
                     [_find_bash(), _bash_path(smoke)],
                     cwd=root,
-                    env={**os.environ, "FAKE_LOGIN_STATUS": login_status},
+                    env={
+                        **os.environ,
+                        "FAKE_LOGIN_STATUS": login_status,
+                        "FAKE_ENV_FAILURE": env_failure,
+                        "TEST_STATS_USER": "test admin",
+                        "TEST_STATS_PASS": password,
+                        "SMOKE_PYTHON": sys.executable,
+                    },
                     capture_output=True,
                     text=True,
                     timeout=10,
@@ -364,10 +385,47 @@ curl() {
                     result.returncode, expected_returncode, result.stdout + result.stderr
                 )
                 ws_calls = root / "smoke-ws-calls.txt"
-                if login_status == "200":
+                self.assertFalse((root / "smoke-dotenv-executed").exists())
+                self.assertFalse((root / "smoke-secret-executed").exists())
+                self.assertNotIn(password, result.stdout + result.stderr)
+                if expected_returncode == 0:
                     self.assertIn("127.0.0.1:8080/ws/", ws_calls.read_text(encoding="utf-8"))
                 else:
                     self.assertFalse(ws_calls.exists())
+
+    @unittest.skipUnless(_find_bash(), "bash is required for the isolated deploy test")
+    def test_deployment_provisions_admin_after_startup_and_stops_on_failure(self):
+        fake_docker = r"""
+docker() {
+  printf '%s\n' "$*" >> docker-calls.txt
+  case "$*" in
+    *fastapi_stats_app.bootstrap_admin) return "$FAKE_BOOTSTRAP_STATUS" ;;
+  esac
+  return 0
+}
+"""
+        for status in (0, 1):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                script = root / "deploy-test.sh"
+                script.write_text(
+                    fake_docker + DEPLOY_SCRIPT.read_text(encoding="utf-8"), encoding="utf-8"
+                )
+                result = subprocess.run(
+                    [_find_bash(), _bash_path(script)],
+                    cwd=root,
+                    env={**os.environ, "FAKE_BOOTSTRAP_STATUS": str(status)},
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                self.assertEqual(result.returncode, status, result.stdout + result.stderr)
+                calls = (root / "docker-calls.txt").read_text(encoding="utf-8")
+                self.assertLess(
+                    calls.index(" up -d "), calls.index("fastapi_stats_app.bootstrap_admin")
+                )
+                self.assertEqual("Deployment successful!" in result.stdout, status == 0)
+                self.assertEqual("restart main-site-frontend caddy" in calls, status == 0)
 
     def test_stats_websocket_uses_runtime_api_origin_and_single_reconnect_timer(self):
         ui_utils = FRONTEND_UI_UTILS.read_text(encoding="utf-8")

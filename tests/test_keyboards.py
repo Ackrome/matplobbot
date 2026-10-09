@@ -130,3 +130,35 @@ class TestCallbackPathPersistence(unittest.IsolatedAsyncioTestCase):
             "owner/repo/src/main.py",
             ttl=kb.CALLBACK_PATH_TTL_SECONDS,
         )
+
+
+class TestWebsiteAccountLinks(unittest.IsolatedAsyncioTestCase):
+    async def test_private_data_menu_does_not_export_or_delete(self):
+        from bot.handlers import settings as module
+        from types import SimpleNamespace
+
+        message = SimpleNamespace(
+            chat=SimpleNamespace(type="private", id=42),
+            from_user=SimpleNamespace(id=42),
+            answer=AsyncMock(),
+        )
+        with (
+            patch.object(module.translator, "get_language", AsyncMock(return_value="ru")),
+            patch.object(module, "export_account_data", AsyncMock()) as export,
+            patch.object(module, "delete_account_data", AsyncMock()) as delete,
+        ):
+            await module.SettingsManager.command_account_data(object(), message)
+        message.answer.assert_awaited_once()
+        actions = [
+            b.callback_data
+            for row in message.answer.await_args.kwargs["reply_markup"].inline_keyboard
+            for b in row
+        ]
+        self.assertIn("account_export", actions)
+        self.assertIn("account_delete_prompt", actions)
+        export.assert_not_awaited()
+        delete.assert_not_awaited()
+        message.chat.type = "group"
+        message.answer.reset_mock()
+        await module.SettingsManager.command_account_data(object(), message)
+        message.answer.assert_not_awaited()

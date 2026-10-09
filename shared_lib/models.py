@@ -306,12 +306,17 @@ class ProductEvent(Base):
 
     __tablename__ = "product_events"
     id = Column(BigInteger, primary_key=True, autoincrement=True)
+    duration_ms = Column(Integer, nullable=True)
     event_name = Column(String(48), nullable=False)
     web_account_id = Column(Integer, ForeignKey("web_accounts.id", ondelete="CASCADE"))
     telegram_user_id = Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"))
     dedupe_key = Column(String(160), unique=True, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     __table_args__ = (
+        CheckConstraint(
+            "duration_ms IS NULL OR (duration_ms >= 0 AND duration_ms <= 3600000)",
+            name="ck_product_event_duration",
+        ),
         CheckConstraint(
             "(web_account_id IS NULL) <> (telegram_user_id IS NULL)",
             name="ck_product_event_one_actor",
