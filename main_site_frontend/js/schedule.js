@@ -47,6 +47,8 @@ let moduleFilterQuery = '';
 let modulePresets = [];
 let scheduleChangeSummary = null;
 let lessonActionMap = new Map();
+const lessonActionIds = new WeakMap();
+let nextLessonActionId = 0;
 let isRefreshingScheduleCache = false;
 let isRefreshingSemesterCache = false;
 let scheduleLoadRequestSeq = 0;
@@ -2466,7 +2468,7 @@ function renderDesktopGrid(lessons) {
                         return `
                             <div class="schedule-timeline-card ${densityClass} ${placement.heightPx < 140 ? 'is-short' : ''} absolute z-20" data-lane-count="${safeLaneCount}"
                                  style="top:${placement.topPx}px;height:${placement.heightPx}px;left:calc(${leftPercent}% + ${TABLE_TIMELINE_LANE_GAP_PX / 2}px);width:calc(${laneWidth}% - ${TABLE_TIMELINE_LANE_GAP_PX}px);">
-                                ${renderCard(lesson, true, lessons.indexOf(lesson))}
+                                ${renderCard(lesson, true)}
                             </div>
                         `;
                     }).join('')}
@@ -2477,7 +2479,7 @@ function renderDesktopGrid(lessons) {
     });
     html += `</tbody></table></div></div>`;
     container.innerHTML = html;
-    container.querySelectorAll('[data-lesson-details]').forEach(button=>button.addEventListener('click',()=>window.showLessonDetails?.(lessons[Number(button.dataset.lessonDetails)])));
+    bindLessonDetails(container);
 }
 
 function renderMobileFeed(lessons) {
@@ -2530,6 +2532,29 @@ function renderMobileFeed(lessons) {
     });
     container.innerHTML = html;
     bindScheduleDayToggleButtons(container);
+    bindLessonDetails(container);
+}
+
+window.showLessonDetails = function(lesson, trigger) {
+    window.MpbLessonDetails?.open(lesson, {
+        schedule: fullSchedule, entity: { ...currentEntity }, bounds: { ...loadedBounds },
+        sourceUpdatedAt, freshness: scheduleFreshness, offline: isOfflineMode,
+        refreshing: scheduleRefreshInProgress,
+    }, trigger);
+};
+
+function bindLessonDetails(container) {
+    // One delegated handler per persistent container, including rerenders.
+    if (container.dataset.lessonDetailsBound) return;
+    container.dataset.lessonDetailsBound = 'true';
+    container.addEventListener('click', event => {
+        const explicit = event.target.closest('[data-lesson-open]');
+        const card = event.target.closest('[data-lesson-card]');
+        if (!card || !container.contains(card)) return;
+        if (!explicit && (event.target.closest('button,a,input,select,textarea,summary,details,[onclick]') || window.getSelection()?.toString())) return;
+        const lesson = lessonActionMap.get(card.dataset.lessonCard);
+        if (lesson) window.showLessonDetails(lesson, explicit || card.querySelector('[data-lesson-open]'));
+    });
 }
 
 function normalizeLessonKind(kind) {
@@ -2609,21 +2634,9 @@ function getShortKind(kind) {
 }
 
 function getLessonActionId(lesson) {
-    const raw = [
-        lesson.date,
-        lesson.beginLesson,
-        lesson.endLesson,
-        lesson.discipline_full || lesson.discipline || lesson.discipline_short,
-        lesson.module,
-        lesson.auditorium,
-        lesson.lecturer_title,
-    ].map((part) => String(part || '')).join('|');
-    let hash = 0;
-    for (let index = 0; index < raw.length; index += 1) {
-        hash = ((hash << 5) - hash) + raw.charCodeAt(index);
-        hash |= 0;
-    }
-    const id = `lesson-${Math.abs(hash).toString(36)}`;
+    // Each source object owns its actions, including parallel subgroups with identical labels.
+    let id = lessonActionIds.get(lesson);
+    if (!id) { id = `lesson-${++nextLessonActionId}`; lessonActionIds.set(lesson, id); }
     lessonActionMap.set(id, lesson);
     return id;
 }
@@ -2646,6 +2659,10 @@ async function openLessonEntitySchedule(type, id, label) {
     const cleanLabel = String(label || id || '').trim();
     const cleanId = String(id || '').trim();
     if (!cleanLabel && !cleanId) return;
+    if (cleanId && cleanId !== cleanLabel) {
+        await loadSchedule(type, cleanId, cleanLabel || cleanId);
+        return;
+    }
     try {
         const results = cleanLabel
             ? await (window.ScheduleApi?.searchEntities?.(cleanLabel, type) || [])
@@ -2693,7 +2710,7 @@ window.runLessonAction = async function(action, lessonId, event) {
     }
 }
 
-function renderCard(l, isDesktop, detailIndex = -1) {
+function renderCard(l, isDesktop) {
     const lessonActionId = getLessonActionId(l);
     const color = getBadgeColor(l.kindOfWork);
     const discName = getPreferredDisciplineName(l);
@@ -2724,7 +2741,7 @@ function renderCard(l, isDesktop, detailIndex = -1) {
     if (isDesktop) {
     const safeTeacherLabel = escapeHtml(teacherLabel || '');
     return `
-        <div class="lesson-card lesson-card--table ${color.bg} relative flex h-full min-h-[96px] flex-col rounded-2xl border transition-transform hover:-translate-y-0.5 hover:shadow-md">
+        <div data-lesson-card="${lessonActionId}" class="lesson-card lesson-card--table ${color.bg} relative flex h-full min-h-[96px] flex-col rounded-2xl border transition-transform hover:-translate-y-0.5 hover:shadow-md">
             <div class="lesson-table-accent" aria-hidden="true"></div>
             <div class="lesson-table-topline">
                 <div class="lesson-kind lesson-table-kind min-w-0 flex-1 truncate" title="${safeKind}">
@@ -2735,7 +2752,7 @@ function renderCard(l, isDesktop, detailIndex = -1) {
                         ${safeModule}
                     </span>` : ''}
             </div>
-            <button type="button" data-lesson-details="${detailIndex}" class="lesson-title lesson-table-title lesson-details-button" title="${safeDiscipline}">
+            <button type="button" data-lesson-open="${lessonActionId}" aria-haspopup="dialog" class="lesson-title lesson-table-title lesson-details-button" title="${safeDiscipline}">
                 ${safeDiscipline}
             </button>
             ${showOffSlotTimeLabel ? `
@@ -2760,7 +2777,7 @@ function renderCard(l, isDesktop, detailIndex = -1) {
         </div>`;
     }
     return `
-    <article class="schedule-feed-card">
+    <article class="schedule-feed-card" data-lesson-card="${lessonActionId}">
         <div class="schedule-feed-card-head">
             <div class="schedule-feed-card-time">
                 <span class="schedule-feed-card-start">${escapeHtml(l.beginLesson || '')}</span>
@@ -2771,7 +2788,7 @@ function renderCard(l, isDesktop, detailIndex = -1) {
             </span>
         </div>
         <div class="schedule-feed-card-body">
-            <div class="schedule-feed-card-title">${safeDiscipline}</div>
+            <button type="button" class="schedule-feed-card-title lesson-details-button" data-lesson-open="${lessonActionId}" aria-haspopup="dialog">${safeDiscipline}</button>
             ${l.module ? `
                 <span class="schedule-feed-card-module lesson-module inline-flex w-fit max-w-full rounded-md border px-2 py-1 text-[10px] font-bold">
                     ${safeModule}

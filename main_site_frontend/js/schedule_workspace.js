@@ -65,6 +65,5 @@
         }
     });
     window.MpbScheduleUX={calendarFocus};
-    window.showLessonDetails=async lesson=>{const box=document.createElement('div');box.className='ui-stack';for(const value of [`${lesson.date||''} · ${lesson.beginLesson||''}–${lesson.endLesson||''}`,lesson.kindOfWork,lesson.auditorium,lesson.lecturer||lesson.lecturer_title,lesson.module])if(value){const p=document.createElement('p');p.textContent=value;box.append(p);}await MpbUI.dialog({title:lesson.discipline_full||lesson.discipline||t('lesson'),content:box,actions:[{label:t('close'),value:'close'}]});};
     controls.classList.add('schedule-workspace-controls');
 })();
