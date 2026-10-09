@@ -29,8 +29,10 @@
         @media(max-width:480px) { .account-card { padding:18px; } .account-main h1 { font-size:1.7rem; } }
     </style>
 <link rel="stylesheet" href="/css/product_ui.css?v=20261009-6">
+<link rel="stylesheet" href="/css/calendar_sync.css?v=20261009-7">
+<link rel="stylesheet" href="/css/account_subscriptions.css?v=20261009-9">
 </head>
-<body>
+<body class="account-page">
     <nav id="navbar" class="fixed top-0 z-50 w-full bg-white border-b border-slate-200 dark:bg-slate-900 dark:border-slate-700">
         <div class="max-w-7xl mx-auto px-4 flex items-center justify-between h-16">
             <a href="/" class="ui-brand"><span class="ui-brand-mark">IT</span><span>Ivan Tishchenko</span></a>
@@ -48,6 +50,35 @@
         <p id="account-login" hidden><a href="/login" data-i18n="account.signIn">Sign in to manage your account.</a></p>
         <div id="account-controls" hidden>
 <section class="account-card"><h2 data-i18n="ux.accountProfile">Профиль и настройки</h2><p id="account-telegram" class="ui-muted"></p><div class="ui-row"><a class="ui-button primary" href="/schedule" data-i18n="ux.mySchedule">Моё расписание</a><a class="ui-button" href="/studio?projects=1" data-i18n="ux.myProjects">Мои проекты</a><a class="ui-button" href="https://t.me/matplobbot?start=web_settings" data-i18n="ux.botSettings">Настройки Telegram</a></div><div class="account-preferences"><label for="account-language" data-i18n="ux.language">Язык</label><select class="ui-input" id="account-language"><option value="ru">Русский</option><option value="en">English</option></select><label for="account-theme" data-i18n="ux.theme">Тема</label><select class="ui-input" id="account-theme"><option value="light" data-i18n="ux.light">Светлая</option><option value="dark" data-i18n="ux.dark">Тёмная</option></select></div></section>
+            <section class="account-card account-subscriptions" id="subscriptions" aria-labelledby="subscriptions-heading">
+                <div class="subscription-heading"><h2 id="subscriptions-heading" data-i18n="account.subscriptions.heading">Schedule subscriptions</h2><span id="subscriptions-count" role="status"></span></div>
+                <p class="subscription-intro" data-i18n="account.subscriptions.intro">Your saved schedules, calendar apps and Telegram notifications — in one place.</p>
+                <div class="subscription-actions">
+                    <button type="button" id="subscriptions-add" class="subscription-button subscription-primary" aria-expanded="false" aria-controls="subscription-create-panel" data-i18n="account.subscriptions.add">Add schedule</button>
+                    <button type="button" id="subscriptions-refresh" class="subscription-button" data-i18n="account.subscriptions.refresh">Refresh</button>
+                </div>
+                <div id="subscription-create-panel" hidden>
+                    <form id="subscription-search-form">
+                        <div class="subscription-search-fields">
+                            <div><label for="subscription-type" data-i18n="account.subscriptions.source">Source</label><select id="subscription-type"><option value="group" data-i18n="account.subscriptions.group">Group</option><option value="person" data-i18n="account.subscriptions.person">Teacher</option><option value="auditorium" data-i18n="account.subscriptions.auditorium">Room</option></select></div>
+                            <div><label for="subscription-query" data-i18n="account.subscriptions.searchLabel">Name or number</label><input id="subscription-query" type="text" minlength="2" maxlength="120" required autocomplete="off"></div>
+                            <button id="subscription-search-button" type="submit" class="subscription-button" data-i18n="account.subscriptions.search">Find</button>
+                        </div>
+                    </form>
+                    <div id="subscription-search-results" role="group" data-i18n-aria-label="account.subscriptions.searchResults" aria-label="Search results"></div>
+                    <p id="subscription-choice" class="subscription-note" role="status"></p>
+                    <p class="subscription-note" data-i18n="account.subscriptions.createHint">This saves a calendar subscription. You can choose modules next. Telegram messages are configured separately below.</p>
+                    <div class="subscription-actions"><button type="button" id="subscription-create" class="subscription-button subscription-primary" disabled data-i18n="account.subscriptions.save">Save subscription</button><button type="button" id="subscription-cancel" class="subscription-button" data-i18n="account.subscriptions.cancel">Cancel</button></div>
+                </div>
+                <div id="subscriptions-list"></div>
+                <p id="subscriptions-status" role="status"></p>
+                <div class="subscription-telegram">
+                    <h3 data-i18n="account.subscriptions.telegramHeading">Telegram notifications</h3>
+                    <p class="subscription-note" data-i18n="account.subscriptions.telegramHint">Add a schedule in the bot, or change notification time, pause and delete existing subscriptions, including paused ones.</p>
+                    <div class="subscription-actions"><a id="subscriptions-bot-add" class="subscription-button" href="https://t.me/matplobbot?start=web_subscribe" target="_blank" rel="noopener" data-i18n="account.subscriptions.addBot">Add in Telegram</a><a id="subscriptions-bot-manage" class="subscription-button" href="https://t.me/matplobbot?start=web_subscriptions" target="_blank" rel="noopener" data-i18n="account.subscriptions.manageBot">Manage in Telegram</a></div>
+                </div>
+                <details class="subscription-help"><summary data-i18n="account.subscriptions.help">How do these subscriptions work?</summary><p data-i18n="account.subscriptions.helpCalendar">“To calendar” opens Apple, Google and Outlook setup. Subscription links receive timetable changes; a downloaded ICS is a one-time copy.</p><p data-i18n="account.subscriptions.helpTelegram">Telegram messages must be enabled in the bot. Calendar filters and timezones are shared with Telegram for the same schedule.</p><p data-i18n="account.subscriptions.helpDelete">Delete removes a saved calendar source. Telegram subscriptions are managed in the bot. Remove an already imported calendar separately in your calendar app.</p></details>
+            </section>
             <section class="account-card" aria-labelledby="export-heading">
                 <h2 id="export-heading" data-i18n="account.exportHeading">1. Keep a copy of your data</h2>
                 <p data-i18n="account.exportDescription">Download your website settings, Studio projects and files, and linked Telegram data as JSON. Passwords, mail credentials and private calendar keys are excluded.</p>
@@ -70,11 +101,16 @@
         </div>
         <p id="account-status" class="account-status" role="status" aria-live="polite"></p>
     </main>
+    <div id="calendarSubscriptionBackdrop" class="hidden"></div>
+    <section id="calendarSubscriptionSection" class="calendar-sync-modal hidden" aria-hidden="true" aria-labelledby="calendar-dialog-title"></section>
     <script src="/js/runtime_config.js?v=20260821-6"></script>
     <script src="/js/frontend_i18n.js?v=1"></script>
 <script src="/js/product_ui.js?v=20261009-4"></script>
     <script src="/js/navbar.js?v=20261009-4"></script>
     <script src="/js/archive_download.js?v=20261009-4"></script>
-    <script src="/js/account.js?v=20261009-4"></script>
+    <script src="/js/schedule_api.js?v=20260924-1"></script>
+    <script src="/js/account_subscriptions.js?v=20261009-9"></script>
+    <script src="/js/calendar_sync.js?v=20261009-9"></script>
+    <script src="/js/account.js?v=20261009-9"></script>
 </body>
 </html>

@@ -7,4 +7,10 @@ or mobile menu. The shared navbar points both user and administrator cards to
 `/account`, with a localized "Account and data" tooltip and accessible name.
 There is no separate account link among the top-level navigation items.
 
+The visible “Schedule subscriptions” section follows profile preferences. It lists
+saved sources with Edit / To calendar / Delete, offers entity search and creation,
+and links directly to Telegram subscription creation and the existing subscription
+cards (including paused records). Calendar settings reuse `js/calendar_sync.js`
+through `js/account_subscriptions.js`; the dialog and backdrop are body siblings.
+
 Usage: sign in, download the JSON export, save it, type `DELETE`, acknowledge the scope, then submit. Destructive controls remain disabled until a successful export. `js/account.js` owns all behavior; the HTML supplies semantic headings, labeled inputs, live feedback and mobile/dark-theme layout. It has no inline application script. When adding controls, preserve keyboard access and translate through the shared `account.*` locale keys. The page contains personal data and must not be added to the offline service-worker cache as an authenticated response.

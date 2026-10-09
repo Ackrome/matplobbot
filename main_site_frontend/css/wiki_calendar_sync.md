@@ -22,7 +22,8 @@ Uses schedule theme variables and the root `.dark` class. Adds stable scrollbar
 space above 600 px to avoid width changes during modal scroll locking. The mobile
 sheet uses the whole viewport without reserving a scrollbar gutter.
 Focus trapping, background inertness, and scroll restoration belong to
-`MpbScheduleUX.calendarFocus` in schedule_workspace.js.
+`MpbScheduleUX.calendarFocus` in calendar_sync.js. The same stylesheet also serves
+account.html, whose account_subscriptions.css supplies the schedule theme tokens.
 
 ## Maintenance
 

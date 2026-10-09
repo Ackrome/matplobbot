@@ -131,6 +131,7 @@
             byId('account-theme').value=document.documentElement.classList.contains('dark')?'dark':'light';
             translateRuntime();
             byId("account-controls").hidden = false;
+            window.MpbAccountSubscriptions?.init(user);
         } catch (error) {
             status("account.loadFailed", "Account information is unavailable. Please sign in or try again later.");
         }

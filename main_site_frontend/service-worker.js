@@ -1,4 +1,4 @@
-const CACHE_VERSION = "mpb-site-v41";
+const CACHE_VERSION = "mpb-site-v42";
 const CORE_CACHE = `${CACHE_VERSION}-core`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const OFFLINE_URL = "/offline.html";
@@ -19,7 +19,7 @@ const CORE_ASSETS = [
     "/register.html",
     "/account",
     "/account.html",
-    "/js/account.js?v=20261009-4",
+    "/js/account.js?v=20261009-9",
     OFFLINE_URL,
     "/project",
     "/project.html",
@@ -28,7 +28,9 @@ const CORE_ASSETS = [
     "/js/offline.js?v=20261009-4",
     "/js/product_ui.js?v=20261009-4",
     "/js/project_readme.js?v=20261009-5",
-    "/js/schedule_workspace.js?v=20261009-8",
+    "/js/schedule_workspace.js?v=20261009-9",
+    "/js/account_subscriptions.js?v=20261009-9",
+    "/css/account_subscriptions.css?v=20261009-9",
     "/js/lesson_details.js?v=20261009-8",
     "/css/lesson_details.css?v=20261009-8",
     "/js/stats_workspace.js?v=20261009-4",
@@ -50,7 +52,7 @@ const CORE_ASSETS = [
     "/js/schedule_filters.js?v=20260821-6",
     "/js/schedule_render.js?v=20260924-2",
     "/js/schedule.js?v=20261009-8",
-    "/js/calendar_sync.js?v=20261009-7",
+    "/js/calendar_sync.js?v=20261009-9",
     "/js/schedule_ux.js?v=20260831-10",
     "/js/stats.js?v=20261009-4",
     "/js/stats_ux.js?v=2",

@@ -366,11 +366,22 @@ class BaseManager:
         await callback.message.edit_text(translator.gettext(lang, "onboarding_quick_set_skipped"))
         await callback.answer()
 
-    async def command_start_regular(self, message: Message):
+    async def command_start_regular(self, message: Message, state: FSMContext):
         payload = ""
         if message.text:
             parts = message.text.split(maxsplit=1)
             payload = parts[1].strip() if len(parts) > 1 else ""
+        if payload in {"web_subscribe", "web_subscriptions"}:
+            if message.chat.type != "private":
+                return
+            await state.clear()
+            if payload == "web_subscriptions":
+                await self.settings_manager.command_subscriptions_private(message)
+            else:
+                lang = await translator.get_language(message.from_user.id, message.chat.id)
+                await message.answer(translator.gettext(lang, "cal_sync_add_subscription_hint"))
+                await self.schedule_manager.cmd_schedule(message, state)
+            return
         if payload == "web_settings":
             await self.settings_manager.command_settings_private(message)
             return

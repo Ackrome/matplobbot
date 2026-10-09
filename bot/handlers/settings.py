@@ -732,19 +732,75 @@ class SettingsManager:
         # No "back to settings" button needed here as it's a transient menu in a group.
         return builder
 
-    async def cq_manage_personal_subscriptions(self, callback: CallbackQuery, state: FSMContext):
-        user_id = callback.from_user.id
+    async def _personal_subscriptions_view(self, user_id: int, page: int = 0):
         lang = await translator.get_language(user_id)
+        # Размер страницы - 5 подписок
+        page_size = 5
+        subs, total_count = await get_user_subscriptions(user_id, page=page, page_size=page_size)
+
+        builder = InlineKeyboardBuilder()
+
+        if not subs:
+            text = translator.gettext(lang, "subscriptions_empty")
+        else:
+            text = translator.gettext(lang, "subscriptions_header")
+
+            for sub in subs:
+                # Формируем кнопку для перехода в карточку
+                status_icon = "✅" if sub["is_active"] else "💤"
+                # Обрезаем имя, если слишком длинное
+                name = (
+                    sub["entity_name"][:25] + "..."
+                    if len(sub["entity_name"]) > 25
+                    else sub["entity_name"]
+                )
+                button_text = f"{status_icon} {name}"
+
+                # sub_open:{id} вызывает карточку подписки
+                builder.row(
+                    InlineKeyboardButton(text=button_text, callback_data=f"sub_open:{sub['id']}")
+                )
+
+        # --- Пагинация ---
+        total_pages = (total_count + page_size - 1) // page_size
+        if total_pages > 1:
+            pagination_buttons = []
+            if page > 0:
+                pagination_buttons.append(
+                    InlineKeyboardButton(text="⬅️", callback_data=f"subs_page:{page - 1}")
+                )
+
+            pagination_buttons.append(
+                InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop")
+            )
+
+            if page < total_pages - 1:
+                pagination_buttons.append(
+                    InlineKeyboardButton(text="➡️", callback_data=f"subs_page:{page + 1}")
+                )
+
+            builder.row(*pagination_buttons)
+
+        # Кнопка назад в главное меню настроек
+        builder.row(
+            InlineKeyboardButton(
+                text=translator.gettext(lang, "back_to_settings"), callback_data="back_to_settings"
+            )
+        )
+
+        # Редактируем сообщение
+        return text, builder
+
+    async def command_subscriptions_private(self, message: Message):
+        """Open the caller's subscriptions from an account-page deep link."""
+        if message.chat.type != "private":
+            return
+        header_text, keyboard = await self._personal_subscriptions_view(message.from_user.id)
+        await message.answer(header_text, reply_markup=keyboard.as_markup())
+
+    async def cq_manage_personal_subscriptions(self, callback: CallbackQuery, state: FSMContext):
         page = int(callback.data.split(":")[1]) if callback.data.startswith("psub_page:") else 0
-        _, total_count = await get_user_subscriptions(
-            user_id, page=page, page_size=SUBSCRIPTIONS_PER_PAGE
-        )
-        header_text = (
-            translator.gettext(lang, "subscriptions_header")
-            if total_count > 0
-            else translator.gettext(lang, "subscriptions_empty")
-        )
-        keyboard = await self.get_personal_subscriptions_keyboard(user_id, page=page)
+        header_text, keyboard = await self._personal_subscriptions_view(callback.from_user.id, page)
         await callback.message.edit_text(header_text, reply_markup=keyboard.as_markup())
         await callback.answer()
 
@@ -1415,61 +1471,8 @@ class SettingsManager:
             except (IndexError, ValueError):
                 page = 0
 
-        # Размер страницы - 5 подписок
-        page_size = 5
-        subs, total_count = await get_user_subscriptions(user_id, page=page, page_size=page_size)
+        text, builder = await self._personal_subscriptions_view(user_id, page)
 
-        builder = InlineKeyboardBuilder()
-
-        if not subs:
-            text = translator.gettext(lang, "subscriptions_empty")
-        else:
-            text = translator.gettext(lang, "subscriptions_header")
-
-            for sub in subs:
-                # Формируем кнопку для перехода в карточку
-                status_icon = "✅" if sub["is_active"] else "💤"
-                # Обрезаем имя, если слишком длинное
-                name = (
-                    sub["entity_name"][:25] + "..."
-                    if len(sub["entity_name"]) > 25
-                    else sub["entity_name"]
-                )
-                button_text = f"{status_icon} {name}"
-
-                # sub_open:{id} вызывает карточку подписки
-                builder.row(
-                    InlineKeyboardButton(text=button_text, callback_data=f"sub_open:{sub['id']}")
-                )
-
-        # --- Пагинация ---
-        total_pages = (total_count + page_size - 1) // page_size
-        if total_pages > 1:
-            pagination_buttons = []
-            if page > 0:
-                pagination_buttons.append(
-                    InlineKeyboardButton(text="⬅️", callback_data=f"subs_page:{page - 1}")
-                )
-
-            pagination_buttons.append(
-                InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop")
-            )
-
-            if page < total_pages - 1:
-                pagination_buttons.append(
-                    InlineKeyboardButton(text="➡️", callback_data=f"subs_page:{page + 1}")
-                )
-
-            builder.row(*pagination_buttons)
-
-        # Кнопка назад в главное меню настроек
-        builder.row(
-            InlineKeyboardButton(
-                text=translator.gettext(lang, "back_to_settings"), callback_data="back_to_settings"
-            )
-        )
-
-        # Редактируем сообщение
         await callback.message.edit_text(text, reply_markup=builder.as_markup())
         await callback.answer()
 

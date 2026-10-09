@@ -1,0 +1,39 @@
+/* Account subscriptions reuse the calendar dialog and its theme tokens. */
+body.account-page{--schedule-panel:var(--ui-surface);--schedule-panel-soft:var(--ui-bg);--schedule-panel-border:var(--ui-line);--schedule-text:var(--ui-text);--schedule-muted:var(--ui-muted)}
+@media(min-width:601px){html:has(body.account-page){scrollbar-gutter:stable}}
+.account-subscriptions .subscription-heading,.subscription-row-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.account-subscriptions .subscription-heading{align-items:flex-start}
+.account-subscriptions .subscription-intro{color:var(--ui-muted);font-size:14px;margin:8px 0 18px}
+.subscription-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.account-subscriptions .subscription-button{display:inline-flex;justify-content:center;align-items:center;gap:6px;min-height:40px;padding:9px 13px;border:1px solid var(--ui-line);border-radius:10px;background:var(--ui-surface);color:var(--ui-text);font:600 13px/1.4 Inter,system-ui,sans-serif;cursor:pointer;text-align:center;overflow-wrap:anywhere}
+.account-subscriptions .subscription-button:hover{background:var(--ui-bg)}
+.account-subscriptions .subscription-primary{background:#4b56e8;border-color:#4b56e8;color:#fff}
+.account-subscriptions .subscription-primary:hover{background:#3e49d4}
+.dark .account-subscriptions .subscription-primary{background:#a5adff;border-color:#a5adff;color:#141d3a}
+.dark .account-subscriptions .subscription-primary:hover{background:#bec4ff}
+.account-subscriptions .subscription-button:disabled{cursor:wait;opacity:.55}
+.account-subscriptions .subscription-delete{color:#b42336}
+.dark .account-subscriptions .subscription-delete{color:#ffadb8}
+.account-subscriptions .subscription-link{border-color:transparent;padding-left:0;color:var(--ui-muted)}
+.subscription-row{padding:18px 0;border-bottom:1px solid var(--ui-line)}
+.subscription-row h3{font-size:16px;font-weight:650;overflow-wrap:anywhere}
+.account-subscriptions .subscription-note{font-size:13px;color:var(--ui-muted);line-height:1.55;margin:7px 0 12px}
+.subscription-type,#subscriptions-count{font-size:12px;white-space:nowrap;color:var(--ui-muted)}
+.subscription-warning{border-left:3px solid #a86716;padding:8px 12px;font-size:13px;background:var(--ui-bg)}
+.subscription-telegram{background:var(--ui-bg);border:1px solid var(--ui-line);border-radius:14px;padding:18px;margin-top:20px}
+.subscription-telegram h3{font-weight:650;font-size:15px}
+#subscription-create-panel{margin:18px 0;padding:18px;background:var(--ui-bg);border:1px solid var(--ui-line);border-radius:14px}
+.account-subscriptions .subscription-search-fields{display:grid;grid-template-columns:130px minmax(0,1fr) auto;gap:8px;align-items:end}
+.account-subscriptions label{font-size:13px;margin:0 0 6px}
+.account-subscriptions input[type=text],.account-subscriptions select{width:100%;min-width:0;height:42px;padding:9px 10px;background:var(--ui-surface);color:var(--ui-text);border:1px solid var(--ui-line);border-radius:8px;font:14px Inter,system-ui,sans-serif}
+#subscription-search-results{display:grid;gap:6px;margin:12px 0;max-height:220px;overflow-y:auto}
+.account-subscriptions .subscription-search-result{justify-content:flex-start;text-align:left}
+.account-subscriptions .subscription-search-result[aria-pressed=true]{border-color:#4b56e8;color:#4b56e8}
+.dark .account-subscriptions .subscription-search-result[aria-pressed=true]{border-color:#a5adff;color:#a5adff}
+.account-subscriptions :is(button,a,input,select,summary):focus-visible{outline:2px solid #6873ef;outline-offset:3px}
+.account-subscriptions .subscription-help{margin-top:16px;font-size:13px;color:var(--ui-muted)}
+.account-subscriptions .subscription-help summary{cursor:pointer;padding-block:5px}
+.account-subscriptions .subscription-help p{margin:8px 0}
+.account-subscriptions #subscriptions-status{font-size:13px;color:var(--ui-muted);margin:12px 0 0}
+.account-subscriptions #subscriptions-status:empty{display:none}
+@media(max-width:600px){.account-subscriptions .subscription-search-fields{grid-template-columns:1fr}.account-subscriptions .subscription-actions>.subscription-button{flex:1 1 auto}.subscription-telegram,#subscription-create-panel{padding:14px}.subscription-row-heading{align-items:flex-start}.subscription-row-heading h3{flex:1;min-width:0}}
