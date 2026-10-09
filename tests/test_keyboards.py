@@ -134,8 +134,9 @@ class TestCallbackPathPersistence(unittest.IsolatedAsyncioTestCase):
 
 class TestWebsiteAccountLinks(unittest.IsolatedAsyncioTestCase):
     async def test_private_data_menu_does_not_export_or_delete(self):
-        from bot.handlers import settings as module
         from types import SimpleNamespace
+
+        from bot.handlers import settings as module
 
         message = SimpleNamespace(
             chat=SimpleNamespace(type="private", id=42),

@@ -252,7 +252,9 @@ class SettingsManager:
         ):
             builder.button(text=translator.gettext(lang, text_key), callback_data=action)
         builder.adjust(1)
-        await message.answer(translator.gettext(lang, "account_data_scope"), reply_markup=builder.as_markup())
+        await message.answer(
+            translator.gettext(lang, "account_data_scope"), reply_markup=builder.as_markup()
+        )
 
     async def cq_delete_my_data_prompt(self, callback: CallbackQuery):
         """Explain Telegram-only and complete account deletion without ambiguity."""

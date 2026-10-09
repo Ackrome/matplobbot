@@ -37,8 +37,8 @@ from .routers import (
     schedule_router,
     stats_router,
     studio_jobs_router,
-    ux_router,
     studio_router,
+    ux_router,
     ws_router,
 )
 from .routers import (
