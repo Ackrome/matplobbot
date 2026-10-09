@@ -37,6 +37,12 @@ CELERY_QUEUE_ALERT_THRESHOLD = max(
     1,
     _read_non_negative_int("CELERY_QUEUE_ALERT_THRESHOLD", 100),
 )
+SCHEDULE_DAILY_CATCHUP_SECONDS = min(
+    86399, max(60, _read_non_negative_int("SCHEDULE_DAILY_CATCHUP_SECONDS", 21600))
+)
+SCHEDULE_OUTBOX_ALERT_AGE_SECONDS = max(
+    60, _read_non_negative_int("SCHEDULE_OUTBOX_ALERT_AGE_SECONDS", 1800)
+)
 
 # --- PostgreSQL Database Configuration ---
 # The DATABASE_URL is now the single source of truth, read from the environment.

@@ -5,6 +5,7 @@ const NAV_ITEMS =[
     { href: "/#projects", key: "nav.projects" },
     { href: "/schedule", key: "nav.schedule" },
     { href: "/studio", key: "nav.studio" },
+    { href: "/account", key: "nav.account", signedInOnly: true },
     { href: "/stats", key: "nav.admin", adminOnly: true }
 ];
 const navState = {
@@ -93,12 +94,17 @@ function escapeHtml(value) {
         .replace(/'/g, "&#39;");
 }
 function shouldShowNavItem(item) {
+    if (item.signedInOnly && !navState.user) return false;
     if (!item.adminOnly) return true;
     return navState.user?.role === "admin";
 }
 function getProfileLink() {
     if (!navState.user) return "/login";
     return navState.user.role === "admin" ? "/stats" : "/schedule";
+}
+function getLoginLink() {
+    const target = window.location.pathname + window.location.search + window.location.hash;
+    return /^\/(login|register)(\.html)?$/.test(window.location.pathname) ? '/login' : `/login?next=${encodeURIComponent(target)}`;
 }
 function getAvatarHtml(sizeClass = "w-6 h-6", textClass = "text-xs") {
     const username = (navState.user?.username || "?").trim();
@@ -111,7 +117,7 @@ function getAvatarHtml(sizeClass = "w-6 h-6", textClass = "text-xs") {
 function renderDesktopAuth() {
     if (!navState.user) {
         return `
-            <a href="/login" class="group relative px-5 py-2.5 bg-slate-900 text-white rounded-full font-medium overflow-hidden shadow-lg shadow-slate-900/20 hover:shadow-slate-900/40 transition-all">
+            <a href="${escapeHtml(getLoginLink())}" class="group relative px-5 py-2.5 bg-slate-900 text-white rounded-full font-medium overflow-hidden shadow-lg shadow-slate-900/20 hover:shadow-slate-900/40 transition-all">
                 <span class="relative z-10 flex items-center gap-2">${translate("nav.signIn")}</span>
                 <span class="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
             </a>
@@ -128,7 +134,7 @@ function renderDesktopAuth() {
 function renderMobileAuth() {
     if (!navState.user) {
         return `
-            <a href="/login" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">
+            <a href="${escapeHtml(getLoginLink())}" class="block mt-4 px-3 py-3 rounded-lg text-base font-medium text-center bg-blue-600 text-white hover:bg-blue-700 transition-colors">
                 ${translate("nav.signIn")}
             </a>
         `;
@@ -358,19 +364,20 @@ function ensureOverlays() {
     if (document.getElementById("mpbCommandPalette")) return;
     const overlays = document.createElement("div");
     overlays.innerHTML = `
-        <div id="mpbCommandPalette" class="hidden fixed inset-0 z-[120] bg-slate-900/50 backdrop-blur-sm px-4">
+        <div id="mpbCommandPalette" role="dialog" aria-modal="true" aria-labelledby="mpbCommandTitle" class="hidden fixed inset-0 z-[120] bg-slate-900/50 backdrop-blur-sm px-4">
             <div class="mx-auto mt-20 w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800">
                 <div class="border-b border-slate-100 p-4 dark:border-slate-700">
-                    <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400" data-i18n="palette.title"></p>
-                    <input id="mpbCommandInput" type="text" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100" data-i18n-placeholder="palette.placeholder" placeholder="">
+                    <p id="mpbCommandTitle" class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400" data-i18n="palette.title"></p>
+                    <input id="mpbCommandInput" type="text" role="combobox" aria-expanded="true" aria-autocomplete="list" aria-controls="mpbCommandList" aria-labelledby="mpbCommandTitle" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100" data-i18n-placeholder="palette.placeholder" placeholder="">
+                    <button type="button" data-close-palette class="mt-2 rounded px-2 py-1" data-i18n="studio.close">Close</button>
                 </div>
-                <div id="mpbCommandList" class="max-h-[22rem] overflow-y-auto p-2"></div>
+                <div id="mpbCommandList" role="listbox" aria-labelledby="mpbCommandTitle" class="max-h-[22rem] overflow-y-auto p-2"></div>
             </div>
         </div>
-        <div id="mpbShortcutHelp" class="hidden fixed inset-0 z-[120] bg-slate-900/50 backdrop-blur-sm px-4">
+        <div id="mpbShortcutHelp" role="dialog" aria-modal="true" aria-labelledby="mpbShortcutTitle" class="hidden fixed inset-0 z-[120] bg-slate-900/50 backdrop-blur-sm px-4">
             <div class="mx-auto mt-24 w-full max-w-xl rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800">
                 <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-700">
-                    <h2 class="text-lg font-bold text-slate-900 dark:text-slate-100" data-i18n="help.title"></h2>
+                    <h2 id="mpbShortcutTitle" class="text-lg font-bold text-slate-900 dark:text-slate-100" data-i18n="help.title"></h2>
                     <button type="button" data-close-help class="rounded-lg px-3 py-1 text-sm text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700">Esc</button>
                 </div>
                 <div class="space-y-3 px-5 py-4 text-sm text-slate-700 dark:text-slate-300">
@@ -408,31 +415,38 @@ function renderCommandList() {
         .map((command, index) => {
             const selected = index === navState.selectedCommandIndex;
             return `
-                <button type="button" data-command-id="${command.id}" class="w-full rounded-xl px-3 py-2 text-left text-sm transition-colors ${selected ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200" : "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"}">
+                <button type="button" role="option" tabindex="-1" id="mpb-command-${command.id}" aria-selected="${selected}" data-command-id="${command.id}" class="w-full rounded-xl px-3 py-2 text-left text-sm transition-colors ${selected ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200" : "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"}">
                     ${escapeHtml(command.label)}
                 </button>
             `;
         })
         .join("");
+    const selected = commands[navState.selectedCommandIndex];
+    if (selected) document.getElementById('mpbCommandInput')?.setAttribute('aria-activedescendant', `mpb-command-${selected.id}`);
 }
+let overlayReturnFocus = null;
 function openCommandPalette() {
     ensureOverlays();
     const palette = document.getElementById("mpbCommandPalette");
     const input = document.getElementById("mpbCommandInput");
     if (!palette || !input) return;
+    toggleShortcutHelp(false);
+    overlayReturnFocus = document.activeElement;
     navState.paletteOpen = true;
     navState.commandQuery = "";
     navState.selectedCommandIndex = 0;
     palette.classList.remove("hidden");
     input.value = "";
     renderCommandList();
-    window.setTimeout(() => input.focus(), 20);
+    input.focus();
 }
 function closeCommandPalette() {
     const palette = document.getElementById("mpbCommandPalette");
     if (!palette) return;
+    const wasOpen = navState.paletteOpen;
     navState.paletteOpen = false;
     palette.classList.add("hidden");
+    if (wasOpen) overlayReturnFocus?.focus?.();
 }
 function runSelectedCommand() {
     const commands = getVisibleCommands();
@@ -447,8 +461,12 @@ function toggleShortcutHelp(forceOpen) {
     const modal = document.getElementById("mpbShortcutHelp");
     if (!modal) return;
     const shouldOpen = typeof forceOpen === "boolean" ? forceOpen : !navState.helpOpen;
+    const wasOpen = navState.helpOpen;
+    if (shouldOpen) { closeCommandPalette(); overlayReturnFocus = document.activeElement; }
     navState.helpOpen = shouldOpen;
     modal.classList.toggle("hidden", !shouldOpen);
+    if (shouldOpen) modal.querySelector('button')?.focus();
+    else if (wasOpen) overlayReturnFocus?.focus?.();
 }
 function focusPrimarySearch() {
     const target = document.querySelector(
@@ -464,6 +482,8 @@ function registerGlobalHandlers() {
     document.body.addEventListener("click", (event) => {
         const target = event.target;
         if (!(target instanceof Element)) return;
+        if (target.closest('[data-close-palette]') || target.id === 'mpbCommandPalette') { closeCommandPalette(); return; }
+        if (target.id === 'mpbShortcutHelp') { toggleShortcutHelp(false); return; }
         const langButton = target.closest(".js-lang-switch");
         if (langButton instanceof HTMLElement) {
             const lang = langButton.getAttribute("data-lang");
@@ -493,6 +513,13 @@ function registerGlobalHandlers() {
         }
     });
     document.addEventListener("keydown", (event) => {
+        if (event.key === 'Tab' && (navState.paletteOpen || navState.helpOpen)) {
+            const modal = document.getElementById(navState.paletteOpen ? 'mpbCommandPalette' : 'mpbShortcutHelp');
+            const controls = [...modal.querySelectorAll('input, button:not([tabindex="-1"])')].filter(element => !element.disabled);
+            const first = controls[0], last = controls[controls.length - 1];
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+        }
         const isMetaK = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k";
         if (isMetaK) {
             event.preventDefault();
@@ -594,6 +621,7 @@ function registerServiceWorker() {
     });
 }
 window.mpbRefreshAuth = checkAuthAndRenderNavbar;
+window.mpbOpenCommandPalette = openCommandPalette;
 document.addEventListener("DOMContentLoaded", async () => {
     await window.mpbI18n?.ready;
     navState.lang = window.mpbI18n?.getLanguage?.() || "en";

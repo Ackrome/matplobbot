@@ -104,6 +104,7 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
         ws_router.stats_manager.active_connections.clear()
         with (
             patch.object(ws_router, "stats_update_task", _RunningTask()),
+            patch.object(ws_router, "websocket_account_is_active", AsyncMock(return_value=True)),
             patch.object(
                 ws_router,
                 "last_sent_stats_data_str",
@@ -118,6 +119,28 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
 
     def test_ws_guard_allows_admin(self):
         self.assertTrue(can_subscribe_user_updates({"role": "admin", "telegram_id": None}, 999))
+
+    async def test_deleted_account_socket_closes_before_another_payload(self):
+        socket = Mock()
+        socket.accept = AsyncMock()
+        socket.close = AsyncMock()
+        socket.send_json = AsyncMock()
+        socket.client_state = ws_router.WebSocketState.CONNECTED
+        manager = ws_router.ConnectionManager("deletion-test")
+        await manager.connect(socket, {"id": 7, "role": "admin"}, admin_only=True)
+        with patch.object(ws_router, "websocket_account_is_active", AsyncMock(return_value=False)):
+            sent = await manager.send_personal_json({"private": "must not be sent"}, socket)
+        self.assertFalse(sent)
+        socket.send_json.assert_not_awaited()
+        socket.close.assert_awaited_once_with(code=1008)
+        self.assertNotIn(socket, manager.active_connections)
+        self.assertNotIn(socket, manager.guards)
+
+    async def test_websocket_database_outage_closes_authorization(self):
+        context = AsyncMock()
+        context.__aenter__.side_effect = RuntimeError("database offline")
+        with patch.object(ws_router, "get_session", return_value=context):
+            self.assertFalse(await ws_router.websocket_account_is_active({"id": 7}))
 
     def test_ws_guard_allows_same_telegram_user(self):
         self.assertTrue(can_subscribe_user_updates({"role": "user", "telegram_id": 777}, 777))
@@ -176,8 +199,14 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
 
         sanitizer = "dompurify@3.4.16/dist/purify.min.js"
         self.assertIn(sanitizer, html)
+        self.assertIn('id="studio-library-manifest"', html)
+        self.assertIn('/js/studio_libraries.js?v=1', html)
         self.assertLess(html.index(sanitizer), html.index("marked@15.0.12/marked.min.js"))
-        self.assertIn("/js/studio.js?v=12", html)
+        self.assertIn("/js/studio.js?v=13", html)
+        frame = (PROJECT_ROOT / "main_site_frontend" / "studio-editor.html").read_text(encoding="utf-8")
+        self.assertIn("monaco-editor/0.38.0/min/vs/loader.min.js", frame)
+        self.assertIn('integrity="sha384-', frame)
+        self.assertIn("/js/studio_monaco.js?v=1", frame)
 
         cdn_tags = re.findall(
             r"<(?:script|link)\b[^>]+(?:cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)[^>]*>",
@@ -210,9 +239,9 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
             encoding="utf-8"
         )
 
-        self.assertIn('const CACHE_VERSION = "mpb-site-v34"', service_worker)
-        self.assertIn('"/css/studio.css?v=1"', service_worker)
-        self.assertIn('"/js/studio.js?v=12"', service_worker)
+        self.assertIn('const CACHE_VERSION = "mpb-site-v35"', service_worker)
+        self.assertIn('"/css/studio.css?v=2"', service_worker)
+        self.assertIn('"/js/studio.js?v=13"', service_worker)
 
     def test_studio_csp_rejects_inline_scripts_and_event_attributes(self):
         html = (PROJECT_ROOT / "main_site_frontend" / "studio.html").read_text(encoding="utf-8")
@@ -223,6 +252,7 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(re.search(r"\son[a-z]+\s*=", html, re.IGNORECASE))
         self.assertIn("location = /studio {", nginx)
         self.assertIn("location = /studio.html {", nginx)
+        self.assertIn("location = /studio-editor.html {", nginx)
         self.assertIn("Content-Security-Policy", nginx)
         self.assertIn("script-src-attr 'none'", nginx)
         script_directive = nginx.split("script-src ", 1)[1].split(";", 1)[0]

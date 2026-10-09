@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import uuid
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, delete, func, insert, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -448,11 +447,11 @@ async def update_chat_settings_db(chat_id: int, settings: dict):
 
 
 async def delete_all_user_data(user_id: int) -> bool:
+    """Compatibility name for explicitly Telegram-only data deletion."""
+    from .services.account_data import delete_telegram_data
+
     async with get_session() as session:
-        # Cascade handling relies on DB schema constraints
-        result = await session.execute(delete(User).where(User.user_id == user_id))
-        await session.commit()
-        return result.rowcount > 0
+        return await delete_telegram_data(session, user_id)
 
 
 async def get_user_search_presets(user_id: int, search_kind: str | None = None) -> list[dict]:
@@ -683,7 +682,12 @@ async def add_schedule_subscription(
 
         result = await session.execute(stmt)
         await session.commit()
-        return result.scalar()
+        subscription_id = result.scalar()
+    if subscription_id:
+        from .product_metrics import record_product_event
+
+        await record_product_event("subscription_created", telegram_user_id=user_id)
+    return subscription_id
 
 
 async def get_user_subscriptions(
@@ -925,12 +929,16 @@ async def get_all_active_subscriptions() -> list:
         ]
 
 
-async def get_subscriptions_due_for_notification(now_utc: datetime.datetime | None = None) -> list:
-    """Return Telegram-delivery subscriptions whose local time is now.
+async def get_subscriptions_due_for_notification(
+    now_utc: datetime.datetime | None = None, *, catchup_seconds: int = 6 * 60 * 60
+) -> list:
+    """Return Telegram subscriptions due within the bounded local-time catch-up window.
 
     ``notification_time`` is a wall-clock value in each profile's timezone;
     legacy rows without a timezone use Moscow by design.
     """
+    from shared_lib.schedule_daily import daily_occurrence
+
     now_utc = now_utc or datetime.datetime.now(datetime.UTC)
     async with get_session() as session:
         result = await session.execute(
@@ -944,13 +952,10 @@ async def get_subscriptions_due_for_notification(now_utc: datetime.datetime | No
         due = []
         for s in result.scalars().all():
             timezone_name = s.timezone or "Europe/Moscow"
-            try:
-                local_now = now_utc.astimezone(ZoneInfo(timezone_name))
-            except Exception:
-                local_now = now_utc.astimezone(ZoneInfo("Europe/Moscow"))
-            if s.notification_time and s.notification_time.strftime("%H:%M") != local_now.strftime(
-                "%H:%M"
-            ):
+            occurrence = daily_occurrence(
+                s.notification_time, timezone_name, now_utc, catchup_seconds
+            )
+            if occurrence is None:
                 continue
             due.append(
                 {
@@ -966,6 +971,7 @@ async def get_subscriptions_due_for_notification(now_utc: datetime.datetime | No
                     "timezone": timezone_name,
                     "lesson_mode": s.lesson_mode or "all",
                     "selected_modules": list(s.selected_modules or []),
+                    **occurrence,
                 }
             )
         return due

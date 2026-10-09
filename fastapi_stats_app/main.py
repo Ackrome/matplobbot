@@ -32,8 +32,11 @@ from .middleware import CorrelationIdMiddleware
 from .openapi_docs import configure_openapi
 from .routers import (
     auth_router,
+    insights_router,
+    planning_router,
     schedule_router,
     stats_router,
+    studio_jobs_router,
     studio_router,
     ws_router,
 )
@@ -127,6 +130,9 @@ async def read_user_details_html(user_id: int):
 app.include_router(auth_router.router, prefix="/api")
 app.include_router(schedule_router.router, prefix="/api")
 app.include_router(studio_router.router, prefix="/api")
+app.include_router(studio_jobs_router.router, prefix="/api")
+app.include_router(insights_router.router, prefix="/api")
+app.include_router(planning_router.router, prefix="/api")
 app.include_router(stats_router.router, prefix="/api")
 app.include_router(ws_router.router, tags=["websockets"])
 app.include_router(calendar_router.router, prefix="/api", tags=["calendar"])

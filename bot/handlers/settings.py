@@ -1,5 +1,7 @@
 import datetime
+import json
 import re
+import time
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
@@ -8,7 +10,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 if TYPE_CHECKING:
@@ -30,6 +32,7 @@ from shared_lib.database import (
     get_chat_settings,
     get_chat_subscriptions,
     get_disabled_short_names_for_user,
+    get_session,
     get_subscription_by_id,
     get_subscription_modules,
     get_user_settings,
@@ -42,6 +45,11 @@ from shared_lib.database import (
     update_user_settings_db,
 )
 from shared_lib.i18n import translator
+from shared_lib.services.account_data import (
+    delete_account_data,
+    export_account_data,
+    get_telegram_web_account,
+)
 from shared_lib.services.schedule_service import (
     generate_module_details_text,
     get_schedule_with_cache_fallback,
@@ -187,6 +195,13 @@ class SettingsManager:
         self.router.callback_query(F.data == "delete_my_data_confirm")(
             self.cq_confirm_delete_my_data
         )
+        self.router.callback_query(F.data == "account_export")(self.cq_export_account)
+        self.router.callback_query(F.data.in_({"telegram_delete_prompt", "account_delete_prompt"}))(
+            self.cq_delete_account_prompt
+        )
+        self.router.callback_query(F.data == "account_delete_confirm")(
+            self.cq_confirm_delete_account
+        )
 
         # --- NEW: Short Name Management Handlers ---
         self.router.callback_query(F.data == "manage_short_names")(self.cq_manage_short_names)
@@ -224,33 +239,108 @@ class SettingsManager:
         await self.base_manager.onboarding_welcome(callback, state)
 
     async def cq_delete_my_data_prompt(self, callback: CallbackQuery):
-        """Asks the user for final confirmation before deleting all their data."""
+        """Explain Telegram-only and complete account deletion without ambiguity."""
         lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
+        if callback.message.chat.id != callback.from_user.id:
+            await callback.answer(translator.gettext(lang, "account_private_only"), show_alert=True)
+            return
+        builder = InlineKeyboardBuilder()
+        for key, data in (
+            ("account_export_button", "account_export"),
+            ("account_telegram_delete_button", "telegram_delete_prompt"),
+            ("account_full_delete_button", "account_delete_prompt"),
+            ("btn_cancel", "back_to_settings"),
+        ):
+            builder.row(InlineKeyboardButton(text=translator.gettext(lang, key), callback_data=data))
+        await callback.message.edit_text(
+            translator.gettext(lang, "account_data_scope"), reply_markup=builder.as_markup()
+        )
+        await callback.answer()
+
+    async def cq_export_account(self, callback: CallbackQuery, state: FSMContext):
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id, callback.message.chat.id)
+        if callback.message.chat.id != user_id:
+            await callback.answer(translator.gettext(lang, "account_private_only"), show_alert=True)
+            return
+        await callback.answer()
+        async with get_session() as session:
+            payload = await export_account_data(session, telegram_user_id=user_id)
+        content = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+        if len(content) > 45 * 1024 * 1024:
+            await callback.message.answer(translator.gettext(lang, "account_export_too_large"))
+            return
+        await callback.message.answer_document(
+            BufferedInputFile(content, filename="matplobbot-account.json"),
+            caption=translator.gettext(lang, "account_export_done"),
+        )
+        await state.update_data(account_exported_at=time.time(), account_export_owner=user_id,
+                                account_export_id=(payload.get("account") or {}).get("id"))
+
+    async def _has_recent_account_export(self, callback: CallbackQuery, state: FSMContext) -> bool:
+        data = await state.get_data()
+        return (callback.message.chat.id == callback.from_user.id
+                and data.get("account_export_owner") == callback.from_user.id
+                and 0 <= time.time() - data.get("account_exported_at", 0) <= 900)
+
+    async def cq_delete_account_prompt(self, callback: CallbackQuery, state: FSMContext):
+        lang = await translator.get_language(callback.from_user.id, callback.message.chat.id)
+        if not await self._has_recent_account_export(callback, state):
+            await callback.answer(translator.gettext(lang, "account_export_first"), show_alert=True)
+            return
+        full = callback.data == "account_delete_prompt"
         builder = InlineKeyboardBuilder()
         builder.row(
             InlineKeyboardButton(
-                text=translator.gettext(lang, "btn_confirm_delete_all_data"),
-                callback_data="delete_my_data_confirm",
+                text=translator.gettext(lang, "account_full_delete_button" if full else "account_telegram_delete_button"),
+                callback_data="account_delete_confirm" if full else "delete_my_data_confirm",
             ),
             InlineKeyboardButton(
                 text=translator.gettext(lang, "btn_cancel"), callback_data="back_to_settings"
             ),
         )
         await callback.message.edit_text(
-            translator.gettext(lang, "settings_delete_my_data_confirm"),
+            translator.gettext(lang, "account_full_delete_confirm" if full else "settings_delete_my_data_confirm"),
             reply_markup=builder.as_markup(),
         )
         await callback.answer()
 
-    async def cq_confirm_delete_my_data(self, callback: CallbackQuery):
-        """Handles the actual deletion of all user data."""
+    async def cq_confirm_delete_my_data(self, callback: CallbackQuery, state: FSMContext):
+        """Delete Telegram-owned data while preserving website identity and Studio."""
         user_id = callback.from_user.id
         lang = await translator.get_language(user_id, callback.message.chat.id)
+        if not await self._has_recent_account_export(callback, state):
+            await callback.answer(translator.gettext(lang, "account_export_first"), show_alert=True)
+            return
         success = await delete_all_user_data(user_id)
+        await state.clear()
         if success:
             await callback.message.edit_text(translator.gettext(lang, "delete_my_data_success"))
         else:
             await callback.message.edit_text(translator.gettext(lang, "delete_my_data_error"))
+        await callback.answer()
+
+    async def cq_confirm_delete_account(self, callback: CallbackQuery, state: FSMContext):
+        user_id = callback.from_user.id
+        lang = await translator.get_language(user_id, callback.message.chat.id)
+        if not await self._has_recent_account_export(callback, state):
+            await callback.answer(translator.gettext(lang, "account_export_first"), show_alert=True)
+            return
+        data = await state.get_data()
+        async with get_session() as session:
+            account = await get_telegram_web_account(session, user_id)
+            account_id = account.id if account is not None else None
+            if account_id != data.get("account_export_id"):
+                await callback.answer(translator.gettext(lang, "account_export_first"), show_alert=True)
+                return
+            if account is not None:
+                success = await delete_account_data(session, account.id)
+            else:
+                success = await delete_all_user_data(user_id)
+        await state.clear()
+        await callback.message.edit_text(translator.gettext(
+            lang, "account_delete_done" if success else "delete_my_data_error"
+        ))
         await callback.answer()
 
     # --- NEW: Modular Keyboard Building Functions ---

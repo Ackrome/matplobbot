@@ -215,64 +215,66 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, {"message_id": 8})
         sleep.assert_awaited_once_with(3.0)
 
-    async def test_send_daily_schedules_raises_when_every_delivery_fails(self):
-        subscriptions = [
-            {
-                "id": 1,
-                "user_id": 10,
-                "chat_id": 100,
-                "message_thread_id": None,
-                "entity_type": "group",
-                "entity_id": "123",
-                "entity_name": "M80-101",
-                "last_schedule_hash": None,
-            }
-        ]
-        ruz_api_client = SimpleNamespace(
-            get_schedule=AsyncMock(return_value=[{"discipline": "Math"}])
-        )
+    @staticmethod
+    def _daily_subscription(entity_id="123", user_id=10):
+        return {
+            "id": user_id,
+            "user_id": user_id,
+            "chat_id": user_id,
+            "message_thread_id": None,
+            "entity_type": "group",
+            "entity_id": entity_id,
+            "entity_name": "M80-101",
+            "timezone": "Europe/Moscow",
+            "target_date": datetime(2026, 10, 10).date(),
+            "expires_at": datetime(2026, 10, 10, tzinfo=UTC),
+        }
+
+    async def test_daily_persists_before_delivery_and_reports_retry_failure(self):
+        calls = []
+
+        async def enqueue(**_kwargs):
+            calls.append("persist")
+            return 1
+
+        async def deliver(*_args, **_kwargs):
+            calls.append("deliver")
+            return {"claimed": 1, "sent": 0, "rescheduled": 1, "failed": 0}
 
         with (
             patch.object(
                 jobs,
                 "get_subscriptions_due_for_notification",
-                AsyncMock(return_value=subscriptions),
+                AsyncMock(return_value=[self._daily_subscription()]),
             ),
-            patch.object(
-                jobs,
-                "get_subscriptions_for_notification",
-                AsyncMock(return_value=subscriptions),
-            ),
+            patch.object(jobs, "get_existing_schedule_deliveries", AsyncMock(return_value=set())),
+            patch.object(jobs, "enqueue_daily_schedule_delivery", enqueue),
+            patch.object(jobs, "deliver_pending_schedule_change_notifications", deliver),
             patch.object(jobs.translator, "get_language", AsyncMock(return_value="en")),
             patch.object(jobs, "format_schedule", AsyncMock(return_value="Schedule text")),
-            patch.object(jobs, "send_telegram_message", AsyncMock(return_value=None)),
-            self.assertRaises(RuntimeError),
         ):
-            await jobs.send_daily_schedules(object(), ruz_api_client)
+            result = await jobs.send_daily_schedules(
+                object(), SimpleNamespace(get_schedule=AsyncMock(return_value=[]))
+            )
+        self.assertEqual(calls, ["persist", "deliver"])
+        self.assertEqual(result, {"prepared": 1, "failed": 1, "sent": 0})
 
     async def test_send_daily_schedules_uses_timestamped_cache_fallback(self):
-        subscriptions = [
-            {
-                "id": 1,
-                "user_id": 10,
-                "chat_id": 100,
-                "message_thread_id": None,
-                "entity_type": "group",
-                "entity_id": "123",
-                "entity_name": "M80-101",
-                "timezone": "Europe/Moscow",
-            }
-        ]
         source_checked_at = datetime(2026, 9, 24, 15, 30, tzinfo=UTC)
-        ruz_api_client = SimpleNamespace(
-            get_schedule=AsyncMock(side_effect=RuntimeError("RUZ is down"))
-        )
-
         with (
             patch.object(
                 jobs,
                 "get_subscriptions_due_for_notification",
-                AsyncMock(return_value=subscriptions),
+                AsyncMock(return_value=[self._daily_subscription()]),
+            ),
+            patch.object(jobs, "get_existing_schedule_deliveries", AsyncMock(return_value=set())),
+            patch.object(
+                jobs, "enqueue_daily_schedule_delivery", AsyncMock(return_value=1)
+            ) as enqueue,
+            patch.object(
+                jobs,
+                "deliver_pending_schedule_change_notifications",
+                AsyncMock(return_value={"claimed": 1, "sent": 1, "rescheduled": 0, "failed": 0}),
             ),
             patch.object(
                 jobs,
@@ -286,98 +288,76 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
                 side_effect=lambda _lang, _key, **kwargs: f"Cached; checked {kwargs['checked_at']}",
             ),
             patch.object(jobs, "format_schedule", AsyncMock(return_value="Schedule text")),
-            patch.object(
-                jobs,
-                "send_telegram_message",
-                AsyncMock(return_value={"message_id": 1}),
-            ) as send_message,
-            patch.object(jobs.asyncio, "sleep", AsyncMock()),
         ):
-            await jobs.send_daily_schedules(object(), ruz_api_client)
-
-        sent_text = send_message.await_args.args[2]
-        self.assertIn("Schedule text", sent_text)
-        self.assertIn("2026-09-24 18:30 MSK", sent_text)
-
-    async def test_send_daily_schedules_raises_without_live_or_cached_source(self):
-        subscriptions = [
-            {
-                "id": 1,
-                "user_id": 10,
-                "chat_id": 100,
-                "entity_type": "group",
-                "entity_id": "123",
-                "entity_name": "M80-101",
-            }
-        ]
-        ruz_api_client = SimpleNamespace(
-            get_schedule=AsyncMock(side_effect=RuntimeError("RUZ is down"))
-        )
-
-        with (
-            patch.object(
-                jobs,
-                "get_subscriptions_due_for_notification",
-                AsyncMock(return_value=subscriptions),
-            ),
-            patch.object(
-                jobs,
-                "get_cached_schedule_snapshot",
-                AsyncMock(return_value=(None, None)),
-            ),
-            self.assertRaisesRegex(RuntimeError, "could not fetch any schedule data"),
-        ):
-            await jobs.send_daily_schedules(object(), ruz_api_client)
+            await jobs.send_daily_schedules(
+                object(),
+                SimpleNamespace(get_schedule=AsyncMock(side_effect=RuntimeError("RUZ down"))),
+            )
+        payload = enqueue.await_args.kwargs["payload"]
+        self.assertIn("Schedule text", payload)
+        self.assertIn("2026-09-24 18:30 MSK", payload)
 
     async def test_send_daily_schedules_continues_after_one_entity_has_no_source(self):
-        subscriptions = [
-            {
-                "id": 1,
-                "user_id": 10,
-                "chat_id": 100,
-                "entity_type": "group",
-                "entity_id": "missing",
-                "entity_name": "Missing",
-            },
-            {
-                "id": 2,
-                "user_id": 20,
-                "chat_id": 200,
-                "entity_type": "group",
-                "entity_id": "live",
-                "entity_name": "Live",
-            },
-        ]
-        ruz_api_client = SimpleNamespace(
-            get_schedule=AsyncMock(
-                side_effect=[RuntimeError("RUZ error for one entity"), [{"discipline": "Math"}]]
-            )
-        )
-
         with (
             patch.object(
                 jobs,
                 "get_subscriptions_due_for_notification",
-                AsyncMock(return_value=subscriptions),
+                AsyncMock(
+                    return_value=[
+                        self._daily_subscription("missing"),
+                        self._daily_subscription("live", 20),
+                    ]
+                ),
             ),
+            patch.object(jobs, "get_existing_schedule_deliveries", AsyncMock(return_value=set())),
+            patch.object(
+                jobs, "enqueue_daily_schedule_delivery", AsyncMock(return_value=1)
+            ) as enqueue,
             patch.object(
                 jobs,
-                "get_cached_schedule_snapshot",
-                AsyncMock(return_value=(None, None)),
+                "deliver_pending_schedule_change_notifications",
+                AsyncMock(return_value={"claimed": 1, "sent": 1, "rescheduled": 0, "failed": 0}),
+            ),
+            patch.object(
+                jobs, "get_cached_schedule_snapshot", AsyncMock(return_value=(None, None))
             ),
             patch.object(jobs.translator, "get_language", AsyncMock(return_value="en")),
             patch.object(jobs, "format_schedule", AsyncMock(return_value="Schedule text")),
+        ):
+            result = await jobs.send_daily_schedules(
+                object(),
+                SimpleNamespace(
+                    get_schedule=AsyncMock(side_effect=[RuntimeError("RUZ error"), []])
+                ),
+            )
+        enqueue.assert_awaited_once()
+        self.assertEqual(enqueue.await_args.kwargs["subscription"]["user_id"], 20)
+        self.assertEqual(result, {"prepared": 1, "failed": 1, "sent": 1})
+
+    async def test_daily_existing_event_is_not_refetched_and_queue_still_drains(self):
+        subscription = self._daily_subscription()
+        key = jobs.daily_event_key("group", "123", subscription["target_date"])
+        client = SimpleNamespace(get_schedule=AsyncMock())
+        with (
             patch.object(
                 jobs,
-                "send_telegram_message",
-                AsyncMock(return_value={"message_id": 1}),
-            ) as send_message,
-            patch.object(jobs.asyncio, "sleep", AsyncMock()),
+                "get_subscriptions_due_for_notification",
+                AsyncMock(return_value=[subscription, {**subscription, "id": 42}]),
+            ),
+            patch.object(
+                jobs, "get_existing_schedule_deliveries", AsyncMock(return_value={(key, 10)})
+            ),
+            patch.object(jobs, "enqueue_daily_schedule_delivery", AsyncMock()) as enqueue,
+            patch.object(
+                jobs,
+                "deliver_pending_schedule_change_notifications",
+                AsyncMock(return_value={"claimed": 0, "sent": 0, "rescheduled": 0, "failed": 0}),
+            ) as drain,
         ):
-            await jobs.send_daily_schedules(object(), ruz_api_client)
-
-        send_message.assert_awaited_once()
-        self.assertEqual(send_message.await_args.args[1], 200)
+            await jobs.send_daily_schedules(object(), client)
+        client.get_schedule.assert_not_awaited()
+        enqueue.assert_not_awaited()
+        drain.assert_awaited_once()
 
     async def test_outbox_retries_only_failed_recipient(self):
         first_batch = [
@@ -402,7 +382,7 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             patch.object(
                 jobs,
                 "claim_schedule_change_deliveries",
-                AsyncMock(side_effect=[first_batch, retry_batch]),
+                AsyncMock(side_effect=[[first_batch[0]], [first_batch[1]], [], retry_batch, []]),
             ),
             patch.object(
                 jobs,
@@ -461,6 +441,18 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             self.assertRaises(RuntimeError),
         ):
             await jobs.send_admin_summary(object())
+
+    async def test_schedule_update_job_reports_failed_outbox_without_active_subscriptions(self):
+        with (
+            patch.object(
+                jobs,
+                "deliver_pending_schedule_change_notifications",
+                AsyncMock(return_value={"rescheduled": 1, "failed": 1}),
+            ),
+            patch.object(jobs, "get_all_active_subscriptions", AsyncMock(return_value=[])),
+        ):
+            result = await jobs.check_for_schedule_updates(object(), object())
+        self.assertEqual(result, {"failed": 2})
 
     async def test_check_for_schedule_updates_refreshes_cache_when_hash_is_unchanged(self):
         schedule_data = [{"date": "2026.08.21", "discipline": "Math"}]
@@ -794,6 +786,23 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
         db_session = SimpleNamespace(execute=AsyncMock())
 
         with (
+            patch.object(
+                scheduler_main,
+                "get_operational_snapshot",
+                AsyncMock(return_value={"available": True, "operations": []}),
+            ),
+            patch.object(
+                scheduler_main,
+                "get_schedule_outbox_health",
+                AsyncMock(
+                    return_value={
+                        "pending": 0,
+                        "processing": 0,
+                        "failed": 0,
+                        "oldest_pending_age_seconds": 0,
+                    }
+                ),
+            ),
             patch.object(
                 scheduler_main,
                 "get_session",

@@ -341,10 +341,7 @@ check_ws_upgrade() {
 retry_http "http://127.0.0.1:9583/api/stats/health" 40 3
 retry_http "http://127.0.0.1:9584/health" 40 3
 
-# Leaderboard endpoint contract:
-# 1) if STATS_USER/STATS_PASS are valid admin credentials, authenticated request must return 200
-# 2) otherwise, endpoint must still be reachable and protected (401/403)
-auth_checked=0
+# Both positive authentication and anonymous access protection must pass.
 if [ -n "${STATS_USER:-}" ] && [ -n "${STATS_PASS:-}" ]; then
   LOGIN_RESP_FILE="$(mktemp)"
   LOGIN_STATUS="$(curl -sS -o "$LOGIN_RESP_FILE" -w '%{http_code}' -X POST "http://127.0.0.1:9583/api/auth/login" \
@@ -366,33 +363,33 @@ if [ -n "${STATS_USER:-}" ] && [ -n "${STATS_PASS:-}" ]; then
 
     if [ "$LEADERBOARD_STATUS" = "200" ]; then
       echo "Smoke check OK: leaderboard endpoint (authenticated)"
-      check_ws_upgrade "http://127.0.0.1:9584/ws/stats/total_actions" "$TOKEN"
+      check_ws_upgrade "http://127.0.0.1:8080/ws/stats/total_actions" "$TOKEN"
       if [ -n "${PUBLIC_SITE_URL:-}" ]; then
         check_ws_upgrade "${PUBLIC_SITE_URL%/}/ws/stats/total_actions" "$TOKEN"
       fi
-      auth_checked=1
     else
       echo "Smoke check FAILED: authenticated leaderboard returned HTTP $LEADERBOARD_STATUS"
       rm -f "$LOGIN_RESP_FILE"
       exit 1
     fi
   else
-    echo "Smoke check WARN: /api/auth/login returned HTTP $LOGIN_STATUS for STATS_USER; falling back to protected-endpoint contract"
+    echo "Smoke check FAILED: expected admin login returned HTTP $LOGIN_STATUS"
+    rm -f "$LOGIN_RESP_FILE"
+    exit 1
   fi
 
   rm -f "$LOGIN_RESP_FILE"
 else
-  echo "Smoke check WARN: STATS_USER/STATS_PASS missing in .env; falling back to protected-endpoint contract"
+  echo "Smoke check FAILED: expected admin credentials are missing in .env"
+  exit 1
 fi
 
-if [ "$auth_checked" -eq 0 ]; then
-  PROTECTED_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:9583/api/stats/leaderboard" || true)"
-  if [ "$PROTECTED_STATUS" = "401" ] || [ "$PROTECTED_STATUS" = "403" ]; then
-    echo "Smoke check OK: leaderboard endpoint is protected (HTTP $PROTECTED_STATUS)"
-  else
-    echo "Smoke check FAILED: leaderboard endpoint returned unexpected HTTP $PROTECTED_STATUS without auth"
-    exit 1
-  fi
+PROTECTED_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:9583/api/stats/leaderboard" || true)"
+if [ "$PROTECTED_STATUS" = "401" ] || [ "$PROTECTED_STATUS" = "403" ]; then
+  echo "Smoke check OK: leaderboard endpoint is protected (HTTP $PROTECTED_STATUS)"
+else
+  echo "Smoke check FAILED: leaderboard endpoint returned unexpected HTTP $PROTECTED_STATUS without auth"
+  exit 1
 fi
 REMOTE_EOF
                             } 2>&1 | tee -a "$LOG_FILE"

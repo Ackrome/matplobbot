@@ -94,6 +94,9 @@ async def set_bot_commands(bot: Bot):
     """Sets the bot's command list in the UI for different user scopes."""
 
     user_commands_ru = [
+        types.BotCommand(command="plan", description="Пересечения и свободные окна"),
+        types.BotCommand(command="conflicts", description="Пересечения расписания"),
+        types.BotCommand(command="free", description="Общие свободные окна"),
         types.BotCommand(command="mail", description="Почтовые ящики"),
         types.BotCommand(
             command="start", description=translator.gettext("ru", "command_desc_start")
@@ -132,6 +135,9 @@ async def set_bot_commands(bot: Bot):
     ]
 
     user_commands_en = [
+        types.BotCommand(command="plan", description="Conflicts and common free windows"),
+        types.BotCommand(command="conflicts", description="Schedule conflicts"),
+        types.BotCommand(command="free", description="Common free windows"),
         types.BotCommand(command="mail", description="Email inboxes"),
         types.BotCommand(
             command="start", description=translator.gettext("en", "command_desc_start")

@@ -3,6 +3,7 @@ from sqlalchemy import (
     JSON,
     BigInteger,
     Boolean,
+    CheckConstraint,
     Column,
     DateTime,
     ForeignKey,
@@ -134,6 +135,8 @@ class ScheduleChangeDelivery(Base):
     chat_id = Column(BigInteger, nullable=False)
     message_thread_id = Column(BigInteger, nullable=True)
     payload = Column(Text, nullable=False)
+    delivery_kind = Column(String(16), nullable=False, server_default="change")
+    expires_at = Column(DateTime(timezone=True), nullable=True)
     status = Column(String(16), nullable=False, server_default="pending")
     attempt_count = Column(Integer, nullable=False, server_default="0")
     next_attempt_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -296,3 +299,24 @@ class ProjectFile(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (UniqueConstraint("project_id", "file_path", name="uq_project_file_path"),)
+
+
+class ProductEvent(Base):
+    """Small, content-free outcome events; account deletion cascades to these rows."""
+
+    __tablename__ = "product_events"
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    event_name = Column(String(48), nullable=False)
+    web_account_id = Column(Integer, ForeignKey("web_accounts.id", ondelete="CASCADE"))
+    telegram_user_id = Column(BigInteger, ForeignKey("users.user_id", ondelete="CASCADE"))
+    dedupe_key = Column(String(160), unique=True, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    __table_args__ = (
+        CheckConstraint(
+            "(web_account_id IS NULL) <> (telegram_user_id IS NULL)",
+            name="ck_product_event_one_actor",
+        ),
+        Index("ix_product_events_created_event", "created_at", "event_name"),
+        Index("ix_product_events_web_account", "web_account_id"),
+        Index("ix_product_events_telegram_user", "telegram_user_id"),
+    )

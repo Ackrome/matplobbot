@@ -28,7 +28,7 @@ from .. import keyboards as kb
 from ..config import SEARCH_RESULTS_PER_PAGE
 from ..services import github_display
 from ..services.repo_indexer import index_github_repository
-from ..services.search_center import search_repository_markdown
+from ..services.search_center import SearchUnavailableError, search_repository_markdown
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -360,13 +360,18 @@ class GitHubManager:
         # Используем наш векторный движок
         # source_type = "repo:owner/name"
 
-        results = await search_repository_markdown(query, repo_to_search, limit=10)
+        lang = await translator.get_language(user_id, message.chat.id)
+        try:
+            results = await search_repository_markdown(query, repo_to_search, limit=10)
+        except SearchUnavailableError:
+            await status_msg.edit_text(translator.gettext(lang, "search_unavailable"))
+            return
         formatted_results = [{"path": item["path"], "score": item["score"]} for item in results]
 
         if not results:
             # Fallback на старый поиск через GitHub API, если векторы не дали результата (или база пуста)
             # await self._search_github_md(query, repo_to_search) # Старый метод
-            await status_msg.edit_text("По вашему запросу ничего не найдено (векторный поиск).")
+            await status_msg.edit_text(translator.gettext(lang, "github_search_no_results", query=query))
             return
 
         # Формируем результаты для кэша и клавиатуры

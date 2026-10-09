@@ -1,3 +1,4 @@
+import ast
 import os
 import shutil
 import stat
@@ -306,8 +307,59 @@ class TestComposeConfiguration(unittest.TestCase):
         self.assertIn('proxy_set_header Connection "upgrade"', ws_location)
         self.assertIn("check_ws_upgrade", jenkinsfile)
         self.assertIn('if [ "$status" != "101" ]', jenkinsfile)
-        self.assertIn("http://127.0.0.1:9584/ws/stats/total_actions", jenkinsfile)
+        self.assertIn("http://127.0.0.1:8080/ws/stats/total_actions", jenkinsfile)
+        self.assertNotIn("http://127.0.0.1:9584/ws/", jenkinsfile)
+        self.assertIn("expected admin login returned HTTP", jenkinsfile)
+        self.assertNotIn("falling back to protected-endpoint contract", jenkinsfile)
         self.assertIn("${PUBLIC_SITE_URL%/}/ws/stats/total_actions", jenkinsfile)
+
+    @unittest.skipUnless(_find_bash(), "bash is required for the isolated smoke script test")
+    def test_jenkins_smoke_requires_successful_expected_admin_login_at_runtime(self):
+        jenkinsfile = JENKINSFILE.read_text(encoding="utf-8")
+        script = jenkinsfile.rsplit("<<'REMOTE_EOF'", 1)[1].split("REMOTE_EOF", 1)[0]
+        # The pipeline's Groovy string consumes one layer of escaped backslashes.
+        script = script.replace("\\\\", "\\")
+        fake_curl = r'''
+curl() {
+  local output="" url="" arg="" previous="" authenticated=0
+  for arg in "$@"; do
+    if [ "$previous" = "-o" ]; then output="$arg"; fi
+    case "$arg" in
+      http*) url="$arg" ;;
+      Authorization:*) authenticated=1 ;;
+    esac
+    previous="$arg"
+  done
+  case "$url" in
+    */api/auth/login)
+      printf '{"access_token":"test-token"}' > "$output"
+      printf '%s' "$FAKE_LOGIN_STATUS" ;;
+    */ws/*)
+      printf '%s\n' "$url" >> smoke-ws-calls.txt
+      printf '101' ;;
+    */api/stats/leaderboard)
+      if [ "$authenticated" = 1 ]; then printf '200'; else printf '401'; fi ;;
+  esac
+  return 0
+}
+'''
+        for login_status, expected_returncode in (("200", 0), ("500", 1), ("401", 1)):
+            with self.subTest(login_status=login_status), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / ".env").write_text("STATS_USER=test\nSTATS_PASS=test\n", encoding="utf-8")
+                smoke = root / "smoke.sh"
+                smoke.write_text(fake_curl + script, encoding="utf-8")
+                result = subprocess.run(
+                    [_find_bash(), _bash_path(smoke)], cwd=root,
+                    env={**os.environ, "FAKE_LOGIN_STATUS": login_status},
+                    capture_output=True, text=True, timeout=10,
+                )
+                self.assertEqual(result.returncode, expected_returncode, result.stdout + result.stderr)
+                ws_calls = root / "smoke-ws-calls.txt"
+                if login_status == "200":
+                    self.assertIn("127.0.0.1:8080/ws/", ws_calls.read_text(encoding="utf-8"))
+                else:
+                    self.assertFalse(ws_calls.exists())
 
     def test_stats_websocket_uses_runtime_api_origin_and_single_reconnect_timer(self):
         ui_utils = FRONTEND_UI_UTILS.read_text(encoding="utf-8")
@@ -321,14 +373,40 @@ class TestComposeConfiguration(unittest.TestCase):
         self.assertNotIn("window.location.host}/ws/stats", stats)
 
     def test_schedule_outbox_is_drained_every_minute(self):
-        scheduler_main = SCHEDULER_MAIN.read_text(encoding="utf-8")
-
-        outbox_job = scheduler_main.split(
-            "scheduler.add_job(\n                deliver_pending_schedule_change_notifications,",
-            1,
-        )[1].split("scheduler.add_job(", 1)[0]
-        self.assertIn('trigger="interval"', outbox_job)
-        self.assertIn("minutes=1", outbox_job)
+        tree = ast.parse(SCHEDULER_MAIN.read_text(encoding="utf-8"))
+        matching_jobs = []
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "add_job"
+                and node.args
+            ):
+                continue
+            handler = node.args[0]
+            # A monitored function still has to schedule the real delivery worker.
+            if (
+                isinstance(handler, ast.Call)
+                and isinstance(handler.func, ast.Name)
+                and handler.func.id == "monitor_job"
+            ):
+                self.assertEqual(len(handler.args), 2)
+                handler = handler.args[1]
+            if (
+                isinstance(handler, ast.Name)
+                and handler.id == "deliver_pending_schedule_change_notifications"
+            ):
+                matching_jobs.append({keyword.arg: keyword.value for keyword in node.keywords})
+        self.assertEqual(len(matching_jobs), 1)
+        job = matching_jobs[0]
+        self.assertEqual(ast.literal_eval(job["trigger"]), "interval")
+        interval = sum(
+            ast.literal_eval(job[key]) * multiplier
+            for key, multiplier in (("seconds", 1), ("minutes", 60), ("hours", 3600))
+            if key in job
+        )
+        self.assertGreater(interval, 0)
+        self.assertLessEqual(interval, 60)
 
     def test_celery_worker_healthcheck_is_bounded_and_identical(self):
         local_health = self.local["services"]["mpb-worker"]["healthcheck"]

@@ -285,6 +285,12 @@ async def get_help_inline_keyboard(user_id: int) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
+                    text=translator.gettext(lang, "help_btn_plan"),
+                    callback_data="help_cmd_plan",
+                )
+            ],
+            [
+                InlineKeyboardButton(
                     text=translator.gettext(lang, "help_btn_lec_search"),
                     callback_data="help_cmd_lec_search",
                 )

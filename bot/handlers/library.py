@@ -23,7 +23,7 @@ from .. import database
 from .. import keyboards as kb
 from ..config import SEARCH_RESULTS_PER_PAGE
 from ..services import library_display
-from ..services.search_center import search_library_examples
+from ..services.search_center import SearchUnavailableError, search_library_examples
 
 
 class Search(StatesGroup):
@@ -256,15 +256,8 @@ class LibraryManager:
         return builder.as_markup()
 
     async def _perform_full_text_search(self, query: str) -> list[dict]:
-        """
-        Использует векторный поиск через Postgres.
-        """
-        try:
-            # search теперь async метод, await'им его напрямую
-            return await search_library_examples(query, limit=20)
-        except Exception as e:
-            logging.error(f"Text search failed: {e}", exc_info=True)
-            return []
+        """Search the text index without disguising an outage as zero matches."""
+        return await search_library_examples(query, limit=20)
 
     async def search_command(self, message: Message, state: FSMContext):
         lang = await translator.get_language(message.from_user.id, message.chat.id)
@@ -283,7 +276,11 @@ class LibraryManager:
         status_msg = await message.answer(
             translator.gettext(lang, "search_in_progress", query=query)
         )
-        results = await self._perform_full_text_search(query)
+        try:
+            results = await self._perform_full_text_search(query)
+        except SearchUnavailableError:
+            await status_msg.edit_text(translator.gettext(lang, "search_unavailable"))
+            return
 
         if not results:
             await status_msg.edit_text(translator.gettext(lang, "search_no_results", query=query))

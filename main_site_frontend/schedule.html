@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title data-i18n="schedule.meta.title">Расписание | ITISHCHENKO</title>
+    <link rel="stylesheet" href="/css/feature_panels.css?v=20261009-1">
     <!-- Site icons -->
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
@@ -856,6 +857,29 @@
 
     <!-- КОНТЕНТ -->
     <main class="pt-24 max-w-[1600px] mx-auto px-2 sm:px-6 lg:px-8 pb-20">
+        <details id="schedulePlanner" class="mpb-panel">
+            <summary data-plan-i18n="plan.title">Конфликты и общие свободные окна</summary>
+            <p data-plan-i18n="plan.description">Сравните до шести расписаний за период до 14 дней. Время — московское. Отсутствие занятий не гарантирует доступность аудитории.</p>
+            <button type="button" id="planAddCurrent" data-plan-i18n="plan.addCurrent">Добавить открытое расписание с его фильтрами</button>
+            <div class="mpb-fields">
+                <label><span data-plan-i18n="plan.search">Группа, преподаватель или аудитория</span><input id="planSearch" type="search" maxlength="100" autocomplete="off"></label>
+                <button type="button" id="planSearchButton" data-plan-i18n="plan.find">Найти</button>
+            </div>
+            <div id="planSearchResults" class="mpb-fields"></div>
+            <ul id="planEntities"></ul>
+            <form id="planForm">
+                <div class="mpb-fields">
+                    <label><span data-plan-i18n="plan.start">С даты</span><input id="planStart" type="date" required></label>
+                    <label><span data-plan-i18n="plan.end">По дату</span><input id="planEnd" type="date" required></label>
+                    <label><span data-plan-i18n="plan.dayStart">Начало дня</span><input id="planDayStart" type="time" value="08:00" required></label>
+                    <label><span data-plan-i18n="plan.dayEnd">Конец дня</span><input id="planDayEnd" type="time" value="22:00" required></label>
+                    <label><span data-plan-i18n="plan.minimum">Минимум минут</span><input id="planMin" type="number" min="5" max="720" value="30" required></label>
+                    <button id="planRun" data-plan-i18n="plan.run">Сравнить</button>
+                </div>
+            </form>
+            <p id="planStatus" role="status" aria-live="polite"></p>
+            <div id="planResult"></div>
+        </details>
         <div class="w-full">
             <section id="scheduleHomePanel" class="hidden mb-4 md:mb-6"></section>
             <section id="scheduleChangesPanel" class="hidden mb-4 md:mb-6"></section>
@@ -1063,7 +1087,7 @@
     <script src="/js/ui_utils.js?v=2"></script>
     <script src="/js/telegram_webapp.js?v=20260821-6"></script>
     <script src="/js/frontend_i18n.js?v=1"></script>
-    <script src="/js/navbar.js?v=20260923-1"></script>
+    <script src="/js/navbar.js?v=20261009-1"></script>
     <script src="/js/schedule_state.js?v=20260821-6"></script>
     <script src="/js/schedule_api.js?v=20260924-1"></script>
     <script src="/js/schedule_filters.js?v=20260821-6"></script>
@@ -1071,5 +1095,6 @@
     <script src="/js/schedule.js?v=20260924-1"></script>
     <script src="/js/calendar_sync.js?v=20260821-6"></script>
     <script src="/js/schedule_ux.js?v=20260831-10"></script>
+    <script src="/js/schedule_planner.js?v=20261009-1"></script>
 </body>
 </html>

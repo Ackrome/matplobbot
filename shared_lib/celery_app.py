@@ -1,3 +1,5 @@
+import time
+
 from celery import Celery, Task
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
@@ -56,15 +58,28 @@ class TracedTask(Task):
             span.set_attribute("messaging.message.id", getattr(self.request, "id", ""))
             span.set_attribute("celery.task_name", self.name)
             attach_correlation_id_to_span(span, correlation_id)
-
+            started = time.monotonic()
+            successful = False
             try:
-                return super().__call__(*args, **kwargs)
+                result = super().__call__(*args, **kwargs)
+                successful = not (isinstance(result, dict) and result.get("status") == "error")
+                return result
             except Exception as exc:
                 span.record_exception(exc)
                 span.set_status(Status(StatusCode.ERROR, str(exc)))
                 raise
             finally:
                 reset_correlation_id(token)
+                if self.name.rsplit(".", 1)[-1] in {
+                    "compile_full_latex", "compile_project", "render_pdf", "render_mermaid",
+                }:
+                    from .operational_metrics import record_operation_sync
+
+                    record_operation_sync(
+                        "studio_compile", successful=successful,
+                        duration_seconds=time.monotonic() - started,
+                        error_code=None if successful else "compile_failed",
+                    )
 
 
 app = Celery(
@@ -84,10 +99,14 @@ app.conf.update(
     task_acks_late=True,
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
+    task_track_started=True,
+    result_expires=86400,
+    redis_socket_timeout=5,
+    redis_socket_connect_timeout=5,
 )
 
 
-def dispatch_traced_task(task: Task, *args, **kwargs):
+def dispatch_traced_task(task: Task, *args, _task_id: str | None = None, **kwargs):
     tracer = get_tracer("shared_lib.celery")
     correlation_id = get_correlation_id()
     if not correlation_id or correlation_id == "-":
@@ -104,4 +123,5 @@ def dispatch_traced_task(task: Task, *args, **kwargs):
         span.set_attribute("celery.task_name", task.name)
         attach_correlation_id_to_span(span, correlation_id)
         inject_trace_context(headers)
-        return task.apply_async(args=args, kwargs=kwargs, headers=headers)
+        options = {"task_id": _task_id} if _task_id else {}
+        return task.apply_async(args=args, kwargs=kwargs, headers=headers, **options)

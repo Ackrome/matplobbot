@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 
 import aiohttp
 import aiohttp.web
@@ -9,8 +10,14 @@ from dotenv import load_dotenv
 # Load environment variables from .env before importing config modules that read os.getenv().
 load_dotenv()
 
-from scheduler_app.config import BOT_TOKEN, CELERY_QUEUE_ALERT_THRESHOLD, TELEGRAM_PROXY_URL
+from scheduler_app.config import (
+    BOT_TOKEN,
+    CELERY_QUEUE_ALERT_THRESHOLD,
+    SCHEDULE_OUTBOX_ALERT_AGE_SECONDS,
+    TELEGRAM_PROXY_URL,
+)
 from scheduler_app.http_client import build_telegram_http_client_config
+from scheduler_app.job_health import monitor_job
 from scheduler_app.jobs import (
     check_for_schedule_updates,
     deliver_pending_schedule_change_notifications,
@@ -22,7 +29,10 @@ from scheduler_app.jobs import (
 )
 from shared_lib.database import close_db_pool, get_session, init_db_pool
 from shared_lib.logging_config import configure_logging
+from shared_lib.operational_metrics import get_operational_snapshot
+from shared_lib.product_metrics import purge_expired_product_events
 from shared_lib.redis_client import redis_client
+from shared_lib.schedule_outbox import get_schedule_outbox_health
 from shared_lib.services.university_api import create_ruz_api_client
 
 # --- Logging Setup ---
@@ -33,6 +43,7 @@ if aps_logger.handlers:
     aps_logger.handlers.clear()
 
 logger = logging.getLogger(__name__)
+_STARTED_AT = time.monotonic()
 
 
 async def build_scheduler_health(scheduler_running: bool) -> tuple[dict[str, object], int]:
@@ -44,7 +55,28 @@ async def build_scheduler_health(scheduler_running: bool) -> tuple[dict[str, obj
 
     celery_queue_depth = int(await redis_client.client.llen("celery"))
     queue_backlogged = celery_queue_depth >= CELERY_QUEUE_ALERT_THRESHOLD
-    healthy = scheduler_running and not queue_backlogged
+    operations = await get_operational_snapshot()
+    outbox = await get_schedule_outbox_health()
+    stale_jobs = [
+        row["name"]
+        for row in operations.get("operations", [])
+        if row.get("stale_after_seconds")
+        and (
+            row["status"] in {"stale", "error"}
+            or (
+                row["status"] == "unknown"
+                and time.monotonic() - _STARTED_AT > row["stale_after_seconds"]
+            )
+        )
+    ]
+    outbox_backlogged = outbox["oldest_pending_age_seconds"] >= SCHEDULE_OUTBOX_ALERT_AGE_SECONDS
+    healthy = (
+        scheduler_running
+        and not queue_backlogged
+        and not outbox_backlogged
+        and not stale_jobs
+        and operations["available"]
+    )
     payload: dict[str, object] = {
         "status": "ok" if healthy else "unhealthy",
         "scheduler": "running" if scheduler_running else "stopped",
@@ -52,6 +84,10 @@ async def build_scheduler_health(scheduler_running: bool) -> tuple[dict[str, obj
         "celery_queue": "backlogged" if queue_backlogged else "ok",
         "celery_queue_depth": celery_queue_depth,
         "celery_queue_alert_threshold": CELERY_QUEUE_ALERT_THRESHOLD,
+        "operations": operations,
+        "stale_or_failed_jobs": stale_jobs,
+        "schedule_outbox": outbox,
+        "schedule_outbox_alert_age_seconds": SCHEDULE_OUTBOX_ALERT_AGE_SECONDS,
     }
     return payload, 200 if healthy else 503
 
@@ -84,7 +120,7 @@ async def main():
             scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
 
             scheduler.add_job(
-                send_daily_schedules,
+                monitor_job("daily_schedules", send_daily_schedules),
                 trigger="cron",
                 minute="*",
                 kwargs={
@@ -94,7 +130,7 @@ async def main():
                 },
             )
             scheduler.add_job(
-                check_for_schedule_updates,
+                monitor_job("schedule_updates", check_for_schedule_updates),
                 trigger="interval",
                 hours=2,
                 kwargs={
@@ -104,7 +140,7 @@ async def main():
                 },
             )
             scheduler.add_job(
-                deliver_pending_schedule_change_notifications,
+                monitor_job("outbox_delivery", deliver_pending_schedule_change_notifications),
                 trigger="interval",
                 minutes=1,
                 kwargs={
@@ -123,7 +159,7 @@ async def main():
                 },
             )
             scheduler.add_job(
-                update_schedule_cache,
+                monitor_job("schedule_refresh", update_schedule_cache),
                 trigger="cron",
                 hour="4,16",
                 minute=0,
@@ -137,6 +173,12 @@ async def main():
                 trigger="cron",
                 hour=3,
                 minute=0,
+            )
+            scheduler.add_job(
+                purge_expired_product_events,
+                trigger="cron",
+                hour=3,
+                minute=15,
             )
             scheduler.add_job(
                 send_admin_summary,

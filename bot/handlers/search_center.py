@@ -1,4 +1,5 @@
 import hashlib
+import html
 import logging
 
 from aiogram import F, Router
@@ -9,6 +10,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from shared_lib.i18n import translator
+from shared_lib.product_metrics import record_product_event
 from shared_lib.redis_client import redis_client
 
 from .. import database
@@ -22,6 +24,7 @@ from ..services.search_center import (
     SEARCH_KIND_GLOBAL,
     SEARCH_KIND_LIBRARY,
     SEARCH_KIND_SCHEDULE,
+    SearchUnavailableError,
     build_default_global_filters,
     format_global_result_label,
     normalize_global_filters,
@@ -125,14 +128,23 @@ class SearchCenterManager:
         working_message = status_message or await message.answer(
             translator.gettext(lang, "search_in_progress", query=query)
         )
+        await record_product_event("search_started", telegram_user_id=user_id)
         results, normalized_filters = await search_global_sources(
             query, active_filters, repo_paths, limit=20
+        )
+        search_status = getattr(results, "status", "ok" if results else "empty")
+        await record_product_event(
+            "search_succeeded" if results else "search_failed"
+            if search_status in {"unavailable", "partial"} else "search_empty",
+            telegram_user_id=user_id,
         )
 
         await redis_client.set_user_cache(
             user_id,
             "global_search",
-            {"query": query, "filters": normalized_filters, "results": results},
+            {"query": query, "filters": normalized_filters, "results": results,
+             "search_status": search_status,
+             "failed_sources": getattr(results, "failed_sources", [])},
         )
         keyboard = await self._build_global_search_keyboard(user_id, page=0)
         text = await self._build_global_search_text(user_id, page=0)
@@ -149,7 +161,21 @@ class SearchCenterManager:
         if not query:
             return translator.gettext(lang, "global_search_prompt", filters=filters_text)
 
+        status = context.get("search_status")
+        if status == "unavailable":
+            return translator.gettext(lang, "search_unavailable")
+        warning = ""
+        if status == "partial":
+            sources = ", ".join(
+                translator.gettext(lang, "global_search_source_library") if source == "library"
+                else translator.gettext(lang, "global_search_source_github") if source == "github"
+                else source for source in context.get("failed_sources", [])
+            )
+            warning = translator.gettext(lang, "global_search_partial", sources=html.escape(sources))
+
         if not results:
+            if warning:
+                return translator.gettext(lang, "global_search_partial_empty") + "\n\n" + warning
             return translator.gettext(
                 lang, "global_search_no_results", query=query, filters=filters_text
             )
@@ -164,7 +190,7 @@ class SearchCenterManager:
             page=safe_page + 1,
             total_pages=total_pages,
             filters=filters_text,
-        )
+        ) + ("\n\n" + warning if warning else "")
 
     def _format_global_filters_summary(self, lang: str, filters: dict) -> str:
         sources = filters.get("sources") or []
@@ -602,7 +628,11 @@ class SearchCenterManager:
         status_msg = await message.answer(
             translator.gettext(lang, "search_in_progress", query=query)
         )
-        results = await search_library_examples(query, limit=20)
+        try:
+            results = await search_library_examples(query, limit=20)
+        except SearchUnavailableError:
+            await status_msg.edit_text(translator.gettext(lang, "search_unavailable"))
+            return
 
         formatted_results = [{"path": item["path"], "score": item["score"]} for item in results]
         if not formatted_results:
@@ -634,7 +664,11 @@ class SearchCenterManager:
             translator.gettext(lang, "github_search_in_progress", query=query, repo_path=repo_path),
             parse_mode="markdown",
         )
-        results = await search_repository_markdown(query, repo_path, limit=10)
+        try:
+            results = await search_repository_markdown(query, repo_path, limit=10)
+        except SearchUnavailableError:
+            await status_msg.edit_text(translator.gettext(lang, "search_unavailable"))
+            return
         formatted_results = [{"path": item["path"], "score": item["score"]} for item in results]
 
         if not formatted_results:

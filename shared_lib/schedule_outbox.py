@@ -7,7 +7,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from .database import get_session
@@ -17,6 +17,50 @@ OUTBOX_PENDING = "pending"
 OUTBOX_PROCESSING = "processing"
 OUTBOX_SENT = "sent"
 OUTBOX_FAILED = "failed"
+
+
+async def get_existing_schedule_deliveries(keys: list[tuple[str, int]]) -> set[tuple[str, int]]:
+    """Find already persisted daily events without retrieving message contents."""
+    if not keys:
+        return set()
+    from sqlalchemy import tuple_
+
+    existing = set()
+    async with get_session() as session:
+        for offset in range(0, len(keys), 500):
+            rows = await session.execute(
+                select(ScheduleChangeDelivery.event_key, ScheduleChangeDelivery.user_id).where(
+                    tuple_(ScheduleChangeDelivery.event_key, ScheduleChangeDelivery.user_id).in_(
+                        keys[offset : offset + 500]
+                    )
+                )
+            )
+            existing.update((row[0], row[1]) for row in rows.all())
+    return existing
+
+
+async def enqueue_daily_schedule_delivery(
+    *, event_key: str, subscription: dict, payload: str
+) -> int:
+    """Persist a daily message before any send; retries keep the original payload."""
+    async with get_session() as session:
+        result = await session.execute(
+            pg_insert(ScheduleChangeDelivery)
+            .values(
+                event_key=event_key,
+                user_id=subscription["user_id"],
+                entity_type=subscription["entity_type"],
+                entity_id=str(subscription["entity_id"]),
+                chat_id=subscription["chat_id"],
+                message_thread_id=subscription.get("message_thread_id"),
+                payload=payload,
+                delivery_kind="daily",
+                expires_at=subscription["expires_at"],
+            )
+            .on_conflict_do_nothing(constraint="uq_schedule_change_delivery_event_user")
+        )
+        await session.commit()
+        return result.rowcount or 0
 
 
 def build_schedule_change_event_key(
@@ -156,10 +200,40 @@ async def claim_schedule_change_deliveries(
     now = now_utc or datetime.now(UTC)
     stale_before = now - timedelta(seconds=max(1, lock_timeout_seconds))
     async with get_session() as session:
+        # A worker can crash after claiming its final attempt. Such rows must leave
+        # processing even though they are no longer eligible for another claim.
+        abandoned = and_(
+            ScheduleChangeDelivery.status == OUTBOX_PROCESSING,
+            or_(
+                ScheduleChangeDelivery.locked_at.is_(None),
+                ScheduleChangeDelivery.locked_at <= stale_before,
+            ),
+        )
+        ready_or_abandoned = or_(ScheduleChangeDelivery.status == OUTBOX_PENDING, abandoned)
+        await session.execute(
+            update(ScheduleChangeDelivery)
+            .where(
+                ready_or_abandoned,
+                or_(
+                    ScheduleChangeDelivery.attempt_count >= max_attempts,
+                    ScheduleChangeDelivery.expires_at <= now,
+                ),
+            )
+            .values(
+                status=OUTBOX_FAILED,
+                locked_at=None,
+                updated_at=now,
+                last_error="Delivery window or attempt budget exhausted; delivery may be unconfirmed",
+            )
+        )
         result = await session.execute(
             select(ScheduleChangeDelivery)
             .where(
                 ScheduleChangeDelivery.attempt_count < max_attempts,
+                or_(
+                    ScheduleChangeDelivery.expires_at.is_(None),
+                    ScheduleChangeDelivery.expires_at > now,
+                ),
                 or_(
                     and_(
                         ScheduleChangeDelivery.status == OUTBOX_PENDING,
@@ -196,6 +270,7 @@ async def claim_schedule_change_deliveries(
                     "message_thread_id": row.message_thread_id,
                     "payload": row.payload,
                     "attempt_count": row.attempt_count,
+                    "delivery_kind": row.delivery_kind,
                 }
             )
         await session.commit()
@@ -206,13 +281,18 @@ async def mark_schedule_change_delivery_sent(
     delivery_id: int,
     *,
     now_utc: datetime | None = None,
+    expected_attempt_count: int | None = None,
 ) -> None:
     now = now_utc or datetime.now(UTC)
     async with get_session() as session:
+        statement = update(ScheduleChangeDelivery).where(ScheduleChangeDelivery.id == delivery_id)
+        if expected_attempt_count is not None:
+            statement = statement.where(
+                ScheduleChangeDelivery.status == OUTBOX_PROCESSING,
+                ScheduleChangeDelivery.attempt_count == expected_attempt_count,
+            )
         await session.execute(
-            update(ScheduleChangeDelivery)
-            .where(ScheduleChangeDelivery.id == delivery_id)
-            .values(
+            statement.values(
                 status=OUTBOX_SENT,
                 sent_at=now,
                 locked_at=None,
@@ -230,14 +310,19 @@ async def reschedule_schedule_change_delivery(
     delay_seconds: float,
     terminal: bool = False,
     now_utc: datetime | None = None,
+    expected_attempt_count: int | None = None,
 ) -> None:
     now = now_utc or datetime.now(UTC)
     next_attempt_at = now + timedelta(seconds=max(0.0, delay_seconds))
     async with get_session() as session:
+        statement = update(ScheduleChangeDelivery).where(ScheduleChangeDelivery.id == delivery_id)
+        if expected_attempt_count is not None:
+            statement = statement.where(
+                ScheduleChangeDelivery.status == OUTBOX_PROCESSING,
+                ScheduleChangeDelivery.attempt_count == expected_attempt_count,
+            )
         await session.execute(
-            update(ScheduleChangeDelivery)
-            .where(ScheduleChangeDelivery.id == delivery_id)
-            .values(
+            statement.values(
                 status=OUTBOX_FAILED if terminal else OUTBOX_PENDING,
                 next_attempt_at=next_attempt_at,
                 locked_at=None,
@@ -246,3 +331,29 @@ async def reschedule_schedule_change_delivery(
             )
         )
         await session.commit()
+
+
+async def get_schedule_outbox_health(now_utc: datetime | None = None) -> dict:
+    """Low-cardinality operational counters, without recipient or message data."""
+    now = now_utc or datetime.now(UTC)
+    async with get_session() as session:
+        result = await session.execute(
+            select(
+                ScheduleChangeDelivery.status,
+                func.count(),
+                func.min(ScheduleChangeDelivery.created_at),
+            )
+            .where(ScheduleChangeDelivery.status != OUTBOX_SENT)
+            .group_by(ScheduleChangeDelivery.status)
+        )
+        counts = {OUTBOX_PENDING: 0, OUTBOX_PROCESSING: 0, OUTBOX_FAILED: 0}
+        oldest = None
+        for status, count, created_at in result.all():
+            counts[status] = int(count)
+            if status in {OUTBOX_PENDING, OUTBOX_PROCESSING} and created_at is not None:
+                aware = created_at.replace(tzinfo=UTC) if created_at.tzinfo is None else created_at
+                oldest = min(oldest, aware) if oldest is not None else aware
+    return {
+        **counts,
+        "oldest_pending_age_seconds": max(0, int((now - oldest).total_seconds())) if oldest else 0,
+    }

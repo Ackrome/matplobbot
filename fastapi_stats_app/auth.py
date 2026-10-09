@@ -53,6 +53,12 @@ JWT_LEEWAY_SECONDS = max(0, int(os.getenv("JWT_LEEWAY_SECONDS", "0")))
 TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS = int(
     os.getenv("TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS", str(60 * 60 * 24))
 )
+TELEGRAM_WIDGET_AUTH_MAX_AGE_SECONDS = max(
+    1, int(os.getenv("TELEGRAM_WIDGET_AUTH_MAX_AGE_SECONDS", "86400"))
+)
+TELEGRAM_WIDGET_AUTH_CLOCK_SKEW_SECONDS = max(
+    0, int(os.getenv("TELEGRAM_WIDGET_AUTH_CLOCK_SKEW_SECONDS", "60"))
+)
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login", auto_error=False)
@@ -100,6 +106,29 @@ def decode_access_token(token: str) -> dict[str, Any]:
     )
 
 
+def create_account_export_token(account_id: int) -> str:
+    """Short-lived export receipt; its audience deliberately cannot authenticate requests."""
+    now = datetime.now(UTC)
+    return jwt.encode(
+        {"sub": str(account_id), "iat": now, "nbf": now,
+         "exp": now + timedelta(minutes=15), "iss": JWT_ISSUER,
+         "aud": f"{JWT_AUDIENCE}:account-export"},
+        SECRET_KEY, algorithm=ALGORITHM,
+    )
+
+
+def verify_account_export_token(token: str, account_id: int) -> bool:
+    try:
+        claims = jwt.decode(
+            token, SECRET_KEY, algorithms=[ALGORITHM], issuer=JWT_ISSUER,
+            audience=f"{JWT_AUDIENCE}:account-export",
+            options={"require": ["sub", "iat", "nbf", "exp", "iss", "aud"]},
+        )
+        return claims["sub"] == str(account_id)
+    except JWTError:
+        return False
+
+
 def resolve_account_role(account: WebAccount) -> str:
     if account.role == "admin":
         return "admin"
@@ -114,6 +143,14 @@ def verify_telegram_authorization(data: dict) -> bool:
 
     received_hash = data.get("hash")
     if not received_hash:
+        return False
+
+    # A valid signature alone does not expire an intercepted login payload.
+    auth_date = data.get("auth_date")
+    if isinstance(auth_date, bool) or not isinstance(auth_date, int):
+        return False
+    age = int(time.time()) - auth_date
+    if age > TELEGRAM_WIDGET_AUTH_MAX_AGE_SECONDS or age < -TELEGRAM_WIDGET_AUTH_CLOCK_SKEW_SECONDS:
         return False
 
     data_check_arr = []

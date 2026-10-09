@@ -18,6 +18,146 @@ This page is a full feature map of the project: bot, website, API, scheduler, wo
 
 This document is an OKF concept inside the [documentation bundle](index.md). It is kept as the global project wiki source and is mirrored to GitHub Wiki by the existing wiki sync workflow.
 
+## Selected Growth Improvements (2026-10-09)
+
+This implementation covers review items 1–7, 13, 20, 23–25, 27, and 34–35.
+It adds the following behavior to the existing product. Historical sprint sections
+below describe earlier contracts; the refinements in this section take precedence.
+
+### Authentication, account data and search
+
+- Telegram Login Widget verification requires an integer `auth_date`, checks its
+  age after signature validation, and rejects expired or future payloads.
+  `TELEGRAM_WIDGET_AUTH_MAX_AGE_SECONDS` defaults to 86400 and
+  `TELEGRAM_WIDGET_AUTH_CLOCK_SKEW_SECONDS` to 60.
+- Login/registration preserve a same-origin `next` path, including query/hash,
+  and reject external/protocol-relative redirects. Studio sends unauthenticated
+  users through this flow. Signed-in navbar users can open `/account`.
+- `GET /api/auth/account/export` downloads owner-scoped JSON with Studio text
+  and base64 assets, preferences, linked Telegram data and retained product
+  events. Secrets, mailbox message buffers, generated build caches, shared
+  indexes and external backups are excluded. The browser adds this account's
+  local Studio drafts to the downloaded export.
+- `DELETE /api/auth/account` requires `confirmation: "DELETE"` and an owner-bound
+  `export_token` from a successful export, valid for 15 minutes. It atomically
+  removes the WebAccount and linked Telegram owner, with dependent data removed
+  by foreign-key cascades. The UI requires explicit scope acknowledgement and
+  clears the current account's browser drafts after success. Other devices,
+  external Telegram messages, backups and external logs have separate lifecycles.
+- Telegram-only reset is a separate private-chat operation. It preserves a
+  linked website account and the minimum identity needed to retain project access.
+  Full erasure invalidates old JWTs through database-backed authentication.
+  Existing stats WebSockets revalidate before each payload and at most every
+  15 seconds while idle; validation has a two-second deadline and fails closed.
+- Full erasure also attempts bounded Redis job cleanup, queued task revocation
+  and result forgetting. Active workers are not forcibly killed. Transient
+  results may remain until their 24-hour expiry but cannot be read by the removed
+  account.
+- Global/library/GitHub search distinguish available-but-empty, partly
+  unavailable and wholly unavailable sources. Cached data can still produce a
+  useful partial result. A backend failure is no longer presented as no matches.
+
+### Studio durability and rendering
+
+- A serialized session layer captures file identity with each save. Switching
+  documents, building, exporting or sending waits for the pending save. A failed
+  save preserves the current editor and blocks the transition; retry is explicit.
+  Account-scoped local drafts survive reload and offline failures. Storage quota
+  or blocked browser storage produces a warning rather than silently claiming
+  that recovery is available.
+- The initial editor is a working textarea on desktop and mobile. Monaco upgrades
+  it asynchronously while preserving contents. Its AMD loader is isolated in
+  `/studio-editor.html`, which uses the same enforcing CSP as Studio. Markdown,
+  KaTeX, Mermaid and desktop split layout load only when needed, with pinned
+  versions/SRI and retryable failures. Monaco failure leaves the textarea usable.
+- `POST /api/studio/jobs` queues a LaTeX/Markdown/Mermaid snippet; `POST
+  /api/studio/projects/{id}/jobs` snapshots saved project files. Both return 202
+  with a job ID and expiry. `GET /api/studio/jobs/{id}` is owner-scoped and returns
+  queued/running/success/error. Reload resumes polling without submitting another
+  task. Jobs/results expire after 24 hours; foreign/expired jobs return 404.
+- Project type selects the correct worker. LaTeX uses all project files and
+  persists incremental build artifacts only while the current source still
+  matches the submitted fingerprint. Cache bytes stay internal. Markdown PDF
+  and Mermaid PNG builds consume the main text file; auxiliary project assets
+  are not bundled by those workers. Existing synchronous routes remain available.
+- Studio UI uses the shared RU/EN dictionaries, semantic labels, live status,
+  keyboard-accessible mobile tabs, modal focus trapping/return, and visible focus.
+  The shared command palette receives the same keyboard/focus treatment. A
+  completed preview is marked stale when its source changes.
+
+### Durable schedules and comparison
+
+- Daily messages now use the existing PostgreSQL delivery outbox, with migration
+  `f6c7d8e9f0a1` adding `delivery_kind` and `expires_at`. Daily identities combine
+  user, entity and target date; overlapping Web/Telegram profiles do not enqueue
+  duplicate deliveries. The original scheduled occurrence determines the target
+  date, including catch-up after local midnight.
+- `SCHEDULE_DAILY_CATCHUP_SECONDS` defaults to six hours and is bounded below
+  24 hours. Missed occurrences within that window are replayed; expired messages
+  are not sent. A worker abandoned on its final attempt is finalized as failed,
+  and attempt fencing prevents a superseded worker from overwriting a newer
+  delivery attempt. Telegram's ambiguous acknowledgement can still cause a
+  duplicate external message; the outbox is not an exactly-once transport.
+- The schedule page compares up to six explicitly chosen groups, lecturers or
+  auditoriums for up to 14 days within the currently cached university semester,
+  preserving modules/lesson mode when adding the
+  currently open schedule. `POST /api/schedule/plan` returns overlaps, common free
+  intervals, source checks and completeness. It uses the existing schedule rate
+  limit. Timezone is Moscow in the UI and bot. A free interval means no lesson in
+  the selected sources, not guaranteed physical room availability.
+- Stale, missing or invalid source data makes a comparison incomplete and
+  suppresses free-window claims. Known conflicts are still shown with the warning.
+  `/plan`, `/conflicts` and `/free` expose the comparison for the private-chat
+  user's own active subscriptions over seven days.
+
+### Operational and product outcomes
+
+- Admin-only `GET /api/insights/operations` and `/api/insights/product?days=30`
+  feed the expandable panel on Stats. They expose aggregates, not raw account
+  events. The panel clears on logout and ignores responses from obsolete sessions.
+- Redis heartbeats record attempts, successes, failures and duration for daily
+  schedules, source refreshes, change scans, outbox delivery and compilation.
+  Unknown, stale and unavailable observations are distinct from success. A last
+  cache-write timestamp is explicitly not proof that every schedule is fresh.
+  Worker task results with `status: error` count as failed work even when Celery
+  completed the Python task. Heartbeat records expire after seven days.
+- Scheduler health includes queue/outbox signals. Pending/processing deliveries
+  whose age exceeds
+  `SCHEDULE_OUTBOX_ALERT_AGE_SECONDS` (default 1800) degrade health, as do stale or
+  failed monitored jobs. Historical failed deliveries remain visible as a count;
+  they do not make health permanently fail. The worker queue threshold remains
+  separately configurable.
+- Migration `f7d8e9f0a1b2` adds small allowlisted product events: search outcomes,
+  first recorded subscriptions, and asynchronous Studio outcomes. Events contain
+  account foreign keys, event names, timestamps and optional deduplication keys;
+  no query/document text, names, IP addresses or credentials. These internal
+  identifiers make erasure possible; the data is not described as anonymous.
+- Events are retained for 90 days with nightly cleanup and account-delete
+  cascades. Historical website activity and later linked Telegram activity are
+  normalized to one actor during aggregation. A returning account has events on
+  two different UTC dates in the selected period. Search success means a completed
+  search with results; a successful Studio outcome means the owner opened an
+  asynchronous result. These metrics are not a complete website attendance count.
+- Jenkins smoke checks now require successful configured admin login plus an
+  anonymous access denial. WebSocket upgrade checks target nginx on port 8080
+  (and the public URL when configured), rather than the scheduler health port.
+
+### Rollout and verification
+
+Apply both additive Alembic revisions through `alembic upgrade head` before the
+updated services begin using them; restart API, scheduler and worker together so
+the job/result contract and 24-hour expiry agree. Frontend asset/SW versions were
+bumped. Configuration defaults allow existing environments to start without new
+secrets. Do not infer that a local implementation has already been deployed.
+
+Regression coverage includes signed login age, account ownership/erasure and
+session revocation, partial search failures, catch-up across midnight, exhausted
+outbox attempts, interval calculations, serialized saves, resumed jobs and metrics
+aggregation. Browser scenarios cover mobile/desktop, RU/EN, simulated save/CDN
+failures, actual pinned preview libraries, auth redirects, account export gating,
+incomplete planning sources and logout during metric requests. Local controlled
+DB/queue doubles do not replace a real PostgreSQL/Celery deployment smoke test.
+
 ## Sprint 3 P2 Reliability And Security (2026-09-24)
 
 Sprint 3 closes BUG-03, BUG-06, BUG-09, SEC-03, SEC-04, PROD-01, ARCH-01, ARCH-03,
@@ -1696,8 +1836,10 @@ How to use:
 - Keep TatSu pinned below `5.7`: `ics==0.7.2` still uses the `buffer_class` parser option removed by later TatSu releases. Verify `from fastapi_stats_app.main import app` after dependency updates.
 - Studio upload and rename endpoints accept one safe filename component only;
   path separators, control characters, absolute paths and traversal attempts are rejected.
-- Schedule notification lookups compare the native PostgreSQL `TIME` value and
-  use the `notification_time/is_active` index. `REDIS_URL` is authoritative for the shared client,
+- Daily catch-up reads active Telegram profiles and computes their latest local
+  scheduled occurrence from the native PostgreSQL `TIME` value and timezone.
+  Exact-time notification lookups remain available for compatibility.
+  `REDIS_URL` is authoritative for the shared client,
   Celery, and bot FSM; `REDIS_HOST`, `REDIS_PORT`, and `REDIS_DB` are the compatibility fallback.
 - Generated Telegram inline-button hashes use the bounded local
   `CallbackPathCache` first and Redis keys named `callback_path:<hash>` as a

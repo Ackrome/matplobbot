@@ -4,6 +4,22 @@ const API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : "/api";
 const loginForm = document.getElementById("loginForm");
 const registerForm = document.getElementById("registerForm");
 
+// Never turn a login link into an open redirect or send ordinary users to admin Stats.
+function getAuthReturnPath(search = window.location.search, origin = window.location.origin) {
+    const raw = new URLSearchParams(search).get('next');
+    if (!raw || !raw.startsWith('/') || raw.startsWith('//') || /[\\\u0000-\u001f]/.test(raw)) return '/schedule';
+    try {
+        const target = new URL(raw, origin);
+        if (target.origin !== origin || /^\/(login|register)(\.html)?\/?$/.test(target.pathname)) return '/schedule';
+        return target.pathname + target.search + target.hash;
+    } catch (_) { return '/schedule'; }
+}
+document.querySelectorAll('a[href="/login"], a[href="/register"]').forEach(link => {
+    if (new URLSearchParams(window.location.search).has('next')) {
+        link.setAttribute('href', `${link.getAttribute('href')}?next=${encodeURIComponent(getAuthReturnPath())}`);
+    }
+});
+
 const AUTH_TEXT = {
     en: {
         telegramAuthError: "Telegram authorization failed",
@@ -64,7 +80,7 @@ window.handleTelegramLogin = async function handleTelegramLogin(telegramUser) {
             const data = await response.json();
             localStorage.setItem("jwt_token", data.access_token);
             window.dispatchEvent(new CustomEvent("mpb-auth-token-changed"));
-            window.location.href = "/schedule";
+            window.location.href = getAuthReturnPath();
             return;
         }
 
@@ -119,7 +135,7 @@ if (loginForm) {
                 const data = await response.json();
                 localStorage.setItem("jwt_token", data.access_token);
                 window.dispatchEvent(new CustomEvent("mpb-auth-token-changed"));
-                window.location.href = "/stats";
+                window.location.href = getAuthReturnPath();
                 return;
             }
 
@@ -176,7 +192,7 @@ if (registerForm) {
                     localStorage.setItem("jwt_token", data.access_token);
                     window.dispatchEvent(new CustomEvent("mpb-auth-token-changed"));
                     setTimeout(() => {
-                        window.location.href = "/stats";
+                        window.location.href = getAuthReturnPath();
                     }, 1000);
                 }
                 return;

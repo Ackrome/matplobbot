@@ -1,6 +1,10 @@
 # fastapi_stats_app/routers/auth_router.py
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,18 +20,55 @@ from shared_lib.schemas import (
     WebAccountCreate,
     WebAccountPreferencesUpdate,
 )
+from shared_lib.services.account_data import delete_account_data, export_account_data
 
 from ..auth import (
     create_access_token,
+    create_account_export_token,
     get_current_user,
     get_password_hash,
     parse_verified_telegram_webapp_init_data,
+    verify_account_export_token,
     verify_password,
     verify_telegram_authorization,
 )
 from ..config import ADMIN_USER_IDS, AUTH_PASSWORD_REGISTRATION_ENABLED
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+class AccountDeleteRequest(BaseModel):
+    confirmation: Literal["DELETE"]
+    export_token: str = Field(min_length=1, max_length=4096)
+
+
+@router.get("/account/export", summary="Download your account data before deletion")
+async def account_export(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session_dependency),
+):
+    try:
+        payload = await export_account_data(db, account_id=current_user["id"])
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Account not found") from exc
+    payload["deletion_token"] = create_account_export_token(current_user["id"])
+    return JSONResponse(payload, headers={
+        "Content-Disposition": 'attachment; filename="matplobbot-account.json"',
+        "Cache-Control": "no-store",
+    })
+
+
+@router.delete("/account", response_model=StatusResponse, summary="Permanently delete your full account")
+async def account_delete(
+    data: AccountDeleteRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session_dependency),
+):
+    if not verify_account_export_token(data.export_token, current_user["id"]):
+        raise HTTPException(status_code=409, detail="Download a fresh account export before deleting.")
+    if not await delete_account_data(db, current_user["id"]):
+        raise HTTPException(status_code=404, detail="Account not found")
+    return {"status": "success"}
 
 
 async def _issue_telegram_account_token(

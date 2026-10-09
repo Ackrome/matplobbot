@@ -18,6 +18,10 @@ from shared_lib.models import SearchDocument
 logger = logging.getLogger(__name__)
 
 
+class SearchUnavailableError(RuntimeError):
+    """The index could not be searched; this is not an empty successful result."""
+
+
 class TextSearchEngine:
     _instance = None
 
@@ -83,7 +87,7 @@ class TextSearchEngine:
                 rows = result.all()
             except Exception as e:
                 logger.error(f"Text search failed: {e}")
-                return []
+                raise SearchUnavailableError("Text search is temporarily unavailable") from e
 
         results = []
         for row in rows:

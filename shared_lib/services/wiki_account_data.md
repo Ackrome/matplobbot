@@ -1,0 +1,11 @@
+# Account data lifecycle
+
+`account_data.py` shares owner-scoped export and deletion between authenticated website routes and private Telegram settings.
+
+Public functions: `export_account_data(session, account_id=...)` exports website data and linked Telegram data; `get_telegram_web_account` resolves a Telegram owner's website identity; `delete_telegram_data` clears Telegram-owned rows while preserving a linked website account and minimal login identity; `delete_account_data` removes the website identity and linked Telegram owner atomically. Callers must authenticate the supplied owner IDs. For example, an authenticated route passes `current_user['id']`, never a client-selected target ID.
+
+Exports include Studio text and base64 assets, preferences, Telegram activity/subscriptions/favorites/mail connection metadata and product events. Password hashes, mailbox credentials/message buffers, calendar bearer secrets, generated build caches, shared indexes, operational logs and backups are excluded. Foreign-key cascades remove owned Studio, notification and event rows. Complete deletion invalidates old JWTs because authentication requires the WebAccount row to exist.
+
+SQLAlchemy models and PostgreSQL foreign-key constraints are essential dependencies. Deletion functions commit their session and must run only after explicit scope confirmation and an export offer/receipt. Full deletion does not erase old offline client snapshots, external Telegram messages, backups or external logs. Telegram-only deletion retains minimal identity when necessary to preserve access to website projects. Add newly introduced ownership tables to regression coverage and verify cascades in a disposable database; never test deletion on production data.
+
+Full deletion also attempts bounded cleanup of owner-scoped Redis Studio job metadata and revokes queued Celery tasks without terminating active worker processes. It forgets known results. If Redis/Celery cleanup is unavailable, transient data expires within the documented 24-hour result TTL; an active task may finish and repopulate its result until that expiry. Deleted accounts cannot authenticate to retrieve these results. Redis user caches are cleared best-effort and otherwise expire normally. These external cleanup failures do not undo an already committed database deletion.

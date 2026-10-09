@@ -3,7 +3,8 @@ import collections
 import hashlib
 import json
 import logging
-from datetime import UTC, datetime, timedelta
+import time
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -17,7 +18,6 @@ from shared_lib.database import (
     get_cached_schedule_snapshot,
     get_session,
     get_subscriptions_due_for_notification,
-    get_subscriptions_for_notification,
     get_unique_active_subscription_entities,
     get_user_settings,
     upsert_cached_schedule,
@@ -26,10 +26,13 @@ from shared_lib.html_tools import split_telegram_html_message
 from shared_lib.i18n import translator
 from shared_lib.redis_client import redis_client
 from shared_lib.request_context import generate_correlation_id, set_correlation_id
+from shared_lib.schedule_daily import daily_event_key, deduplicate_daily_recipients
 from shared_lib.schedule_outbox import (
     build_schedule_change_event_key,
     claim_schedule_change_deliveries,
     commit_schedule_change_transition,
+    enqueue_daily_schedule_delivery,
+    get_existing_schedule_deliveries,
     mark_schedule_change_delivery_sent,
     reschedule_schedule_change_delivery,
 )
@@ -45,6 +48,7 @@ from shared_lib.services.university_api import RuzAPIClient, RuzAPIError
 
 from .config import (
     BOT_TOKEN,
+    SCHEDULE_DAILY_CATCHUP_SECONDS,
     SCHEDULE_OUTBOX_BASE_DELAY_SECONDS,
     SCHEDULE_OUTBOX_MAX_ATTEMPTS,
     TELEGRAM_REQUEST_RETRY_ATTEMPTS,
@@ -211,48 +215,61 @@ async def deliver_pending_schedule_change_notifications(
     telegram_request_kwargs: dict | None = None,
 ) -> dict[str, int]:
     """Deliver one claimed outbox batch and reschedule only failed recipients."""
-    deliveries = await claim_schedule_change_deliveries(max_attempts=SCHEDULE_OUTBOX_MAX_ATTEMPTS)
-    summary = {"claimed": len(deliveries), "sent": 0, "rescheduled": 0, "failed": 0}
-    for delivery in deliveries:
-        delivery_id = int(delivery["id"])
-        attempt_count = int(delivery.get("attempt_count") or 1)
-        error_message = "Telegram API did not accept the message"
-        try:
-            result = await send_telegram_message(
-                http_session,
-                int(delivery["chat_id"]),
-                str(delivery["payload"]),
-                delivery.get("message_thread_id"),
-                request_kwargs=telegram_request_kwargs,
+    summary = {"claimed": 0, "sent": 0, "rescheduled": 0, "failed": 0}
+    batch_deadline = time.monotonic() + 45
+    # Claim immediately before sending. Reserving 100 rows up front lets later
+    # recipients' leases expire while the worker is still sending earlier rows.
+    while summary["claimed"] < 100 and time.monotonic() < batch_deadline:
+        deliveries = await claim_schedule_change_deliveries(
+            limit=1, max_attempts=SCHEDULE_OUTBOX_MAX_ATTEMPTS
+        )
+        if not deliveries:
+            break
+        summary["claimed"] += len(deliveries)
+        for delivery in deliveries:
+            delivery_id = int(delivery["id"])
+            attempt_count = int(delivery.get("attempt_count") or 1)
+            error_message = "Telegram API did not accept the message"
+            try:
+                async with asyncio.timeout(840):
+                    result = await send_telegram_message(
+                        http_session,
+                        int(delivery["chat_id"]),
+                        str(delivery["payload"]),
+                        delivery.get("message_thread_id"),
+                        request_kwargs=telegram_request_kwargs,
+                    )
+                if result is not None:
+                    await mark_schedule_change_delivery_sent(
+                        delivery_id, expected_attempt_count=attempt_count
+                    )
+                    summary["sent"] += 1
+                    continue
+            except Exception as exc:
+                error_message = f"{type(exc).__name__}: {exc}"
+                logger.error(
+                    "Schedule outbox delivery %s failed unexpectedly: %s",
+                    delivery_id,
+                    exc,
+                    exc_info=True,
+                )
+
+            terminal = attempt_count >= SCHEDULE_OUTBOX_MAX_ATTEMPTS
+            delay_seconds = min(
+                SCHEDULE_OUTBOX_BASE_DELAY_SECONDS * (2 ** max(0, attempt_count - 1)),
+                6 * 60 * 60,
             )
-            if result is not None:
-                await mark_schedule_change_delivery_sent(delivery_id)
-                summary["sent"] += 1
-                continue
-        except Exception as exc:
-            error_message = f"{type(exc).__name__}: {exc}"
-            logger.error(
-                "Schedule outbox delivery %s failed unexpectedly: %s",
+            await reschedule_schedule_change_delivery(
                 delivery_id,
-                exc,
-                exc_info=True,
+                error=error_message,
+                delay_seconds=delay_seconds,
+                terminal=terminal,
+                expected_attempt_count=attempt_count,
             )
+            summary["failed" if terminal else "rescheduled"] += 1
 
-        terminal = attempt_count >= SCHEDULE_OUTBOX_MAX_ATTEMPTS
-        delay_seconds = min(
-            SCHEDULE_OUTBOX_BASE_DELAY_SECONDS * (2 ** max(0, attempt_count - 1)),
-            6 * 60 * 60,
-        )
-        await reschedule_schedule_change_delivery(
-            delivery_id,
-            error=error_message,
-            delay_seconds=delay_seconds,
-            terminal=terminal,
-        )
-        summary["failed" if terminal else "rescheduled"] += 1
-
-    if deliveries:
-        logger.info("Schedule change outbox batch finished: %s", summary)
+    if summary["claimed"]:
+        logger.info("Schedule outbox batch finished: %s", summary)
     return summary
 
 
@@ -261,202 +278,92 @@ async def send_daily_schedules(
     ruz_api_client: RuzAPIClient,
     telegram_request_kwargs: dict | None = None,
 ):
-    """
-    This job runs every minute, checks for subscriptions for the current time,
-    and sends the schedule for the next day.
-    """
+    """Durably enqueue due local-date schedules, including a bounded restart catch-up."""
+    now = datetime.now(UTC)
     correlation_id = generate_correlation_id(prefix="sched-daily")
     set_correlation_id(correlation_id)
-    logger.info("Starting daily schedules job (cid=%s).", correlation_id)
-
-    # Use timezone-aware datetime for Moscow
-    moscow_tz = ZoneInfo("Europe/Moscow")
-    now_in_moscow = datetime.now(moscow_tz)
-    # The schedule should be for the next day
-    target_date = now_in_moscow.date() + timedelta(days=1)
-    start_date, end_date = target_date, target_date  # Fetch for a single day
-    start_date_str = start_date.strftime("%Y-%m-%d")
-    end_date_str = end_date.strftime("%Y-%m-%d")
-    current_time_str = now_in_moscow.strftime("%H:%M")
-
-    try:
-        subscriptions = await get_subscriptions_due_for_notification(datetime.now(UTC))
-    except Exception:
-        # Keep the old Moscow lookup as a safe compatibility path while a
-        # rolling deployment is applying the profile migration.
-        subscriptions = await get_subscriptions_for_notification(current_time_str)
-    if not subscriptions:
-        return
-    grouped_subscriptions = collections.defaultdict(list)
-    for sub in subscriptions:
-        if sub.get("delivery_mode", "telegram") != "telegram":
-            continue
-        entity_key = (sub["entity_type"], sub["entity_id"])
-        grouped_subscriptions[entity_key].append(sub)
-
-    # A user can keep several subscriptions for one entity. One Telegram
-    # message per user/entity is the contract; prefer a private chat when it
-    # is present and otherwise keep the first recipient row.
-    for entity_key, entity_subscriptions in list(grouped_subscriptions.items()):
-        recipients: dict[int, dict] = {}
-        for sub in entity_subscriptions:
-            user_id = int(sub["user_id"])
-            previous = recipients.get(user_id)
-            if previous is None or sub.get("chat_id") == user_id:
-                recipients[user_id] = sub
-        grouped_subscriptions[entity_key] = list(recipients.values())
-
-    logger.info(
-        "Found %s subscriptions across %s unique entities for %s (cid=%s).",
-        len(subscriptions),
-        len(grouped_subscriptions),
-        current_time_str,
-        correlation_id,
+    subscriptions = await get_subscriptions_due_for_notification(
+        now, catchup_seconds=SCHEDULE_DAILY_CATCHUP_SECONDS
     )
-
-    entity_fetch_successes = 0
-    entity_fetch_failures = 0
-    entity_cache_fallbacks = 0
-    entity_processing_failures = 0
-    subscriber_attempts = 0
-    delivery_successes = 0
-    delivery_failures = 0
-
-    for entity_key, subs_for_entity in grouped_subscriptions.items():
-        entity_type, entity_id = entity_key
-        entity_name_for_log = subs_for_entity[0].get("entity_name", "Unknown")
-
+    subscriptions = deduplicate_daily_recipients(subscriptions)
+    keys = [
+        (daily_event_key(sub["entity_type"], sub["entity_id"], sub["target_date"]), sub["user_id"])
+        for sub in subscriptions
+    ]
+    existing = await get_existing_schedule_deliveries(keys)
+    grouped = collections.defaultdict(list)
+    for sub, key in zip(subscriptions, keys, strict=True):
+        if key not in existing:
+            grouped[(sub["entity_type"], str(sub["entity_id"]), sub["target_date"])].append(sub)
+    prepared = 0
+    failures = 0
+    for (entity_type, entity_id, target_date), recipients in grouped.items():
+        using_cache = False
+        checked_at = None
         try:
-            logger.info(
-                "Fetching schedule for entity '%s' (%s:%s) for %s subscribers (cid=%s).",
-                entity_name_for_log,
-                entity_type,
-                entity_id,
-                len(subs_for_entity),
-                correlation_id,
-            )
-            using_cached_schedule = False
-            source_checked_at = None
             try:
                 schedule_data = await ruz_api_client.get_schedule(
-                    entity_type, entity_id, start=start_date_str, finish=end_date_str
+                    entity_type,
+                    entity_id,
+                    start=target_date.isoformat(),
+                    finish=target_date.isoformat(),
                 )
-                entity_fetch_successes += 1
-            except Exception as fetch_error:
-                entity_fetch_failures += 1
-                schedule_data, source_checked_at = await get_cached_schedule_snapshot(
+                if not isinstance(schedule_data, list):
+                    raise ValueError("Unexpected schedule response")
+            except Exception:
+                schedule_data, checked_at = await get_cached_schedule_snapshot(
                     entity_type, entity_id
                 )
                 if schedule_data is None:
-                    logger.error(
-                        "Daily schedule has no live or cached data for '%s' (%s:%s, cid=%s): %s",
-                        entity_name_for_log,
-                        entity_type,
-                        entity_id,
-                        correlation_id,
-                        fetch_error,
-                    )
+                    failures += len(recipients)
+                    logger.warning("No source for daily schedule %s:%s", entity_type, entity_id)
                     continue
-                using_cached_schedule = True
-                entity_cache_fallbacks += 1
-                logger.warning(
-                    "Daily schedule is using cached data for '%s' (%s:%s, checked_at=%s, cid=%s): %s",
-                    entity_name_for_log,
-                    entity_type,
-                    entity_id,
-                    source_checked_at,
-                    correlation_id,
-                    fetch_error,
-                )
-
-            for sub in subs_for_entity:
-                subscriber_attempts += 1
+                using_cache = True
+            for sub in recipients:
                 try:
                     lang = await translator.get_language(sub["user_id"], sub["chat_id"])
-                    recipient_chat_id = sub["chat_id"]
-                    thread_id = sub.get("message_thread_id")
-
-                    formatted_text = await format_schedule(
+                    payload = await format_schedule(
                         schedule_data,
                         lang,
                         sub["entity_name"],
-                        sub["entity_type"],
+                        entity_type,
                         sub["user_id"],
                         start_date=target_date,
                         is_week_view=False,
                         subscription_id=sub["id"],
                         lesson_mode=sub.get("lesson_mode", "all"),
                     )
-                    if using_cached_schedule:
-                        checked_at = _format_cached_schedule_timestamp(
-                            source_checked_at,
-                            sub.get("timezone") or "Europe/Moscow",
-                        )
-                        cache_warning = translator.gettext(
+                    if using_cache:
+                        warning = translator.gettext(
                             lang,
                             "schedule_daily_cache_warning",
-                            checked_at=checked_at,
+                            checked_at=_format_cached_schedule_timestamp(
+                                checked_at, sub.get("timezone") or "Europe/Moscow"
+                            ),
                         )
-                        formatted_text = f"{formatted_text}\n\n{cache_warning}"
-                    send_result = await send_telegram_message(
-                        http_session,
-                        recipient_chat_id,
-                        formatted_text,
-                        thread_id,
-                        request_kwargs=telegram_request_kwargs,
+                        payload = f"{payload}\n\n{warning}"
+                    prepared += await enqueue_daily_schedule_delivery(
+                        event_key=daily_event_key(entity_type, entity_id, target_date),
+                        subscription=sub,
+                        payload=payload,
                     )
-                    if send_result is None:
-                        delivery_failures += 1
-                    else:
-                        delivery_successes += 1
-                    await asyncio.sleep(0.1)
-                except Exception as e:
-                    delivery_failures += 1
-                    logger.error(
-                        "Failed to send to individual subscriber (sub_id: %s, chat_id: %s, cid=%s): %s",
-                        sub["id"],
-                        sub["chat_id"],
-                        correlation_id,
-                        e,
-                        exc_info=True,
-                    )
-
-        except Exception as e:
-            entity_processing_failures += 1
-            logger.error(
-                "Failed to process entity group '%s' (cid=%s): %s",
-                entity_name_for_log,
-                correlation_id,
-                e,
-                exc_info=True,
-            )
-
-    logger.info(
-        "Daily schedules job finished (cid=%s). Live fetches: %s succeeded, %s failed; cache fallbacks: %s; processing failures: %s. Deliveries: %s attempted, %s succeeded, %s failed.",
-        correlation_id,
-        entity_fetch_successes,
-        entity_fetch_failures,
-        entity_cache_fallbacks,
-        entity_processing_failures,
-        subscriber_attempts,
-        delivery_successes,
-        delivery_failures,
+                except Exception:
+                    failures += 1
+                    logger.exception("Failed to prepare daily subscription %s", sub["id"])
+        except Exception:
+            failures += len(recipients)
+            logger.exception("Daily source processing failed for %s:%s", entity_type, entity_id)
+    # This also retries messages from earlier ticks when no subscription is newly due.
+    delivery = await deliver_pending_schedule_change_notifications(
+        http_session, telegram_request_kwargs=telegram_request_kwargs
     )
-
-    if (
-        subscriber_attempts > 0
-        and delivery_successes == 0
-        and delivery_failures == subscriber_attempts
-    ):
-        raise RuntimeError("Daily schedules job failed: every attempted delivery failed.")
-
-    if (
-        grouped_subscriptions
-        and entity_fetch_successes == 0
-        and entity_cache_fallbacks == 0
-        and entity_fetch_failures == len(grouped_subscriptions)
-    ):
-        raise RuntimeError("Daily schedules job failed: could not fetch any schedule data.")
+    summary = {
+        "prepared": prepared,
+        "failed": failures + delivery["failed"] + delivery["rescheduled"],
+        "sent": delivery["sent"],
+    }
+    logger.info("Daily schedule job finished: %s", summary)
+    return summary
 
 
 async def check_for_schedule_updates(
@@ -471,17 +378,20 @@ async def check_for_schedule_updates(
     cache/hash checkpoint advances, so a Telegram outage or worker restart cannot silently discard
     an observed change.
     """
+    failures = 0
     logger.info("Starting schedule change detection job...")
 
     start_date_str, end_date_str = get_semester_bounds()
 
     try:
         try:
-            await deliver_pending_schedule_change_notifications(
+            delivery = await deliver_pending_schedule_change_notifications(
                 http_session,
                 telegram_request_kwargs=telegram_request_kwargs,
             )
+            failures += delivery.get("rescheduled", 0) + delivery.get("failed", 0)
         except Exception as exc:
+            failures += 1
             logger.error(
                 "Failed to drain the schedule-change outbox before polling: %s",
                 exc,
@@ -490,7 +400,7 @@ async def check_for_schedule_updates(
 
         all_subscriptions = await get_all_active_subscriptions()
         if not all_subscriptions:
-            return
+            return {"failed": failures}
 
         # Группируем подписки по сущностям (Group/Teacher/Auditorium)
         grouped_subscriptions = collections.defaultdict(list)
@@ -638,26 +548,33 @@ async def check_for_schedule_updates(
                 await asyncio.sleep(0.5)
 
             except RuzAPIError as e:
+                failures += 1
                 logger.warning(f"Change detection: RUZ API error for entity '{entity_name}': {e}")
             except Exception as e:
+                failures += 1
                 logger.error(
                     f"Change detection: Failed to process entity '{entity_name}': {e}",
                     exc_info=True,
                 )
 
         try:
-            await deliver_pending_schedule_change_notifications(
+            delivery = await deliver_pending_schedule_change_notifications(
                 http_session,
                 telegram_request_kwargs=telegram_request_kwargs,
             )
+            failures += delivery.get("rescheduled", 0) + delivery.get("failed", 0)
         except Exception as exc:
+            failures += 1
             logger.error(
                 "Failed to drain the schedule-change outbox after polling: %s",
                 exc,
                 exc_info=True,
             )
     except Exception as e:
+        failures += 1
         logger.error(f"Critical error in check_for_schedule_updates job: {e}", exc_info=True)
+
+    return {"failed": failures}
 
 
 async def update_schedule_cache(http_session: aiohttp.ClientSession, ruz_api_client: RuzAPIClient):
@@ -665,6 +582,7 @@ async def update_schedule_cache(http_session: aiohttp.ClientSession, ruz_api_cli
     Job to update the cached schedules in the database.
     Fetching the full semester schedule for all active subscriptions.
     """
+    failures = 0
     logger.info("Starting schedule cache update job...")
 
     start_date_str, end_date_str = get_semester_bounds()
@@ -696,14 +614,18 @@ async def update_schedule_cache(http_session: aiohttp.ClientSession, ruz_api_cli
                 await asyncio.sleep(0.5)
 
             except RuzAPIError as e:
+                failures += 1
                 logger.warning(f"Cache update failed for {entity_name}: {e}")
             except Exception as e:
+                failures += 1
                 logger.error(f"Error caching schedule for {entity_name}: {e}", exc_info=True)
 
         logger.info("Schedule cache update job finished.")
 
     except Exception as e:
+        failures += 1
         logger.error(f"Critical error in update_schedule_cache job: {e}", exc_info=True)
+    return {"failed": failures}
 
 
 async def refresh_schedule_entity_ids(ruz_api_client: RuzAPIClient):

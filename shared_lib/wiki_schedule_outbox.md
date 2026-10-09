@@ -1,5 +1,21 @@
 # `schedule_outbox.py`
 
+Daily delivery also uses this outbox. `enqueue_daily_schedule_delivery` stores
+the formatted message before sending, with a deterministic entity/date event key
+and an expiry. `get_existing_schedule_deliveries` prevents repeated source fetches
+for already prepared days. `get_schedule_outbox_health` returns status counts and
+the oldest outstanding age without exposing messages or recipients.
+
+Expired pending rows and abandoned processing rows with an exhausted final
+attempt are explicitly marked failed. Completion/reschedule supports an expected
+attempt count, preventing an old worker from overwriting a newer claim. Telegram
+has no idempotency key: a successful send followed by an ambiguous acknowledgement
+can still duplicate a message on retry; this is not an exactly-once guarantee.
+The delivery worker claims one recipient immediately before sending instead of
+reserving a large batch whose leases can expire while waiting. A pass stops
+claiming after 45 seconds or 100 recipients; an individual send is bounded to
+840 seconds, shorter than the 900-second recovery lease.
+
 ## Purpose
 
 Provides the durable PostgreSQL outbox used by the scheduler for Telegram notifications about

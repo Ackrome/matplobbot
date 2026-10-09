@@ -462,6 +462,7 @@ class BaseManager:
             "search_presets": self.search_center_manager.command_search_presets,
             "schedule": self.schedule_manager.cmd_schedule,
             "myschedule": self.schedule_manager.cmd_my_schedule,
+            "plan": self.schedule_manager.planning_manager.plan,
             "lec_search": self.github_manager.lec_search_command,
             "lec_all": self.github_manager.lec_all_command,
             "favorites": self.library_manager.favorites_command,

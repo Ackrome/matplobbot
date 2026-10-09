@@ -903,6 +903,9 @@ async def _upsert_canonical_calendar_profile(
             )
         )
     await db.commit()
+    from shared_lib.product_metrics import record_product_event
+
+    await record_product_event("subscription_created", telegram_user_id=telegram_id)
 
 
 async def _update_entity_profile_rows(

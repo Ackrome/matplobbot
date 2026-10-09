@@ -87,7 +87,11 @@ class ScheduleStates(StatesGroup):
 
 class ScheduleManager:
     def __init__(self, ruz_api_client: RuzAPIClient):
+        from .schedule_planning import SchedulePlanningManager
+
         self.router = Router()
+        self.planning_manager = SchedulePlanningManager(ruz_api_client)
+        self.router.include_router(self.planning_manager.router)
         self.api_client = ruz_api_client
         self.myschedule_filters = MyScheduleFilterService()
         self.schedule_freshness_settings = load_schedule_freshness_settings()

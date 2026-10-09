@@ -2,7 +2,7 @@ import asyncio
 import logging
 from typing import Any
 
-from shared_lib.services.semantic_search import search_engine
+from shared_lib.services.semantic_search import SearchUnavailableError, search_engine
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +14,21 @@ SEARCH_KIND_GLOBAL = "global"
 GLOBAL_SOURCE_LIBRARY = "library"
 GLOBAL_SOURCE_GITHUB = "github"
 GLOBAL_SOURCES = {GLOBAL_SOURCE_LIBRARY, GLOBAL_SOURCE_GITHUB}
+
+
+class SearchResults(list):
+    """List-compatible results carrying source availability independently of matches."""
+
+    def __init__(self, results=(), *, failed_sources=(), successful_sources=0):
+        super().__init__(results)
+        self.failed_sources = list(failed_sources)
+        self.successful_sources = successful_sources
+
+    @property
+    def status(self) -> str:
+        if self.failed_sources:
+            return "partial" if self.successful_sources else "unavailable"
+        return "ok" if self else "empty"
 
 
 def build_default_global_filters(repo_paths: list[str]) -> dict[str, list[str]]:
@@ -133,7 +148,7 @@ async def search_library_examples(query: str, limit: int = 20) -> list[dict[str,
         raw_results = await search_engine.search(query, source_type="lib", top_k=limit)
     except Exception as exc:
         logger.error("Library text search failed: %s", exc, exc_info=True)
-        return []
+        raise SearchUnavailableError("Library search is temporarily unavailable") from exc
 
     return [
         {
@@ -154,7 +169,7 @@ async def search_repository_markdown(
         )
     except Exception as exc:
         logger.error("GitHub text search failed for %s: %s", repo_path, exc, exc_info=True)
-        return []
+        raise SearchUnavailableError("Repository search is temporarily unavailable") from exc
 
     return format_github_search_results(raw_results, repo_path)
 
@@ -169,11 +184,15 @@ async def search_linked_github_markdown(
         *[
             search_repository_markdown(query, repo_path, limit=per_repo_limit)
             for repo_path in repo_paths
-        ]
+        ], return_exceptions=True,
     )
-    merged_results = [item for repo_results in results_per_repo for item in repo_results]
+    failed_sources = [repo for repo, result in zip(repo_paths, results_per_repo)
+                      if isinstance(result, BaseException)]
+    merged_results = [item for result in results_per_repo
+                      if not isinstance(result, BaseException) for item in result]
     merged_results.sort(key=lambda item: float(item.get("score") or 0), reverse=True)
-    return merged_results[:limit]
+    return SearchResults(merged_results[:limit], failed_sources=failed_sources,
+                         successful_sources=len(repo_paths) - len(failed_sources))
 
 
 async def search_global_sources(
@@ -181,11 +200,11 @@ async def search_global_sources(
 ) -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
     normalized_filters = normalize_global_filters(filters, repo_paths)
     search_tasks = []
+    source_names = []
 
     if GLOBAL_SOURCE_LIBRARY in normalized_filters["sources"]:
         search_tasks.append(search_library_examples(query, limit=limit))
-    else:
-        search_tasks.append(asyncio.sleep(0, result=[]))
+        source_names.append(GLOBAL_SOURCE_LIBRARY)
 
     if GLOBAL_SOURCE_GITHUB in normalized_filters["sources"] and normalized_filters["repo_paths"]:
         search_tasks.append(
@@ -196,8 +215,19 @@ async def search_global_sources(
                 limit=limit,
             )
         )
-    else:
-        search_tasks.append(asyncio.sleep(0, result=[]))
+        source_names.append(GLOBAL_SOURCE_GITHUB)
 
-    library_results, github_results = await asyncio.gather(*search_tasks)
-    return merge_global_results(library_results, github_results, limit=limit), normalized_filters
+    outcomes = await asyncio.gather(*search_tasks, return_exceptions=True)
+    merged, failed_sources, successful_sources = [], [], 0
+    for source, outcome in zip(source_names, outcomes):
+        if isinstance(outcome, BaseException):
+            failed_sources.append(source)
+        else:
+            merged.extend(outcome)
+            failed_sources.extend(getattr(outcome, "failed_sources", []))
+            successful_sources += getattr(outcome, "successful_sources", 1)
+    results = SearchResults(
+        merge_global_results(merged, [], limit=limit),
+        failed_sources=failed_sources, successful_sources=successful_sources,
+    )
+    return results, normalized_filters

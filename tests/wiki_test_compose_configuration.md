@@ -10,6 +10,7 @@ Protects the intentional relationship between the local and production Docker Co
 - Nginx and Caddy mounts remain aligned and read-only.
 - Every long-running service has bounded Docker `json-file` retention (`10m` × 3 files).
 - Bot, scheduler, and API production containers select the production logging defaults.
+- The extracted Jenkins smoke script runs against a fake curl function in an isolated temporary directory: expected admin HTTP 200 must reach the frontend WebSocket on port 8080; HTTP 401/500 login must fail the gate. No deployment host is contacted.
 
 ## Usage
 

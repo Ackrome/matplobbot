@@ -1,861 +1,507 @@
-﻿// main_site_frontend/js/studio.js
-
-const API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : "/api";
-let token = localStorage.getItem('jwt_token');
-
-function refreshAuthToken() {
-    token = localStorage.getItem('jwt_token');
-    return token;
-}
-
-async function ensureStudioAuth() {
-    if (refreshAuthToken()) return true;
-    if (window.mpbTelegramWebApp?.isActive && window.mpbTelegramAuthReady) {
-        await window.mpbTelegramAuthReady;
-        if (refreshAuthToken()) return true;
-    }
-
-    window.mpbPopup?.("Пожалуйста, авторизуйтесь для доступа к Студии.");
-    setTimeout(() => {
-        window.location.href = '/login';
-    }, 250);
-    return false;
-}
-
-const studioAuthReady = ensureStudioAuth();
-
+/* Studio: drafts and transport errors never silently discard the editor. */
+const API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : '/api';
+const $ = id => document.getElementById(id);
+const t = (key, params = {}) => window.mpbI18n?.t(`studio.${key}`, key, params) || key;
+let token, editor, session, sessionScope, splitInstance, currentBlobUrl, activeJob;
+let currentMode = 'quick', currentProjectId = null, currentFileId = null, currentProjectType = 'latex';
+let projectsList = [], projectFiles = [], previewGeneration = 0, editorGeneration = 0;
+let changingEditor = false, transitionBusy = false, saveTimer, transitionQueue = Promise.resolve();
+let currentStatus = 'ready', statusParams = {}, lastFocus, selectedMobilePane = 'editor-pane';
+let markdownConfigured = false, jobPolling = false, jobStarting = false, storageWarningShown = false;
+const TEMPLATES = {
+    latex: '\\documentclass[12pt,a4paper]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage[T2A]{fontenc}\n\\usepackage[russian]{babel}\n\\usepackage{amsmath,graphicx}\n\\begin{document}\n\\section{Introduction}\n$E=mc^2$\n\\end{document}',
+    markdown: '# Document\n\n$$E=mc^2$$\n',
+    mermaid: 'graph TD;\n    A[Start] --> B[Finish];',
+};
 const STUDIO_MARKDOWN_SANITIZE_CONFIG = Object.freeze({
-    ALLOWED_TAGS: [
-        'a', 'b', 'blockquote', 'br', 'code', 'del', 'div', 'em', 'h1', 'h2', 'h3',
-        'h4', 'h5', 'h6', 'hr', 'i', 'img', 'li', 'ol', 'p', 'pre', 'span',
-        'strong', 'table', 'tbody', 'td', 'th', 'thead', 'tr', 'ul',
-    ],
-    ALLOWED_ATTR: [
-        'alt', 'class', 'colspan', 'href', 'rel', 'rowspan', 'src', 'target', 'title',
-    ],
-    ALLOW_DATA_ATTR: false,
-    ALLOW_UNKNOWN_PROTOCOLS: false,
-    FORBID_TAGS: ['embed', 'form', 'iframe', 'input', 'math', 'object', 'script', 'style', 'svg'],
+    ALLOWED_TAGS: ['a','b','blockquote','br','code','del','div','em','h1','h2','h3','h4','h5','h6','hr','i','img','li','ol','p','pre','span','strong','table','tbody','td','th','thead','tr','ul'],
+    ALLOWED_ATTR: ['alt','class','colspan','href','rel','rowspan','src','target','title'],
+    ALLOW_DATA_ATTR: false, ALLOW_UNKNOWN_PROTOCOLS: false,
+    FORBID_TAGS: ['embed','form','iframe','input','math','object','script','style','svg'],
 });
-
-function studioTranslate(key, fallback, params = {}) {
-    return window.mpbI18n?.t(key, fallback, params) || fallback;
-}
-
 function getStudioHtmlSanitizer() {
     const sanitizer = window.DOMPurify;
-    if (!sanitizer || typeof sanitizer.sanitize !== 'function') {
-        throw new Error(studioTranslate(
-            'studio.preview.sanitizerUnavailable',
-            'Markdown preview sanitizer is unavailable.'
-        ));
-    }
+    if (!sanitizer?.sanitize) throw new Error(t('preview.sanitizerUnavailable'));
     return sanitizer;
 }
-
 function sanitizeStudioMarkdownPreview(markdownSource) {
     const renderedHtml = marked.parse(markdownSource);
     return getStudioHtmlSanitizer().sanitize(renderedHtml, STUDIO_MARKDOWN_SANITIZE_CONFIG);
 }
-
 function renderStudioPreviewError(container, error) {
     const errorElement = document.createElement('pre');
-    errorElement.className = 'text-red-500 text-xs p-4';
+    errorElement.className = 'studio-preview-error';
     errorElement.textContent = error instanceof Error ? error.message : String(error);
     container.replaceChildren(errorElement);
 }
-
-// Настройка парсера Markdown для поддержки локальных картинок
-const renderer = new marked.Renderer();
-renderer.image = function(tokenOrHref, legacyTitle, legacyText) {
-    // Marked 15 передаёт объект-токен; старые версии передавали три аргумента.
-    let href;
-    let title;
-    let text;
-    if (tokenOrHref && typeof tokenOrHref === 'object') {
-        ({ href = '', title = '', text = '' } = tokenOrHref);
-    } else {
-        href = String(tokenOrHref || '');
-        title = legacyTitle || '';
-        text = legacyText || '';
+function storage() { try { return window.localStorage; } catch (_) { return {getItem(){return null;},setItem(){throw new Error('Storage unavailable');},removeItem(){}}; } }
+async function ensureStudioAuth() {
+    token = storage().getItem('jwt_token');
+    if (!token && window.mpbTelegramAuthReady) { await window.mpbTelegramAuthReady; token = storage().getItem('jwt_token'); }
+    if (!token) {
+        window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search + window.location.hash)}`;
+        throw new Error(t('authRequired'));
     }
-    // Если мы в режиме проекта и ссылка относительная (не http/data)
-    if (currentMode === 'project' && currentProjectId && !href.startsWith('http') && !href.startsWith('data:')) {
-        // Убираем слеш в начале, если есть
-        let cleanHref = href.replace(/^\/+/, '');
-        // Формируем прямую ссылку на наш новый эндпоинт + токен
-        href = `${API_BASE}/studio/projects/${currentProjectId}/assets/${cleanHref}?token=${token}`;
-    }
-    return `<img src="${href}" alt="${text || ''}" title="${title || ''}" class="max-w-full rounded-lg shadow-sm my-2 mx-auto" />`;
-};
-marked.use({ renderer });
-// Состояние приложения
-let editor = null;
-let currentMode = 'quick'; // 'quick' | 'project'
-let currentProjectId = null;
-let currentFileId = null;
-let projectFiles =[];
-let splitInstance = null;
-let currentBlobUrl = null; // Ссылка на скомпилированный PDF для скачивания
-let projectsList =[];
-let currentProjectType = 'latex';
-
-window.addEventListener('mpb-theme-change', (e) => {
-    if (editor && window.monaco?.editor) {
-        monaco.editor.setTheme(e.detail.isDark ? 'vs-dark' : 'vs-light');
-    }
-});
-
-const TEMPLATES = {
-    latex: `\\documentclass[12pt, a4paper]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage[T2A]{fontenc}\n\\usepackage[russian]{babel}\n\\usepackage{amsmath, amssymb, graphicx}\n\n\\begin{document}\n\\section{Введение}\nПривет, LaTeX! Формула: \\[ E = mc^2 \\]\n\\end{document}`,
-    markdown: `# Live Markdown\nMath formulas work instantly: $$E = mc^2$$\n\nEdit this text!`,
-    mermaid: `graph TD;\n    A[Start] --> B{Works?};\n    B -- Yes --> C[Great!];\n    B -- No --> D[Find bug];`,
-};
-
-// === 1. UI INITIALIZATION (SPLIT.JS & MOBILE) ===
-function setupSplit() {
-    const isMobile = window.innerWidth < 768;
-
-    if (splitInstance) {
-        splitInstance.destroy();
-        splitInstance = null;
-    }
-
-    const sidebar = document.getElementById('sidebar-pane');
-    const editor = document.getElementById('editor-pane');
-    const viewer = document.getElementById('viewer-pane');
-
-    if (isMobile) {
-        // Мобильный режим: скрываем Split.js, управляем табами
-        sidebar.classList.add('w-full', 'absolute', 'inset-0', 'z-10');
-        editor.classList.add('w-full', 'absolute', 'inset-0', 'z-10');
-        viewer.classList.add('w-full', 'absolute', 'inset-0', 'z-10');
-
-        document.getElementById('mobile-tabs').classList.remove('hidden');
-        switchMobileTab('editor-pane'); // Открываем код по умолчанию
-    } else {
-        // Десктопный режим
-        sidebar.classList.remove('w-full', 'absolute', 'inset-0', 'z-10', 'hidden');
-        editor.classList.remove('w-full', 'absolute', 'inset-0', 'z-10', 'hidden');
-        viewer.classList.remove('w-full', 'absolute', 'inset-0', 'z-10', 'hidden');
-        document.getElementById('mobile-tabs').classList.add('hidden');
-
-        if (currentMode === 'project') {
-            sidebar.classList.remove('hidden');
-            splitInstance = Split(['#sidebar-pane', '#editor-pane', '#viewer-pane'], {
-                sizes: [20, 40, 40], minSize:[150, 300, 300], gutterSize: 6, cursor: 'col-resize'
-            });
-        } else {
-            sidebar.classList.add('hidden');
-            splitInstance = Split(['#editor-pane', '#viewer-pane'], {
-                sizes:[50, 50], minSize: [300, 300], gutterSize: 6, cursor: 'col-resize'
-            });
-        }
-    }
+    if (sessionScope && MpbStudioSession.accountScope(token) !== sessionScope) throw new Error(t('sessionChanged'));
+    return true;
 }
-setupSplit();
-window.addEventListener('resize', () => {
-    // Простейший debounce для resize
-    clearTimeout(window.resizeTimer);
-    window.resizeTimer = setTimeout(setupSplit, 250);
-});
-
-// Логика переключения мобильных табов
-window.switchMobileTab = function(targetPaneId) {
-    const panes = ['sidebar-pane', 'editor-pane', 'viewer-pane'];
-
-    panes.forEach(pane => {
-        const el = document.getElementById(pane);
-        const btn = document.getElementById(`tab-btn-${pane.split('-')[0]}`);
-
-        if (pane === targetPaneId) {
-            el.classList.remove('hidden');
-            btn.classList.replace('text-slate-500', 'text-blue-600');
-            btn.classList.replace('border-transparent', 'border-blue-600');
-            if (pane === 'editor-pane' && editor) setTimeout(() => editor.layout(), 100);
-        } else {
-            el.classList.add('hidden');
-            btn.classList.replace('text-blue-600', 'text-slate-500');
-            btn.classList.replace('border-blue-600', 'border-transparent');
-        }
-    });
-};
-
-// === 2. MONACO EDITOR + INTELLISENSE INIT ===
-require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.38.0/min/vs' }});
-require(['vs/editor/editor.main'], function() {
-
-    // Регистрируем умные сниппеты (Snippets) для LaTeX
-    monaco.languages.registerCompletionItemProvider('latex', {
-        provideCompletionItems: function(model, position) {
-            const suggestions =[
-                {
-                    label: '\\begin',
-                    kind: monaco.languages.CompletionItemKind.Snippet,
-                    insertText: '\\begin{${1:environment}}\n\t$0\n\\end{${1:environment}}',
-                    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                    documentation: 'Вставить окружение LaTeX'
-                },
-                {
-                    label: '\\section',
-                    kind: monaco.languages.CompletionItemKind.Snippet,
-                    insertText: '\\section{${1:title}}\n$0',
-                    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
-                },
-                {
-                    label: '\\includegraphics',
-                    kind: monaco.languages.CompletionItemKind.Snippet,
-                    insertText: '\\includegraphics[width=${1:0.8}\\textwidth]{${2:image.png}}',
-                    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
-                }
-            ];
-            return { suggestions: suggestions };
-        }
-    });
-
-    editor = monaco.editor.create(document.getElementById('monaco-container'), {
-        value: TEMPLATES.latex,
-        language: 'latex',
-        theme: document.documentElement.classList.contains('dark') ? 'vs-dark' : 'vs-light',
-        automaticLayout: true,
-        wordWrap: 'on',
-        minimap: { enabled: false },
-        fontSize: 14
-    });
-
-    // Автосохранение, Live Preview и подсчет слов (Debounce)
-    let timeout;
-    editor.onDidChangeModelContent(() => {
-        updateWordCount();
-        setStatus("Unsaved", false);
-        monaco.editor.setModelMarkers(editor.getModel(), 'latex',[]); // Очищаем маркеры ошибок при редактировании
-
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-            if (currentMode === 'project') saveCurrentFile();
-            updateLivePreview();
-        }, 1000);
-    });
-
-    // Биндим Ctrl+S
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, compileCurrent);
-
-    // Initialize Mermaid
+async function api(path, options = {}) {
+    await ensureStudioAuth();
+    const {timeoutMs=20000,...requestOptions}=options;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-        mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict' });
-    } catch(e) {
-        console.warn("Mermaid init error:", e);
-    }
-});
-
-// Обновление UI Статус-бара
-function setStatus(text, isSaving = false) {
-    document.getElementById('status-text').innerText = text;
-    document.getElementById('status-icon-saved').classList.toggle('hidden', isSaving || text !== 'Saved');
-    document.getElementById('status-icon-sync').classList.toggle('hidden', !isSaving);
+        const response = await fetch(`${API_BASE}${path}`, {...requestOptions, signal: controller.signal,
+            headers: {Authorization: `Bearer ${token}`, ...requestOptions.headers}});
+        if (!response.ok) {
+            let detail;
+            try { const body = await response.json(); detail = typeof body.detail === 'string' ? body.detail : null; } catch (_) { /* non-JSON proxy errors */ }
+            const error = new Error(detail || t(response.status === 401 ? 'authExpired' : 'requestFailed', {status: response.status}));
+            error.status = response.status;
+            throw error;
+        }
+        return response;
+    } catch (error) {
+        if (error.name === 'AbortError') throw new Error(t('networkTimeout'));
+        throw error;
+    } finally { clearTimeout(timer); }
 }
-
+function setStatus(key, params = {}) {
+    currentStatus = key; statusParams = params;
+    $('status-text').textContent = t(`status.${key}`, params);
+    $('status-icon-saved').classList.toggle('hidden', key !== 'saved');
+    $('status-icon-sync').classList.toggle('hidden', !['saving','uploading','creating'].includes(key));
+}
+function showError(error) {
+    $('error-text').textContent = error.message || String(error);
+    $('error-panel').classList.remove('hidden');
+    $('retry-studio-button').classList.remove('hidden');
+    setStatus('error');
+    if (editor && window.innerWidth<768) switchMobileTab('editor-pane');
+}
+function run(action) { return Promise.resolve().then(action).catch(showError); }
+function setEditorContent(value, readOnly = false) {
+    changingEditor = true;
+    editor.setValue(value);
+    editor.updateOptions({readOnly});
+    changingEditor = false;
+    updateWordCount();
+}
+function onEditorChange() {
+    if (changingEditor || !session) return;
+    session.edit(editor.getValue());
+    updateWordCount();
+    setStatus(currentMode === 'quick' ? 'localDraft' : 'unsaved');
+    $('pdf-stale').classList.toggle('hidden', !currentBlobUrl);
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+        if (currentMode === 'project') run(saveCurrentFile);
+        run(updateLivePreview);
+    }, 900);
+}
 function updateWordCount() {
     if (!editor) return;
-    const text = editor.getValue();
-    const chars = text.length;
-    const words = text.trim().split(/\s+/).filter(w => w.length > 0).length;
-    document.getElementById('doc-stats').innerText = `${words} words, ${chars} chars`;
+    const content = editor.getValue();
+    $('doc-stats').textContent = t('wordCount', {words: content.trim().split(/\s+/).filter(Boolean).length, chars: content.length});
 }
-
-// === 3. MODE SWITCHING (QUICK / PROJECT) ===
-document.getElementById('mode-quick').addEventListener('click', () => switchMode('quick'));
-document.getElementById('mode-project').addEventListener('click', async () => {
-    if (!(await ensureStudioAuth())) return;
-    switchMode('project');
-});
-document.getElementById('doc-type').addEventListener('change', (e) => setLanguage(e.target.value));
-document.getElementById('btn-send-tg').addEventListener('click', sendToTelegram);
-document.getElementById('btn-download-pdf').addEventListener('click', downloadPDF);
-document.getElementById('btn-download-zip').addEventListener('click', downloadZIP);
-document.getElementById('compile-btn').addEventListener('click', compileCurrent);
-document.getElementById('tab-btn-sidebar').addEventListener('click', () => switchMobileTab('sidebar-pane'));
-document.getElementById('tab-btn-editor').addEventListener('click', () => switchMobileTab('editor-pane'));
-document.getElementById('tab-btn-viewer').addEventListener('click', () => switchMobileTab('viewer-pane'));
-document.getElementById('create-project-button').addEventListener('click', createNewProject);
-document.getElementById('project-selector').addEventListener('change', (event) => openProject(event.target.value));
-document.getElementById('file-uploader').addEventListener('change', uploadAsset);
-document.getElementById('close-error-panel-button').addEventListener('click', () => {
-    document.getElementById('error-panel').classList.add('hidden');
-});
-document.getElementById('new-project-type').addEventListener('change', () => window.updateTemplateOptions());
-document.getElementById('cancel-create-project-button').addEventListener('click', closeCreateProjectModal);
-document.getElementById('submit-create-project-button').addEventListener('click', submitNewProject);
-
-function switchMode(mode) {
-    currentMode = mode;
-    const btnQ = document.getElementById('mode-quick');
-    const btnP = document.getElementById('mode-project');
-    const typeSelect = document.getElementById('doc-type');
-    const btnZip = document.getElementById('btn-download-zip');
-    const btnTg = document.getElementById('btn-send-tg');
-
-    if (mode === 'quick') {
-        btnQ.className = "px-3 py-1.5 text-sm font-medium rounded-md bg-white shadow-sm text-blue-700 transition-all dark:bg-slate-700 dark:text-blue-200";
-        btnP.className = "px-3 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all dark:text-slate-400 dark:hover:text-slate-200";
-        typeSelect.classList.remove('hidden');
-
-        btnZip.classList.add('hidden');
-        if (btnTg) btnTg.classList.add('hidden');
-
-        currentProjectId = null;
-        currentFileId = null;
-        setLanguage(typeSelect.value);
-    } else {
-        btnP.className = "px-3 py-1.5 text-sm font-medium rounded-md bg-white shadow-sm text-blue-700 transition-all dark:bg-slate-700 dark:text-blue-200";
-        btnQ.className = "px-3 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all dark:text-slate-400 dark:hover:text-slate-200";
-        typeSelect.classList.add('hidden');
-
-        btnZip.classList.remove('hidden');
-        if (btnTg) btnTg.classList.remove('hidden'); // <-- SHOW IN PROJECT MODE
-
-        loadProjects();
+function createFallbackEditor(content = '') {
+    const textarea = document.createElement('textarea');
+    textarea.className = 'studio-fallback-editor';
+    textarea.setAttribute('aria-label', t('editor'));
+    textarea.spellcheck = false;
+    textarea.value = content;
+    textarea.addEventListener('input', onEditorChange);
+    textarea.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); run(compileCurrent); } });
+    $('monaco-container').replaceChildren(textarea);
+    return {getValue:()=>textarea.value,setValue:value=>{textarea.value=value;},updateOptions:options=>{textarea.readOnly=Boolean(options.readOnly);},layout(){},getModel(){return null;},dispose(){textarea.remove();}};
+}
+async function upgradeEditor() {
+    if(editor?.getModel())return;
+    const generation = ++editorGeneration;
+    const frame=document.createElement('iframe');frame.className='studio-editor-frame';frame.title=t('editor');frame.hidden=true;
+    try {
+        await new Promise((resolve,reject) => {
+            const timeout=setTimeout(()=>reject(new Error(t('editorUnavailable'))),24000);
+            frame.onload=()=>{
+                const ready=frame.contentWindow.mpbStudioMonacoReady;
+                if(!ready){clearTimeout(timeout);reject(new Error(t('editorUnavailable')));return;}
+                ready.then(()=>{clearTimeout(timeout);resolve();},error=>{clearTimeout(timeout);reject(error);});
+            };
+            frame.onerror=()=>{clearTimeout(timeout);reject(new Error(t('editorUnavailable')));};
+            frame.src='/studio-editor.html';$('monaco-container').appendChild(frame);
+        });
+        if (generation !== editorGeneration) {frame.remove();return;}
+        const content = editor.getValue();
+        const previousEditor=editor;
+        window.monaco=frame.contentWindow.monaco;
+        frame.contentDocument.documentElement.classList.toggle('dark',document.documentElement.classList.contains('dark'));
+        frame.contentDocument.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();event.stopPropagation();window.mpbOpenCommandPalette?.();}},true);
+        frame.hidden=false;
+        const enhanced = monaco.editor.create(frame.contentDocument.getElementById('monaco-container'), {value:content,language:editorLanguage(),
+            theme:document.documentElement.classList.contains('dark')?'vs-dark':'vs-light',
+            automaticLayout:true,wordWrap:'on',minimap:{enabled:false},fontSize:14,readOnly:transitionBusy||Boolean(currentFile()?.is_binary),ariaLabel:t('editor')});
+        previousEditor.dispose();editor=enhanced;
+        monaco.languages.registerCompletionItemProvider('latex',{provideCompletionItems(){return {suggestions:[
+            {label:'\\begin',kind:monaco.languages.CompletionItemKind.Snippet,insertText:'\\begin{${1:environment}}\n\t$0\n\\end{${1:environment}}',insertTextRules:monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet},
+            {label:'\\section',kind:monaco.languages.CompletionItemKind.Snippet,insertText:'\\section{${1:title}}\n$0',insertTextRules:monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet},
+            {label:'\\includegraphics',kind:monaco.languages.CompletionItemKind.Snippet,insertText:'\\includegraphics[width=${1:0.8}\\textwidth]{${2:image.png}}',insertTextRules:monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet}
+        ]};}});
+        editor.onDidChangeModelContent(onEditorChange);
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,()=>run(compileCurrent));
+        $('editor-fallback-notice').classList.add('hidden');
+        performance.mark?.('studio-editor-ready');
+    } catch (_) {
+        frame.remove();
+        $('editor-fallback-notice').classList.remove('hidden');
+        // The textarea remains fully editable and participates in the same durable session.
     }
+}
+function currentFile() { return projectFiles.find(file=>file.id===currentFileId); }
+function editorLanguage() { return currentMode==='quick' ? ($('doc-type').value==='mermaid'?'plaintext':$('doc-type').value) : ({tex:'latex',sty:'latex',md:'markdown'}[currentFile()?.path.split('.').pop()]||'plaintext'); }
+function setModelLanguage() { if (window.monaco && editor.getModel()) monaco.editor.setModelLanguage(editor.getModel(),editorLanguage()); }
+async function saveCurrentFile() {
+    clearTimeout(saveTimer);
+    if (!session?.dirty()) return;
+    setStatus('saving');
+    await session.flush();
+    setStatus('saved');
+    $('retry-studio-button').classList.add('hidden');
+}
+function transition(action) {
+    const next = transitionQueue.catch(()=>{}).then(async()=>{
+        transitionBusy=true;
+        editor.updateOptions({readOnly:true});
+        try { await saveCurrentFile(); await action(); }
+        finally { transitionBusy=false; editor.updateOptions({readOnly:Boolean(currentMode==='project'&&(!currentProjectId||currentFile()?.is_binary))});renderProjectList(); }
+    });
+    transitionQueue=next;
+    return next;
+}
+function activateDocument(record) {
+    let restored = session.open(record);
+    if (restored.conflict) restored=session.resolveConflict(confirm(t('draftConflict')));
+    setEditorContent(restored.content);
+    setModelLanguage();
+    setStatus(restored.recovered?'recovered':record.projectId?'saved':'ready');
+    if (restored.recovered && record.projectId) saveTimer=setTimeout(()=>run(saveCurrentFile),900);
+    run(updateLivePreview);
+}
+function activateFile(id) {
+    const file=projectFiles.find(item=>item.id===id);
+    if (!file) return;
+    currentFileId=id;
+    if (file.is_binary) {
+        session.open({type:'binary',content:'',projectId:null});
+        setEditorContent(t('binaryFile',{name:file.path}),true);
+        setModelLanguage();
+    } else activateDocument({projectId:currentProjectId,fileId:id,type:currentProjectType,content:file.content||''});
+    renderFileList();
+}
+async function activateProject(id) {
+    const files=await (await api(`/studio/projects/${id}`)).json();
+    if (!Array.isArray(files)) throw new Error(t('invalidResponse'));
+    const preserveId=String(currentProjectId)===String(id)?currentFileId:null;
+    currentMode='project';
+    currentProjectId=id;
+    projectFiles=files;
+    currentProjectType=projectsList.find(project=>String(project.id)===String(id))?.type||'latex';
+    currentFileId=null;
+    $('project-selector').value=id;
+    resetPreview();
+    const file=files.find(item=>item.id===preserveId)||files.find(item=>item.is_main)||files[0];
+    if (file) activateFile(file.id);
+    else { session.open({type:'empty',content:''});setEditorContent('',true);renderFileList(); }
+}
+function openProject(id) { return transition(()=>activateProject(id)); }
+function openFile(id) { return transition(()=>activateFile(id)); }
+async function loadProjects() {
+    const projects=await (await api('/studio/projects')).json();
+    if (!Array.isArray(projects)) throw new Error(t('invalidResponse'));
+    projectsList=projects;
+    renderProjectList();
+}
+function renderProjectList() {
+    const select=$('project-selector');
+    select.replaceChildren(new Option(t('chooseProject'),''));
+    projectsList.forEach(project=>select.add(new Option(project.name,project.id)));
+    select.value=currentProjectId||'';
+}
+function switchMode(mode) { return transition(async()=>{
+    if(mode===currentMode) return;
+    if(mode==='project') await loadProjects();
+    if(mode==='quick') {
+        currentMode=mode;
+        currentProjectId=currentFileId=null;
+        activateDocument({type:$('doc-type').value,content:TEMPLATES[$('doc-type').value]});
+    } else if(projectsList.length) await activateProject(projectsList[0].id);
+    else { currentMode=mode;currentProjectId=currentFileId=null;session.open({type:'empty',content:''});setEditorContent('',true); }
+    resetPreview();updateModeUi();run(updateLivePreview);
+}); }
+function setLanguage(type) { return transition(()=>{ activateDocument({type,content:TEMPLATES[type]});resetPreview();run(updateLivePreview); }); }
+function updateModeUi() {
+    const project=currentMode==='project';
+    $('mode-quick').setAttribute('aria-pressed',String(!project));
+    $('mode-project').setAttribute('aria-pressed',String(project));
+    $('doc-type').classList.toggle('hidden',project);
+    ['btn-download-zip','btn-send-tg'].forEach(id=>$(id).classList.toggle('hidden',!project));
+    $('tab-btn-sidebar').classList.toggle('hidden',!project);
     setupSplit();
 }
-
-function setLanguage(type) {
-    if (!editor) return;
-    let lang = type === 'mermaid' ? 'javascript' : type;
-    monaco.editor.setModelLanguage(editor.getModel(), lang);
-
-    if (currentMode === 'quick') {
-        editor.setValue(TEMPLATES[type]);
-    }
-
-    // Скрываем PDF, если перешли на Live формат
-    if (type !== 'latex') {
-        document.getElementById('pdf-viewer').classList.add('hidden');
-        document.getElementById('btn-download-pdf').classList.add('hidden');
-    }
-    updateLivePreview();
-}
-
-// === 4. LIVE PREVIEW (Markdown & Mermaid) ===
-async function updateLivePreview() {
-    const type = currentMode === 'quick' ? document.getElementById('doc-type').value : currentProjectType;
-    if (type === 'latex') return; // LaTeX требует серверной сборки
-
-    const code = editor.getValue();
-    const liveDiv = document.getElementById('live-preview');
-    const contentDiv = document.getElementById('live-preview-content');
-    const emptyState = document.getElementById('empty-state');
-    const pdfViewer = document.getElementById('pdf-viewer');
-
-    emptyState.classList.add('hidden');
-    pdfViewer.classList.add('hidden');
-    liveDiv.classList.remove('hidden');
-
-    if (type === 'markdown') {
-        try {
-            // Подменяем $$ формулы для KaTeX перед парсингом Markdown.
-            let markdownWithMath = code.replace(/\$\$(.*?)\$\$/gs, (m, p1) => `\n<div class="math-block">${p1}</div>\n`);
-            markdownWithMath = markdownWithMath.replace(/\$(.*?)\$/g, (m, p1) => `<span class="math-inline">${p1}</span>`);
-
-            contentDiv.innerHTML = sanitizeStudioMarkdownPreview(markdownWithMath);
-            for (const link of contentDiv.querySelectorAll('a[target="_blank"]')) {
-                link.rel = 'noopener noreferrer';
-            }
-
-            // KaTeX runs only after untrusted Markdown HTML has been sanitized.
-            if (typeof renderMathInElement === 'function') {
-                renderMathInElement(contentDiv, {
-                    delimiters:[
-                        {left: '<div class="math-block">', right: '</div>', display: true},
-                        {left: '<span class="math-inline">', right: '</span>', display: false}
-                    ]
-                });
-            }
-        } catch (error) {
-            renderStudioPreviewError(contentDiv, error);
-        }
-    } else if (type === 'mermaid') {
-        try {
-            const renderedDiagram = await mermaid.render('mermaid-svg-' + Date.now(), code);
-            const svg = typeof renderedDiagram === 'string'
-                ? renderedDiagram
-                : renderedDiagram.svg;
-            if (!svg) {
-                throw new Error(studioTranslate(
-                    'studio.preview.mermaidEmpty',
-                    'Mermaid returned an empty diagram.'
-                ));
-            }
-            const diagramContainer = document.createElement('div');
-            diagramContainer.className = 'flex items-center justify-center h-full';
-            diagramContainer.innerHTML = getStudioHtmlSanitizer().sanitize(svg, {
-                USE_PROFILES: { svg: true, svgFilters: true },
-            });
-            contentDiv.replaceChildren(diagramContainer);
-        } catch (e) {
-            renderStudioPreviewError(contentDiv, e);
-        }
-    }
-}
-
-// === 5. SERVER-SIDE COMPILE AND ERRORS ===
-async function compileCurrent() {
-    if (!(await ensureStudioAuth())) return;
-    if (currentMode === 'project') await saveCurrentFile();
-
-    const overlay = document.getElementById('loader-overlay');
-    const errorPanel = document.getElementById('error-panel');
-    const errorText = document.getElementById('error-text');
-
-    if(editor) monaco.editor.setModelMarkers(editor.getModel(), 'latex',[]); // Чистим старые ошибки
-
-    overlay.classList.remove('hidden');
-    overlay.classList.add('flex');
-    errorPanel.classList.add('hidden');
-    setStatus("Building...", true);
-
-    try {
-        let response;
-        if (currentMode === 'quick') {
-            const type = document.getElementById('doc-type').value;
-            response = await fetch(`${API_BASE}/studio/compile`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ type, content: editor.getValue() })
-            });
-        } else {
-            if(!currentProjectId) throw new Error("Проект не выбран");
-            response = await fetch(`${API_BASE}/studio/projects/${currentProjectId}/compile`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-        }
-
-        const data = await response.json();
-
-        if (response.ok && data.status === 'success') {
-            setStatus("Saved", false);
-
-            // Если вернулся PDF
-            if (data.pdf) {
-                document.getElementById('live-preview').classList.add('hidden');
-                document.getElementById('empty-state').classList.add('hidden');
-                const pdfViewer = document.getElementById('pdf-viewer');
-                pdfViewer.classList.remove('hidden');
-
-                // Конвертируем Base64 в Blob
-                const byteCharacters = atob(data.pdf);
-                const byteNumbers = new Array(byteCharacters.length);
-                for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
-                const blob = new Blob([new Uint8Array(byteNumbers)], {type: 'application/pdf'});
-
-                if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl); // Очистка старой ссылки памяти
-                currentBlobUrl = URL.createObjectURL(blob);
-
-                pdfViewer.src = currentBlobUrl + "#toolbar=0&view=FitH"; // Скрываем тулбар, подгоняем по ширине
-                document.getElementById('btn-download-pdf').classList.remove('hidden');
-            }
-        } else {
-            setStatus("Error", false);
-
-            // Парсинг ошибок в Monaco Editor
-            if (data.errors && data.errors.length > 0) {
-                const markers = data.errors.map(err => ({
-                    severity: monaco.MarkerSeverity.Error,
-                    startLineNumber: err.line,
-                    startColumn: 1,
-                    endLineNumber: err.line,
-                    endColumn: 1000,
-                    message: err.message
-                }));
-                monaco.editor.setModelMarkers(editor.getModel(), 'latex', markers);
-
-                errorText.innerText = data.errors.map(e => `Line ${e.line}: ${e.message}`).join('\n');
-            } else {
-                errorText.innerText = data.message || data.error || "Compilation failed";
-            }
-            errorPanel.classList.remove('hidden');
-        }
-
-    } catch (err) {
-        setStatus("Error", false);
-        errorText.innerText = "Server error: " + err.message;
-        errorPanel.classList.remove('hidden');
-    } finally {
-        overlay.classList.add('hidden');
-        overlay.classList.remove('flex');
-    }
-}
-
-
-// === 6. PROJECT CRUD & FILE SYSTEM ===
-async function loadProjects() {
-    if (!(await ensureStudioAuth())) return;
-    const res = await fetch(`${API_BASE}/studio/projects`, { headers: { 'Authorization': `Bearer ${token}` } });
-    if (!res.ok) return;
-
-    projectsList = await res.json(); // Сохраняем в глобальную переменную
-    const selector = document.getElementById('project-selector');
-
-    selector.innerHTML = '<option value="" disabled selected>-- Выберите проект --</option>';
-    projectsList.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.id;
-        opt.text = p.name;
-        selector.appendChild(opt);
-    });
-
-    if(projectsList.length > 0) {
-        // Если мы только что создали проект, открываем его, иначе первый в списке
-        const targetId = currentProjectId || projectsList[0].id;
-        selector.value = targetId;
-        openProject(targetId);
-    }
-}
-
-// --- MODAL MANAGEMENT ---
-function createNewProject() {
-    document.getElementById('new-project-name').value = '';
-    document.getElementById('new-project-type').value = 'latex';
-    document.getElementById('create-project-modal').classList.remove('hidden');
-    setTimeout(() => document.getElementById('new-project-name').focus(), 100);
-}
-
-function closeCreateProjectModal() {
-    document.getElementById('create-project-modal').classList.add('hidden');
-}
-
-// Вспомогательная функция для обновления селекта шаблонов
-window.updateTemplateOptions = function() {
-    const type = document.getElementById('new-project-type').value;
-    const templateContainer = document.getElementById('template-container');
-    const templateSelect = document.getElementById('new-project-template');
-
-    templateSelect.innerHTML = '';
-
-    if (type === 'latex') {
-        templateContainer.classList.remove('hidden');
-        templateSelect.innerHTML = `
-            <option value="latex_blank">Пустой документ (Article)</option>
-            <option value="latex_beamer">Презентация (Beamer)</option>
-            <option value="latex_report">Отчет (ГОСТ / extreport)</option>
-        `;
-    } else if (type === 'markdown') {
-        templateContainer.classList.remove('hidden');
-        templateSelect.innerHTML = `<option value="markdown">Стандартный Markdown</option>`;
-    } else if (type === 'mermaid') {
-        templateContainer.classList.remove('hidden');
-        templateSelect.innerHTML = `<option value="mermaid">Базовая диаграмма</option>`;
-    }
-};
-
-async function submitNewProject() {
-    if (!(await ensureStudioAuth())) return;
-    const name = document.getElementById('new-project-name').value.trim();
-    const type = document.getElementById('new-project-type').value;
-    const templateId = document.getElementById('new-project-template').value; // Берем ID шаблона
-
-    if (!name) { window.mpbPopup?.("Введите название проекта"); return; }
-
-    closeCreateProjectModal();
-    setStatus("Creating...", true);
-
-    const res = await fetch(`${API_BASE}/studio/projects`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ name: name, project_type: type, template_id: templateId }) // Отправляем шаблон!
-    });
-
-    if (res.ok) {
-        const newProj = await res.json();
-        currentProjectId = newProj.id;
-        await loadProjects();
-        setStatus("Ready", false);
-    } else {
-        window.mpbPopup?.("Ошибка при создании проекта");
-        setStatus("Error", false);
-    }
-}
-
-// --- OPEN PROJECT ---
-async function openProject(id) {
-    if (!(await ensureStudioAuth())) return;
-    currentProjectId = id;
-
-    // Определяем тип открытого проекта
-    const proj = projectsList.find(p => p.id == id);
-    currentProjectType = proj ? proj.type : 'latex';
-
-    document.getElementById('empty-state').classList.remove('hidden');
-    document.getElementById('pdf-viewer').classList.add('hidden');
-    document.getElementById('btn-download-pdf').classList.add('hidden');
-    document.getElementById('live-preview').classList.add('hidden'); // Прячем live preview по умолчанию
-
-    const res = await fetch(`${API_BASE}/studio/projects/${id}`, { headers: { 'Authorization': `Bearer ${token}` } });
-    projectFiles = await res.json();
-
-    renderFileList();
-
-    const mainFile = projectFiles.find(f => f.is_main);
-    if (mainFile) openFile(mainFile.id);
-}
-
-// Рендеринг дерева файлов (с иконками и кнопками Rename/Delete)
 function renderFileList() {
-    const list = document.getElementById('file-list');
-    list.innerHTML = '';
-
-    projectFiles.forEach(f => {
-        const div = document.createElement('div');
-        div.className = `file-item group px-3 py-1.5 text-sm text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors flex items-center justify-between border-l-[3px] border-transparent dark:text-slate-300 dark:hover:bg-slate-700`;
-        if (f.id === currentFileId) div.classList.add('active');
-
-        let icon = f.is_binary ? '[BIN]' : (f.path.endsWith('.tex') ? '[TEX]' : '[FILE]');
-
-        const nameDiv = document.createElement('div');
-        nameDiv.className = "flex items-center gap-2 truncate";
-        nameDiv.innerHTML = `<span>${icon}</span> <span class="truncate" title="${f.path}">${f.path}</span>`;
-        nameDiv.onclick = () => openFile(f.id);
-
-        const actionsDiv = document.createElement('div');
-        actionsDiv.className = "hidden group-hover:flex items-center gap-2 opacity-50 hover:opacity-100";
-
-        if (!f.is_main) {
-            const btnRename = document.createElement('button');
-            btnRename.innerHTML = 'RENAME';
-            btnRename.className = "hover:scale-125 transition-transform text-xs";
-            btnRename.title = "Переименовать";
-            btnRename.onclick = (e) => { e.stopPropagation(); renameFile(f.id, f.path); };
-
-            const btnDelete = document.createElement('button');
-            btnDelete.innerHTML = 'DELETE';
-            btnDelete.className = "hover:scale-125 transition-transform text-xs";
-            btnDelete.title = "Удалить";
-            btnDelete.onclick = (e) => { e.stopPropagation(); deleteFile(f.id, f.path); };
-
-            actionsDiv.appendChild(btnRename);
-            actionsDiv.appendChild(btnDelete);
-        }
-
-        div.appendChild(nameDiv);
-        div.appendChild(actionsDiv);
-        list.appendChild(div);
-    });
-}
-
-async function openFile(id) {
-    if (currentFileId !== null) await saveCurrentFile();
-
-    const file = projectFiles.find(f => f.id === id);
-    if (!file) return;
-
-    currentFileId = id;
-    renderFileList(); // Обновляем выделение в Sidebar
-
-    if (file.is_binary) {
-        editor.setValue(`% This is a binary file (${file.path}).\n% Use a relative path from your document.`);
-        monaco.editor.setModelLanguage(editor.getModel(), 'plaintext');
-        editor.updateOptions({ readOnly: true });
-    } else {
-        editor.updateOptions({ readOnly: false });
-
-        let ext = file.path.split('.').pop().toLowerCase();
-        let langMap = { 'tex': 'latex', 'md': 'markdown', 'mmd': 'javascript', 'sty': 'latex' };
-        monaco.editor.setModelLanguage(editor.getModel(), langMap[ext] || 'plaintext');
-
-        editor.setValue(file.content || "");
-
-        // Включаем Live Preview для не-LaTeX файлов в режиме проекта
-        if (currentProjectType !== 'latex') {
-            document.getElementById('pdf-viewer').classList.add('hidden');
-            document.getElementById('empty-state').classList.add('hidden');
-            updateLivePreview(); // Запускаем рендер сразу после открытия
-        }
-    }
-}
-
-async function saveCurrentFile() {
-    if (!(await ensureStudioAuth())) return;
-    if (!currentFileId || !currentProjectId) return;
-    const file = projectFiles.find(f => f.id === currentFileId);
-
-    if (file && !file.is_binary) {
-        const newContent = editor.getValue();
-        if (newContent !== file.content) {
-            setStatus("Saving...", true);
-            const res = await fetch(`${API_BASE}/studio/projects/${currentProjectId}/files/${currentFileId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ content: newContent })
-            });
-            if(res.ok) {
-                file.content = newContent;
-                setStatus("Saved", false);
+    const list=$('file-list');list.replaceChildren();
+    projectFiles.forEach(file=>{
+        const row=document.createElement('div');row.className=`file-item${file.id===currentFileId?' active':''}`;
+        const open=document.createElement('button');open.type='button';open.className='studio-file-open';
+        open.textContent=file.path;open.title=file.path;open.setAttribute('aria-current',file.id===currentFileId?'true':'false');
+        open.addEventListener('click',()=>run(()=>openFile(file.id)));row.appendChild(open);
+        if(!file.is_main) {
+            for(const [key,action] of [['rename',()=>renameFile(file.id,file.path)],['delete',()=>deleteFile(file.id,file.path)]]) {
+                const button=document.createElement('button');button.type='button';button.className='studio-file-action';
+                button.textContent=t(key);button.setAttribute('aria-label',t(`${key}Named`,{name:file.path}));
+                button.addEventListener('click',()=>run(action));row.appendChild(button);
             }
         }
-    }
-}
-
-async function renameFile(fileId, oldPath) {
-    if (!(await ensureStudioAuth())) return;
-    const newName = prompt(`Новое имя для файла ${oldPath}:`, oldPath);
-    if (!newName || newName === oldPath) return;
-
-    const res = await fetch(`${API_BASE}/studio/projects/${currentProjectId}/files/${fileId}/rename`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ new_name: newName })
-    });
-    if (res.ok) await openProject(currentProjectId);
-    else window.mpbPopup?.("Ошибка переименования. Возможно имя занято.");
-}
-
-async function deleteFile(fileId, path) {
-    if (!(await ensureStudioAuth())) return;
-    if (!confirm(`Удалить файл ${path}? Это действие необратимо.`)) return;
-
-    const res = await fetch(`${API_BASE}/studio/projects/${currentProjectId}/files/${fileId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (res.ok) {
-        if (currentFileId === fileId) currentFileId = null; // Сбрасываем если удалили открытый
-        await openProject(currentProjectId);
-    } else {
-        window.mpbPopup?.("Ошибка удаления файла.");
-    }
-}
-
-
-// === 7. DRAG & DROP UPLOADS ===
-const sidebar = document.getElementById('sidebar-pane');
-
-sidebar.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    sidebar.classList.add('bg-blue-50', 'border-blue-300');
-});
-sidebar.addEventListener('dragleave', (e) => {
-    e.preventDefault();
-    sidebar.classList.remove('bg-blue-50', 'border-blue-300');
-});
-sidebar.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    sidebar.classList.remove('bg-blue-50', 'border-blue-300');
-
-    if (!currentProjectId) { window.mpbPopup?.("Сначала откройте проект для загрузки файлов."); return; }
-
-    const files = e.dataTransfer.files;
-    for (let f of files) {
-        await uploadSingleFile(f);
-    }
-});
-
-// Обработчик скрытого input type="file"
-async function uploadAsset(event) {
-    if (!currentProjectId) return;
-    const files = event.target.files;
-    for (let f of files) {
-        await uploadSingleFile(f);
-    }
-    event.target.value = ''; // Сброс
-}
-
-async function uploadSingleFile(file) {
-    if (!(await ensureStudioAuth())) return;
-    setStatus("Uploading...", true);
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const res = await fetch(`${API_BASE}/studio/projects/${currentProjectId}/upload`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-    });
-
-    if (res.ok) {
-        await openProject(currentProjectId);
-        setStatus("Saved", false);
-    } else {
-        window.mpbPopup?.(`Ошибка загрузки ${file.name}`);
-        setStatus("Error", false);
-    }
-}
-
-
-// === 8. EXPORT FUNCTIONS (PDF & ZIP) ===
-function downloadPDF() {
-    if (!currentBlobUrl) return;
-    const a = document.createElement('a');
-    a.href = currentBlobUrl;
-    a.download = `Document_${new Date().getTime()}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-}
-
-function downloadZIP() {
-    if (!currentProjectId) return;
-
-    setStatus("Zipping...", true);
-    ensureStudioAuth().then((hasAuth) => {
-        if (!hasAuth) return null;
-        return fetch(`${API_BASE}/studio/projects/${currentProjectId}/export/zip`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-        });
-    })
-    .then(res => {
-        if (!res) return null;
-        if(!res.ok) throw new Error("API Error");
-        return res.blob();
-    })
-    .then(blob => {
-        if (!blob) return;
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `Project_${currentProjectId}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setStatus("Saved", false);
-    })
-    .catch(err => {
-        window.mpbPopup?.("Ошибка выгрузки ZIP архива");
-        setStatus("Error", false);
+        list.appendChild(row);
     });
 }
-
-// === 9. TELEGRAM INTEGRATION ===
-async function sendToTelegram() {
-    if (!(await ensureStudioAuth())) return;
-    if (!currentProjectId) return;
-
-    await saveCurrentFile(); // Обязательно сохраняем перед сборкой
-    setStatus("Sending to TG...", true);
-    const overlay = document.getElementById('loader-overlay');
-
-    overlay.classList.remove('hidden');
-    overlay.classList.add('flex');
-    overlay.querySelector('div:last-child').innerText = "Отправка в Telegram...";
-
+function setupSplit() {
+    if(splitInstance){splitInstance.destroy();splitInstance=null;}
+    const mobile=window.innerWidth<768;
+    $('mobile-tabs').classList.toggle('hidden',!mobile);
+    $('split-container').dataset.mode=currentMode;
+    if(mobile) switchMobileTab(currentMode==='quick'&&selectedMobilePane==='sidebar-pane'?'editor-pane':selectedMobilePane);
+    else {
+        ['editor-pane','viewer-pane'].forEach(id=>$(id).classList.remove('hidden'));
+        $('sidebar-pane').classList.toggle('hidden',currentMode!=='project');
+        if(window.Split) splitInstance=Split(currentMode==='project'?['#sidebar-pane','#editor-pane','#viewer-pane']:['#editor-pane','#viewer-pane'],
+            {sizes:currentMode==='project'?[20,40,40]:[50,50],minSize:currentMode==='project'?[130,240,240]:[260,260],gutterSize:6});
+    }
+    editor?.layout();
+}
+function switchMobileTab(targetPaneId) {
+    selectedMobilePane=targetPaneId;
+    ['sidebar-pane','editor-pane','viewer-pane'].forEach(id=>{
+        const active=id===targetPaneId;
+        $(id).classList.toggle('hidden',!active);
+        const button=$(`tab-btn-${id.split('-')[0]}`);
+        button.setAttribute('aria-selected',String(active));button.tabIndex=active?0:-1;
+    });
+    editor?.layout();
+}
+function resetPreview() {
+    previewGeneration++;
+    if(currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
+    currentBlobUrl=null;
+    $('pdf-viewer').removeAttribute('src');
+    ['pdf-viewer','btn-download-pdf','live-preview','pdf-stale'].forEach(id=>$(id).classList.add('hidden'));
+    $('empty-state').classList.remove('hidden');
+}
+function configureMarkdown() {
+    if(markdownConfigured)return;
+    const renderer=new marked.Renderer();
+    renderer.image=function(tokenOrHref,legacyTitle,legacyText){
+        let href,title,text;
+        if(typeof tokenOrHref === 'object')({href='',title='',text=''}=tokenOrHref);
+        else {href=String(tokenOrHref||'');title=legacyTitle||'';text=legacyText||'';}
+        if(currentMode==='project'&&currentProjectId&&!/^(https?:|data:)/i.test(href)) href=`${API_BASE}/studio/projects/${currentProjectId}/assets/${encodeURIComponent(href.replace(/^\/+/,''))}?token=${encodeURIComponent(token)}`;
+        const image=document.createElement('img');image.src=href;image.alt=text;image.title=title;image.loading='lazy';
+        return image.outerHTML;
+    };
+    marked.use({renderer});markdownConfigured=true;
+}
+async function updateLivePreview() {
+    if(!editor||currentFile()?.is_binary&&currentMode==='project')return;
+    const type=currentMode==='quick'?$('doc-type').value:currentProjectType;
+    if(type==='latex')return;
+    const generation=++previewGeneration, code=editor.getValue();
+    const contentDiv=$('live-preview-content');
+    $('empty-state').classList.add('hidden');$('pdf-viewer').classList.add('hidden');$('live-preview').classList.remove('hidden');
     try {
-        const res = await fetch(`${API_BASE}/studio/projects/${currentProjectId}/send_telegram`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        const data = await res.json();
-        if (res.ok) {
-            window.mpbPopup?.("Успех! Файл отправлен вам в личные сообщения в Telegram.");
-            setStatus("Saved", false);
+        await mpbStudioLibraries.ensure(type);
+        if(generation!==previewGeneration)return;
+        if(type==='markdown') {
+            configureMarkdown();
+            contentDiv.innerHTML=sanitizeStudioMarkdownPreview(code);
+            contentDiv.querySelectorAll('a[target="_blank"]').forEach(link=>{link.rel='noopener noreferrer';});
+            renderMathInElement(contentDiv,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
         } else {
-            throw new Error(data.detail || "Ошибка отправки");
+            mermaid.initialize({startOnLoad:false,theme:document.documentElement.classList.contains('dark')?'dark':'default',securityLevel:'strict',flowchart:{htmlLabels:false}});
+            const renderedDiagram=await mermaid.render(`studio-diagram-${generation}`,code);
+            if(generation!==previewGeneration)return;
+            const svg=typeof renderedDiagram === 'string'?renderedDiagram:renderedDiagram.svg;
+            if(!svg)throw new Error(t('preview.mermaidEmpty'));
+            const diagramContainer=document.createElement('div');
+            diagramContainer.innerHTML=getStudioHtmlSanitizer().sanitize(svg,{USE_PROFILES:{svg:true,svgFilters:true}});
+            contentDiv.replaceChildren(diagramContainer);
         }
-    } catch (err) {
-        window.mpbPopup?.(err.message);
-        setStatus("Error", false);
-    } finally {
-        overlay.classList.add('hidden');
-        overlay.classList.remove('flex');
-        overlay.querySelector('div:last-child').innerText = "Waiting for server..."; // Reset loader text
-    }
+    } catch(error) { if(generation===previewGeneration){renderStudioPreviewError(contentDiv,error);$('retry-studio-button').classList.remove('hidden');} }
 }
+function updateJobUi() {
+    $('compile-btn').disabled=Boolean(activeJob||jobStarting);
+    $('job-panel').classList.toggle('hidden',!activeJob);
+    if(activeJob)$('job-status').textContent=t(`job.${activeJob.status||'queued'}`);
+}
+async function compileCurrent() {
+    if(activeJob)return pollJob();
+    if(jobStarting)return;
+    jobStarting=true;updateJobUi();
+    try {await transition(async()=>{
+        const type=currentMode==='quick'?$('doc-type').value:currentProjectType;
+        if(currentMode==='project'&&!currentProjectId)throw new Error(t('chooseProject'));
+        const path=currentMode==='quick'?'/studio/jobs':`/studio/projects/${currentProjectId}/jobs`;
+        const snapshot={mode:currentMode,projectId:currentProjectId,fileId:currentFileId,type,sourceContent:editor.getValue()};
+        const response=await api(path,{method:'POST',headers:{'Content-Type':'application/json'},
+            ...(currentMode==='quick'?{body:JSON.stringify({type,content:snapshot.sourceContent})}:{})});
+        const job=await response.json();
+        activeJob={...job,...snapshot};session.storeValue('active-job',activeJob);
+    });} finally {jobStarting=false;updateJobUi();}
+    $('error-panel').classList.add('hidden');
+    return pollJob();
+}
+async function pollJob() {
+    if(!activeJob||jobPolling)return;
+    jobPolling=true;$('job-resume-button').disabled=true;
+    try {
+        while(activeJob) {
+            const job=await (await api(`/studio/jobs/${encodeURIComponent(activeJob.job_id)}`)).json();
+            activeJob.status=job.status;updateJobUi();
+            if(['success','error'].includes(job.status)) {
+                const completed=activeJob;
+                activeJob=null;session.removeValue('active-job');updateJobUi();
+                if(job.status==='error'){
+                    const errors=job.result?.errors||[];
+                    if(window.monaco&&editor.getModel()&&String(completed.fileId)===String(currentFileId)) monaco.editor.setModelMarkers(editor.getModel(),'latex',errors.map(error=>({severity:monaco.MarkerSeverity.Error,startLineNumber:Math.max(1,error.line||1),startColumn:1,endLineNumber:Math.max(1,error.line||1),endColumn:1000,message:error.message||t('buildFailed')})));
+                    throw new Error(errors.length?errors.map(error=>`${error.line||1}: ${error.message}`).join('\n'):job.error||t('buildFailed'));
+                }
+                const result=job.result;
+                if(!result||result.status==='error')throw new Error(result?.error||result?.message||t('buildFailed'));
+                showBuildResult(result,completed);return;
+            }
+            await new Promise(resolve=>setTimeout(resolve,1500));
+        }
+    } catch(error) {
+        if(error.status===404){activeJob=null;session.removeValue('active-job');updateJobUi();throw new Error(t('job.expired'));}
+        if(activeJob){activeJob.status='paused';updateJobUi();}
+        throw error;
+    } finally {jobPolling=false;$('job-resume-button').disabled=false;}
+}
+function showBuildResult(data,job) {
+    const encoded=data.pdf||data.image;
+    if(!encoded)throw new Error(t('invalidResponse'));
+    const bytes=Uint8Array.from(atob(encoded),char=>char.charCodeAt(0));
+    if(currentBlobUrl)URL.revokeObjectURL(currentBlobUrl);
+    currentBlobUrl=URL.createObjectURL(new Blob([bytes],{type:data.pdf?'application/pdf':'image/png'}));
+    $('pdf-viewer').src=currentBlobUrl+(data.pdf?'#toolbar=0&view=FitH':'');
+    $('pdf-viewer').classList.remove('hidden');$('live-preview').classList.add('hidden');$('empty-state').classList.add('hidden');
+    $('btn-download-pdf').classList.remove('hidden');$('btn-download-pdf').dataset.extension=data.pdf?'pdf':'png';
+    $('pdf-stale').classList.toggle('hidden',job.mode===currentMode&&String(job.projectId)===String(currentProjectId)&&job.sourceContent===editor.getValue());
+    setStatus('built');
+}
+function createNewProject() {
+    lastFocus=document.activeElement;
+    $('new-project-name').value='';$('new-project-type').value='latex';updateTemplateOptions();
+    $('create-project-modal').classList.remove('hidden');$('new-project-name').focus();
+}
+function closeCreateProjectModal() {$('create-project-modal').classList.add('hidden');lastFocus?.focus();}
+function updateTemplateOptions() {
+    const type=$('new-project-type').value,select=$('new-project-template'),previous=select.value;
+    select.replaceChildren();
+    (type==='latex'?['latex_blank','latex_beamer','latex_report']:[type]).forEach(id=>select.add(new Option(t(`template.${id}`),id)));
+    if([...select.options].some(option=>option.value===previous))select.value=previous;
+}
+async function submitNewProject() {
+    const name=$('new-project-name').value.trim();if(!name){$('new-project-name').focus();return;}
+    $('submit-create-project-button').disabled=true;
+    try {
+        await transition(async()=>{
+            setStatus('creating');
+            const created=await(await api('/studio/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,project_type:$('new-project-type').value,template_id:$('new-project-template').value})})).json();
+            await loadProjects();currentMode='project';await activateProject(created.id);updateModeUi();closeCreateProjectModal();
+        });
+    } finally {$('submit-create-project-button').disabled=false;}
+}
+async function renameFile(id,path) {
+    const name=prompt(t('renamePrompt',{name:path}),path);if(!name||name===path)return;
+    return transition(async()=>{await api(`/studio/projects/${currentProjectId}/files/${id}/rename`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({new_name:name})});await activateProject(currentProjectId);});
+}
+async function deleteFile(id,path) {
+    if(!confirm(t('deletePrompt',{name:path})))return;
+    return transition(async()=>{await api(`/studio/projects/${currentProjectId}/files/${id}`,{method:'DELETE'});await activateProject(currentProjectId);});
+}
+async function uploadFiles(files) {
+    if(!currentProjectId)throw new Error(t('chooseProject'));
+    return transition(async()=>{
+        for(const file of files){setStatus('uploading');const body=new FormData();body.append('file',file);await api(`/studio/projects/${currentProjectId}/upload`,{method:'POST',body});}
+        await activateProject(currentProjectId);setStatus('saved');
+    });
+}
+function downloadBlob(blob,name) {
+    const url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download=name;anchor.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+async function downloadZIP() {return transition(async()=>{if(!currentProjectId)throw new Error(t('chooseProject'));downloadBlob(await(await api(`/studio/projects/${currentProjectId}/export/zip`)).blob(),`Project_${currentProjectId}.zip`);});}
+function downloadPDF() {if(!currentBlobUrl)return;const anchor=document.createElement('a');anchor.href=currentBlobUrl;anchor.download=`Document.${$('btn-download-pdf').dataset.extension||'pdf'}`;anchor.click();}
+async function sendToTelegram() {
+    $('btn-send-tg').disabled=true;
+    try {await transition(async()=>{if(!currentProjectId)throw new Error(t('chooseProject'));await api(`/studio/projects/${currentProjectId}/send_telegram`,{method:'POST',timeoutMs:65000});window.mpbPopup?.(t('sent'));});}
+    finally {$('btn-send-tg').disabled=false;}
+}
+function translateStudio() {
+    setStatus(currentStatus,statusParams);updateWordCount();renderProjectList();renderFileList();updateTemplateOptions();updateJobUi();
+    $('monaco-container').querySelector('textarea')?.setAttribute('aria-label',t('editor'));
+    $('monaco-container').querySelector('iframe')?.setAttribute('title',t('editor'));
+    if(currentMode==='project'&&currentFile()?.is_binary)setEditorContent(t('binaryFile',{name:currentFile().path}),true);
+}
+function bind() {
+    const actions={'mode-quick':()=>switchMode('quick'),'mode-project':()=>switchMode('project'),'compile-btn':compileCurrent,
+        'btn-download-zip':downloadZIP,'btn-download-pdf':downloadPDF,'btn-send-tg':sendToTelegram,
+        'create-project-button':createNewProject,'cancel-create-project-button':closeCreateProjectModal,
+        'submit-create-project-button':submitNewProject,'close-error-panel-button':()=>$('error-panel').classList.add('hidden'),
+        'job-resume-button':pollJob,'retry-editor-button':upgradeEditor,'upload-file-button':()=>$('file-uploader').click(),'retry-studio-button':async()=>{await saveCurrentFile();await updateLivePreview();if(activeJob)await pollJob();}};
+    Object.entries(actions).forEach(([id,action])=>$(id).addEventListener('click',()=>run(action)));
+    $('doc-type').addEventListener('change',event=>run(()=>setLanguage(event.target.value)));
+    $('project-selector').addEventListener('change',event=>run(()=>event.target.value&&openProject(event.target.value)));
+    $('new-project-type').addEventListener('change',updateTemplateOptions);
+    $('file-uploader').addEventListener('change',event=>run(async()=>{const files=[...event.target.files];event.target.value='';await uploadFiles(files);}));
+    ['sidebar','editor','viewer'].forEach(name=>$(`tab-btn-${name}`).addEventListener('click',()=>switchMobileTab(`${name}-pane`)));
+    $('mobile-tabs').addEventListener('keydown',event=>{
+        if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+        const buttons=[...$('mobile-tabs').querySelectorAll('button')].filter(button=>!button.classList.contains('hidden'));
+        let index=buttons.indexOf(document.activeElement);if(index<0)return;
+        event.preventDefault();index=event.key==='Home'?0:event.key==='End'?buttons.length-1:(index+(event.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length;
+        buttons[index].click();buttons[index].focus();
+    });
+    $('create-project-modal').addEventListener('keydown',event=>{
+        if(event.key==='Escape'){event.preventDefault();closeCreateProjectModal();}
+        if(event.key==='Tab'){
+            const controls=[...$('create-project-modal').querySelectorAll('input,select,button')].filter(el=>!el.disabled);
+            const first=controls[0],last=controls[controls.length-1];
+            if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+            else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+        }
+    });
+    $('create-project-modal').addEventListener('click',event=>{if(event.target===$('create-project-modal'))closeCreateProjectModal();});
+    const sidebar=$('sidebar-pane');
+    sidebar.addEventListener('dragover',event=>event.preventDefault());
+    sidebar.addEventListener('drop',event=>{event.preventDefault();run(()=>uploadFiles([...event.dataTransfer.files]));});
+    window.addEventListener('resize',setupSplit);
+    window.addEventListener('beforeunload',event=>{if(session?.dirty()){event.preventDefault();event.returnValue='';}});
+    window.addEventListener('online',()=>run(async()=>{await saveCurrentFile();if(activeJob)await pollJob();}));
+    window.addEventListener('mpb-theme-change',event=>{if(window.monaco){monaco.editor.setTheme(event.detail.isDark?'vs-dark':'vs-light');editor.getDomNode?.()?.ownerDocument.documentElement.classList.toggle('dark',event.detail.isDark);}run(updateLivePreview);});
+}
+async function initStudio() {
+    await window.mpbI18n?.ready;
+    await ensureStudioAuth();
+    sessionScope=MpbStudioSession.accountScope(token);
+    session=MpbStudioSession.create({storage:storage(),scope:sessionScope,
+        save:async record=>{await api(`/studio/projects/${record.projectId}/files/${record.fileId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:record.content})});
+            const file=projectFiles.find(item=>item.id===record.fileId);if(file)file.content=record.content;},
+        onStorageError:()=>{if(!storageWarningShown){storageWarningShown=true;window.mpbPopup?.(t('storageUnavailable'),{type:'warning'});}}});
+    editor=createFallbackEditor();bind();activateDocument({type:'latex',content:TEMPLATES.latex});updateModeUi();
+    window.mpbI18n?.registerTranslator(translateStudio);
+    activeJob=session.readValue('active-job');
+    if(activeJob?.job_id){updateJobUi();run(pollJob);}
+    run(upgradeEditor);
+    mpbStudioLibraries.ensure('layout').then(setupSplit).catch(()=>{});
+}
+run(initStudio);

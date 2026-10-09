@@ -39,3 +39,53 @@ html.tg-webapp #mobile-menu-button { display: none; }
 
 html.tg-webapp .split { height: calc(100dvh - 56px - env(safe-area-inset-bottom)); }
 html.tg-webapp #compile-btn { padding-left: 0.85rem; padding-right: 0.85rem; }
+
+/* The workspace consumes remaining height, including mobile tabs and notices. */
+html, body { height: 100%; height: 100dvh; }
+body { display: flex; flex-direction: column; }
+#navbar { height: auto; min-height: 64px; padding-top: .5rem; padding-bottom: .5rem; flex-wrap: wrap; gap: .5rem; }
+#navbar > div { min-width: 0; }
+.split, html.tg-webapp .split { flex: 1; min-height: 0; height: auto; position: relative; }
+#sidebar-pane { width: 20%; min-width: 130px; }
+#editor-pane, #viewer-pane { width: 50%; min-width: 0; }
+.split[data-mode="project"] #editor-pane, .split[data-mode="project"] #viewer-pane { width: 40%; }
+#monaco-container { min-height: 0; }
+.studio-monaco-host { position: absolute; inset: 0; }
+.studio-editor-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.studio-fallback-editor { width: 100%; height: 100%; padding: 1rem; resize: none; border: 0; outline-offset: -3px; font: 14px/1.6 ui-monospace, monospace; background: #fff; color: #0f172a; }
+html.dark .studio-fallback-editor { background: #0f172a; color: #e2e8f0; }
+.studio-notice { flex-shrink: 0; padding: .5rem .8rem; background: #eff6ff; color: #1e40af; display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; font-size: .8rem; }
+html.dark .studio-notice { background: #172554; color: #bfdbfe; }
+.studio-notice.hidden, .studio-retry.hidden { display: none; }
+.studio-notice button, .studio-retry { text-decoration: underline; font-weight: 600; padding: .3rem .5rem; }
+.studio-retry { background: #fff7ed; color: #9a3412; }
+.studio-preview-error { color: #b91c1c; white-space: pre-wrap; padding: 1rem; }
+.file-item { display: flex; flex-wrap: wrap; align-items: center; gap: .2rem; padding: .3rem .5rem; border-left: 3px solid transparent; }
+.studio-file-open { flex: 1 1 100%; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: .35rem; }
+.studio-file-action { padding: .4rem; font-size: .75rem; color: #2563eb; }
+html.dark .studio-file-action { color: #93c5fd; }
+button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+button:disabled { opacity: .55; cursor: wait; }
+#mode-quick, #mode-project { background: transparent; color: #64748b; box-shadow: none; }
+#mode-quick[aria-pressed="true"], #mode-project[aria-pressed="true"] { background: #fff; color: #1d4ed8; box-shadow: inset 0 -2px #2563eb; }
+html.dark #mode-quick[aria-pressed="true"], html.dark #mode-project[aria-pressed="true"] { background: #334155; color: #bfdbfe; }
+#mobile-tabs button { border-color: transparent; color: #64748b; }
+#mobile-tabs [aria-selected="true"] { border-color: #2563eb; color: #1d4ed8; }
+#create-project-modal { padding: 1rem; overflow-y: auto; }
+#create-project-modal > div { max-height: calc(100dvh - 2rem); overflow-y: auto; }
+@media (max-width: 767px) {
+    #navbar { padding-left: .5rem; padding-right: .5rem; }
+    #navbar > div { gap: .35rem; }
+    #navbar > div:first-child { width: 100%; justify-content: space-between; }
+    #navbar > div:last-child { width: 100%; justify-content: flex-end; }
+    #navbar > div:first-child > a { display: none; }
+    #doc-type { max-width: 110px; }
+    #mode-quick, #mode-project { padding-left: .5rem; padding-right: .5rem; }
+    #sidebar-pane, #editor-pane, #viewer-pane, .split[data-mode="project"] #editor-pane, .split[data-mode="project"] #viewer-pane { position: absolute; inset: 0; width: 100% !important; min-width: 0; }
+    #live-preview-content { padding: 1rem; }
+    .gutter { display: none; }
+    #mobile-tabs button { min-height: 44px; }
+    .studio-file-action { min-height: 44px; }
+    html.tg-webapp #navbar { height: auto; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
