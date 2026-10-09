@@ -24,6 +24,243 @@ This implementation covers review items 1–7, 13, 20, 23–25, 27, and 34–35.
 It adds the following behavior to the existing product. Historical sprint sections
 below describe earlier contracts; the refinements in this section take precedence.
 
+### Official curriculum assessments
+
+The lesson dialog's **Discipline** tab now shows reviewed curriculum assessment
+requirements for the selected group and semester: exam, pass/fail, graded pass,
+coursework and course project. Other semesters are separate. Each result links
+to the official source and the saved, hash-identified reviewed PDF page. These
+are planned requirements, not a scheduled exam date from RUZ.
+
+Administrators open **Admin → Curricula** (`/curricula`) to register the official
+PDF URL and programme/profile, campus, admission year and study format. The
+workflow is: fetch or upload the document, check/edit candidate rows against the
+PDF and publish, then bind exact RUZ group IDs and explicit semester date ranges.
+The page supports RU/EN, dark theme, narrow screens, review corrections and
+source deletion. Deletion removes its group bindings and future refreshes.
+
+`CURRICULUM_REFRESH_DAYS=7` checks registered sources weekly; set `14` for every
+two weeks. An hourly scheduler tick consults persisted due dates, including on
+startup. Short database leases prevent concurrent imports. Unchanged PDF bytes
+retain reviewed corrections. Changed PDFs require review; failed imports and
+pending replacements preserve the last published data with a visible stale
+notice. Opening a lesson reads the database without downloading PDFs.
+
+The native parser uses pdfplumber and explicit table header/cell geometry. Scanned
+pages now use the **name OCR + numeric CNN** pipeline: OpenCV deskew/grid geometry,
+pypdfium2 rendering, Tesseract only for discipline names, and a small convolutional
+CTC model for complete numeric sequences such as `1,2,3`. Printed indices and
+headers are not recognized. A declared table template supplies column meanings;
+the 2023 and 2025 layouts differ and are never selected by admission year alone.
+Candidates retain the name, semester, source row crop and confidence diagnostics.
+The publication/group-binding step remains separate from automatic extraction.
+This supports declared ruled FA tables, not arbitrary document layouts.
+The parser does not infer semesters from loose numeric sequences or match similar course names.
+Downloads allow only HTTPS `fa.ru`/`www.fa.ru` `/upload/` URLs, validate redirects,
+and bound size/time. Imports are limited to 20 MiB and 100 PDF pages; the nginx
+document-upload location permits the same request size. OCR accepts at most eight
+scanned pages per document, renders at most 24 million pixels per page, and bounds
+recognition time, record count and crop payloads. Undeclared layouts, unreadable cells
+and unsupported layouts produce review warnings. A parser's `parsed` status still
+means unpublished candidates. The native path remains available without OCR packages.
+
+Upload/refresh stores the PDF and returns a durable `queued` state. A separate
+scheduler job checks the queue every minute and on startup. It takes a recoverable
+15-minute database lease and runs one document in a bounded child process outside
+FastAPI. The administrator sees queue/processing/error states, can retry stored
+bytes with **Reprocess**, and can enlarge individual source crops before publishing.
+There is no fabricated percentage progress. A stale result cannot replace newer
+uploaded bytes. Unchanged SHA256 + parser/model version avoids repeated parsing;
+an engine upgrade reprocesses cached PDFs while preserving human-reviewed values.
+
+Only the scheduler image installs `tesseract-ocr`, `tesseract-ocr-rus`,
+`tesseract-ocr-eng`, OpenCV, pypdfium2 and ONNX Runtime; no GPU or model server is required.
+`CURRICULUM_PARSE_TIMEOUT_SECONDS=300` (30–600) bounds wall time;
+`CURRICULUM_PARSE_MEMORY_MB=1536` (512–4096) bounds Linux address space per process,
+not combined Python/Tesseract resident memory.
+The child uses one OpenMP/BLAS thread, an 8 MiB output cap and Linux CPU/file-size
+limits; timeout/cancellation kills its process group, including Tesseract.
+Windows development enforces wall time and process-tree termination but not the
+Linux memory limit. `CURRICULUM_TESSERACT_CMD` may select a local executable.
+Keep `CURRICULUM_OCR_MODEL_VERSION` equal in API/scheduler and bump it after changing
+engine/language packages; its default is `tessdata-fast-system`. Parser rule changes
+must also bump the source-controlled cache version in `curriculum_processing.py`.
+
+The official catalogue at <https://www.fa.ru/sveden/education/edupr/> linked the
+2023 full-time Applied Machine Learning plan to
+<https://www.fa.ru/upload/constructor/773/o1glti47zsriv5zhc7qc6agt7g6gou7x/UP.pdf>
+when checked on 2026-10-09. This two-page scan is now supported by the OCR path:
+local visual checks confirmed exam/semester 7 for «Семантические технологии» and
+«Электронные деньги», and pass/semester 7 for «Программирование для встраиваемых систем».
+OCR names and ambiguous/missing cells still need administrator correction; this
+sample does not establish general extraction accuracy. A newer 2025 text PDF was
+successfully fetched and initially yielded 91 candidates; two were parent
+practice-section counts. Collecting the hierarchy from all source rows, including
+blank children, now excludes those parents and yields 89 discipline assessments.
+No plan is automatically assigned to ПМ23-1 or another
+group merely by its name; initial administrator registration/binding is required.
+
+Persistence: `curriculum_documents` holds metadata, source and reviewed PDF
+bytes/hashes, candidates, reviewed records and refresh state;
+`curriculum_groups` maps a unique group ID to a document and semester ranges.
+Apply Alembic migrations through `fc2c3d4e5f60` (registry, durable processing/cache
+state, declared `scan_layout`, then linked supplemental sources) before starting
+the updated API/scheduler.
+Both Compose scheduler definitions wait for the migrator.
+
+API (the administrator routes require `require_admin`):
+
+- `GET /api/schedule/curriculum?group_id=…&discipline=…&lesson_date=YYYY-MM-DD`
+  returns confirmed assessments or `unmapped`, `unavailable`, `not_found`,
+  `needs_review`; public lookups and PDF reads are rate limited.
+- `GET /api/schedule/curriculum/documents/{id}/{hash}.pdf` serves the current
+  published snapshot only when its hash matches. Publishing a replacement
+  retires the previous public snapshot URL; this is not a document archive.
+- `GET/POST /api/curricula`, `GET/DELETE /api/curricula/{id}` manage the registry.
+- `PUT /api/curricula/{id}/scan-layout` stores `fa_legacy_v1`, `fa_compact_v1`,
+  or null (verified-source selection). It queues cached bytes again, discards
+  stale pending candidates and preserves publication. Source/layout changes
+  during a worker run invalidate its result, including an A→B→A race.
+- `POST /api/curricula/{id}/refresh` checks the official source;
+  `PUT /api/curricula/{id}/document` accepts raw `application/pdf` bytes and
+  queues it; `GET` downloads the review copy with administrator authorization.
+- `POST /api/curricula/{id}/reprocess` retries cached PDF bytes without another
+  download. Detail exposes `processing_state`, safe `processing_error`, method,
+  parser/engine version and private review crops; list responses omit heavy rows.
+- `POST /api/curricula/{id}/publish` accepts `expected_hash` and reviewed
+  `assessments` (course code/name, semester, kind, page, evidence). It rejects
+  changed hashes, duplicate identities, conflicting titles and invalid pages.
+- `PUT /api/curricula/{id}/groups` atomically replaces group bindings and their
+  explicit semester ranges; overlapping ranges and cross-plan collisions fail.
+
+Course matching normalizes whitespace and case only. Same-title elective rows
+with different course codes remain ambiguous. Teacher/room timetables require
+an explicit group ID on the selected lesson. Source absence, missing term dates,
+or an empty cached exam schedule never establishes that a course has no exam.
+
+Historical all-OCR baseline validation (2026-10-09): the real two-page 2023 PDF produced 70 review candidates
+in about 10 seconds on a local Windows CPU with Tesseract 5.5.3 and tessdata_fast.
+Three ambiguous/unreadable cells were explicitly reported; some names/codes still
+need visual correction. A disposable SQLite/HTTP check covered upload → scheduler
+child → review → public lookup/PDF snapshot and unchanged-file cache reuse. This is
+not a production server benchmark. Linux container memory limits were not executed
+locally because the Docker daemon was unavailable.
+
+The full suite passes 470 tests with 62% branch-inclusive coverage, including the
+optional real-scan check. There are 116 administrator browser assertions plus 20
+locale/service-worker update assertions, with inspected desktop/mobile screenshots.
+Critical Ruff, JavaScript syntax and dependency audit pass. Coverage omits only
+`./config.py` and `./config-3.py`, virtual root filenames created by OpenCV's bootstrap
+`compile(..., basename, ...)`; actual application configuration files stay measured.
+Do not replace this with broad `config.py` exclusions or ignored coverage errors.
+
+### Specialized numeric curriculum pipeline
+
+The scan implementation is now `curriculum_pipeline.py`, with explicit
+`curriculum_layout.py` templates and `curriculum_numeric.py` CPU recognition.
+`curriculum_control_cells.py` splits wrapped numeric baselines and joins only
+recognized comma/range separators; uncertain lines remain unresolved. Source
+rows have internal physical identities, so printed discipline indices and table
+headers are not recognition targets. Only name crops reach Tesseract.
+
+The bundled CNN+CTC has 121,277 parameters and a 488,345-byte ONNX artifact.
+`scripts/train_curriculum_numeric.py` generated 384,000 synthetic font/noise
+samples without curriculum PDFs or GT. `scripts/run_curriculum_pipeline.py`
+exposes GT-free full-PDF inference; `scripts/evaluate_curriculum_numeric.py`
+separately evaluates frozen predictions. `scripts/curriculum_vector_gt.py`
+extracts independent native-text reference annotations for the 2025 raster test.
+The earlier dataset/fusion/model helper scripts remain research tools, not the
+production inference path. Packaged model metadata records seeds and hashes.
+
+On the 2023 scan, all 79 explicit control/semester facts were recovered, with
+three abstentions on noisy blank cells and no invented control values. The 2025
+layout test recovered all 89 numeric facts; three OCR title errors reduced strict
+name-inclusive matching to 85/89. Actual app-vm CPU processing took 27.67 seconds
+and approximately 360 MiB peak process-tree RSS. Server Tesseract introduced one
+title typo: its strict result is 78/79 while numeric identities remain 79/79.
+These are development/regression results, not a general accuracy guarantee.
+
+The [numeric pipeline report](reports/curriculum-numeric-pipeline/README.md)
+includes per-cell scores, frozen audit rows, synthetic training provenance,
+PyTorch/ONNX export parity, actual server measurements, reproduction commands and
+the failing raw-grid ablation. It explains why deskew, tight crop, grid removal
+and structural row filtering are mandatory. Wheel asset loading and migration
+round trips were checked; the production Docker image was not built or deployed
+during this validation.
+
+For the ПМ23/ПМ25 rollout, exact group IDs, the Moscow campus and full-time form
+were checked against the complete RUZ dictionaries. Parent schedule names prove
+current numbered semesters 7/3, and official cohort calendars supply current
+date bounds 2026-09-01 through 2027-01-25. The official Center AI 2025 updated
+native plan is identified separately from the catalog's signed scan; their URLs
+and hashes are never interchanged. Evidence and exclusions are retained in
+[the group-binding report](reports/curriculum-numeric-pipeline/group-binding/README.md).
+
+Reviewed supporting sources may set `parent_document_id` to a root curriculum
+with the same program, profile, campus, admission year and study form. They
+inherit the root's group/semester context; they cannot own separate groups or
+form nested chains. Lookup combines published sources while preserving each
+fact's own official URL, page and hash-identified PDF snapshot. Conflicting course
+identities remain unconfirmed. Deleting a root unlinks its supporting documents
+without deleting those independent source records.
+
+`scripts/publish_curriculum_bundle.py` validates frozen PDF bytes, reviewed
+records and group/date evidence through the administrator API. It defaults to
+an authenticated read-only dry run. Explicit `--apply` saves a pre-write snapshot,
+creates missing sources, waits for bounded background processing, publishes and
+merges group bindings without removing unrelated groups. Repeating an identical
+bundle is idempotent; a conflicting existing publication or group owner stops
+the operation. Credentials stay in environment variables and are never logged.
+Supplement bundles use `parent_source_url`, resolved to a database ID only after
+root documents exist. The prepared
+[publication bundle](reports/curriculum-numeric-pipeline/publication-bundle.json)
+contains 79 base 2023 facts, 89 updated 2025 facts and two 2023 graph-course passes
+from the separate official autumn 2026/27 BRS PDF (pages 13 and 35).
+
+### Historical full-table curriculum OCR audit
+
+The [2023 scan audit](reports/curriculum-ocr-2023/README.md) covers both pages:
+91 physical rows, 66 disciplines, 455 assessment cells (including 347 blanks),
+and 79 explicit discipline/assessment/semester facts. The visually double-checked
+agent GT and independent RUZ name vocabulary are in
+`tests/fixtures/curriculum_ocr/`; hours and credits are deliberately out of scope.
+Printed duplicate indices and section-only practice controls remain visible.
+
+`scripts/benchmark_curriculum_ocr.py` independently detects/deskews the grid,
+recognizes cells with Tesseract fast/best and optional PP-OCRv5 CPU ONNX, and
+compares preprocessing, PSM settings and ensemble policies. GT is read only
+after inference. Metrics separate blanks, nonempty cells, row classification,
+codes/names, facts by geometry and facts requiring correct course identity.
+Actual production candidates are also scored. Name matching uses a separate
+RUZ vocabulary and reports accepted corrections versus harmful replacements;
+a GT dictionary is explicitly labeled as a leaking oracle, not deployment evidence.
+
+`scripts/render_curriculum_ocr_report.py` creates a portable HTML audit with
+search/filtering, all row crops from the original scan, all model readings and
+production candidates, plus GT/comparison CSV. Its output includes a byte-for-byte
+copy of the source PDF. Models and PDF are external local inputs; no online calls
+or published data changes occur during evaluation/reporting.
+
+In the 14-scenario development experiment, exact voting lost useful answers.
+A fixed field-specific hybrid (best for indices, batched fast for names, PP-OCR
+for controls) achieved 76/79 strict facts with no incorrect additions. Its choices
+were selected on the same GT, so another curriculum is needed before adoption.
+Numeric `3`/`з` and index `Б`/`5` confusions remain. Model confidence values are
+not treated as comparable calibrated probabilities. ONNX Runtime is optional
+for the offline experiment and is not added to the scheduler's production image.
+
+The audit also exposed a TSV-reader defect: quotation marks in Tesseract text
+were being interpreted as CSV quoting and merging following rows into titles.
+The reader now preserves literal quotes, with a regression test and parser cache
+version bump. Frozen measurements before that fix are preserved separately;
+the final comparison is rerun after it. The ensemble and fuzzy suggestions remain
+offline development tools; publication still requires administrator review.
+
+The final audit gate passes 497 tests (including the local real scan) with 62%
+branch-inclusive coverage, critical project Ruff and full Ruff for the touched
+OCR tools. The HTML audit passes 22 browser checks with inspected 1440/390 px
+screenshots. GT/CSV counts, original PDF hash and recomputed metrics agree.
+
 ### Authentication, account data and search
 
 - Telegram Login Widget verification requires an integer `auth_date`, checks its

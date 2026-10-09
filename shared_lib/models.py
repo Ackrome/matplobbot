@@ -22,6 +22,75 @@ from sqlalchemy.orm import declarative_base
 Base = declarative_base()
 
 
+class CurriculumDocument(Base):
+    """Reviewed official curriculum and a separately staged replacement PDF."""
+
+    __tablename__ = "curriculum_documents"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    parent_document_id = Column(
+        Integer,
+        ForeignKey(
+            "curriculum_documents.id",
+            ondelete="SET NULL",
+            name="fk_curriculum_documents_parent_document_id",
+        ),
+        nullable=True,
+        index=True,
+    )
+    title = Column(String(500), nullable=False)
+    source_url = Column(String(2048), nullable=False)
+    program = Column(String(500), nullable=False)
+    profile = Column(String(500), nullable=False)
+    campus = Column(String(255), nullable=False)
+    admission_year = Column(Integer, nullable=False)
+    study_form = Column(String(100), nullable=False)
+    scan_layout = Column(String(50), nullable=True)
+    source_pdf = Column(LargeBinary, nullable=True)
+    source_page_count = Column(Integer, nullable=True)
+    pending_hash = Column(String(64), nullable=True)
+    pending_assessments = Column(JSON, nullable=False, default=list)
+    pending_warnings = Column(JSON, nullable=False, default=list)
+    pending_status = Column(String(30), nullable=True)
+    published_hash = Column(String(64), nullable=True)
+    published_pdf = Column(LargeBinary, nullable=True)
+    published_assessments = Column(JSON, nullable=False, default=list)
+    published_at = Column(DateTime(timezone=True), nullable=True)
+    checked_at = Column(DateTime(timezone=True), nullable=True)
+    last_attempt_at = Column(DateTime(timezone=True), nullable=True)
+    next_check_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    last_error = Column(String(80), nullable=True)
+    refresh_token = Column(String(36), nullable=True)
+    refresh_started_at = Column(DateTime(timezone=True), nullable=True)
+    source_hash = Column(String(64), nullable=True)
+    parsed_hash = Column(String(64), nullable=True)
+    parser_version = Column(String(100), nullable=True)
+    parse_method = Column(String(20), nullable=True)
+    engine_version = Column(String(200), nullable=True)
+    processing_state = Column(
+        String(20), nullable=False, default="ready", server_default="ready", index=True
+    )
+    processing_token = Column(String(36), nullable=True)
+    processing_started_at = Column(DateTime(timezone=True), nullable=True)
+    processing_error = Column(String(80), nullable=True)
+
+
+class CurriculumGroup(Base):
+    """Explicit group identity and reviewed semester date ranges for one plan."""
+
+    __tablename__ = "curriculum_groups"
+
+    group_id = Column(String(128), primary_key=True)
+    document_id = Column(
+        Integer,
+        ForeignKey("curriculum_documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    group_name = Column(String(255), nullable=False)
+    terms = Column(JSON, nullable=False, default=list)
+
+
 class User(Base):
     __tablename__ = "users"
 

@@ -16,6 +16,7 @@ setup(
         "cachetools",
         "celery",
         "Pillow>=12.3.0",
+        "pdfplumber==0.11.10",
         "markdown-it-py",
         "mdit-py-plugins",
         "opentelemetry-api>=1.41.0,<2",
@@ -23,9 +24,15 @@ setup(
         "opentelemetry-instrumentation-aiohttp-client>=0.62b0,<1",
         "opentelemetry-sdk>=1.41.0,<2",
     ],
-    # ВАЖНОЕ ИЗМЕНЕНИЕ ЗДЕСЬ:
+    # Keep the small numeric recognizer and its integrity metadata in wheels.
+    # Its inference runtime is installed only by the scheduler image.
     package_data={
-        "shared_lib": ["locales/*.json", "templates/*.tex"],
+        "shared_lib": [
+            "locales/*.json",
+            "templates/*.tex",
+            "data/curriculum_numeric.onnx",
+            "data/curriculum_numeric.json",
+        ],
     },
     include_package_data=True,
     python_requires=">=3.11",

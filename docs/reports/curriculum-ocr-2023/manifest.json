@@ -1,0 +1,80 @@
+{
+  "date": "2026-10-09",
+  "source_url": "https://www.fa.ru/upload/constructor/773/o1glti47zsriv5zhc7qc6agt7g6gou7x/UP.pdf",
+  "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3",
+  "python": "3.13.11",
+  "os": "Windows-11-10.0.26200-SP0",
+  "cpu": "Intel Core Ultra 9 285H",
+  "cpu_workers": 4,
+  "gpu_used": false,
+  "packages": {
+    "numpy": "2.2.6",
+    "opencv-python-headless": "4.12.0.88",
+    "pypdfium2": "5.14.0",
+    "Pillow": "12.3.0",
+    "onnxruntime": "1.23.2",
+    "graphifyy": "0.9.82"
+  },
+  "git_base": "3d33820e29e6304ba0a53afd482e02f50b22b290",
+  "uncommitted_changes": true,
+  "gt_sha256_files": {
+    "fa_pmo_2023_page1_gt.json": "2f74f884ea24106bd13ee7663a7fc4a53e99520204fd28be4027f6dc690c3cff",
+    "fa_pmo_2023_page2_gt.json": "6f76fed2c973faff846629ee652596d0bee4d9150e6a714d35796fb4ab29550d",
+    "fa_pmo_2023_ruz_names_2026-10-09.json": "841c040fbbdc78c2ff3e8a6d7c41fa2bb8a39c62d3585329b4a9699aae32201e"
+  },
+  "timing_scope": "Local wall time, result-cache miss runs; no hardware/OS cache reset. Model download/initialization excluded. Ensemble/hybrid times are constituent sums, not an optimized field-only pipeline measurement.",
+  "development_selection": "hybrid field assignment and matching thresholds evaluated on same GT; no held-out claim",
+  "models": {
+    "fast": {
+      "rus": "e16e5e036cce1d9ec2b00063cf8b54472625b9e14d893a169e2b0dedeb4df225",
+      "eng": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+    },
+    "best": {
+      "rus": "b617eb6830ffabaaa795dd87ea7fd251adfe9cf0efe05eb9a2e8128b7728d6b6",
+      "eng": "8280aed0782fe27257a68ea10fe7ef324ca0f8d85bd2fd145d1c2b560bcb66ba"
+    },
+    "ppocr": {
+      "url": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv5/rec/eslav_PP-OCRv5_rec_mobile.onnx",
+      "sha256": "08705d6721849b1347d26187f15a5e362c431963a2a62bfff4feac578c489aab"
+    }
+  },
+  "measured_source_sha256_files": {
+    "scripts/benchmark_curriculum_ocr.py": "b70c355f54824e4574c6ac1ae8cd431cc72af64af97a4278f6cced659aeab5a1",
+    "scripts/curriculum_ocr_onnx.py": "6b1a285910f05ad75b9f79f749e37a7dc49c47ec24e095dd65464a1825df95c6",
+    "shared_lib/services/curriculum_ocr.py": "66953128ffc092e469f20e4beacb158057f2d6c4b5c418df93c82ba1cebe808b",
+    "shared_lib/services/curriculum_documents.py": "1d509b862ceda5dc2880e9f76fe15ccc2bc147994b7b468633685bfb9e71df8d"
+  },
+  "current_source_sha256_files": {
+    "scripts/benchmark_curriculum_ocr.py": "2f2037e87afa182cb9d47836a5fd66f07322ea4c16e2d8c2013cb82a211c41b0",
+    "scripts/curriculum_ocr_onnx.py": "535664ffab80addfd0c7222df171502faadbe8d833314bfb6dfb163c51135b87",
+    "shared_lib/services/curriculum_ocr.py": "6f153db0da714226d22943200a85bdba29eaa10e35ad6ee83bcdc1328e12fd7d",
+    "shared_lib/services/curriculum_documents.py": "1d509b862ceda5dc2880e9f76fe15ccc2bc147994b7b468633685bfb9e71df8d",
+    "scripts/render_curriculum_ocr_report.py": "ad9f6df1f5b320cfe6c28ca9c03500c448c929b42b7c4cf57643dbcc946f6627",
+    "shared_lib/services/curriculum_processing.py": "ca057ca9a6671bd3c75379d5d4f4897673fdd782a96f500f50a2255d116c452f"
+  },
+  "post_measurement_changes": "Import organization/unused-import removal and equivalent subprocess capture_output=True cleanup only. Full 497-test suite rerun after cleanup; OCR predictions and timings preserved.",
+  "validation": {
+    "unit_tests": 497,
+    "branch_inclusive_coverage_percent": 62,
+    "browser_checks": 22,
+    "browser_errors": [],
+    "gt_rows": 91,
+    "comparison_rows": 1274,
+    "original_row_crops": 91,
+    "source_pdf_hash_verified": true,
+    "metric_crosscheck": true,
+    "ruff_critical_project": "pass",
+    "ruff_touched_ocr_tools": "pass",
+    "skill_validation": "pass",
+    "graphify": {
+      "version": "0.9.82",
+      "nodes": 4543,
+      "edges": 10779,
+      "communities": 271,
+      "known_extraction_limits": [
+        "pyproject.toml no symbols",
+        "Jenkinsfile.groovy syntax parser limitation"
+      ]
+    }
+  }
+}

@@ -1,0 +1,759 @@
+{
+  "schema": "curriculum-numeric-server-benchmark-1",
+  "recorded_at_utc": "2026-10-09T16:39:16.949728+00:00",
+  "scope": "Isolated temporary CPU process on actual app-vm; no production deploy or system package/service/VM changes.",
+  "machine": {
+    "host": "app-vm",
+    "os": "Ubuntu 24.04.4",
+    "vcpu": 8,
+    "qemu_cpu_profile": "x86-64-v2-AES",
+    "avx": false,
+    "avx2": false,
+    "allocated_memory_mib": 5120,
+    "guest_memory_mib": 4915,
+    "gpu_passthrough": false,
+    "proxmox_host_cpu": "Intel Core i7-4770",
+    "runtime_folder": "/home/app-vm/mpb-ocr-probe.vgPpjF"
+  },
+  "whole_pdf": {
+    "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3",
+    "model_sha256": "88bc1d21d5cc709db75a17e2ef8cf2ffd695b0b8e6b22c3c40f6de4265bc8c01",
+    "parser_fingerprint": "curriculum-text-1-numeric-1-8a7290c813da8a2d8edc45c4",
+    "gt_used": false,
+    "runtime_sha256": {
+      "curriculum_ocr.py": "2b1f962ce3450496e89c6312761cb6e9870c916d21f0903ab3d8abba097c8bc9",
+      "curriculum_control_cells.py": "4ae874be02784406ac5c911d04e005acca7db2f90a501c3d627937c55ffd110d",
+      "curriculum_processing.py": "35715410890b1650b1bd67a71c1fe3e2c1a9444b9a4cea56dfa72ddd0d468ea4",
+      "curriculum_pipeline.py": "48116a5945f19c85fb3a350835d84ec004118b565abfbd494e10ad831e67e267",
+      "curriculum_worker.py": "f92e51e436229efca6610324035f806dc68368480eecf7af8ad43220e85e5d27",
+      "curriculum_numeric.py": "4311f16993d3e5145cf19830ef941237e6a99f1a687d478ccdc6fe0ca73572a6",
+      "curriculum_documents.py": "1d509b862ceda5dc2880e9f76fe15ccc2bc147994b7b468633685bfb9e71df8d",
+      "curriculum_service.py": "6af685ba00d190eb7a299ad7aeabfd98fbc4dd4d851ad33e3e13dc62daf88292",
+      "curriculum_layout.py": "5afffde2e25c12b3d6caf0c57e4356a3183f2f0ef91d8e7e0dff746c3ea876f1"
+    },
+    "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+    "platform": "Linux-6.8.0-139-generic-x86_64-with-glibc2.39",
+    "numpy": "2.2.6",
+    "opencv": "4.12.0",
+    "onnxruntime": "1.23.2",
+    "pdfium": "5.14.0",
+    "pdfplumber": "0.11.10",
+    "tesseract": "tesseract 5.3.4",
+    "traineddata_sha256": {
+      "rus.traineddata": "e16e5e036cce1d9ec2b00063cf8b54472625b9e14d893a169e2b0dedeb4df225",
+      "eng.traineddata": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+    },
+    "threads": 1,
+    "wall_seconds": 27.670528379036114,
+    "cpu_seconds_self": 23.112367340000002,
+    "cpu_seconds_children": 4.7685900000000006,
+    "peak_rss_self_kib": 355920,
+    "peak_rss_children_kib": 355920,
+    "sampled_peak_tree_rss_kib": 368580,
+    "memory_limit_bytes": 1610612736,
+    "assessments": 79,
+    "warnings": [
+      "Page 1, row 29, pass: numeric cell unresolved.",
+      "Page 2, row 14, course_project: numeric cell unresolved.",
+      "Page 2, row 37, pass: numeric cell unresolved."
+    ],
+    "status": "needs_review",
+    "method": "ocr"
+  },
+  "bounds": {
+    "threads": 1,
+    "rlimit_as_mib": 1536,
+    "rlimit_cpu_seconds_soft": 290,
+    "rlimit_cpu_seconds_hard": 291,
+    "alarm_seconds": 295,
+    "outer_timeout_seconds": 300,
+    "outer_kill_after_seconds": 3,
+    "gt_loaded": false,
+    "rss_sample_period_seconds": 0.05
+  },
+  "comparison_to_local": {
+    "local_prediction_sha256": "fb38b44f225aa819e730f902ba29e6596123c7135282fef2240708fd240b9e98",
+    "local_prediction_file": "mpb-numeric-pipeline/predictions-2023-final.json",
+    "server_prediction_sha256": "ed7dbc57ff360c791bec3a4bcbee25a7d5e531717a2091f9f5e7bac9f618658b",
+    "server_records": 79,
+    "local_records": 79,
+    "strict_matching_records": 78,
+    "strict_server_only": 1,
+    "strict_local_only": 1,
+    "numeric_identity_matching_records": 79,
+    "numeric_identity_server_only": 0,
+    "numeric_identity_local_only": 0,
+    "warnings_equal": true,
+    "name_changes": [
+      {
+        "identity": {
+          "discipline_code": "scan:p2:r004",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2
+        },
+        "server_name": "Разработка припожений в системе 1С Предприятие",
+        "local_name": "Разработка приложений в системе 1С Предприятие"
+      }
+    ]
+  },
+  "predictions": [
+    {
+      "discipline_code": "scan:p1:r004",
+      "discipline_name": "Финансовый университет: история и современность",
+      "semester": 1,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r005",
+      "discipline_name": "История России",
+      "semester": 2,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r006",
+      "discipline_name": "Безопасность жизнедеятельности",
+      "semester": 1,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r007",
+      "discipline_name": "Физическая культура и спорт",
+      "semester": 1,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r008",
+      "discipline_name": "Иностранный язык",
+      "semester": 4,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r008",
+      "discipline_name": "Иностранный язык",
+      "semester": 1,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r008",
+      "discipline_name": "Иностранный язык",
+      "semester": 2,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r008",
+      "discipline_name": "Иностранный язык",
+      "semester": 3,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r009",
+      "discipline_name": "Иностранный язык в профессиональной сфере",
+      "semester": 6,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r009",
+      "discipline_name": "Иностранный язык в профессиональной сфере",
+      "semester": 5,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r010",
+      "discipline_name": "Философия",
+      "semester": 5,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r011",
+      "discipline_name": "Информационное право",
+      "semester": 5,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r012",
+      "discipline_name": "Экономическая теория",
+      "semester": 1,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r013",
+      "discipline_name": "Основы деловой и публичной коммуникации",
+      "semester": 7,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r015",
+      "discipline_name": "Введение в специальность",
+      "semester": 1,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r016",
+      "discipline_name": "Теория вероятностей и математическая статистика",
+      "semester": 3,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r016",
+      "discipline_name": "Теория вероятностей и математическая статистика",
+      "semester": 2,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r017",
+      "discipline_name": "Финансовая математика и ее приложения",
+      "semester": 3,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r018",
+      "discipline_name": "Обработка данных и моделирование в табличном редакторе",
+      "semester": 4,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r019",
+      "discipline_name": "Математические модели микро- и макроэкономики",
+      "semester": 4,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r020",
+      "discipline_name": "Дискретная математика",
+      "semester": 2,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r020",
+      "discipline_name": "Дискретная математика",
+      "semester": 1,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r022",
+      "discipline_name": "Алгоритмы и структуры данных в языке Python",
+      "semester": 1,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r022",
+      "discipline_name": "Алгоритмы и структуры данных в языке Python",
+      "semester": 2,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r023",
+      "discipline_name": "Машинное обучение",
+      "semester": 4,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r023",
+      "discipline_name": "Машинное обучение",
+      "semester": 3,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r023",
+      "discipline_name": "Машинное обучение",
+      "semester": 4,
+      "kind": "course_project",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r024",
+      "discipline_name": "Практикум по программированию",
+      "semester": 1,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r024",
+      "discipline_name": "Практикум по программированию",
+      "semester": 2,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r024",
+      "discipline_name": "Практикум по программированию",
+      "semester": 3,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r024",
+      "discipline_name": "Практикум по программированию",
+      "semester": 4,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r025",
+      "discipline_name": "Технологии обработки данных",
+      "semester": 2,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r026",
+      "discipline_name": "Системы управления базами данных",
+      "semester": 4,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r026",
+      "discipline_name": "Системы управления базами данных",
+      "semester": 3,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r029",
+      "discipline_name": "Алгебра и геометрия",
+      "semester": 1,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r030",
+      "discipline_name": "Дифференциальные уравнения",
+      "semester": 3,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r031",
+      "discipline_name": "Функциональный анализ",
+      "semester": 6,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r032",
+      "discipline_name": "Численные методы",
+      "semester": 4,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r033",
+      "discipline_name": "Математическое и имитационное моделирование",
+      "semester": 6,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r034",
+      "discipline_name": "Эконометрика",
+      "semester": 4,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r034",
+      "discipline_name": "Эконометрика",
+      "semester": 3,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r035",
+      "discipline_name": "Современные банковские продукты и услуги",
+      "semester": 4,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r036",
+      "discipline_name": "Технологии обработки больших данных",
+      "semester": 5,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r037",
+      "discipline_name": "Математический анализ",
+      "semester": 2,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r037",
+      "discipline_name": "Математический анализ",
+      "semester": 1,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r040",
+      "discipline_name": "Глубокое обучение",
+      "semester": 5,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r041",
+      "discipline_name": "Обработка текстов на естественных языках",
+      "semester": 6,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r042",
+      "discipline_name": "Рекомендательные системы и коллаборативная фильтрация",
+      "semester": 6,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r043",
+      "discipline_name": "Семантические технологии",
+      "semester": 7,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r044",
+      "discipline_name": "Прикладные задачи машинного обучения",
+      "semester": 7,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r045",
+      "discipline_name": "Машинное зрение",
+      "semester": 6,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r046",
+      "discipline_name": "Машинное обучение в семантическом и сетевом анализе",
+      "semester": 6,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r046",
+      "discipline_name": "Машинное обучение в семантическом и сетевом анализе",
+      "semester": 6,
+      "kind": "coursework",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r047",
+      "discipline_name": "Методы оптимизации",
+      "semester": 5,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r048",
+      "discipline_name": "Электронные деньги",
+      "semester": 7,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r049",
+      "discipline_name": "Технологии работы с открытыми данными",
+      "semester": 7,
+      "kind": "exam",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r052",
+      "discipline_name": "Основы веб-разработки",
+      "semester": 6,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r053",
+      "discipline_name": "Объектно-ориентированное программирование",
+      "semester": 6,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p1:r054",
+      "discipline_name": "Основы мобильной разработки",
+      "semester": 7,
+      "kind": "pass",
+      "page": 1
+    },
+    {
+      "discipline_code": "scan:p2:r002",
+      "discipline_name": "Основы корпоративных информационных систем",
+      "semester": 6,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r003",
+      "discipline_name": "Основы бухгалтерских информационных систем",
+      "semester": 6,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r004",
+      "discipline_name": "Разработка припожений в системе 1С Предприятие",
+      "semester": 7,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r006",
+      "discipline_name": "Разработка эффективных вычислительных алгоритмов",
+      "semester": 6,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r007",
+      "discipline_name": "Низкоуровневое программирование",
+      "semester": 6,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r008",
+      "discipline_name": "Программирование для встраиваемых систем",
+      "semester": 7,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r010",
+      "discipline_name": "Основы проектирования информационных систем",
+      "semester": 6,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r011",
+      "discipline_name": "Архитектура и дизайн программного обеспечения",
+      "semester": 7,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r012",
+      "discipline_name": "Тестирование программного обеспечения",
+      "semester": 7,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r014",
+      "discipline_name": "Методы визуализации данных",
+      "semester": 6,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r015",
+      "discipline_name": "Основы численных методов",
+      "semester": 7,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r016",
+      "discipline_name": "Основы математического моделирования",
+      "semester": 7,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r018",
+      "discipline_name": "Технологии параллельного программирования",
+      "semester": 6,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r019",
+      "discipline_name": "Основы технологий интернета вещей",
+      "semester": 7,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r020",
+      "discipline_name": "Микросервисная архитектура",
+      "semester": 7,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r029",
+      "discipline_name": "Учебно-научный семинар",
+      "semester": 2,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r029",
+      "discipline_name": "Учебно-научный семинар",
+      "semester": 4,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r029",
+      "discipline_name": "Учебно-научный семинар",
+      "semester": 6,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r035",
+      "discipline_name": "Элективные дисциплины по физической культуре и спорту",
+      "semester": 2,
+      "kind": "pass",
+      "page": 2
+    },
+    {
+      "discipline_code": "scan:p2:r037",
+      "discipline_name": "Основы военной подготовки",
+      "semester": 5,
+      "kind": "graded_pass",
+      "page": 2
+    }
+  ],
+  "numeric_export_probes": [
+    {
+      "scenario": "synthetic_numeric_v2_clean",
+      "gt_used": false,
+      "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3",
+      "model_sha256": "88bc1d21d5cc709db75a17e2ef8cf2ffd695b0b8e6b22c3c40f6de4265bc8c01",
+      "dataset_sha256": "389871590f81fec75101033375ee6b73ba30900d9a41e52b93cbd749206afdfb",
+      "cell_images_ordered_sha256": "66f08faf8a00a88425c8033e033523a3311f928a777429f409887709d18b788d",
+      "runtime_sha256": {
+        "curriculum_numeric": "4311f16993d3e5145cf19830ef941237e6a99f1a687d478ccdc6fe0ca73572a6",
+        "curriculum_control_cells": "4ae874be02784406ac5c911d04e005acca7db2f90a501c3d627937c55ffd110d"
+      },
+      "onnxruntime": "1.23.2",
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "platform": "Linux-6.8.0-139-generic-x86_64-with-glibc2.39",
+      "numpy": "2.2.6",
+      "opencv": "4.12.0",
+      "providers": [
+        "CPUExecutionProvider"
+      ],
+      "threads": 1,
+      "row_count": 91,
+      "cells": 455,
+      "blank_cells": 271,
+      "abstentions": 95,
+      "external_blank_gate_used": false,
+      "model_init_seconds": 0.007020802004262805,
+      "inference_seconds": 0.4249339129310101,
+      "wall_seconds": 0.5398768121376634,
+      "cpu_seconds": 0.5390126630000001,
+      "peak_rss_kib": 74588,
+      "memory_limit_bytes": 1073741824,
+      "full_prediction_sha256": "d2b611ca758d09bc3f77f0ab7f891229f15eebdba338d716cc664270c2944cb2"
+    },
+    {
+      "scenario": "synthetic_numeric_v2_raw",
+      "gt_used": false,
+      "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3",
+      "model_sha256": "88bc1d21d5cc709db75a17e2ef8cf2ffd695b0b8e6b22c3c40f6de4265bc8c01",
+      "dataset_sha256": "389871590f81fec75101033375ee6b73ba30900d9a41e52b93cbd749206afdfb",
+      "cell_images_ordered_sha256": "c1af4feaaa7fce64c7c2c55bbe3d0f6eea0354ef59492d9875a815b7caf95a59",
+      "runtime_sha256": {
+        "curriculum_numeric": "4311f16993d3e5145cf19830ef941237e6a99f1a687d478ccdc6fe0ca73572a6",
+        "curriculum_control_cells": "4ae874be02784406ac5c911d04e005acca7db2f90a501c3d627937c55ffd110d"
+      },
+      "onnxruntime": "1.23.2",
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "platform": "Linux-6.8.0-139-generic-x86_64-with-glibc2.39",
+      "numpy": "2.2.6",
+      "opencv": "4.12.0",
+      "providers": [
+        "CPUExecutionProvider"
+      ],
+      "threads": 1,
+      "row_count": 91,
+      "cells": 455,
+      "blank_cells": 199,
+      "abstentions": 130,
+      "external_blank_gate_used": false,
+      "model_init_seconds": 0.007661315146833658,
+      "inference_seconds": 0.47371101402677596,
+      "wall_seconds": 0.58909672498703,
+      "cpu_seconds": 0.588305001,
+      "peak_rss_kib": 74712,
+      "memory_limit_bytes": 1073741824,
+      "full_prediction_sha256": "0f28f4c69f870f9624b4b4def99c04c8254266fdbe62649e18871b68dee9b8c1"
+    }
+  ],
+  "package_check": {
+    "wheel_file": "matplobbot_shared-0.1.356-py3-none-any.whl",
+    "wheel_sha256": "6b2a3daef87812f4ff69b701f2fa463b3615fb509484d5599cbc4c85cdf67db1",
+    "wheel_bytes": 606976,
+    "model_bytes": 488345,
+    "onnxruntime_in_shared_dependencies": false,
+    "default_model_loaded_from_extracted_wheel": true,
+    "scheduler_docker_build_smoke_added": true,
+    "docker_image_built": false
+  },
+  "validation": {
+    "targeted_tests": 42,
+    "targeted_tests_passed": true,
+    "migration_head": "fb1b2c3d4e5f",
+    "isolated_sqlite_upgrade_model_parity_downgrade": true,
+    "direct_onnxruntime_pin_audit": "1.23.2: no known vulnerabilities; full transitive audit is separate",
+    "runtime_sources_match_current_checkout": {
+      "curriculum_ocr.py": true,
+      "curriculum_control_cells.py": true,
+      "curriculum_processing.py": true,
+      "curriculum_pipeline.py": true,
+      "curriculum_worker.py": true,
+      "curriculum_numeric.py": true,
+      "curriculum_documents.py": true,
+      "curriculum_service.py": true,
+      "curriculum_layout.py": true
+    }
+  },
+  "measurement_notes": [
+    "Whole-PDF timing includes imports, native PDF scan detection, PDFium rasterization, OpenCV geometry, name OCR and numeric CNN; Linux workers use same source as checkout.",
+    "Sampled tree RSS sums current Python process and descendant Tesseract processes every50ms; separate getrusage child peak may include inherited parent RSS around fork and must not be added to parent peak.",
+    "Numeric export probes run all455 control cells across91 physical rows, including totals/sections and upscaled raw/clean exports. Their abstentions are not the production discipline-cell quality metric.",
+    "General OCR differs across Tesseract versions: one 2023 course title has a server spelling error; numeric source-row/kind/semester identities match79/79.",
+    "Temporary runtime used Ubuntu Noble Tesseract5.3.4 and traineddata4.1.0, not the final scheduler container image; no Dockerdaemon access was available."
+  ],
+  "temporary_artifact_policy": "Runtime and JSON outputs preserved for reproducibility; no background process or service remains."
+}

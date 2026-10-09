@@ -23,3 +23,8 @@ exclude = "(^alembic/versions/)"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.coverage.report]
+# OpenCV's bootstrap compiles package configuration with basename-only filenames.
+# These two root paths are virtual; keep real app config.py modules in coverage.
+omit = ["./config.py", "./config-3.py"]

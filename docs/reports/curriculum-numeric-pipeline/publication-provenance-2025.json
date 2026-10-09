@@ -1,0 +1,1780 @@
+{
+  "schema": "reviewed-curriculum-publication-v1",
+  "reviewed_on": "2026-10-09",
+  "source_url": "https://www.fa.ru/upload/constructor/e13/mm7ghxp0y1dumv3ons4kyeey1qy0haj1/uchebnyy-plan-PMO_2025-new.pdf",
+  "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86",
+  "source_page_count": 3,
+  "curriculum_years": "2025–2029",
+  "programme": "01.03.02 Прикладная математика и информатика",
+  "profile": "Прикладное машинное обучение",
+  "publication_file": "publish-2025.json",
+  "publication_file_sha256": "2a748aa337319ca697790606820fbb8e726d4b6a4988718ae7630b3d315c4440",
+  "publication_method": "native PDF extraction after source-row hierarchy correction",
+  "assessment_count": 89,
+  "distinct_discipline_count": 71,
+  "assessment_kind_counts": {
+    "exam": 30,
+    "pass": 55,
+    "course_project": 2,
+    "graded_pass": 2
+  },
+  "ground_truth_files": [
+    {
+      "path": "tests/fixtures/curriculum_ocr/fa_pmo_2025_page1_native_gt.json",
+      "sha256": "f1995353948c5673e586cb0b590aca2b9d8a25ce8434da397138ec78bc7686b9"
+    },
+    {
+      "path": "tests/fixtures/curriculum_ocr/fa_pmo_2025_page2_native_gt.json",
+      "sha256": "7005ed009a65e70965aad2839e7d2ba9b80b6331efe5f2651c49b7bf559a4539"
+    }
+  ],
+  "numeric_model_changed_by_review": false,
+  "gt_used_for_inference": false,
+  "review_uses_gt_and_source_pdf": true,
+  "strict_ground_truth_comparison": {
+    "expected": 89,
+    "published": 89,
+    "missing": 0,
+    "unexpected": 0
+  },
+  "title_corrections": [
+    {
+      "source_row": "p1_r026",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.6028450968163458,
+        0.27037764170278533,
+        0.6183891665676724
+      ],
+      "before": "‘Алгоритмы и структуры данных в языке Python",
+      "verified_source_name": "Алгоритмы и структуры данных в языке Python",
+      "affected_assessments": 2,
+      "method": "native PDF text plus visual source crop; publication uses native extraction"
+    },
+    {
+      "source_row": "p1_r046",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.8949703051991764,
+        0.27037764170278533,
+        0.918206228221272
+      ],
+      "before": "Рекомендательные системы и кллаборативная фильтрация",
+      "verified_source_name": "Рекомендательные системы и коллаборативная фильтрация",
+      "affected_assessments": 1,
+      "method": "native PDF text plus visual source crop; publication uses native extraction"
+    },
+    {
+      "source_row": "p2_r028",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.5503415345093846,
+        0.27037764170278533,
+        0.5659301486893166
+      ],
+      "before": "Основы глубокого обучения и МЕР",
+      "verified_source_name": "Основы глубокого обучения и NLP",
+      "affected_assessments": 1,
+      "method": "native PDF text plus visual source crop; publication uses native extraction"
+    }
+  ],
+  "excluded_native_candidates": [
+    {
+      "source_row": "p2_r033",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.612805880256593,
+        0.27037764170278533,
+        0.6219054427021462
+      ],
+      "printed_code": "Б.2.1",
+      "name": "Учебная практика",
+      "source_controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "8",
+        "coursework": "",
+        "course_project": ""
+      },
+      "reason": "parent section; all leaf children have blank assessment cells; do not publish parent as discipline or infer child assessments",
+      "children": [
+        {
+          "source_row": "p2_r034",
+          "printed_code": "Б.2.1.1",
+          "name": "Учебная практика: технологическая (проектно- технологическая) практика",
+          "controls": {
+            "exam": "",
+            "pass": "",
+            "graded_pass": "",
+            "coursework": "",
+            "course_project": ""
+          }
+        }
+      ]
+    },
+    {
+      "source_row": "p2_r035",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.6438108834244081,
+        0.27037764170278533,
+        0.652411501148333
+      ],
+      "printed_code": "Б.2.2",
+      "name": "Производственная практика",
+      "source_controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "8",
+        "coursework": "",
+        "course_project": ""
+      },
+      "reason": "parent section; all leaf children have blank assessment cells; do not publish parent as discipline or infer child assessments",
+      "children": [
+        {
+          "source_row": "p2_r036",
+          "printed_code": "Б.2.2.1",
+          "name": "Производственная практика: технологическая (проектно-технологическая) практика",
+          "controls": {
+            "exam": "",
+            "pass": "",
+            "graded_pass": "",
+            "coursework": "",
+            "course_project": ""
+          }
+        },
+        {
+          "source_row": "p2_r037",
+          "printed_code": "Б.2.2.2",
+          "name": "Производственная практика: преддипломная практика",
+          "controls": {
+            "exam": "",
+            "pass": "",
+            "graded_pass": "",
+            "coursework": "",
+            "course_project": ""
+          }
+        }
+      ]
+    }
+  ],
+  "records": [
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.2.4",
+        "semester": 3,
+        "kind": "exam"
+      },
+      "source_row": "p1_r019",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.52259444246456,
+        0.27037764170278533,
+        0.5328581600934506
+      ],
+      "printed_code": "Б.1.1.2.4",
+      "source_name": "Алгебра и геометрия",
+      "source_control_text": "3"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.3.5",
+        "semester": 1,
+        "kind": "exam"
+      },
+      "source_row": "p1_r026",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.6028450968163458,
+        0.27037764170278533,
+        0.6183891665676724
+      ],
+      "printed_code": "Б.1.1.3.5",
+      "source_name": "Алгоритмы и структуры данных в языке Python",
+      "source_control_text": "1,2"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.3.5",
+        "semester": 2,
+        "kind": "exam"
+      },
+      "source_row": "p1_r026",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.6028450968163458,
+        0.27037764170278533,
+        0.6183891665676724
+      ],
+      "printed_code": "Б.1.1.3.5",
+      "source_name": "Алгоритмы и структуры данных в языке Python",
+      "source_control_text": "1,2"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.4.2",
+        "semester": 7,
+        "kind": "pass"
+      },
+      "source_row": "p2_r017",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.409389403064861,
+        0.27037764170278533,
+        0.4244998806129722
+      ],
+      "printed_code": "Б.1.2.2.2.4.2",
+      "source_name": "Архитектура и дизайн программного обеспечения",
+      "source_control_text": "7"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.1.3",
+        "semester": 1,
+        "kind": "pass"
+      },
+      "source_row": "p1_r006",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.3651983838203849,
+        0.27037764170278533,
+        0.37588975944404845
+      ],
+      "printed_code": "Б.1.1.1.3",
+      "source_name": "Безопасность жизнедеятельности",
+      "source_control_text": "1"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.5.1",
+        "semester": 1,
+        "kind": "pass"
+      },
+      "source_row": "p2_r047",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.8111309158945117,
+        0.27037764170278533,
+        0.8202542230933714
+      ],
+      "printed_code": "Б.5.1",
+      "source_name": "Введение в искусственный интеллект",
+      "source_control_text": "1"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.3.4",
+        "semester": 1,
+        "kind": "pass"
+      },
+      "source_row": "p1_r025",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.5952482765106517,
+        0.27037764170278533,
+        0.6028450968163458
+      ],
+      "printed_code": "Б.1.1.3.4",
+      "source_name": "Введение в специальность",
+      "source_control_text": "1"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.5.7",
+        "semester": 7,
+        "kind": "pass"
+      },
+      "source_row": "p2_r053",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.9380256474221906,
+        0.27037764170278533,
+        0.9592777223410154
+      ],
+      "printed_code": "Б.5.7",
+      "source_name": "Гибритный искусственный интеллект",
+      "source_control_text": "7"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.1.1",
+        "semester": 5,
+        "kind": "exam"
+      },
+      "source_row": "p1_r042",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.8403272659776669,
+        0.27037764170278533,
+        0.8590520348261662
+      ],
+      "printed_code": "Б.1.2.2.1.1",
+      "source_name": "Глубокое обучение",
+      "source_control_text": "5"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.7.3",
+        "semester": 7,
+        "kind": "pass"
+      },
+      "source_row": "p2_r030",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.5814682827472876,
+        0.27037764170278533,
+        0.5894808750593965
+      ],
+      "printed_code": "Б.1.2.2.2.7.3",
+      "source_name": "Глубокое обучение в финансах",
+      "source_control_text": "7"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.2.2",
+        "semester": 1,
+        "kind": "pass"
+      },
+      "source_row": "p1_r017",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.4959135176605686,
+        0.27037764170278533,
+        0.5070307678981547
+      ],
+      "printed_code": "Б.1.1.2.2",
+      "source_name": "Дискретная математика",
+      "source_control_text": "1"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.2.2",
+        "semester": 2,
+        "kind": "exam"
+      },
+      "source_row": "p1_r017",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.4959135176605686,
+        0.27037764170278533,
+        0.5070307678981547
+      ],
+      "printed_code": "Б.1.1.2.2",
+      "source_name": "Дискретная математика",
+      "source_control_text": "2"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.2.5",
+        "semester": 3,
+        "kind": "exam"
+      },
+      "source_row": "p1_r020",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.5328581600934506,
+        0.27037764170278533,
+        0.5439771937118872
+      ],
+      "printed_code": "Б.1.1.2.5",
+      "source_name": "Дифференциальные уравнения",
+      "source_control_text": "3"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.1.5",
+        "semester": 1,
+        "kind": "pass"
+      },
+      "source_row": "p1_r008",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.38572582501781894,
+        0.27037764170278533,
+        0.3968448556664291
+      ],
+      "printed_code": "Б.1.1.1.5",
+      "source_name": "Иностранный язык",
+      "source_control_text": "1,2,3"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.1.5",
+        "semester": 2,
+        "kind": "pass"
+      },
+      "source_row": "p1_r008",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.38572582501781894,
+        0.27037764170278533,
+        0.3968448556664291
+      ],
+      "printed_code": "Б.1.1.1.5",
+      "source_name": "Иностранный язык",
+      "source_control_text": "1,2,3"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.1.5",
+        "semester": 3,
+        "kind": "pass"
+      },
+      "source_row": "p1_r008",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.38572582501781894,
+        0.27037764170278533,
+        0.3968448556664291
+      ],
+      "printed_code": "Б.1.1.1.5",
+      "source_name": "Иностранный язык",
+      "source_control_text": "1,2,3"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.1.5",
+        "semester": 4,
+        "kind": "exam"
+      },
+      "source_row": "p1_r008",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.38572582501781894,
+        0.27037764170278533,
+        0.3968448556664291
+      ],
+      "printed_code": "Б.1.1.1.5",
+      "source_name": "Иностранный язык",
+      "source_control_text": "4"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.1.6",
+        "semester": 5,
+        "kind": "pass"
+      },
+      "source_row": "p1_r009",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.3968448556664291,
+        0.27037764170278533,
+        0.4119553332145403
+      ],
+      "printed_code": "Б.1.1.1.6",
+      "source_name": "Иностранный язык в профессиональной сфере",
+      "source_control_text": "5"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.1.6",
+        "semester": 6,
+        "kind": "exam"
+      },
+      "source_row": "p1_r009",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.3968448556664291,
+        0.27037764170278533,
+        0.4119553332145403
+      ],
+      "printed_code": "Б.1.1.1.6",
+      "source_name": "Иностранный язык в профессиональной сфере",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.1.8",
+        "semester": 5,
+        "kind": "exam"
+      },
+      "source_row": "p1_r011",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.42350202066999276,
+        0.27037764170278533,
+        0.4401164290805417
+      ],
+      "printed_code": "Б.1.1.1.8",
+      "source_name": "Информационное право",
+      "source_control_text": "5"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.1.2",
+        "semester": 2,
+        "kind": "exam"
+      },
+      "source_row": "p1_r005",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.3540793531717748,
+        0.27037764170278533,
+        0.3651983838203849
+      ],
+      "printed_code": "Б.1.1.1.2",
+      "source_name": "История России",
+      "source_control_text": "2"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.5.5",
+        "semester": 3,
+        "kind": "pass"
+      },
+      "source_row": "p2_r051",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.888816827037301,
+        0.27037764170278533,
+        0.9154739724400095
+      ],
+      "printed_code": "Б.5.5",
+      "source_name": "Математика искусственного интеллекта",
+      "source_control_text": "3"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.2.7",
+        "semester": 4,
+        "kind": "pass"
+      },
+      "source_row": "p1_r022",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.5555286285340936,
+        0.27037764170278533,
+        0.5722071745070088
+      ],
+      "printed_code": "Б.1.1.2.7",
+      "source_name": "Математические модели микро- и макроэкономики",
+      "source_control_text": "4"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.2.1",
+        "semester": 1,
+        "kind": "pass"
+      },
+      "source_row": "p1_r016",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.48474400540508433,
+        0.27037764170278533,
+        0.4959135176605686
+      ],
+      "printed_code": "Б.1.1.2.1",
+      "source_name": "Математический анализ",
+      "source_control_text": "1"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.2.1",
+        "semester": 2,
+        "kind": "exam"
+      },
+      "source_row": "p1_r016",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.48474400540508433,
+        0.27037764170278533,
+        0.4959135176605686
+      ],
+      "printed_code": "Б.1.1.2.1",
+      "source_name": "Математический анализ",
+      "source_control_text": "2"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.1.4",
+        "semester": 6,
+        "kind": "exam"
+      },
+      "source_row": "p1_r037",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.7729508142274492,
+        0.27037764170278533,
+        0.7884889468005069
+      ],
+      "printed_code": "Б.1.2.1.4",
+      "source_name": "Математическое и имитационное моделирование",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.1.4",
+        "semester": 6,
+        "kind": "exam"
+      },
+      "source_row": "p1_r045",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.8831385072661758,
+        0.27037764170278533,
+        0.8949703051991764
+      ],
+      "printed_code": "Б.1.2.2.1.4",
+      "source_name": "Машинное зрение",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.1.2",
+        "semester": 3,
+        "kind": "pass"
+      },
+      "source_row": "p1_r035",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.7428724197156886,
+        0.27037764170278533,
+        0.7618317835788391
+      ],
+      "printed_code": "Б.1.2.1.2",
+      "source_name": "Машинное обучение",
+      "source_control_text": "3"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.1.2",
+        "semester": 4,
+        "kind": "course_project"
+      },
+      "source_row": "p1_r035",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.7428724197156886,
+        0.27037764170278533,
+        0.7618317835788391
+      ],
+      "printed_code": "Б.1.2.1.2",
+      "source_name": "Машинное обучение",
+      "source_control_text": "4"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.1.2",
+        "semester": 4,
+        "kind": "exam"
+      },
+      "source_row": "p1_r035",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.7428724197156886,
+        0.27037764170278533,
+        0.7618317835788391
+      ],
+      "printed_code": "Б.1.2.1.2",
+      "source_name": "Машинное обучение",
+      "source_control_text": "4"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.5.3",
+        "semester": 7,
+        "kind": "pass"
+      },
+      "source_row": "p2_r022",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.4729626979884375,
+        0.27037764170278533,
+        0.4885305327868852
+      ],
+      "printed_code": "Б.1.2.2.2.5.3",
+      "source_name": "Машинное обучение в семантическом и сетевом анализе",
+      "source_control_text": "7"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.1.6",
+        "semester": 6,
+        "kind": "pass"
+      },
+      "source_row": "p1_r047",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.918206228221272,
+        0.27037764170278533,
+        0.9293252499604023
+      ],
+      "printed_code": "Б.1.2.2.1.6",
+      "source_name": "Методы визуализации данных",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.1.2",
+        "semester": 5,
+        "kind": "exam"
+      },
+      "source_row": "p1_r043",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.8590520348261662,
+        0.27037764170278533,
+        0.8688863095945196
+      ],
+      "printed_code": "Б.1.2.2.1.2",
+      "source_name": "Методы оптимизации",
+      "source_control_text": "5"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.6.3",
+        "semester": 7,
+        "kind": "pass"
+      },
+      "source_row": "p2_r026",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.5294416720123544,
+        0.27037764170278533,
+        0.540603470737309
+      ],
+      "printed_code": "Б.1.2.2.2.6.3",
+      "source_name": "Микросервисная архитектура",
+      "source_control_text": "7"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.3.2",
+        "semester": 6,
+        "kind": "pass"
+      },
+      "source_row": "p2_r013",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.3539368032786885,
+        0.27037764170278533,
+        0.3642005220955096
+      ],
+      "printed_code": "Б.1.2.2.2.3.2",
+      "source_name": "Низкоуровневое программирование",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.3.7",
+        "semester": 4,
+        "kind": "pass"
+      },
+      "source_row": "p1_r028",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.6339272932010771,
+        0.27037764170278533,
+        0.650605848083472
+      ],
+      "printed_code": "Б.1.1.3.7",
+      "source_name": "Обработка данных и моделирование в табличном редакторе",
+      "source_control_text": "4"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.1.3",
+        "semester": 6,
+        "kind": "exam"
+      },
+      "source_row": "p1_r044",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.8688863095945196,
+        0.27037764170278533,
+        0.8831385072661758
+      ],
+      "printed_code": "Б.1.2.2.1.3",
+      "source_name": "Обработка текстов на естественных языках",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.1.2",
+        "semester": 6,
+        "kind": "pass"
+      },
+      "source_row": "p2_r005",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.2489831313851271,
+        0.27037764170278533,
+        0.26409360893323824
+      ],
+      "printed_code": "Б.1.2.2.2.1.2",
+      "source_name": "Объектно-ориентированное программирование",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.2.2",
+        "semester": 6,
+        "kind": "pass"
+      },
+      "source_row": "p2_r009",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.29802090757899735,
+        0.27037764170278533,
+        0.3142750071275837
+      ],
+      "printed_code": "Б.1.2.2.2.2.2",
+      "source_name": "Основы бухгалтерских информационных систем",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.1.1",
+        "semester": 6,
+        "kind": "pass"
+      },
+      "source_row": "p2_r004",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.23937990021382752,
+        0.27037764170278533,
+        0.2489831313851271
+      ],
+      "printed_code": "Б.1.2.2.2.1.1",
+      "source_name": "Основы веб-разработки",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.1.11",
+        "semester": 5,
+        "kind": "graded_pass"
+      },
+      "source_row": "p1_r014",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.46263959372772623,
+        0.27037764170278533,
+        0.4750059416330086
+      ],
+      "printed_code": "Б.1.1.1.11",
+      "source_name": "Основы военной подготовки",
+      "source_control_text": "5"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.7.1",
+        "semester": 6,
+        "kind": "pass"
+      },
+      "source_row": "p2_r028",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.5503415345093846,
+        0.27037764170278533,
+        0.5659301486893166
+      ],
+      "printed_code": "Б.1.2.2.2.7.1",
+      "source_name": "Основы глубокого обучения и NLP",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.2.1",
+        "semester": 6,
+        "kind": "pass"
+      },
+      "source_row": "p2_r008",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.28057733428367776,
+        0.27037764170278533,
+        0.29802090757899735
+      ],
+      "printed_code": "Б.1.2.2.2.2.1",
+      "source_name": "Основы корпоративных информационных систем",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.1.3",
+        "semester": 7,
+        "kind": "pass"
+      },
+      "source_row": "p2_r006",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.26409360893323824,
+        0.27037764170278533,
+        0.2724043715846994
+      ],
+      "printed_code": "Б.1.2.2.2.1.3",
+      "source_name": "Основы мобильной разработки",
+      "source_control_text": "7"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.4.1",
+        "semester": 6,
+        "kind": "pass"
+      },
+      "source_row": "p2_r016",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.39422665617327945,
+        0.27037764170278533,
+        0.409389403064861
+      ],
+      "printed_code": "Б.1.2.2.2.4.1",
+      "source_name": "Основы проектирования информационных систем",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.1.10",
+        "semester": 2,
+        "kind": "graded_pass"
+      },
+      "source_row": "p1_r013",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.45194821810406266,
+        0.27037764170278533,
+        0.46263959372772623
+      ],
+      "printed_code": "Б.1.1.1.10",
+      "source_name": "Основы российской государственности",
+      "source_control_text": "2"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.6.2",
+        "semester": 7,
+        "kind": "pass"
+      },
+      "source_row": "p2_r025",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.5182967444761225,
+        0.27037764170278533,
+        0.5294416720123544
+      ],
+      "printed_code": "Б.1.2.2.2.6.2",
+      "source_name": "Основы технологий интернета вещей",
+      "source_control_text": "7"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.3.6",
+        "semester": 1,
+        "kind": "pass"
+      },
+      "source_row": "p1_r027",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.6183891665676724,
+        0.27037764170278533,
+        0.6339272932010771
+      ],
+      "printed_code": "Б.1.1.3.6",
+      "source_name": "Практикум по программированию",
+      "source_control_text": "1,2, 3,4"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.3.6",
+        "semester": 2,
+        "kind": "pass"
+      },
+      "source_row": "p1_r027",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.6183891665676724,
+        0.27037764170278533,
+        0.6339272932010771
+      ],
+      "printed_code": "Б.1.1.3.6",
+      "source_name": "Практикум по программированию",
+      "source_control_text": "1,2, 3,4"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.3.6",
+        "semester": 3,
+        "kind": "pass"
+      },
+      "source_row": "p1_r027",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.6183891665676724,
+        0.27037764170278533,
+        0.6339272932010771
+      ],
+      "printed_code": "Б.1.1.3.6",
+      "source_name": "Практикум по программированию",
+      "source_control_text": "1,2, 3,4"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.3.6",
+        "semester": 4,
+        "kind": "pass"
+      },
+      "source_row": "p1_r027",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.6183891665676724,
+        0.27037764170278533,
+        0.6339272932010771
+      ],
+      "printed_code": "Б.1.1.3.6",
+      "source_name": "Практикум по программированию",
+      "source_control_text": "1,2, 3,4"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.5.2",
+        "semester": 2,
+        "kind": "pass"
+      },
+      "source_row": "p2_r048",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.8202542230933714,
+        0.27037764170278533,
+        0.8497624198146828
+      ],
+      "printed_code": "Б.5.2",
+      "source_name": "Практическая подготовка (1 курс)",
+      "source_control_text": "2"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.5.3",
+        "semester": 4,
+        "kind": "pass"
+      },
+      "source_row": "p2_r049",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.8497624198146828,
+        0.27037764170278533,
+        0.8668674150629603
+      ],
+      "printed_code": "Б.5.3",
+      "source_name": "Практическая подготовка (2 курс)",
+      "source_control_text": "4"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.5.4",
+        "semester": 6,
+        "kind": "pass"
+      },
+      "source_row": "p2_r050",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.8668674150629603,
+        0.27037764170278533,
+        0.888816827037301
+      ],
+      "printed_code": "Б.5.4",
+      "source_name": "Практическая подготовка (3 курс)",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.5.1",
+        "semester": 6,
+        "kind": "pass"
+      },
+      "source_row": "p2_r020",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.44825077660964596,
+        0.27037764170278533,
+        0.4574245654153797
+      ],
+      "printed_code": "Б.1.2.2.2.5.1",
+      "source_name": "Прикладная теория графов",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.7.2",
+        "semester": 7,
+        "kind": "pass"
+      },
+      "source_row": "p2_r029",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.5659301486893166,
+        0.27037764170278533,
+        0.5814682827472876
+      ],
+      "printed_code": "Б.1.2.2.2.7.2",
+      "source_name": "Прикладной Data Science в финтехе",
+      "source_control_text": "7"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.1.8",
+        "semester": 7,
+        "kind": "course_project"
+      },
+      "source_row": "p1_r049",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.9404727998534886,
+        0.27037764170278533,
+        0.9586125025738498
+      ],
+      "printed_code": "Б.1.2.2.1.8",
+      "source_name": "Прикладные задачи машинного обучения",
+      "source_control_text": "7"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.1.8",
+        "semester": 7,
+        "kind": "exam"
+      },
+      "source_row": "p1_r049",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.9404727998534886,
+        0.27037764170278533,
+        0.9586125025738498
+      ],
+      "printed_code": "Б.1.2.2.1.8",
+      "source_name": "Прикладные задачи машинного обучения",
+      "source_control_text": "7"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.3.3",
+        "semester": 7,
+        "kind": "pass"
+      },
+      "source_row": "p2_r014",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.3642005220955096,
+        0.27037764170278533,
+        0.38049418111982247
+      ],
+      "printed_code": "Б.1.2.2.2.3.3",
+      "source_name": "Программирование для встраиваемых систем",
+      "source_control_text": "7"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.2.3",
+        "semester": 7,
+        "kind": "pass"
+      },
+      "source_row": "p2_r010",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.3142750071275837,
+        0.27037764170278533,
+        0.33060109487605915
+      ],
+      "printed_code": "Б.1.2.2.2.2.3",
+      "source_name": "Разработка приложений в системе 1С Предприятие",
+      "source_control_text": "7"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.3.1",
+        "semester": 6,
+        "kind": "pass"
+      },
+      "source_row": "p2_r012",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.3387740575750376,
+        0.27037764170278533,
+        0.3539368032786885
+      ],
+      "printed_code": "Б.1.2.2.2.3.1",
+      "source_name": "Разработка эффективных вычислительных алгоритмов",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.1.5",
+        "semester": 6,
+        "kind": "exam"
+      },
+      "source_row": "p1_r046",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.8949703051991764,
+        0.27037764170278533,
+        0.918206228221272
+      ],
+      "printed_code": "Б.1.2.2.1.5",
+      "source_name": "Рекомендательные системы и коллаборативная фильтрация",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.1.7",
+        "semester": 7,
+        "kind": "exam"
+      },
+      "source_row": "p1_r048",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.9293252499604023,
+        0.27037764170278533,
+        0.9404727998534886
+      ],
+      "printed_code": "Б.1.2.2.1.7",
+      "source_name": "Семантические технологии",
+      "source_control_text": "7"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.3.8",
+        "semester": 3,
+        "kind": "pass"
+      },
+      "source_row": "p1_r029",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.650605848083472,
+        0.27037764170278533,
+        0.6657163226617565
+      ],
+      "printed_code": "Б.1.1.3.8",
+      "source_name": "Системы управления базами данных",
+      "source_control_text": "3"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.3.8",
+        "semester": 4,
+        "kind": "exam"
+      },
+      "source_row": "p1_r029",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.650605848083472,
+        0.27037764170278533,
+        0.6657163226617565
+      ],
+      "printed_code": "Б.1.1.3.8",
+      "source_name": "Системы управления базами данных",
+      "source_control_text": "4"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.3.9",
+        "semester": 4,
+        "kind": "exam"
+      },
+      "source_row": "p1_r030",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.6657163226617565,
+        0.27037764170278533,
+        0.6823996174863388
+      ],
+      "printed_code": "Б.1.1.3.9",
+      "source_name": "Современные банковские продукты и услуги",
+      "source_control_text": "4"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.2.3",
+        "semester": 2,
+        "kind": "exam"
+      },
+      "source_row": "p1_r018",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.5070307678981547,
+        0.27037764170278533,
+        0.52259444246456
+      ],
+      "printed_code": "Б.1.1.2.3",
+      "source_name": "Теория вероятностей и математическая статистика",
+      "source_control_text": "2,3"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.2.3",
+        "semester": 3,
+        "kind": "exam"
+      },
+      "source_row": "p1_r018",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.5070307678981547,
+        0.27037764170278533,
+        0.52259444246456
+      ],
+      "printed_code": "Б.1.1.2.3",
+      "source_name": "Теория вероятностей и математическая статистика",
+      "source_control_text": "2,3"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.4.3",
+        "semester": 7,
+        "kind": "pass"
+      },
+      "source_row": "p2_r018",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.4244998806129722,
+        0.27037764170278533,
+        0.4396531232676011
+      ],
+      "printed_code": "Б.1.2.2.2.4.3",
+      "source_name": "Тестирование программного обеспечения",
+      "source_control_text": "7"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.5.2",
+        "semester": 7,
+        "kind": "pass"
+      },
+      "source_row": "p2_r021",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.4574245654153797,
+        0.27037764170278533,
+        0.4729626979884375
+      ],
+      "printed_code": "Б.1.2.2.2.5.2",
+      "source_name": "Технологии и алгоритмы анализа сетевых моделей",
+      "source_control_text": "7"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.1.6",
+        "semester": 5,
+        "kind": "exam"
+      },
+      "source_row": "p1_r039",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.8003207447335076,
+        0.27037764170278533,
+        0.8134651854656687
+      ],
+      "printed_code": "Б.1.2.1.6",
+      "source_name": "Технологии обработки больших данных",
+      "source_control_text": "5"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.1.1",
+        "semester": 2,
+        "kind": "exam"
+      },
+      "source_row": "p1_r034",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.7263968623782371,
+        0.27037764170278533,
+        0.7428724197156886
+      ],
+      "printed_code": "Б.1.2.1.1",
+      "source_name": "Технологии обработки данных",
+      "source_control_text": "2"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.2.6.1",
+        "semester": 6,
+        "kind": "pass"
+      },
+      "source_row": "p2_r024",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.5031361358596658,
+        0.27037764170278533,
+        0.5182967444761225
+      ],
+      "printed_code": "Б.1.2.2.2.6.1",
+      "source_name": "Технологии параллельного программирования",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.2.1.9",
+        "semester": 7,
+        "kind": "exam"
+      },
+      "source_row": "p2_r001",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.1943305988655262,
+        0.27037764170278533,
+        0.2133701591827037
+      ],
+      "printed_code": "Б.1.2.2.1.9",
+      "source_name": "Технологии работы с открытыми данными",
+      "source_control_text": "7"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.2.3.1",
+        "semester": 2,
+        "kind": "pass"
+      },
+      "source_row": "p2_r039",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.6987407955175418,
+        0.27037764170278533,
+        0.711522929040944
+      ],
+      "printed_code": "Б.2.3.1",
+      "source_name": "Учебно-научный семинар",
+      "source_control_text": "2,4,6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.2.3.1",
+        "semester": 4,
+        "kind": "pass"
+      },
+      "source_row": "p2_r039",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.6987407955175418,
+        0.27037764170278533,
+        0.711522929040944
+      ],
+      "printed_code": "Б.2.3.1",
+      "source_name": "Учебно-научный семинар",
+      "source_control_text": "2,4,6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.2.3.1",
+        "semester": 6,
+        "kind": "pass"
+      },
+      "source_row": "p2_r039",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.6987407955175418,
+        0.27037764170278533,
+        0.711522929040944
+      ],
+      "printed_code": "Б.2.3.1",
+      "source_name": "Учебно-научный семинар",
+      "source_control_text": "2,4,6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.1.4",
+        "semester": 1,
+        "kind": "pass"
+      },
+      "source_row": "p1_r007",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.37588975944404845,
+        0.27037764170278533,
+        0.38572582501781894
+      ],
+      "printed_code": "Б.1.1.1.4",
+      "source_name": "Физическая культура и спорт",
+      "source_control_text": "1"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.1.7",
+        "semester": 5,
+        "kind": "exam"
+      },
+      "source_row": "p1_r010",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.4119553332145403,
+        0.27037764170278533,
+        0.42350202066999276
+      ],
+      "printed_code": "Б.1.1.1.7",
+      "source_name": "Философия",
+      "source_control_text": "5"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.2.6",
+        "semester": 4,
+        "kind": "exam"
+      },
+      "source_row": "p1_r021",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.5439771937118872,
+        0.27037764170278533,
+        0.5555286285340936
+      ],
+      "printed_code": "Б.1.1.2.6",
+      "source_name": "Финансовая математика и ее приложения",
+      "source_control_text": "4"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.1.1",
+        "semester": 1,
+        "kind": "pass"
+      },
+      "source_row": "p1_r004",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.3389166062801932,
+        0.27037764170278533,
+        0.3540793531717748
+      ],
+      "printed_code": "Б.1.1.1.1",
+      "source_name": "Финансовый университет: история и современность",
+      "source_control_text": "1"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.5.6",
+        "semester": 5,
+        "kind": "pass"
+      },
+      "source_row": "p2_r052",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.9154739724400095,
+        0.27037764170278533,
+        0.9380256474221906
+      ],
+      "printed_code": "Б.5.6",
+      "source_name": "Фундаментальные модели",
+      "source_control_text": "5"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.2.8",
+        "semester": 6,
+        "kind": "pass"
+      },
+      "source_row": "p1_r023",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.5722071745070088,
+        0.27037764170278533,
+        0.5837966252870833
+      ],
+      "printed_code": "Б.1.1.2.8",
+      "source_name": "Функциональный анализ",
+      "source_control_text": "6"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.1.3",
+        "semester": 4,
+        "kind": "pass"
+      },
+      "source_row": "p1_r036",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.7618317835788391,
+        0.27037764170278533,
+        0.7729508142274492
+      ],
+      "printed_code": "Б.1.2.1.3",
+      "source_name": "Численные методы",
+      "source_control_text": "4"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.1.5",
+        "semester": 3,
+        "kind": "pass"
+      },
+      "source_row": "p1_r038",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.7884889468005069,
+        0.27037764170278533,
+        0.8003207447335076
+      ],
+      "printed_code": "Б.1.2.1.5",
+      "source_name": "Эконометрика",
+      "source_control_text": "3"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.2.1.5",
+        "semester": 4,
+        "kind": "exam"
+      },
+      "source_row": "p1_r038",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.7884889468005069,
+        0.27037764170278533,
+        0.8003207447335076
+      ],
+      "printed_code": "Б.1.2.1.5",
+      "source_name": "Эконометрика",
+      "source_control_text": "4"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.1.9",
+        "semester": 1,
+        "kind": "exam"
+      },
+      "source_row": "p1_r012",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.4401164290805417,
+        0.27037764170278533,
+        0.45194821810406266
+      ],
+      "printed_code": "Б.1.1.1.9",
+      "source_name": "Экономическая теория",
+      "source_control_text": "1"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.4.1",
+        "semester": 2,
+        "kind": "pass"
+      },
+      "source_row": "p2_r045",
+      "page": 2,
+      "source_bbox": [
+        0.018869065618385243,
+        0.786873362635622,
+        0.27037764170278533,
+        0.8020788805733745
+      ],
+      "printed_code": "Б.4.1",
+      "source_name": "Элективные дисциплины по физической культуре и спорту",
+      "source_control_text": "2"
+    },
+    {
+      "publication_identity": {
+        "discipline_code": "Б.1.1.3.10",
+        "semester": 5,
+        "kind": "pass"
+      },
+      "source_row": "p1_r031",
+      "page": 1,
+      "source_bbox": [
+        0.018869065618385243,
+        0.6823996174863388,
+        0.27037764170278533,
+        0.6942741763681002
+      ],
+      "printed_code": "Б.1.1.3.10",
+      "source_name": "Электронные деньги",
+      "source_control_text": "5"
+    }
+  ],
+  "production_written_by_this_review": false,
+  "comparison_ocr_prediction_sha256": "428c24a2a50bc415142b6e900a5afc3f52daaf435f60abdf627f4924fe0d52fd",
+  "comparison_ocr_model_sha256": "88bc1d21d5cc709db75a17e2ef8cf2ffd695b0b8e6b22c3c40f6de4265bc8c01",
+  "publication_extraction_uses_numeric_model": false,
+  "parser_source_sha256": "19da2e2344da1f7c813cea3587214c705c6229bcb35e5294aa665fa9ff460e16",
+  "visual_proof_files": [
+    "publication-proof/titles-2025.png",
+    "publication-proof/practice-sections-2025.png",
+    "publication-proof/source-typo-2025.png"
+  ]
+}

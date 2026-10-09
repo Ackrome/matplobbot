@@ -1,0 +1,70 @@
+body { margin:0; background:#f8fafc; color:#0f172a; font-family:Inter,system-ui,sans-serif; }
+.curricula-main { max-width:1120px; margin:auto; padding:104px 24px 64px; }
+.curricula-main h1 { margin:16px 0 8px; font-size:2rem; font-weight:800; }
+.curricula-main h2 { margin:0 0 14px; font-size:1.2rem; font-weight:750; }
+.curricula-main h3 { margin:0 0 12px; font-size:1rem; font-weight:700; }
+.curricula-main p { line-height:1.65; }
+.curricula-back { color:#4f46e5; font-weight:650; }
+.curricula-catalog { color:#4f46e5; text-decoration:underline; text-underline-offset:3px; }
+.curricula-muted { color:#64748b; }
+.curricula-card { margin-top:20px; padding:24px; border:1px solid #dbe3ef; border-radius:20px; background:#fff; }
+.curricula-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.curricula-wide { grid-column:1/-1; }
+.curricula-main label { display:grid; align-content:start; gap:6px; font-size:.875rem; font-weight:650; }
+.curricula-main input,.curricula-main select,.curricula-main textarea { width:100%; min-width:0; padding:10px 12px; border:1px solid #cbd5e1; border-radius:9px; background:#fff; color:inherit; font:inherit; font-weight:400; }
+.curricula-main textarea { resize:vertical; min-height:70px; }
+.curricula-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:16px 0 0; }
+.curricula-main button,.curricula-link { display:inline-flex; justify-content:center; align-items:center; padding:10px 15px; border:1px solid #cbd5e1; border-radius:10px; background:#fff; color:inherit; font-size:.875rem; font-weight:650; cursor:pointer; }
+.curricula-main button.primary { color:#fff; background:#4f46e5; border-color:#4f46e5; }
+.curricula-main button:disabled { opacity:.5; cursor:wait; }
+.curricula-main :focus-visible { outline:3px solid #818cf8; outline-offset:3px; }
+.curricula-main fieldset { min-width:0; border:0; padding:0; margin:0; }
+.curricula-main summary { cursor:pointer; font-weight:700; }
+.curricula-main details[open] > summary { margin-bottom:18px; }
+.curricula-meta { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.curricula-meta > span { border-radius:20px; padding:5px 10px; background:#f1f5f9; font-size:.8rem; }
+.curricula-scroll { overflow-x:auto; margin-top:16px; border:1px solid #e2e8f0; border-radius:12px; max-height:460px; }
+.curricula-main table { border-collapse:collapse; min-width:910px; width:100%; font-size:.82rem; }
+.curricula-main th { text-align:left; position:sticky; top:0; background:#f1f5f9; z-index:1; }
+.curricula-main td,.curricula-main th { padding:9px; border-bottom:1px solid #e2e8f0; }
+.curricula-main td:nth-child(2) { min-width:210px; }
+.curricula-main td:nth-child(3),.curricula-main td:nth-child(5) { width:80px; }
+.curricula-main td:nth-child(4) { min-width:150px; }
+.curricula-main td:nth-child(6) { min-width:200px; }
+.curricula-main .curricula-review-check { display:flex; align-items:flex-start; gap:10px; margin-top:16px; }
+.curricula-review-check input { width:18px; margin-top:3px; }
+.curricula-group { background:#f8fafc; padding:16px; border:1px solid #e2e8f0; border-radius:12px; margin-top:14px; }
+.curricula-term { display:grid; grid-template-columns:90px 1fr 1fr auto; gap:10px; align-items:end; margin-top:12px; }
+.curricula-note { padding:12px 16px; background:#eef2ff; border-radius:10px; overflow-wrap:anywhere; }
+.curricula-processing { margin:16px 0; padding:14px 16px; background:#eef2ff; border:1px solid #c7d2fe; border-radius:12px; overflow-wrap:anywhere; }
+.curricula-processing p { margin:0; }
+.curricula-processing button { margin-top:12px; }
+.curricula-processing-error { background:#fff7ed; border-color:#fed7aa; }
+.curricula-ocr-label { margin-top:8px; color:#92400e; font-size:.75rem; font-weight:650; }
+.curricula-main .curricula-crop-button { padding:7px 9px; margin-top:6px; font-size:.75rem; }
+.curricula-preview { width:min(1280px,calc(100vw - 32px)); max-width:calc(100vw - 32px); max-height:calc(100dvh - 40px); margin:auto; padding:24px; border:1px solid #cbd5e1; border-radius:20px; background:#fff; color:#0f172a; overflow:auto; box-sizing:border-box; }
+.curricula-preview::backdrop { background:rgba(15,23,42,.64); backdrop-filter:blur(8px); }
+.curricula-preview header { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.curricula-preview h2 { margin:0; }
+.curricula-preview header button { flex-shrink:0; }
+.curricula-preview p { overflow-wrap:anywhere; }
+.curricula-preview-image { overflow:auto; background:#fff; border:1px solid #cbd5e1; border-radius:8px; }
+.curricula-preview-image img { display:block; width:100%; min-width:1200px; height:auto; max-width:none; }
+.curricula-main button.danger { color:#b91c1c; border-color:#fecaca; }
+.curricula-danger h2 { color:#b91c1c; }
+.dark body { background:#0f172a; color:#e2e8f0; }
+.dark .curricula-card,.dark .curricula-main input,.dark .curricula-main select,.dark .curricula-main textarea,.dark .curricula-main button,.dark .curricula-link { background:#1e293b; border-color:#475569; }
+.dark .curricula-main button.primary { background:#6366f1; }
+.dark .curricula-muted { color:#94a3b8; }
+.dark .curricula-group,.dark .curricula-meta > span,.dark .curricula-main th { background:#0f172a; }
+.dark .curricula-main td,.dark .curricula-scroll,.dark .curricula-group { border-color:#334155; }
+.dark .curricula-note { background:#252953; }
+.dark .curricula-processing { background:#252953; border-color:#4f46e5; }
+.dark .curricula-processing-error { background:#422e1b; border-color:#92400e; }
+.dark .curricula-ocr-label { color:#fcd34d; }
+.dark .curricula-preview { background:#1e293b; border-color:#475569; color:#e2e8f0; }
+.dark .curricula-main button.danger,.dark .curricula-danger h2 { color:#fca5a5; }
+.dark .curricula-catalog { color:#a5b4fc; }
+[hidden] { display:none !important; }
+@media(max-width:640px) { .curricula-main { padding:90px 14px 32px; } .curricula-card { padding:16px; } .curricula-grid { grid-template-columns:1fr; } .curricula-term { grid-template-columns:1fr 1fr; } .curricula-main h1 { font-size:1.7rem; } .curricula-preview { padding:16px; } .curricula-preview header { flex-wrap:wrap; } }
+@media(max-width:420px) { .curricula-term { grid-template-columns:1fr; } .curricula-term button { justify-self:start; } }

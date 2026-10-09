@@ -53,6 +53,45 @@
             item.kind, item.module, item.room, item.roomId, item.building, item.teacher, item.teacherId,
             item.group, item.groupId, item.subgroup, item.emails, item.links, item.notes]);
     }
+    function curriculumContext(item, entity = {}) {
+        // A teacher or room ID must never be interpreted as the student's group.
+        const currentGroup = entity.type === 'group' && canonical(item.group) === canonical(entity.name);
+        const groupId = currentGroup ? text(entity.id) : item.groupId;
+        if (!/^[1-9]\d*$/.test(groupId) || !item.title || !item.date) return null;
+        return { group_id: groupId, discipline: item.title, lesson_date: item.date };
+    }
+    function curriculumSnapshotUrl(value) {
+        const path = text(value);
+        if (!/^\/api\/schedule\/curriculum\/documents\/[1-9]\d*\/[a-f0-9]{64}\.pdf$/.test(path)) return '';
+        try {
+            const base = text(window.getMpbApiBase?.() || '/api').replace(/\/+$/, '');
+            return safeUrl(new URL(`${base}${path.slice(4)}`, window.location.origin).href);
+        } catch { return ''; }
+    }
+    function normalizeCurriculum(data, groupId) {
+        const statuses = ['confirmed', 'unmapped', 'unavailable', 'not_found', 'needs_review'];
+        const kinds = ['exam', 'pass', 'graded_pass', 'coursework', 'course_project'];
+        const semester = value => Number.isInteger(value) && value > 0 && value <= 30 ? value : null;
+        if (!data || !statuses.includes(data.status) || text(data.group_id) !== groupId || !Array.isArray(data.assessments)) return null;
+        const assessments = [];
+        for (const item of data.assessments) {
+            if (!item || !kinds.includes(item.kind) || !semester(item.semester)) return null;
+            const sourceUrl = safeUrl(item.source_url);
+            if (!sourceUrl) return null;
+            const url = new URL(sourceUrl);
+            if (url.protocol !== 'https:' || !(url.hostname === 'fa.ru' || url.hostname.endsWith('.fa.ru'))) return null;
+            const page = Number.isInteger(item.page) && item.page > 0 ? item.page : null;
+            if (page) url.hash = `page=${page}`;
+            const snapshot = curriculumSnapshotUrl(item.snapshot_url);
+            assessments.push({ kind: item.kind, semester: item.semester, sourceUrl: url.href,
+                snapshotUrl: snapshot ? `${snapshot}${page ? `#page=${page}` : ''}` : '',
+                sourceTitle: text(item.source_title), page });
+        }
+        if (data.status === 'confirmed' && (!assessments.length || !semester(data.semester))) return null;
+        return { status: data.status, semester: semester(data.semester), assessments,
+            program: text(data.program), admissionYear: text(data.admission_year),
+            checkedAt: text(data.checked_at), stale: data.stale === true };
+    }
     function relatedLessons(selected, schedule, entity, includeSelected = true) {
         const seen = new Set();
         const records = includeSelected ? [selected.raw, ...(schedule || [])] : schedule || [];
@@ -98,6 +137,7 @@
         const original = selected;
         let occurrences = relatedLessons(original, context.schedule, context.entity);
         let cacheState = 'idle', cacheSnapshot = null, cacheController = null, selectedFromCache = false;
+        let curriculumState = 'idle', curriculumData = null, curriculumController = null;
         const sourceOpen = new Set();
         const previousOverflow = document.documentElement.style.overflow;
         const scroll = { left: window.scrollX, top: window.scrollY };
@@ -108,6 +148,7 @@
             if (closed) return;
             closed = true;
             cacheController?.abort();
+            curriculumController?.abort();
             document.documentElement.style.overflow = previousOverflow;
             window.removeEventListener('mpb-language-change', languageChanged);
             dialog.remove();
@@ -144,11 +185,40 @@
             }) : t('checkedUnknown');
         }
         function updateCourse() {
-            const panel = dialog.querySelector('#lessonDetailsCourse');
+            const panel = dialog.querySelector('.ld-course-classes');
             const hadFocus = panel.contains(document.activeElement);
-            const replacement = renderCourse(); replacement.hidden = tab !== 'course';
-            panel.replaceWith(replacement);
+            panel.replaceWith(renderCourseClasses());
             if (hadFocus) dialog.querySelector('[data-tab="course"]').focus({ preventScroll: true });
+        }
+        function updateCurriculum() {
+            const panel = dialog.querySelector('.ld-curriculum');
+            const hadFocus = panel.contains(document.activeElement);
+            panel.replaceWith(renderCurriculum());
+            if (hadFocus) dialog.querySelector('[data-tab="course"]').focus({ preventScroll: true });
+        }
+        async function loadCurriculum() {
+            if (closed || curriculumState === 'loading' || curriculumState === 'ready') return;
+            const request = curriculumContext(selected, context.entity);
+            if (!request) { curriculumState = 'ready'; updateCurriculum(); return; }
+            curriculumState = 'loading'; updateCurriculum();
+            const controller = new AbortController(); curriculumController = controller;
+            const timeout = setTimeout(() => controller.abort(), 12000);
+            try {
+                const response = await window.ScheduleApi.loadCurriculumData({ ...request, signal: controller.signal });
+                if (closed || curriculumController !== controller) return;
+                if (controller.signal.aborted) throw new Error('Curriculum request timed out');
+                const data = normalizeCurriculum(response, request.group_id);
+                if (!data) throw new Error('Invalid curriculum response');
+                curriculumData = data; curriculumState = 'ready';
+            } catch {
+                if (closed || curriculumController !== controller) return;
+                curriculumState = 'error';
+            } finally {
+                clearTimeout(timeout);
+                if (!closed && curriculumController === controller) {
+                    curriculumController = null; updateCurriculum();
+                }
+            }
         }
         async function loadCourse() {
             if (closed || cacheState === 'loading' || cacheState === 'ready') return;
@@ -187,6 +257,7 @@
             dialog.querySelector('.ld-copy').hidden = true;
             if (focusTab) dialog.querySelector(`[data-tab="${tab}"]`).focus({ preventScroll: true });
             if (tab === 'course' && cacheState === 'idle') void loadCourse();
+            if (tab === 'course' && curriculumState === 'idle') void loadCurriculum();
         }
         async function navigate(type, id, label) {
             dialog.close(); cleanup();
@@ -247,9 +318,82 @@
             if (items.children.length) { actions.append(items); body.append(actions); }
             return body;
         }
-        function renderCourse() {
-            const body = node('div', 'ld-body'); body.id = 'lessonDetailsCourse';
-            body.setAttribute('role', 'tabpanel'); body.setAttribute('aria-labelledby', 'lessonDetailsCourseTab');
+        function renderCurriculum() {
+            const panel = node('section', 'ld-curriculum');
+            panel.setAttribute('aria-labelledby', 'lessonDetailsCurriculumTitle');
+            const heading = node('h3', '', t('curriculum.heading')); heading.id = 'lessonDetailsCurriculumTitle';
+            panel.append(heading);
+            const request = curriculumContext(selected, context.entity);
+            if (!request) {
+                panel.append(node('p', 'ld-curriculum-hint', t('curriculum.noGroup')));
+                return panel;
+            }
+            const status = node('div'); status.setAttribute('role', 'status');
+            if (curriculumState !== 'ready') {
+                status.append(node('p', 'ld-curriculum-hint', t(curriculumState === 'error' ? 'curriculum.error' : 'curriculum.loading')));
+                if (curriculumState === 'error') status.append(button(t('retry'), () => void loadCurriculum()));
+                panel.append(status); return panel;
+            }
+            const data = curriculumData;
+            const group = selected.group || text(context.entity?.name) || request.group_id;
+            panel.append(node('p', 'ld-curriculum-context', [group, data?.semester ? t('curriculum.semester', { number: data.semester }) : ''].filter(Boolean).join(' · ')));
+            if (!data || data.status !== 'confirmed') {
+                status.append(node('p', 'ld-curriculum-hint', t(`curriculum.${data?.status || 'unavailable'}`)));
+                panel.append(status); return panel;
+            }
+            panel.classList.add('ld-curriculum-confirmed');
+            const current = data.assessments.filter(item => item.semester === data.semester);
+            const other = data.assessments.filter(item => item.semester !== data.semester);
+            function renderAssessments(items) {
+                const terms = new Map();
+                items.forEach(item => {
+                    if (!terms.has(item.semester)) terms.set(item.semester, []);
+                    terms.get(item.semester).push(item);
+                });
+                const list = node('div', 'ld-assessment-terms');
+                [...terms].sort(([a], [b]) => a - b).forEach(([term, records]) => {
+                    const block = node('div', 'ld-assessment-term');
+                    if (term !== data.semester) block.append(node('p', 'ld-curriculum-context', t('curriculum.semester', { number: term })));
+                    const badges = node('div', 'ld-assessment-badges');
+                    [...new Set(records.map(item => item.kind))].forEach(kind => badges.append(node('span', 'ld-assessment-kind', t(`curriculum.kind.${kind}`))));
+                    block.append(badges);
+                    const sources = node('div', 'ld-assessment-sources');
+                    const seen = new Set();
+                    records.forEach(item => {
+                        const key = item.snapshotUrl || item.sourceUrl;
+                        if (seen.has(key)) return;
+                        seen.add(key);
+                        if (item.snapshotUrl) {
+                            const copy = externalLink(item.page ? t('curriculum.snapshotPage', { page: item.page }) : t('curriculum.snapshot'), item.snapshotUrl);
+                            if (item.sourceTitle) { copy.title = item.sourceTitle; copy.setAttribute('aria-label', `${copy.textContent} · ${item.sourceTitle}`); }
+                            sources.append(copy);
+                        }
+                        const label = item.page ? t('curriculum.sourcePage', { page: item.page }) : t('curriculum.source');
+                        const link = externalLink(label, item.sourceUrl);
+                        if (item.sourceTitle) { link.title = item.sourceTitle; link.setAttribute('aria-label', `${label} · ${item.sourceTitle}`); }
+                        sources.append(link);
+                    });
+                    block.append(sources); list.append(block);
+                });
+                return list;
+            }
+            if (current.length) panel.append(renderAssessments(current));
+            else panel.append(node('p', 'ld-curriculum-hint', t('curriculum.noCurrent')));
+            panel.append(node('p', 'ld-curriculum-hint', t('curriculum.plannedHint')));
+            if (other.length) {
+                const details = disclosure('curriculum-other', t('curriculum.otherSemesters'));
+                details.append(renderAssessments(other)); panel.append(details);
+            }
+            const provenance = node('div', 'ld-curriculum-provenance');
+            const program = [data.program, data.admissionYear ? t('curriculum.admissionYear', { year: data.admissionYear }) : ''].filter(Boolean).join(' · ');
+            if (program) provenance.append(node('span', '', program));
+            provenance.append(node('span', '', checkedLabel(data.checkedAt)));
+            if (data.stale) provenance.append(node('span', 'ld-warning', t('curriculum.stale')));
+            panel.append(provenance);
+            return panel;
+        }
+        function renderCourseClasses() {
+            const body = node('div', 'ld-course-classes');
             body.append(node('h3', '', t('courseClasses')));
             body.append(node('p', 'ld-subtitle', [text(context.entity?.name), cacheState === 'ready' ? t('allCached') : t('loadedRange', { range: rangeLabel() })].filter(Boolean).join(' · ')));
             const status = node('div', 'ld-subtitle'); status.setAttribute('role', 'status');
@@ -267,7 +411,15 @@
             if (cacheState === 'ready' && !occurrences.length) body.append(node('p', 'ld-small', t('cacheEmpty')));
             const list = node('div', 'ld-occurrences');
             occurrences.forEach(item => {
-                const entry = button('', () => { selected = item; selectedFromCache = cacheState === 'ready'; tab = 'lesson'; render(); dialog.querySelector('[data-tab="lesson"]').focus({ preventScroll: true }); }, 'ld-occurrence');
+                const entry = button('', () => {
+                    const changed = JSON.stringify(curriculumContext(selected, context.entity)) !== JSON.stringify(curriculumContext(item, context.entity));
+                    if (changed) {
+                        curriculumController?.abort(); curriculumController = null;
+                        curriculumState = 'idle'; curriculumData = null;
+                    }
+                    selected = item; selectedFromCache = cacheState === 'ready'; tab = 'lesson'; render();
+                    dialog.querySelector('[data-tab="lesson"]').focus({ preventScroll: true });
+                }, 'ld-occurrence');
                 const date = node('span'); date.append(node('b', '', dateLabel(item.date, { month: 'short', year: undefined })), node('span', 'ld-small', item.date ? dateLabel(item.date, { day: undefined, month: undefined, year: undefined, weekday: 'long' }) : ''));
                 if (item.date && item.date.slice(0, 4) !== original.date.slice(0, 4)) date.append(node('span', 'ld-small', item.date.slice(0, 4)));
                 const summary = node('span'); summary.append(node('b', '', timeLabel(item)), node('span', 'ld-small', [item.kind, item.room].filter(Boolean).join(' · ')));
@@ -278,6 +430,12 @@
                 entry.append(date, summary, arrow); list.append(entry);
             });
             body.append(list);
+            return body;
+        }
+        function renderCourse() {
+            const body = node('div', 'ld-body'); body.id = 'lessonDetailsCourse';
+            body.setAttribute('role', 'tabpanel'); body.setAttribute('aria-labelledby', 'lessonDetailsCourseTab');
+            body.append(renderCurriculum(), renderCourseClasses());
             return body;
         }
         function render() {
@@ -338,5 +496,5 @@
         dialog.showModal();
         active = { dialog, cleanup };
     }
-    window.MpbLessonDetails = { open, normalizeLesson, relatedLessons };
+    window.MpbLessonDetails = { open, normalizeLesson, relatedLessons, curriculumContext, normalizeCurriculum };
 })();

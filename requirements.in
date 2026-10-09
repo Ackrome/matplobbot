@@ -25,6 +25,7 @@ opentelemetry-exporter-otlp-proto-http>=1.41.0,<2
 opentelemetry-instrumentation-aiohttp-client>=0.62b0,<1
 opentelemetry-sdk>=1.41.0,<2
 Pillow>=12.3.0,<13
+pdfplumber==0.11.10
 pysocks>=1.7.1,<2
 python-dotenv>=1.2.2,<2
 redis>=5.1.1,<6

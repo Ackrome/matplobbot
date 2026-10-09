@@ -125,6 +125,74 @@ class LessonDetailsTests(unittest.TestCase):
             assert.equal(result.some(item=>item.disciplineId==='2'), false);
         """)
 
+    def test_curriculum_context_uses_student_group_and_selected_lesson_date(self):
+        self.run_model("""
+            const context = sandbox.window.MpbLessonDetails.curriculumContext;
+            const selected = normalize({...base, groupOid:88}, entity);
+            const request = context(selected, entity);
+            assert.equal(request.group_id, '7');
+            assert.equal(request.discipline, 'Полное название');
+            assert.equal(request.lesson_date, '2026-10-09');
+            const teacher = {type:'person', id:'999', name:'Teacher'};
+            assert.equal(context(normalize(base, teacher), teacher), null);
+            assert.equal(context(normalize({...base, groupOid:88}, teacher), teacher).group_id, '88');
+            assert.equal(context(normalize({...base, groupOid:'88,99'}, teacher), teacher), null);
+            assert.equal(context(normalize({...base, date:'not-a-date'}, entity), entity), null);
+            assert.equal(context(normalize({...base, discipline:'', discipline_full:'', discipline_short:''}, entity), entity), null);
+            const other = context(normalize({...base, group:'ПМ23-2', groupOid:8, date:'2027.03.05'}, entity), entity);
+            assert.equal(other.group_id, '8');
+            assert.equal(other.lesson_date, '2027-03-05');
+        """)
+
+    def test_curriculum_assessments_preserve_terms_and_reject_untrusted_provenance(self):
+        self.run_model("""
+            const normalizeCurriculum = sandbox.window.MpbLessonDetails.normalizeCurriculum;
+            const assessment = {kind:'exam', semester:7, source_url:'https://www.fa.ru/upload/plan.pdf',
+                source_title:'Official plan', page:12};
+            const response = {status:'confirmed', group_id:7, semester:7, admission_year:2023,
+                program:'Applied mathematics', assessments:[assessment,
+                    {...assessment, kind:'coursework'}, {...assessment, kind:'graded_pass', semester:8}],
+                checked_at:'2026-10-09T09:00:00Z', stale:true};
+            const result = normalizeCurriculum(response, '7');
+            assert.equal(result.assessments.length, 3);
+            assert.equal(result.assessments[2].kind, 'graded_pass');
+            assert.equal(result.assessments[2].semester, 8);
+            assert.equal(result.assessments[0].sourceUrl, 'https://www.fa.ru/upload/plan.pdf#page=12');
+            assert.equal(result.admissionYear, '2023');
+            assert.equal(result.stale, true);
+            for (const url of ['javascript:alert(1)', 'https://fa.ru.attacker.example/plan.pdf',
+                'https://user:password@www.fa.ru/plan.pdf', 'http://www.fa.ru/plan.pdf']) {
+                assert.equal(normalizeCurriculum({...response, assessments:[{...assessment, source_url:url}]}, '7'), null);
+            }
+            assert.equal(normalizeCurriculum(response, '8'), null);
+            assert.equal(normalizeCurriculum({...response, assessments:[]}, '7'), null);
+            assert.equal(normalizeCurriculum({...response, semester:null}, '7'), null);
+            assert.equal(normalizeCurriculum({...response, assessments:[{...assessment, kind:'test'}]}, '7'), null);
+            assert.equal(normalizeCurriculum({...response, assessments:[{...assessment, semester:0}]}, '7'), null);
+            const unavailable = normalizeCurriculum({status:'unmapped', group_id:'7', assessments:[]}, '7');
+            assert.equal(unavailable.status, 'unmapped');
+            assert.equal(unavailable.assessments.length, 0);
+        """)
+
+    def test_curriculum_snapshot_resolves_only_immutable_paths_at_configured_api(self):
+        self.run_model("""
+            const normalizeCurriculum = sandbox.window.MpbLessonDetails.normalizeCurriculum;
+            sandbox.window.location = {origin:'https://site.example'};
+            sandbox.window.getMpbApiBase = () => 'https://api.example/custom-api';
+            const snapshot = '/api/schedule/curriculum/documents/42/' + 'a'.repeat(64) + '.pdf';
+            const assessment = {kind:'pass', semester:7, source_url:'https://www.fa.ru/upload/plan.pdf',
+                snapshot_url:snapshot, page:3};
+            const response = {status:'confirmed', group_id:7, semester:7, assessments:[assessment]};
+            const read = item => normalizeCurriculum({...response, assessments:[item]}, '7').assessments[0];
+            assert.equal(read(assessment).snapshotUrl, 'https://api.example/custom-api/schedule/curriculum/documents/42/' + 'a'.repeat(64) + '.pdf#page=3');
+            for (const invalid of ['https://attacker.example/file.pdf', '//attacker.example/file.pdf',
+                snapshot + '?redirect=https://attacker.example', '/api/../../secret', '/api/schedule/curriculum/documents/42/latest.pdf']) {
+                assert.equal(read({...assessment, snapshot_url:invalid}).snapshotUrl, '');
+            }
+            sandbox.window.getMpbApiBase = () => '/api';
+            assert.equal(read(assessment).snapshotUrl, 'https://site.example' + snapshot + '#page=3');
+        """)
+
     def test_card_actions_preserve_each_source_object_and_known_entity_id(self):
         self.run_model("""
             const source = fs.readFileSync('main_site_frontend/js/schedule.js', 'utf8');

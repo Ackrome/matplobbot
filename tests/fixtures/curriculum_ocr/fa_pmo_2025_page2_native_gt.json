@@ -1,0 +1,1616 @@
+{
+  "page": 2,
+  "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86",
+  "source_file": "fa-curriculum-sample.pdf",
+  "provenance": "Independent PDF vector table and text extraction; no OCR inputs.",
+  "native_control_columns": {
+    "exam": 4,
+    "pass": 5,
+    "graded_pass": 6,
+    "coursework": 7,
+    "course_project": 8
+  },
+  "rows": [
+    {
+      "row_id": "p2_r001",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.1.9",
+      "discipline_name": "Технологии работы с открытыми данными",
+      "controls": {
+        "exam": "7",
+        "pass": "",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.1943305988655262,
+        0.27037764170278533,
+        0.2133701591827037
+      ],
+      "native_table_row": 5,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [
+          7
+        ],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r002",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2",
+      "discipline_name": "Цикл профиля (элективный) (Количество выбираемых модулей 2)",
+      "controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.2133701591827037,
+        0.27037764170278533,
+        0.23070800665241145
+      ],
+      "native_table_row": 6,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "section",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r003",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.1",
+      "discipline_name": "Модуль \"Прикладное программирование\"",
+      "controls": {
+        "exam": "",
+        "pass": "3",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.23070800665241145,
+        0.27037764170278533,
+        0.23937990021382752
+      ],
+      "native_table_row": 7,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "section",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r004",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.1.1",
+      "discipline_name": "Основы веб-разработки",
+      "controls": {
+        "exam": "",
+        "pass": "6",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.23937990021382752,
+        0.27037764170278533,
+        0.2489831313851271
+      ],
+      "native_table_row": 8,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          6
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r005",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.1.2",
+      "discipline_name": "Объектно-ориентированное программирование",
+      "controls": {
+        "exam": "",
+        "pass": "6",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.2489831313851271,
+        0.27037764170278533,
+        0.26409360893323824
+      ],
+      "native_table_row": 9,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          6
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r006",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.1.3",
+      "discipline_name": "Основы мобильной разработки",
+      "controls": {
+        "exam": "",
+        "pass": "7",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.26409360893323824,
+        0.27037764170278533,
+        0.2724043715846994
+      ],
+      "native_table_row": 10,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          7
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r007",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.2",
+      "discipline_name": "Модуль \"ERP-системы\"",
+      "controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.2724043715846994,
+        0.27037764170278533,
+        0.28057733428367776
+      ],
+      "native_table_row": 11,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "section",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r008",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.2.1",
+      "discipline_name": "Основы корпоративных информационных систем",
+      "controls": {
+        "exam": "",
+        "pass": "6",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.28057733428367776,
+        0.27037764170278533,
+        0.29802090757899735
+      ],
+      "native_table_row": 12,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          6
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r009",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.2.2",
+      "discipline_name": "Основы бухгалтерских информационных систем",
+      "controls": {
+        "exam": "",
+        "pass": "6",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.29802090757899735,
+        0.27037764170278533,
+        0.3142750071275837
+      ],
+      "native_table_row": 13,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          6
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r010",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.2.3",
+      "discipline_name": "Разработка приложений в системе 1С Предприятие",
+      "controls": {
+        "exam": "",
+        "pass": "7",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.3142750071275837,
+        0.27037764170278533,
+        0.33060109487605915
+      ],
+      "native_table_row": 14,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          7
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r011",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.3",
+      "discipline_name": "Модуль \"Системное программирование\"",
+      "controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.33060109487605915,
+        0.27037764170278533,
+        0.3387740575750376
+      ],
+      "native_table_row": 15,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "section",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r012",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.3.1",
+      "discipline_name": "Разработка эффективных вычислительных алгоритмов",
+      "controls": {
+        "exam": "",
+        "pass": "6",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.3387740575750376,
+        0.27037764170278533,
+        0.3539368032786885
+      ],
+      "native_table_row": 16,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          6
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r013",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.3.2",
+      "discipline_name": "Низкоуровневое программирование",
+      "controls": {
+        "exam": "",
+        "pass": "6",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.3539368032786885,
+        0.27037764170278533,
+        0.3642005220955096
+      ],
+      "native_table_row": 17,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          6
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r014",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.3.3",
+      "discipline_name": "Программирование для встраиваемых систем",
+      "controls": {
+        "exam": "",
+        "pass": "7",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.3642005220955096,
+        0.27037764170278533,
+        0.38049418111982247
+      ],
+      "native_table_row": 18,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          7
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r015",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.4",
+      "discipline_name": "Модуль \"Архитектура программного обеспечения\"",
+      "controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.38049418111982247,
+        0.27037764170278533,
+        0.39422665617327945
+      ],
+      "native_table_row": 19,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "section",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r016",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.4.1",
+      "discipline_name": "Основы проектирования информационных систем",
+      "controls": {
+        "exam": "",
+        "pass": "6",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.39422665617327945,
+        0.27037764170278533,
+        0.409389403064861
+      ],
+      "native_table_row": 20,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          6
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r017",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.4.2",
+      "discipline_name": "Архитектура и дизайн программного обеспечения",
+      "controls": {
+        "exam": "",
+        "pass": "7",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.409389403064861,
+        0.27037764170278533,
+        0.4244998806129722
+      ],
+      "native_table_row": 21,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          7
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r018",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.4.3",
+      "discipline_name": "Тестирование программного обеспечения",
+      "controls": {
+        "exam": "",
+        "pass": "7",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.4244998806129722,
+        0.27037764170278533,
+        0.4396531232676011
+      ],
+      "native_table_row": 22,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          7
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r019",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.5",
+      "discipline_name": "Модуль \"Машинное обучение на графах\"",
+      "controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.4396531232676011,
+        0.27037764170278533,
+        0.44825077660964596
+      ],
+      "native_table_row": 23,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "section",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r020",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.5.1",
+      "discipline_name": "Прикладная теория графов",
+      "controls": {
+        "exam": "",
+        "pass": "6",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.44825077660964596,
+        0.27037764170278533,
+        0.4574245654153797
+      ],
+      "native_table_row": 24,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          6
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r021",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.5.2",
+      "discipline_name": "Технологии и алгоритмы анализа сетевых моделей",
+      "controls": {
+        "exam": "",
+        "pass": "7",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.4574245654153797,
+        0.27037764170278533,
+        0.4729626979884375
+      ],
+      "native_table_row": 25,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          7
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r022",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.5.3",
+      "discipline_name": "Машинное обучение в семантическом и сетевом анализе",
+      "controls": {
+        "exam": "",
+        "pass": "7",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.4729626979884375,
+        0.27037764170278533,
+        0.4885305327868852
+      ],
+      "native_table_row": 26,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          7
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r023",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.6",
+      "discipline_name": "Модуль \"Разработка распределенных приложений\"",
+      "controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.4885305327868852,
+        0.27037764170278533,
+        0.5031361358596658
+      ],
+      "native_table_row": 27,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "section",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r024",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.6.1",
+      "discipline_name": "Технологии параллельного программирования",
+      "controls": {
+        "exam": "",
+        "pass": "6",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.5031361358596658,
+        0.27037764170278533,
+        0.5182967444761225
+      ],
+      "native_table_row": 28,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          6
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r025",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.6.2",
+      "discipline_name": "Основы технологий интернета вещей",
+      "controls": {
+        "exam": "",
+        "pass": "7",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.5182967444761225,
+        0.27037764170278533,
+        0.5294416720123544
+      ],
+      "native_table_row": 29,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          7
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r026",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.6.3",
+      "discipline_name": "Микросервисная архитектура",
+      "controls": {
+        "exam": "",
+        "pass": "7",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.5294416720123544,
+        0.27037764170278533,
+        0.540603470737309
+      ],
+      "native_table_row": 30,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          7
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r027",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.7",
+      "discipline_name": "Модуль \"Data Science для бизнеса\"",
+      "controls": {
+        "exam": "",
+        "pass": "3",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.540603470737309,
+        0.27037764170278533,
+        0.5503415345093846
+      ],
+      "native_table_row": 31,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "section",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r028",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.7.1",
+      "discipline_name": "Основы глубокого обучения и NLP",
+      "controls": {
+        "exam": "",
+        "pass": "6",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.5503415345093846,
+        0.27037764170278533,
+        0.5659301486893166
+      ],
+      "native_table_row": 32,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          6
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r029",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.7.2",
+      "discipline_name": "Прикладной Data Science в финтехе",
+      "controls": {
+        "exam": "",
+        "pass": "7",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.5659301486893166,
+        0.27037764170278533,
+        0.5814682827472876
+      ],
+      "native_table_row": 33,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          7
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r030",
+      "page": 2,
+      "discipline_code": "Б.1.2.2.2.7.3",
+      "discipline_name": "Глубокое обучение в финансах",
+      "controls": {
+        "exam": "",
+        "pass": "7",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.5814682827472876,
+        0.27037764170278533,
+        0.5894808750593965
+      ],
+      "native_table_row": 34,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          7
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r031",
+      "page": 2,
+      "discipline_code": "",
+      "discipline_name": "Всего на теоретическое обучение",
+      "controls": {
+        "exam": "30",
+        "pass": "29",
+        "graded_pass": "2",
+        "coursework": "",
+        "course_project": "2"
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.5894808750593965,
+        0.27037764170278533,
+        0.5976954205274412
+      ],
+      "native_table_row": 35,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "summary",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r032",
+      "page": 2,
+      "discipline_code": "Б.2",
+      "discipline_name": "Блок 2. Практики, в том числе Научно- исследовательская работа (НИР)",
+      "controls": {
+        "exam": "",
+        "pass": "3",
+        "graded_pass": "2",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.5976954205274412,
+        0.27037764170278533,
+        0.612805880256593
+      ],
+      "native_table_row": 36,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "section",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r033",
+      "page": 2,
+      "discipline_code": "Б.2.1",
+      "discipline_name": "Учебная практика",
+      "controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "8",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.612805880256593,
+        0.27037764170278533,
+        0.6219054427021462
+      ],
+      "native_table_row": 37,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "section",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r034",
+      "page": 2,
+      "discipline_code": "Б.2.1.1",
+      "discipline_name": "Учебная практика: технологическая (проектно- технологическая) практика",
+      "controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.6219054427021462,
+        0.27037764170278533,
+        0.6438108834244081
+      ],
+      "native_table_row": 38,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r035",
+      "page": 2,
+      "discipline_code": "Б.2.2",
+      "discipline_name": "Производственная практика",
+      "controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "8",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.6438108834244081,
+        0.27037764170278533,
+        0.652411501148333
+      ],
+      "native_table_row": 39,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "section",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r036",
+      "page": 2,
+      "discipline_code": "Б.2.2.1",
+      "discipline_name": "Производственная практика: технологическая (проектно-технологическая) практика",
+      "controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.652411501148333,
+        0.27037764170278533,
+        0.6749869303872653
+      ],
+      "native_table_row": 40,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r037",
+      "page": 2,
+      "discipline_code": "Б.2.2.2",
+      "discipline_name": "Производственная практика: преддипломная практика",
+      "controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.6749869303872653,
+        0.27037764170278533,
+        0.6901401777936169
+      ],
+      "native_table_row": 41,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r038",
+      "page": 2,
+      "discipline_code": "Б.2.3",
+      "discipline_name": "Научно-исследовательская работа",
+      "controls": {
+        "exam": "",
+        "pass": "3",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.6901401777936169,
+        0.27037764170278533,
+        0.6987407955175418
+      ],
+      "native_table_row": 42,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "section",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r039",
+      "page": 2,
+      "discipline_code": "Б.2.3.1",
+      "discipline_name": "Учебно-научный семинар",
+      "controls": {
+        "exam": "",
+        "pass": "2,4,6",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.6987407955175418,
+        0.27037764170278533,
+        0.711522929040944
+      ],
+      "native_table_row": 43,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          2,
+          4,
+          6
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r040",
+      "page": 2,
+      "discipline_code": "Б.3",
+      "discipline_name": "Блок 3. Государственная итоговая аттестация",
+      "controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.711522929040944,
+        0.27037764170278533,
+        0.7265437118872259
+      ],
+      "native_table_row": 44,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "section",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r041",
+      "page": 2,
+      "discipline_code": "Б.3.1",
+      "discipline_name": "Подготовка к сдаче и сдача государственного экзамена",
+      "controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.7265437118872259,
+        0.27037764170278533,
+        0.7417367557614635
+      ],
+      "native_table_row": 45,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r042",
+      "page": 2,
+      "discipline_code": "Б.3.2",
+      "discipline_name": "Подготовка к процедуре защиты и процедура защиты выпускной квалификационной работы",
+      "controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.7417367557614635,
+        0.27037764170278533,
+        0.7643026867030964
+      ],
+      "native_table_row": 46,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r043",
+      "page": 2,
+      "discipline_code": "",
+      "discipline_name": "ИТОГО",
+      "controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.7643026867030964,
+        0.27037764170278533,
+        0.7717866535994298
+      ],
+      "native_table_row": 47,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "summary",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r044",
+      "page": 2,
+      "discipline_code": "Б.4",
+      "discipline_name": "Элективные дисциплины по физической культуре и спорту",
+      "controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.7717866535994298,
+        0.27037764170278533,
+        0.786873362635622
+      ],
+      "native_table_row": 48,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "section",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r045",
+      "page": 2,
+      "discipline_code": "Б.4.1",
+      "discipline_name": "Элективные дисциплины по физической культуре и спорту",
+      "controls": {
+        "exam": "",
+        "pass": "2",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.786873362635622,
+        0.27037764170278533,
+        0.8020788805733745
+      ],
+      "native_table_row": 49,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          2
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r046",
+      "page": 2,
+      "discipline_code": "Б.5",
+      "discipline_name": "Факультативы",
+      "controls": {
+        "exam": "",
+        "pass": "",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.8020788805733745,
+        0.27037764170278533,
+        0.8111309158945117
+      ],
+      "native_table_row": 50,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "section",
+      "semesters": {
+        "exam": [],
+        "pass": [],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r047",
+      "page": 2,
+      "discipline_code": "Б.5.1",
+      "discipline_name": "Введение в искусственный интеллект",
+      "controls": {
+        "exam": "",
+        "pass": "1",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.8111309158945117,
+        0.27037764170278533,
+        0.8202542230933714
+      ],
+      "native_table_row": 51,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          1
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r048",
+      "page": 2,
+      "discipline_code": "Б.5.2",
+      "discipline_name": "Практическая подготовка (1 курс)",
+      "controls": {
+        "exam": "",
+        "pass": "2",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.8202542230933714,
+        0.27037764170278533,
+        0.8497624198146828
+      ],
+      "native_table_row": 52,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          2
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r049",
+      "page": 2,
+      "discipline_code": "Б.5.3",
+      "discipline_name": "Практическая подготовка (2 курс)",
+      "controls": {
+        "exam": "",
+        "pass": "4",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.8497624198146828,
+        0.27037764170278533,
+        0.8668674150629603
+      ],
+      "native_table_row": 53,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          4
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r050",
+      "page": 2,
+      "discipline_code": "Б.5.4",
+      "discipline_name": "Практическая подготовка (3 курс)",
+      "controls": {
+        "exam": "",
+        "pass": "6",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.8668674150629603,
+        0.27037764170278533,
+        0.888816827037301
+      ],
+      "native_table_row": 54,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          6
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r051",
+      "page": 2,
+      "discipline_code": "Б.5.5",
+      "discipline_name": "Математика искусственного интеллекта",
+      "controls": {
+        "exam": "",
+        "pass": "3",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.888816827037301,
+        0.27037764170278533,
+        0.9154739724400095
+      ],
+      "native_table_row": 55,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          3
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r052",
+      "page": 2,
+      "discipline_code": "Б.5.6",
+      "discipline_name": "Фундаментальные модели",
+      "controls": {
+        "exam": "",
+        "pass": "5",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.9154739724400095,
+        0.27037764170278533,
+        0.9380256474221906
+      ],
+      "native_table_row": 56,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          5
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    },
+    {
+      "row_id": "p2_r053",
+      "page": 2,
+      "discipline_code": "Б.5.7",
+      "discipline_name": "Гибритный искусственный интеллект",
+      "controls": {
+        "exam": "",
+        "pass": "7",
+        "graded_pass": "",
+        "coursework": "",
+        "course_project": ""
+      },
+      "bbox": [
+        0.018869065618385243,
+        0.9380256474221906,
+        0.27037764170278533,
+        0.9592777223410154
+      ],
+      "native_table_row": 57,
+      "verification_method": "native_pdf_vector_cells_not_ocr",
+      "row_type": "discipline",
+      "semesters": {
+        "exam": [],
+        "pass": [
+          7
+        ],
+        "graded_pass": [],
+        "coursework": [],
+        "course_project": []
+      }
+    }
+  ]
+}

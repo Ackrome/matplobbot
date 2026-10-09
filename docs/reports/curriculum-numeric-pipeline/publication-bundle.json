@@ -1,0 +1,1540 @@
+{
+  "version": 1,
+  "documents": [
+    {
+      "metadata": {
+        "title": "Прикладное машинное обучение — учебный план набора 2023",
+        "source_url": "https://www.fa.ru/upload/constructor/773/o1glti47zsriv5zhc7qc6agt7g6gou7x/UP.pdf",
+        "program": "01.03.02 Прикладная математика и информатика",
+        "profile": "Прикладное машинное обучение",
+        "campus": "Московский кампус",
+        "admission_year": 2023,
+        "study_form": "Очная",
+        "scan_layout": "fa_legacy_v1"
+      },
+      "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3",
+      "pdf_file": "sources/plan-2023.pdf",
+      "assessments": [
+        {
+          "discipline_code": "scan:p1:r029",
+          "discipline_name": "Алгебра и геометрия",
+          "semester": 1,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 29: Алгебра и геометрия | exam: 1"
+        },
+        {
+          "discipline_code": "scan:p1:r022",
+          "discipline_name": "Алгоритмы и структуры данных в языке Python",
+          "semester": 1,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 22: Алгоритмы и структуры данных в языке Python | exam: 1,2"
+        },
+        {
+          "discipline_code": "scan:p1:r022",
+          "discipline_name": "Алгоритмы и структуры данных в языке Python",
+          "semester": 2,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 22: Алгоритмы и структуры данных в языке Python | exam: 1,2"
+        },
+        {
+          "discipline_code": "scan:p2:r011",
+          "discipline_name": "Архитектура и дизайн программного обеспечения",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 11: Архитектура и дизайн программного обеспечения | pass: 7"
+        },
+        {
+          "discipline_code": "scan:p1:r006",
+          "discipline_name": "Безопасность жизнедеятельности",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 6: Безопасность жизнедеятельности | pass: 1"
+        },
+        {
+          "discipline_code": "scan:p1:r015",
+          "discipline_name": "Введение в специальность",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 15: Введение в специальность | pass: 1"
+        },
+        {
+          "discipline_code": "scan:p1:r040",
+          "discipline_name": "Глубокое обучение",
+          "semester": 5,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 40: Глубокое обучение | exam: 5"
+        },
+        {
+          "discipline_code": "scan:p1:r020",
+          "discipline_name": "Дискретная математика",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 20: Дискретная математика | pass: 1"
+        },
+        {
+          "discipline_code": "scan:p1:r020",
+          "discipline_name": "Дискретная математика",
+          "semester": 2,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 20: Дискретная математика | exam: 2"
+        },
+        {
+          "discipline_code": "scan:p1:r030",
+          "discipline_name": "Дифференциальные уравнения",
+          "semester": 3,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 30: Дифференциальные уравнения | exam: 3"
+        },
+        {
+          "discipline_code": "scan:p1:r008",
+          "discipline_name": "Иностранный язык",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 8: Иностранный язык | pass: 1,2,3"
+        },
+        {
+          "discipline_code": "scan:p1:r008",
+          "discipline_name": "Иностранный язык",
+          "semester": 2,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 8: Иностранный язык | pass: 1,2,3"
+        },
+        {
+          "discipline_code": "scan:p1:r008",
+          "discipline_name": "Иностранный язык",
+          "semester": 3,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 8: Иностранный язык | pass: 1,2,3"
+        },
+        {
+          "discipline_code": "scan:p1:r008",
+          "discipline_name": "Иностранный язык",
+          "semester": 4,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 8: Иностранный язык | exam: 4"
+        },
+        {
+          "discipline_code": "scan:p1:r009",
+          "discipline_name": "Иностранный язык в профессиональной сфере",
+          "semester": 5,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 9: Иностранный язык в профессиональной сфере | pass: 5"
+        },
+        {
+          "discipline_code": "scan:p1:r009",
+          "discipline_name": "Иностранный язык в профессиональной сфере",
+          "semester": 6,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 9: Иностранный язык в профессиональной сфере | exam: 6"
+        },
+        {
+          "discipline_code": "scan:p1:r011",
+          "discipline_name": "Информационное право",
+          "semester": 5,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 11: Информационное право | exam: 5"
+        },
+        {
+          "discipline_code": "scan:p1:r005",
+          "discipline_name": "История России",
+          "semester": 2,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 5: История России | exam: 2"
+        },
+        {
+          "discipline_code": "scan:p1:r019",
+          "discipline_name": "Математические модели микро- и макроэкономики",
+          "semester": 4,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 19: Математические модели микро- и макроэкономики | pass: 4"
+        },
+        {
+          "discipline_code": "scan:p1:r037",
+          "discipline_name": "Математический анализ",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 37: Математический анализ | pass: 1"
+        },
+        {
+          "discipline_code": "scan:p1:r037",
+          "discipline_name": "Математический анализ",
+          "semester": 2,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 37: Математический анализ | exam: 2"
+        },
+        {
+          "discipline_code": "scan:p1:r033",
+          "discipline_name": "Математическое и имитационное моделирование",
+          "semester": 6,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 33: Математическое и имитационное моделирование | exam: 6"
+        },
+        {
+          "discipline_code": "scan:p1:r045",
+          "discipline_name": "Машинное зрение",
+          "semester": 6,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 45: Машинное зрение | exam: 6"
+        },
+        {
+          "discipline_code": "scan:p1:r023",
+          "discipline_name": "Машинное обучение",
+          "semester": 3,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 23: Машинное обучение | pass: 3"
+        },
+        {
+          "discipline_code": "scan:p1:r023",
+          "discipline_name": "Машинное обучение",
+          "semester": 4,
+          "kind": "course_project",
+          "page": 1,
+          "evidence": "Page 1, row 23: Машинное обучение | course_project: 4"
+        },
+        {
+          "discipline_code": "scan:p1:r023",
+          "discipline_name": "Машинное обучение",
+          "semester": 4,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 23: Машинное обучение | exam: 4"
+        },
+        {
+          "discipline_code": "scan:p1:r046",
+          "discipline_name": "Машинное обучение в семантическом и сетевом анализе",
+          "semester": 6,
+          "kind": "coursework",
+          "page": 1,
+          "evidence": "Page 1, row 46: Машинное обучение в семантическом и сетевом анализе | coursework: 6"
+        },
+        {
+          "discipline_code": "scan:p1:r046",
+          "discipline_name": "Машинное обучение в семантическом и сетевом анализе",
+          "semester": 6,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 46: Машинное обучение в семантическом и сетевом анализе | pass: 6"
+        },
+        {
+          "discipline_code": "scan:p2:r014",
+          "discipline_name": "Методы визуализации данных",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 14: Методы визуализации данных | pass: 6"
+        },
+        {
+          "discipline_code": "scan:p1:r047",
+          "discipline_name": "Методы оптимизации",
+          "semester": 5,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 47: Методы оптимизации | pass: 5"
+        },
+        {
+          "discipline_code": "scan:p2:r020",
+          "discipline_name": "Микросервисная архитектура",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 20: Микросервисная архитектура | pass: 7"
+        },
+        {
+          "discipline_code": "scan:p2:r007",
+          "discipline_name": "Низкоуровневое программирование",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 7: Низкоуровневое программирование | pass: 6"
+        },
+        {
+          "discipline_code": "scan:p1:r018",
+          "discipline_name": "Обработка данных и моделирование в табличном редакторе",
+          "semester": 4,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 18: Обработка данных и моделирование в табличном редакторе | pass: 4"
+        },
+        {
+          "discipline_code": "scan:p1:r041",
+          "discipline_name": "Обработка текстов на естественных языках",
+          "semester": 6,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 41: Обработка текстов на естественных языках | exam: 6"
+        },
+        {
+          "discipline_code": "scan:p1:r053",
+          "discipline_name": "Объектно-ориентированное программирование",
+          "semester": 6,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 53: Объектно-ориентированное программирование | pass: 6"
+        },
+        {
+          "discipline_code": "scan:p2:r003",
+          "discipline_name": "Основы бухгалтерских информационных систем",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 3: Основы бухгалтерских информационных систем | pass: 6"
+        },
+        {
+          "discipline_code": "scan:p1:r052",
+          "discipline_name": "Основы веб-разработки",
+          "semester": 6,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 52: Основы веб-разработки | pass: 6"
+        },
+        {
+          "discipline_code": "scan:p2:r037",
+          "discipline_name": "Основы военной подготовки",
+          "semester": 5,
+          "kind": "graded_pass",
+          "page": 2,
+          "evidence": "Page 2, row 37: Основы военной подготовки | graded_pass: 5"
+        },
+        {
+          "discipline_code": "scan:p1:r013",
+          "discipline_name": "Основы деловой и публичной коммуникации",
+          "semester": 7,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 13: Основы деловой и публичной коммуникации | pass: 7"
+        },
+        {
+          "discipline_code": "scan:p2:r002",
+          "discipline_name": "Основы корпоративных информационных систем",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 2: Основы корпоративных информационных систем | pass: 6"
+        },
+        {
+          "discipline_code": "scan:p2:r016",
+          "discipline_name": "Основы математического моделирования",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 16: Основы математического моделирования | pass: 7"
+        },
+        {
+          "discipline_code": "scan:p1:r054",
+          "discipline_name": "Основы мобильной разработки",
+          "semester": 7,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 54: Основы мобильной разработки | pass: 7"
+        },
+        {
+          "discipline_code": "scan:p2:r010",
+          "discipline_name": "Основы проектирования информационных систем",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 10: Основы проектирования информационных систем | pass: 6"
+        },
+        {
+          "discipline_code": "scan:p2:r019",
+          "discipline_name": "Основы технологий интернета вещей",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 19: Основы технологий интернета вещей | pass: 7"
+        },
+        {
+          "discipline_code": "scan:p2:r015",
+          "discipline_name": "Основы численных методов",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 15: Основы численных методов | pass: 7"
+        },
+        {
+          "discipline_code": "scan:p1:r024",
+          "discipline_name": "Практикум по программированию",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 24: Практикум по программированию | pass: 1,2,3,4"
+        },
+        {
+          "discipline_code": "scan:p1:r024",
+          "discipline_name": "Практикум по программированию",
+          "semester": 2,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 24: Практикум по программированию | pass: 1,2,3,4"
+        },
+        {
+          "discipline_code": "scan:p1:r024",
+          "discipline_name": "Практикум по программированию",
+          "semester": 3,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 24: Практикум по программированию | pass: 1,2,3,4"
+        },
+        {
+          "discipline_code": "scan:p1:r024",
+          "discipline_name": "Практикум по программированию",
+          "semester": 4,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 24: Практикум по программированию | pass: 1,2,3,4"
+        },
+        {
+          "discipline_code": "scan:p1:r044",
+          "discipline_name": "Прикладные задачи машинного обучения",
+          "semester": 7,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 44: Прикладные задачи машинного обучения | exam: 7"
+        },
+        {
+          "discipline_code": "scan:p2:r008",
+          "discipline_name": "Программирование для встраиваемых систем",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 8: Программирование для встраиваемых систем | pass: 7"
+        },
+        {
+          "discipline_code": "scan:p2:r004",
+          "discipline_name": "Разработка приложений в системе 1С Предприятие",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 4: Разработка приложений в системе 1С Предприятие | pass: 7"
+        },
+        {
+          "discipline_code": "scan:p2:r006",
+          "discipline_name": "Разработка эффективных вычислительных алгоритмов",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 6: Разработка эффективных вычислительных алгоритмов | pass: 6"
+        },
+        {
+          "discipline_code": "scan:p1:r042",
+          "discipline_name": "Рекомендательные системы и коллаборативная фильтрация",
+          "semester": 6,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 42: Рекомендательные системы и коллаборативная фильтрация | exam: 6"
+        },
+        {
+          "discipline_code": "scan:p1:r043",
+          "discipline_name": "Семантические технологии",
+          "semester": 7,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 43: Семантические технологии | exam: 7"
+        },
+        {
+          "discipline_code": "scan:p1:r026",
+          "discipline_name": "Системы управления базами данных",
+          "semester": 3,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 26: Системы управления базами данных | pass: 3"
+        },
+        {
+          "discipline_code": "scan:p1:r026",
+          "discipline_name": "Системы управления базами данных",
+          "semester": 4,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 26: Системы управления базами данных | exam: 4"
+        },
+        {
+          "discipline_code": "scan:p1:r035",
+          "discipline_name": "Современные банковские продукты и услуги",
+          "semester": 4,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 35: Современные банковские продукты и услуги | exam: 4"
+        },
+        {
+          "discipline_code": "scan:p1:r016",
+          "discipline_name": "Теория вероятностей и математическая статистика",
+          "semester": 2,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 16: Теория вероятностей и математическая статистика | pass: 2"
+        },
+        {
+          "discipline_code": "scan:p1:r016",
+          "discipline_name": "Теория вероятностей и математическая статистика",
+          "semester": 3,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 16: Теория вероятностей и математическая статистика | exam: 3"
+        },
+        {
+          "discipline_code": "scan:p2:r012",
+          "discipline_name": "Тестирование программного обеспечения",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 12: Тестирование программного обеспечения | pass: 7"
+        },
+        {
+          "discipline_code": "scan:p1:r036",
+          "discipline_name": "Технологии обработки больших данных",
+          "semester": 5,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 36: Технологии обработки больших данных | exam: 5"
+        },
+        {
+          "discipline_code": "scan:p1:r025",
+          "discipline_name": "Технологии обработки данных",
+          "semester": 2,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 25: Технологии обработки данных | exam: 2"
+        },
+        {
+          "discipline_code": "scan:p2:r018",
+          "discipline_name": "Технологии параллельного программирования",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 18: Технологии параллельного программирования | pass: 6"
+        },
+        {
+          "discipline_code": "scan:p1:r049",
+          "discipline_name": "Технологии работы с открытыми данными",
+          "semester": 7,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 49: Технологии работы с открытыми данными | exam: 7"
+        },
+        {
+          "discipline_code": "scan:p2:r029",
+          "discipline_name": "Учебно-научный семинар",
+          "semester": 2,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 29: Учебно-научный семинар | pass: 2,4,6"
+        },
+        {
+          "discipline_code": "scan:p2:r029",
+          "discipline_name": "Учебно-научный семинар",
+          "semester": 4,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 29: Учебно-научный семинар | pass: 2,4,6"
+        },
+        {
+          "discipline_code": "scan:p2:r029",
+          "discipline_name": "Учебно-научный семинар",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 29: Учебно-научный семинар | pass: 2,4,6"
+        },
+        {
+          "discipline_code": "scan:p1:r007",
+          "discipline_name": "Физическая культура и спорт",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 7: Физическая культура и спорт | pass: 1"
+        },
+        {
+          "discipline_code": "scan:p1:r010",
+          "discipline_name": "Философия",
+          "semester": 5,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 10: Философия | exam: 5"
+        },
+        {
+          "discipline_code": "scan:p1:r017",
+          "discipline_name": "Финансовая математика и ее приложения",
+          "semester": 3,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 17: Финансовая математика и ее приложения | exam: 3"
+        },
+        {
+          "discipline_code": "scan:p1:r004",
+          "discipline_name": "Финансовый университет: история и современность",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 4: Финансовый университет: история и современность | pass: 1"
+        },
+        {
+          "discipline_code": "scan:p1:r031",
+          "discipline_name": "Функциональный анализ",
+          "semester": 6,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 31: Функциональный анализ | pass: 6"
+        },
+        {
+          "discipline_code": "scan:p1:r032",
+          "discipline_name": "Численные методы",
+          "semester": 4,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 32: Численные методы | exam: 4"
+        },
+        {
+          "discipline_code": "scan:p1:r034",
+          "discipline_name": "Эконометрика",
+          "semester": 3,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Page 1, row 34: Эконометрика | pass: 3"
+        },
+        {
+          "discipline_code": "scan:p1:r034",
+          "discipline_name": "Эконометрика",
+          "semester": 4,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 34: Эконометрика | exam: 4"
+        },
+        {
+          "discipline_code": "scan:p1:r012",
+          "discipline_name": "Экономическая теория",
+          "semester": 1,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 12: Экономическая теория | exam: 1"
+        },
+        {
+          "discipline_code": "scan:p2:r035",
+          "discipline_name": "Элективные дисциплины по физической культуре и спорту",
+          "semester": 2,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Page 2, row 35: Элективные дисциплины по физической культуре и спорту | pass: 2"
+        },
+        {
+          "discipline_code": "scan:p1:r048",
+          "discipline_name": "Электронные деньги",
+          "semester": 7,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Page 1, row 48: Электронные деньги | exam: 7"
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "162426",
+          "group_name": "ПМ23-1",
+          "terms": [
+            {
+              "semester": 7,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            }
+          ]
+        },
+        {
+          "group_id": "162428",
+          "group_name": "ПМ23-2",
+          "terms": [
+            {
+              "semester": 7,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            }
+          ]
+        },
+        {
+          "group_id": "162430",
+          "group_name": "ПМ23-3",
+          "terms": [
+            {
+              "semester": 7,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            }
+          ]
+        },
+        {
+          "group_id": "162432",
+          "group_name": "ПМ23-4",
+          "terms": [
+            {
+              "semester": 7,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            }
+          ]
+        },
+        {
+          "group_id": "162434",
+          "group_name": "ПМ23-5",
+          "terms": [
+            {
+              "semester": 7,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "title": "Прикладное машинное обучение — учебный план набора 2025",
+        "source_url": "https://www.fa.ru/upload/constructor/e13/mm7ghxp0y1dumv3ons4kyeey1qy0haj1/uchebnyy-plan-PMO_2025-new.pdf",
+        "program": "01.03.02 Прикладная математика и информатика",
+        "profile": "Прикладное машинное обучение",
+        "campus": "Московский кампус",
+        "admission_year": 2025,
+        "study_form": "Очная",
+        "scan_layout": "fa_compact_v1"
+      },
+      "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86",
+      "pdf_file": "sources/plan-2025.pdf",
+      "assessments": [
+        {
+          "discipline_code": "Б.1.1.2.4",
+          "discipline_name": "Алгебра и геометрия",
+          "semester": 3,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.1.2.4 | Алгебра и геометрия | exam: 3"
+        },
+        {
+          "discipline_code": "Б.1.1.3.5",
+          "discipline_name": "Алгоритмы и структуры данных в языке Python",
+          "semester": 1,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.1.3.5 | Алгоритмы и структуры данных в языке Python | exam: 1,2"
+        },
+        {
+          "discipline_code": "Б.1.1.3.5",
+          "discipline_name": "Алгоритмы и структуры данных в языке Python",
+          "semester": 2,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.1.3.5 | Алгоритмы и структуры данных в языке Python | exam: 1,2"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.4.2",
+          "discipline_name": "Архитектура и дизайн программного обеспечения",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.4.2 | Архитектура и дизайн программного обеспечения | pass: 7"
+        },
+        {
+          "discipline_code": "Б.1.1.1.3",
+          "discipline_name": "Безопасность жизнедеятельности",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.1.3 | Безопасность жизнедеятельности | pass: 1"
+        },
+        {
+          "discipline_code": "Б.5.1",
+          "discipline_name": "Введение в искусственный интеллект",
+          "semester": 1,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.5.1 | Введение в искусственный интеллект | pass: 1"
+        },
+        {
+          "discipline_code": "Б.1.1.3.4",
+          "discipline_name": "Введение в специальность",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.3.4 | Введение в специальность | pass: 1"
+        },
+        {
+          "discipline_code": "Б.5.7",
+          "discipline_name": "Гибритный искусственный интеллект",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.5.7 | Гибритный искусственный интеллект | pass: 7"
+        },
+        {
+          "discipline_code": "Б.1.2.2.1.1",
+          "discipline_name": "Глубокое обучение",
+          "semester": 5,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.2.2.1.1 | Глубокое обучение | exam: 5"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.7.3",
+          "discipline_name": "Глубокое обучение в финансах",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.7.3 | Глубокое обучение в финансах | pass: 7"
+        },
+        {
+          "discipline_code": "Б.1.1.2.2",
+          "discipline_name": "Дискретная математика",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.2.2 | Дискретная математика | pass: 1"
+        },
+        {
+          "discipline_code": "Б.1.1.2.2",
+          "discipline_name": "Дискретная математика",
+          "semester": 2,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.1.2.2 | Дискретная математика | exam: 2"
+        },
+        {
+          "discipline_code": "Б.1.1.2.5",
+          "discipline_name": "Дифференциальные уравнения",
+          "semester": 3,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.1.2.5 | Дифференциальные уравнения | exam: 3"
+        },
+        {
+          "discipline_code": "Б.1.1.1.5",
+          "discipline_name": "Иностранный язык",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.1.5 | Иностранный язык | pass: 1,2,3"
+        },
+        {
+          "discipline_code": "Б.1.1.1.5",
+          "discipline_name": "Иностранный язык",
+          "semester": 2,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.1.5 | Иностранный язык | pass: 1,2,3"
+        },
+        {
+          "discipline_code": "Б.1.1.1.5",
+          "discipline_name": "Иностранный язык",
+          "semester": 3,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.1.5 | Иностранный язык | pass: 1,2,3"
+        },
+        {
+          "discipline_code": "Б.1.1.1.5",
+          "discipline_name": "Иностранный язык",
+          "semester": 4,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.1.1.5 | Иностранный язык | exam: 4"
+        },
+        {
+          "discipline_code": "Б.1.1.1.6",
+          "discipline_name": "Иностранный язык в профессиональной сфере",
+          "semester": 5,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.1.6 | Иностранный язык в профессиональной сфере | pass: 5"
+        },
+        {
+          "discipline_code": "Б.1.1.1.6",
+          "discipline_name": "Иностранный язык в профессиональной сфере",
+          "semester": 6,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.1.1.6 | Иностранный язык в профессиональной сфере | exam: 6"
+        },
+        {
+          "discipline_code": "Б.1.1.1.8",
+          "discipline_name": "Информационное право",
+          "semester": 5,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.1.1.8 | Информационное право | exam: 5"
+        },
+        {
+          "discipline_code": "Б.1.1.1.2",
+          "discipline_name": "История России",
+          "semester": 2,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.1.1.2 | История России | exam: 2"
+        },
+        {
+          "discipline_code": "Б.5.5",
+          "discipline_name": "Математика искусственного интеллекта",
+          "semester": 3,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.5.5 | Математика искусственного интеллекта | pass: 3"
+        },
+        {
+          "discipline_code": "Б.1.1.2.7",
+          "discipline_name": "Математические модели микро- и макроэкономики",
+          "semester": 4,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.2.7 | Математические модели микро- и макроэкономики | pass: 4"
+        },
+        {
+          "discipline_code": "Б.1.1.2.1",
+          "discipline_name": "Математический анализ",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.2.1 | Математический анализ | pass: 1"
+        },
+        {
+          "discipline_code": "Б.1.1.2.1",
+          "discipline_name": "Математический анализ",
+          "semester": 2,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.1.2.1 | Математический анализ | exam: 2"
+        },
+        {
+          "discipline_code": "Б.1.2.1.4",
+          "discipline_name": "Математическое и имитационное моделирование",
+          "semester": 6,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.2.1.4 | Математическое и имитационное моделирование | exam: 6"
+        },
+        {
+          "discipline_code": "Б.1.2.2.1.4",
+          "discipline_name": "Машинное зрение",
+          "semester": 6,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.2.2.1.4 | Машинное зрение | exam: 6"
+        },
+        {
+          "discipline_code": "Б.1.2.1.2",
+          "discipline_name": "Машинное обучение",
+          "semester": 3,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.2.1.2 | Машинное обучение | pass: 3"
+        },
+        {
+          "discipline_code": "Б.1.2.1.2",
+          "discipline_name": "Машинное обучение",
+          "semester": 4,
+          "kind": "course_project",
+          "page": 1,
+          "evidence": "Б.1.2.1.2 | Машинное обучение | course_project: 4"
+        },
+        {
+          "discipline_code": "Б.1.2.1.2",
+          "discipline_name": "Машинное обучение",
+          "semester": 4,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.2.1.2 | Машинное обучение | exam: 4"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.5.3",
+          "discipline_name": "Машинное обучение в семантическом и сетевом анализе",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.5.3 | Машинное обучение в семантическом и сетевом анализе | pass: 7"
+        },
+        {
+          "discipline_code": "Б.1.2.2.1.6",
+          "discipline_name": "Методы визуализации данных",
+          "semester": 6,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.2.2.1.6 | Методы визуализации данных | pass: 6"
+        },
+        {
+          "discipline_code": "Б.1.2.2.1.2",
+          "discipline_name": "Методы оптимизации",
+          "semester": 5,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.2.2.1.2 | Методы оптимизации | exam: 5"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.6.3",
+          "discipline_name": "Микросервисная архитектура",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.6.3 | Микросервисная архитектура | pass: 7"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.3.2",
+          "discipline_name": "Низкоуровневое программирование",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.3.2 | Низкоуровневое программирование | pass: 6"
+        },
+        {
+          "discipline_code": "Б.1.1.3.7",
+          "discipline_name": "Обработка данных и моделирование в табличном редакторе",
+          "semester": 4,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.3.7 | Обработка данных и моделирование в табличном редакторе | pass: 4"
+        },
+        {
+          "discipline_code": "Б.1.2.2.1.3",
+          "discipline_name": "Обработка текстов на естественных языках",
+          "semester": 6,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.2.2.1.3 | Обработка текстов на естественных языках | exam: 6"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.1.2",
+          "discipline_name": "Объектно-ориентированное программирование",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.1.2 | Объектно-ориентированное программирование | pass: 6"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.2.2",
+          "discipline_name": "Основы бухгалтерских информационных систем",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.2.2 | Основы бухгалтерских информационных систем | pass: 6"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.1.1",
+          "discipline_name": "Основы веб-разработки",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.1.1 | Основы веб-разработки | pass: 6"
+        },
+        {
+          "discipline_code": "Б.1.1.1.11",
+          "discipline_name": "Основы военной подготовки",
+          "semester": 5,
+          "kind": "graded_pass",
+          "page": 1,
+          "evidence": "Б.1.1.1.11 | Основы военной подготовки | graded_pass: 5"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.7.1",
+          "discipline_name": "Основы глубокого обучения и NLP",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.7.1 | Основы глубокого обучения и NLP | pass: 6"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.2.1",
+          "discipline_name": "Основы корпоративных информационных систем",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.2.1 | Основы корпоративных информационных систем | pass: 6"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.1.3",
+          "discipline_name": "Основы мобильной разработки",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.1.3 | Основы мобильной разработки | pass: 7"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.4.1",
+          "discipline_name": "Основы проектирования информационных систем",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.4.1 | Основы проектирования информационных систем | pass: 6"
+        },
+        {
+          "discipline_code": "Б.1.1.1.10",
+          "discipline_name": "Основы российской государственности",
+          "semester": 2,
+          "kind": "graded_pass",
+          "page": 1,
+          "evidence": "Б.1.1.1.10 | Основы российской государственности | graded_pass: 2"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.6.2",
+          "discipline_name": "Основы технологий интернета вещей",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.6.2 | Основы технологий интернета вещей | pass: 7"
+        },
+        {
+          "discipline_code": "Б.1.1.3.6",
+          "discipline_name": "Практикум по программированию",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.3.6 | Практикум по программированию | pass: 1,2, 3,4"
+        },
+        {
+          "discipline_code": "Б.1.1.3.6",
+          "discipline_name": "Практикум по программированию",
+          "semester": 2,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.3.6 | Практикум по программированию | pass: 1,2, 3,4"
+        },
+        {
+          "discipline_code": "Б.1.1.3.6",
+          "discipline_name": "Практикум по программированию",
+          "semester": 3,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.3.6 | Практикум по программированию | pass: 1,2, 3,4"
+        },
+        {
+          "discipline_code": "Б.1.1.3.6",
+          "discipline_name": "Практикум по программированию",
+          "semester": 4,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.3.6 | Практикум по программированию | pass: 1,2, 3,4"
+        },
+        {
+          "discipline_code": "Б.5.2",
+          "discipline_name": "Практическая подготовка (1 курс)",
+          "semester": 2,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.5.2 | Практическая подготовка (1 курс) | pass: 2"
+        },
+        {
+          "discipline_code": "Б.5.3",
+          "discipline_name": "Практическая подготовка (2 курс)",
+          "semester": 4,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.5.3 | Практическая подготовка (2 курс) | pass: 4"
+        },
+        {
+          "discipline_code": "Б.5.4",
+          "discipline_name": "Практическая подготовка (3 курс)",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.5.4 | Практическая подготовка (3 курс) | pass: 6"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.5.1",
+          "discipline_name": "Прикладная теория графов",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.5.1 | Прикладная теория графов | pass: 6"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.7.2",
+          "discipline_name": "Прикладной Data Science в финтехе",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.7.2 | Прикладной Data Science в финтехе | pass: 7"
+        },
+        {
+          "discipline_code": "Б.1.2.2.1.8",
+          "discipline_name": "Прикладные задачи машинного обучения",
+          "semester": 7,
+          "kind": "course_project",
+          "page": 1,
+          "evidence": "Б.1.2.2.1.8 | Прикладные задачи машинного обучения | course_project: 7"
+        },
+        {
+          "discipline_code": "Б.1.2.2.1.8",
+          "discipline_name": "Прикладные задачи машинного обучения",
+          "semester": 7,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.2.2.1.8 | Прикладные задачи машинного обучения | exam: 7"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.3.3",
+          "discipline_name": "Программирование для встраиваемых систем",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.3.3 | Программирование для встраиваемых систем | pass: 7"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.2.3",
+          "discipline_name": "Разработка приложений в системе 1С Предприятие",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.2.3 | Разработка приложений в системе 1С Предприятие | pass: 7"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.3.1",
+          "discipline_name": "Разработка эффективных вычислительных алгоритмов",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.3.1 | Разработка эффективных вычислительных алгоритмов | pass: 6"
+        },
+        {
+          "discipline_code": "Б.1.2.2.1.5",
+          "discipline_name": "Рекомендательные системы и коллаборативная фильтрация",
+          "semester": 6,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.2.2.1.5 | Рекомендательные системы и коллаборативная фильтрация | exam: 6"
+        },
+        {
+          "discipline_code": "Б.1.2.2.1.7",
+          "discipline_name": "Семантические технологии",
+          "semester": 7,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.2.2.1.7 | Семантические технологии | exam: 7"
+        },
+        {
+          "discipline_code": "Б.1.1.3.8",
+          "discipline_name": "Системы управления базами данных",
+          "semester": 3,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.3.8 | Системы управления базами данных | pass: 3"
+        },
+        {
+          "discipline_code": "Б.1.1.3.8",
+          "discipline_name": "Системы управления базами данных",
+          "semester": 4,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.1.3.8 | Системы управления базами данных | exam: 4"
+        },
+        {
+          "discipline_code": "Б.1.1.3.9",
+          "discipline_name": "Современные банковские продукты и услуги",
+          "semester": 4,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.1.3.9 | Современные банковские продукты и услуги | exam: 4"
+        },
+        {
+          "discipline_code": "Б.1.1.2.3",
+          "discipline_name": "Теория вероятностей и математическая статистика",
+          "semester": 2,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.1.2.3 | Теория вероятностей и математическая статистика | exam: 2,3"
+        },
+        {
+          "discipline_code": "Б.1.1.2.3",
+          "discipline_name": "Теория вероятностей и математическая статистика",
+          "semester": 3,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.1.2.3 | Теория вероятностей и математическая статистика | exam: 2,3"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.4.3",
+          "discipline_name": "Тестирование программного обеспечения",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.4.3 | Тестирование программного обеспечения | pass: 7"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.5.2",
+          "discipline_name": "Технологии и алгоритмы анализа сетевых моделей",
+          "semester": 7,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.5.2 | Технологии и алгоритмы анализа сетевых моделей | pass: 7"
+        },
+        {
+          "discipline_code": "Б.1.2.1.6",
+          "discipline_name": "Технологии обработки больших данных",
+          "semester": 5,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.2.1.6 | Технологии обработки больших данных | exam: 5"
+        },
+        {
+          "discipline_code": "Б.1.2.1.1",
+          "discipline_name": "Технологии обработки данных",
+          "semester": 2,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.2.1.1 | Технологии обработки данных | exam: 2"
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.6.1",
+          "discipline_name": "Технологии параллельного программирования",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.1.2.2.2.6.1 | Технологии параллельного программирования | pass: 6"
+        },
+        {
+          "discipline_code": "Б.1.2.2.1.9",
+          "discipline_name": "Технологии работы с открытыми данными",
+          "semester": 7,
+          "kind": "exam",
+          "page": 2,
+          "evidence": "Б.1.2.2.1.9 | Технологии работы с открытыми данными | exam: 7"
+        },
+        {
+          "discipline_code": "Б.2.3.1",
+          "discipline_name": "Учебно-научный семинар",
+          "semester": 2,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.2.3.1 | Учебно-научный семинар | pass: 2,4,6"
+        },
+        {
+          "discipline_code": "Б.2.3.1",
+          "discipline_name": "Учебно-научный семинар",
+          "semester": 4,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.2.3.1 | Учебно-научный семинар | pass: 2,4,6"
+        },
+        {
+          "discipline_code": "Б.2.3.1",
+          "discipline_name": "Учебно-научный семинар",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.2.3.1 | Учебно-научный семинар | pass: 2,4,6"
+        },
+        {
+          "discipline_code": "Б.1.1.1.4",
+          "discipline_name": "Физическая культура и спорт",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.1.4 | Физическая культура и спорт | pass: 1"
+        },
+        {
+          "discipline_code": "Б.1.1.1.7",
+          "discipline_name": "Философия",
+          "semester": 5,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.1.1.7 | Философия | exam: 5"
+        },
+        {
+          "discipline_code": "Б.1.1.2.6",
+          "discipline_name": "Финансовая математика и ее приложения",
+          "semester": 4,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.1.2.6 | Финансовая математика и ее приложения | exam: 4"
+        },
+        {
+          "discipline_code": "Б.1.1.1.1",
+          "discipline_name": "Финансовый университет: история и современность",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.1.1 | Финансовый университет: история и современность | pass: 1"
+        },
+        {
+          "discipline_code": "Б.5.6",
+          "discipline_name": "Фундаментальные модели",
+          "semester": 5,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.5.6 | Фундаментальные модели | pass: 5"
+        },
+        {
+          "discipline_code": "Б.1.1.2.8",
+          "discipline_name": "Функциональный анализ",
+          "semester": 6,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.2.8 | Функциональный анализ | pass: 6"
+        },
+        {
+          "discipline_code": "Б.1.2.1.3",
+          "discipline_name": "Численные методы",
+          "semester": 4,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.2.1.3 | Численные методы | pass: 4"
+        },
+        {
+          "discipline_code": "Б.1.2.1.5",
+          "discipline_name": "Эконометрика",
+          "semester": 3,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.2.1.5 | Эконометрика | pass: 3"
+        },
+        {
+          "discipline_code": "Б.1.2.1.5",
+          "discipline_name": "Эконометрика",
+          "semester": 4,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.2.1.5 | Эконометрика | exam: 4"
+        },
+        {
+          "discipline_code": "Б.1.1.1.9",
+          "discipline_name": "Экономическая теория",
+          "semester": 1,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "Б.1.1.1.9 | Экономическая теория | exam: 1"
+        },
+        {
+          "discipline_code": "Б.4.1",
+          "discipline_name": "Элективные дисциплины по физической культуре и спорту",
+          "semester": 2,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "Б.4.1 | Элективные дисциплины по физической культуре и спорту | pass: 2"
+        },
+        {
+          "discipline_code": "Б.1.1.3.10",
+          "discipline_name": "Электронные деньги",
+          "semester": 5,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "Б.1.1.3.10 | Электронные деньги | pass: 5"
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "164554",
+          "group_name": "ПМ25-1",
+          "terms": [
+            {
+              "semester": 3,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            }
+          ]
+        },
+        {
+          "group_id": "164555",
+          "group_name": "ПМ25-2",
+          "terms": [
+            {
+              "semester": 3,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            }
+          ]
+        },
+        {
+          "group_id": "164556",
+          "group_name": "ПМ25-3",
+          "terms": [
+            {
+              "semester": 3,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            }
+          ]
+        },
+        {
+          "group_id": "164557",
+          "group_name": "ПМ25-4",
+          "terms": [
+            {
+              "semester": 3,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            }
+          ]
+        },
+        {
+          "group_id": "164558",
+          "group_name": "ПМ25-5",
+          "terms": [
+            {
+              "semester": 3,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            }
+          ]
+        },
+        {
+          "group_id": "164559",
+          "group_name": "ПМ25-6",
+          "terms": [
+            {
+              "semester": 3,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "title": "БРС кафедры ИИ — осень 2026/27, дополнение для ПМ23",
+        "source_url": "https://www.fa.ru/upload/constructor/62f/cvigxrmcv4janm7wj3k351mqpl9o1lxd/-Obshchiy-fayl-BRS-1-sem-26_27.pdf",
+        "program": "01.03.02 Прикладная математика и информатика",
+        "profile": "Прикладное машинное обучение",
+        "campus": "Московский кампус",
+        "admission_year": 2023,
+        "study_form": "Очная",
+        "scan_layout": null
+      },
+      "source_sha256": "812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac",
+      "pdf_file": "sources/brs-2026-autumn.pdf",
+      "assessments": [
+        {
+          "discipline_code": "brs:2026-autumn:p13",
+          "discipline_name": "Машинное обучение на графах",
+          "semester": 7,
+          "kind": "pass",
+          "page": 13,
+          "evidence": "БРС кафедры ИИ, осень 2026/27, стр. 13: «Машинное обучение графах» — зачёт. Автор: Кузина О.Н.. Соответствие дисциплине проверено по названию и преподавателям РУЗ; ПМ23-1…5, 7-й семестр."
+        },
+        {
+          "discipline_code": "brs:2026-autumn:p35",
+          "discipline_name": "Технологии и алгоритмы анализа сетевых моделей",
+          "semester": 7,
+          "kind": "pass",
+          "page": 35,
+          "evidence": "БРС кафедры ИИ, осень 2026/27, стр. 35: «Технологии и алгоритмы анализа сетевых моделей» — зачёт. Автор: Карпухин А.И.. Соответствие дисциплине проверено по названию и преподавателям РУЗ; ПМ23-1…5, 7-й семестр."
+        }
+      ],
+      "groups": [],
+      "parent_source_url": "https://www.fa.ru/upload/constructor/773/o1glti47zsriv5zhc7qc6agt7g6gou7x/UP.pdf"
+    }
+  ]
+}

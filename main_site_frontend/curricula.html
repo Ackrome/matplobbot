@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Учебные планы | Matplobbot</title>
+    <link rel="icon" href="/favicon.ico">
+    <script src="/js/theme_bootstrap.js?v=20260821-6"></script>
+    <link rel="stylesheet" href="/css/tailwind.css?v=20261009-4">
+    <link rel="stylesheet" href="/css/product_ui.css?v=20261009-6">
+    <link rel="stylesheet" href="/css/curricula.css?v=20261009-13">
+</head>
+<body>
+    <nav id="navbar" class="fixed top-0 z-50 w-full bg-white border-b border-slate-200 dark:bg-slate-900 dark:border-slate-700">
+        <div class="max-w-7xl mx-auto px-4 flex items-center justify-between h-16">
+            <a href="/" class="ui-brand"><span class="ui-brand-mark">IT</span><span>Ivan Tishchenko</span></a>
+            <div id="desktop-nav-links" class="hidden md:flex items-center gap-3"><div id="desktop-auth-container"></div></div>
+            <button id="mobile-menu-button" type="button" class="md:hidden p-2" aria-label="Menu">☰</button>
+        </div>
+        <div id="mobile-menu" class="hidden md:hidden bg-white dark:bg-slate-900"><div id="mobile-nav-links" class="px-4 py-4"></div></div>
+    </nav>
+    <main class="curricula-main">
+        <a class="curricula-back" href="/stats" data-curricula="back">← Админ</a>
+        <h1 data-curricula="heading">Учебные планы</h1>
+        <p class="curricula-muted" data-curricula="intro">Официальные документы, формы аттестации и привязка к группам.</p>
+        <p id="curricula-status" role="status" aria-live="polite"></p>
+        <div id="curricula-controls" hidden></div>
+    </main>
+    <script src="/js/runtime_config.js?v=20260821-6"></script>
+    <script src="/js/ui_utils.js?v=2"></script>
+    <script src="/js/frontend_i18n.js?v=20261009-13"></script>
+    <script src="/js/product_ui.js?v=20261009-4"></script>
+    <script src="/js/navbar.js?v=20261009-4"></script>
+    <script src="/js/curricula.js?v=20261009-13"></script>
+</body>
+</html>

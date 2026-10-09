@@ -1,0 +1,838 @@
+{
+  "verified_on": "2026-10-09",
+  "scope": "All current RUZ timetable names for all eleven exact groups, fetched 2026-09-01 through 2027-02-28. Predictions only: not evidence of live API success.",
+  "cohorts": [
+    {
+      "cohort": 2023,
+      "semester": 7,
+      "public_request_date": "2026-10-09",
+      "group_ids": [
+        "162426",
+        "162428",
+        "162430",
+        "162432",
+        "162434"
+      ],
+      "publication_file": "docs/reports/curriculum-numeric-pipeline/publish-2023.json",
+      "publication_sha256": "69e282ed67c074d66f0c39b1e89796d5801c7895044f975ce8717f54934c456c",
+      "expected_source_hash": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3",
+      "unique_schedule_titles": 17,
+      "matched_titles": 14,
+      "matched_current_semester_titles": 14,
+      "normalization_rule": "re.sub(r\"\\s+\", \" \", title).strip().casefold() — mirrors curriculum_service._name",
+      "rows": [
+        {
+          "schedule_title": "Архитектура и дизайн программного обеспечения",
+          "normalized_title": "архитектура и дизайн программного обеспечения",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 7,
+          "current_semester_kinds": [
+            "pass"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Архитектура и дизайн программного обеспечения",
+              "semester": 7,
+              "kind": "pass",
+              "discipline_code": "scan:p2:r011",
+              "page": 2
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            3860
+          ],
+          "ruz_discipline_oids": [
+            37456
+          ]
+        },
+        {
+          "schedule_title": "Военная подготовка",
+          "normalized_title": "военная подготовка",
+          "expected_api_status": "not_found",
+          "match_classification": "source_absent",
+          "current_semester": 7,
+          "current_semester_kinds": [],
+          "all_assessments": [],
+          "ruz_discipline_in_plan_ids": [
+            6142
+          ],
+          "ruz_discipline_oids": [
+            36639
+          ]
+        },
+        {
+          "schedule_title": "Машинное обучение на графах",
+          "normalized_title": "машинное обучение на графах",
+          "expected_api_status": "not_found",
+          "match_classification": "source_absent",
+          "current_semester": 7,
+          "current_semester_kinds": [],
+          "all_assessments": [],
+          "ruz_discipline_in_plan_ids": [
+            3860
+          ],
+          "ruz_discipline_oids": [
+            37470
+          ]
+        },
+        {
+          "schedule_title": "Микросервисная архитектура",
+          "normalized_title": "микросервисная архитектура",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 7,
+          "current_semester_kinds": [
+            "pass"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Микросервисная архитектура",
+              "semester": 7,
+              "kind": "pass",
+              "discipline_code": "scan:p2:r020",
+              "page": 2
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            3860
+          ],
+          "ruz_discipline_oids": [
+            36182
+          ]
+        },
+        {
+          "schedule_title": "Основы деловой и публичной коммуникации",
+          "normalized_title": "основы деловой и публичной коммуникации",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 7,
+          "current_semester_kinds": [
+            "pass"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Основы деловой и публичной коммуникации",
+              "semester": 7,
+              "kind": "pass",
+              "discipline_code": "scan:p1:r013",
+              "page": 1
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            3860
+          ],
+          "ruz_discipline_oids": [
+            43307
+          ]
+        },
+        {
+          "schedule_title": "Основы математического моделирования",
+          "normalized_title": "основы математического моделирования",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 7,
+          "current_semester_kinds": [
+            "pass"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Основы математического моделирования",
+              "semester": 7,
+              "kind": "pass",
+              "discipline_code": "scan:p2:r016",
+              "page": 2
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            3860
+          ],
+          "ruz_discipline_oids": [
+            37447
+          ]
+        },
+        {
+          "schedule_title": "Основы мобильной разработки",
+          "normalized_title": "основы мобильной разработки",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 7,
+          "current_semester_kinds": [
+            "pass"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Основы мобильной разработки",
+              "semester": 7,
+              "kind": "pass",
+              "discipline_code": "scan:p1:r054",
+              "page": 1
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            3860
+          ],
+          "ruz_discipline_oids": [
+            37453
+          ]
+        },
+        {
+          "schedule_title": "Основы технологий интернета вещей",
+          "normalized_title": "основы технологий интернета вещей",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 7,
+          "current_semester_kinds": [
+            "pass"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Основы технологий интернета вещей",
+              "semester": 7,
+              "kind": "pass",
+              "discipline_code": "scan:p2:r019",
+              "page": 2
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            3860
+          ],
+          "ruz_discipline_oids": [
+            47294
+          ]
+        },
+        {
+          "schedule_title": "Основы численных методов",
+          "normalized_title": "основы численных методов",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 7,
+          "current_semester_kinds": [
+            "pass"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Основы численных методов",
+              "semester": 7,
+              "kind": "pass",
+              "discipline_code": "scan:p2:r015",
+              "page": 2
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            3860
+          ],
+          "ruz_discipline_oids": [
+            37446
+          ]
+        },
+        {
+          "schedule_title": "Прикладные задачи машинного обучения",
+          "normalized_title": "прикладные задачи машинного обучения",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 7,
+          "current_semester_kinds": [
+            "exam"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Прикладные задачи машинного обучения",
+              "semester": 7,
+              "kind": "exam",
+              "discipline_code": "scan:p1:r044",
+              "page": 1
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            3860
+          ],
+          "ruz_discipline_oids": [
+            45372
+          ]
+        },
+        {
+          "schedule_title": "Программирование для встраиваемых систем",
+          "normalized_title": "программирование для встраиваемых систем",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 7,
+          "current_semester_kinds": [
+            "pass"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Программирование для встраиваемых систем",
+              "semester": 7,
+              "kind": "pass",
+              "discipline_code": "scan:p2:r008",
+              "page": 2
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            3860
+          ],
+          "ruz_discipline_oids": [
+            36192
+          ]
+        },
+        {
+          "schedule_title": "Разработка приложений в системе 1С Предприятие",
+          "normalized_title": "разработка приложений в системе 1с предприятие",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 7,
+          "current_semester_kinds": [
+            "pass"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Разработка приложений в системе 1С Предприятие",
+              "semester": 7,
+              "kind": "pass",
+              "discipline_code": "scan:p2:r004",
+              "page": 2
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            3860
+          ],
+          "ruz_discipline_oids": [
+            36188
+          ]
+        },
+        {
+          "schedule_title": "Семантические технологии",
+          "normalized_title": "семантические технологии",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 7,
+          "current_semester_kinds": [
+            "exam"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Семантические технологии",
+              "semester": 7,
+              "kind": "exam",
+              "discipline_code": "scan:p1:r043",
+              "page": 1
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            3860
+          ],
+          "ruz_discipline_oids": [
+            36178
+          ]
+        },
+        {
+          "schedule_title": "Тестирование программного обеспечения",
+          "normalized_title": "тестирование программного обеспечения",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 7,
+          "current_semester_kinds": [
+            "pass"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Тестирование программного обеспечения",
+              "semester": 7,
+              "kind": "pass",
+              "discipline_code": "scan:p2:r012",
+              "page": 2
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            3860
+          ],
+          "ruz_discipline_oids": [
+            37457
+          ]
+        },
+        {
+          "schedule_title": "Технологии и алгоритмы анализа сетевых моделей",
+          "normalized_title": "технологии и алгоритмы анализа сетевых моделей",
+          "expected_api_status": "not_found",
+          "match_classification": "source_absent",
+          "current_semester": 7,
+          "current_semester_kinds": [],
+          "all_assessments": [],
+          "ruz_discipline_in_plan_ids": [
+            3860
+          ],
+          "ruz_discipline_oids": [
+            44968
+          ]
+        },
+        {
+          "schedule_title": "Технологии работы с открытыми данными",
+          "normalized_title": "технологии работы с открытыми данными",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 7,
+          "current_semester_kinds": [
+            "exam"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Технологии работы с открытыми данными",
+              "semester": 7,
+              "kind": "exam",
+              "discipline_code": "scan:p1:r049",
+              "page": 1
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            3860
+          ],
+          "ruz_discipline_oids": [
+            36176
+          ]
+        },
+        {
+          "schedule_title": "Электронные деньги",
+          "normalized_title": "электронные деньги",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 7,
+          "current_semester_kinds": [
+            "exam"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Электронные деньги",
+              "semester": 7,
+              "kind": "exam",
+              "discipline_code": "scan:p1:r048",
+              "page": 1
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            3860
+          ],
+          "ruz_discipline_oids": [
+            41264
+          ]
+        }
+      ]
+    },
+    {
+      "cohort": 2025,
+      "semester": 3,
+      "public_request_date": "2026-10-09",
+      "group_ids": [
+        "164554",
+        "164555",
+        "164556",
+        "164557",
+        "164558",
+        "164559"
+      ],
+      "publication_file": "docs/reports/curriculum-numeric-pipeline/publish-2025.json",
+      "publication_sha256": "2a748aa337319ca697790606820fbb8e726d4b6a4988718ae7630b3d315c4440",
+      "expected_source_hash": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86",
+      "unique_schedule_titles": 13,
+      "matched_titles": 11,
+      "matched_current_semester_titles": 9,
+      "normalization_rule": "re.sub(r\"\\s+\", \" \", title).strip().casefold() — mirrors curriculum_service._name",
+      "rows": [
+        {
+          "schedule_title": "Алгебра и геометрия",
+          "normalized_title": "алгебра и геометрия",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 3,
+          "current_semester_kinds": [
+            "exam"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Алгебра и геометрия",
+              "semester": 3,
+              "kind": "exam",
+              "discipline_code": "Б.1.1.2.4",
+              "page": 1
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            6088
+          ],
+          "ruz_discipline_oids": [
+            39217
+          ]
+        },
+        {
+          "schedule_title": "Военная подготовка",
+          "normalized_title": "военная подготовка",
+          "expected_api_status": "not_found",
+          "match_classification": "source_absent",
+          "current_semester": 3,
+          "current_semester_kinds": [],
+          "all_assessments": [],
+          "ruz_discipline_in_plan_ids": [
+            6142
+          ],
+          "ruz_discipline_oids": [
+            36639
+          ]
+        },
+        {
+          "schedule_title": "Дифференциальные уравнения",
+          "normalized_title": "дифференциальные уравнения",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 3,
+          "current_semester_kinds": [
+            "exam"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Дифференциальные уравнения",
+              "semester": 3,
+              "kind": "exam",
+              "discipline_code": "Б.1.1.2.5",
+              "page": 1
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            6088
+          ],
+          "ruz_discipline_oids": [
+            42608
+          ]
+        },
+        {
+          "schedule_title": "Иностранный язык",
+          "normalized_title": "иностранный язык",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 3,
+          "current_semester_kinds": [
+            "pass"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Иностранный язык",
+              "semester": 1,
+              "kind": "pass",
+              "discipline_code": "Б.1.1.1.5",
+              "page": 1
+            },
+            {
+              "discipline_name": "Иностранный язык",
+              "semester": 2,
+              "kind": "pass",
+              "discipline_code": "Б.1.1.1.5",
+              "page": 1
+            },
+            {
+              "discipline_name": "Иностранный язык",
+              "semester": 3,
+              "kind": "pass",
+              "discipline_code": "Б.1.1.1.5",
+              "page": 1
+            },
+            {
+              "discipline_name": "Иностранный язык",
+              "semester": 4,
+              "kind": "exam",
+              "discipline_code": "Б.1.1.1.5",
+              "page": 1
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            6044,
+            6088
+          ],
+          "ruz_discipline_oids": [
+            37814
+          ]
+        },
+        {
+          "schedule_title": "Математика искусственного интеллекта",
+          "normalized_title": "математика искусственного интеллекта",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 3,
+          "current_semester_kinds": [
+            "pass"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Математика искусственного интеллекта",
+              "semester": 3,
+              "kind": "pass",
+              "discipline_code": "Б.5.5",
+              "page": 2
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            6954
+          ],
+          "ruz_discipline_oids": [
+            49945
+          ]
+        },
+        {
+          "schedule_title": "Машинное обучение",
+          "normalized_title": "машинное обучение",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 3,
+          "current_semester_kinds": [
+            "pass"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Машинное обучение",
+              "semester": 3,
+              "kind": "pass",
+              "discipline_code": "Б.1.2.1.2",
+              "page": 1
+            },
+            {
+              "discipline_name": "Машинное обучение",
+              "semester": 4,
+              "kind": "course_project",
+              "discipline_code": "Б.1.2.1.2",
+              "page": 1
+            },
+            {
+              "discipline_name": "Машинное обучение",
+              "semester": 4,
+              "kind": "exam",
+              "discipline_code": "Б.1.2.1.2",
+              "page": 1
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            6088
+          ],
+          "ruz_discipline_oids": [
+            36172
+          ]
+        },
+        {
+          "schedule_title": "Практикум по программированию",
+          "normalized_title": "практикум по программированию",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 3,
+          "current_semester_kinds": [
+            "pass"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Практикум по программированию",
+              "semester": 1,
+              "kind": "pass",
+              "discipline_code": "Б.1.1.3.6",
+              "page": 1
+            },
+            {
+              "discipline_name": "Практикум по программированию",
+              "semester": 2,
+              "kind": "pass",
+              "discipline_code": "Б.1.1.3.6",
+              "page": 1
+            },
+            {
+              "discipline_name": "Практикум по программированию",
+              "semester": 3,
+              "kind": "pass",
+              "discipline_code": "Б.1.1.3.6",
+              "page": 1
+            },
+            {
+              "discipline_name": "Практикум по программированию",
+              "semester": 4,
+              "kind": "pass",
+              "discipline_code": "Б.1.1.3.6",
+              "page": 1
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            6088
+          ],
+          "ruz_discipline_oids": [
+            47277
+          ]
+        },
+        {
+          "schedule_title": "Практическая подготовка ",
+          "normalized_title": "практическая подготовка",
+          "expected_api_status": "not_found",
+          "match_classification": "ambiguous_generic_schedule_title",
+          "current_semester": 3,
+          "current_semester_kinds": [],
+          "all_assessments": [],
+          "ruz_discipline_in_plan_ids": [
+            6962
+          ],
+          "ruz_discipline_oids": [
+            49944
+          ]
+        },
+        {
+          "schedule_title": "Системы управления базами данных",
+          "normalized_title": "системы управления базами данных",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 3,
+          "current_semester_kinds": [
+            "pass"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Системы управления базами данных",
+              "semester": 3,
+              "kind": "pass",
+              "discipline_code": "Б.1.1.3.8",
+              "page": 1
+            },
+            {
+              "discipline_name": "Системы управления базами данных",
+              "semester": 4,
+              "kind": "exam",
+              "discipline_code": "Б.1.1.3.8",
+              "page": 1
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            6088
+          ],
+          "ruz_discipline_oids": [
+            42908
+          ]
+        },
+        {
+          "schedule_title": "Теория вероятностей и математическая статистика",
+          "normalized_title": "теория вероятностей и математическая статистика",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 3,
+          "current_semester_kinds": [
+            "exam"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Теория вероятностей и математическая статистика",
+              "semester": 2,
+              "kind": "exam",
+              "discipline_code": "Б.1.1.2.3",
+              "page": 1
+            },
+            {
+              "discipline_name": "Теория вероятностей и математическая статистика",
+              "semester": 3,
+              "kind": "exam",
+              "discipline_code": "Б.1.1.2.3",
+              "page": 1
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            6088,
+            6962
+          ],
+          "ruz_discipline_oids": [
+            39628
+          ]
+        },
+        {
+          "schedule_title": "Учебно-научный семинар",
+          "normalized_title": "учебно-научный семинар",
+          "expected_api_status": "confirmed",
+          "match_classification": "known_title_no_control_in_current_semester",
+          "current_semester": 3,
+          "current_semester_kinds": [],
+          "all_assessments": [
+            {
+              "discipline_name": "Учебно-научный семинар",
+              "semester": 2,
+              "kind": "pass",
+              "discipline_code": "Б.2.3.1",
+              "page": 2
+            },
+            {
+              "discipline_name": "Учебно-научный семинар",
+              "semester": 4,
+              "kind": "pass",
+              "discipline_code": "Б.2.3.1",
+              "page": 2
+            },
+            {
+              "discipline_name": "Учебно-научный семинар",
+              "semester": 6,
+              "kind": "pass",
+              "discipline_code": "Б.2.3.1",
+              "page": 2
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            6088
+          ],
+          "ruz_discipline_oids": [
+            44466
+          ]
+        },
+        {
+          "schedule_title": "Эконометрика",
+          "normalized_title": "эконометрика",
+          "expected_api_status": "confirmed",
+          "match_classification": "exact_current_semester",
+          "current_semester": 3,
+          "current_semester_kinds": [
+            "pass"
+          ],
+          "all_assessments": [
+            {
+              "discipline_name": "Эконометрика",
+              "semester": 3,
+              "kind": "pass",
+              "discipline_code": "Б.1.2.1.5",
+              "page": 1
+            },
+            {
+              "discipline_name": "Эконометрика",
+              "semester": 4,
+              "kind": "exam",
+              "discipline_code": "Б.1.2.1.5",
+              "page": 1
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            6088
+          ],
+          "ruz_discipline_oids": [
+            39888
+          ]
+        },
+        {
+          "schedule_title": "Элективные дисциплины по физической культуре и спорту",
+          "normalized_title": "элективные дисциплины по физической культуре и спорту",
+          "expected_api_status": "confirmed",
+          "match_classification": "known_title_no_control_in_current_semester",
+          "current_semester": 3,
+          "current_semester_kinds": [],
+          "all_assessments": [
+            {
+              "discipline_name": "Элективные дисциплины по физической культуре и спорту",
+              "semester": 2,
+              "kind": "pass",
+              "discipline_code": "Б.4.1",
+              "page": 2
+            }
+          ],
+          "ruz_discipline_in_plan_ids": [
+            6962
+          ],
+          "ruz_discipline_oids": [
+            45623
+          ]
+        }
+      ]
+    }
+  ]
+}

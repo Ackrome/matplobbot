@@ -45,6 +45,20 @@
     .lesson-details-dialog details+details{margin-top:6px}
     .lesson-details-dialog .ld-warning{font-weight:600}
     .lesson-details-dialog .ld-arrow{color:var(--ld-muted)}
+    .lesson-details-dialog .ld-curriculum{padding:17px 18px;margin-bottom:25px;border:1px solid var(--ld-border);border-radius:14px;background:var(--ld-soft);overflow-wrap:anywhere}
+    .lesson-details-dialog .ld-curriculum-confirmed{background:var(--ld-tint)}
+    .lesson-details-dialog .ld-curriculum h3{margin-bottom:4px}
+    .lesson-details-dialog .ld-curriculum-context{margin:0 0 11px;font-size:13px;color:var(--ld-muted)}
+    .lesson-details-dialog .ld-curriculum-hint{margin:10px 0 0;font-size:13px;color:var(--ld-muted)}
+    .lesson-details-dialog .ld-curriculum .ld-button{margin-top:12px}
+    .lesson-details-dialog .ld-assessment-badges{display:flex;flex-wrap:wrap;gap:7px}
+    .lesson-details-dialog .ld-assessment-kind{display:inline-block;padding:6px 11px;border:1px solid var(--ld-border);border-radius:8px;background:var(--ld-bg);font-size:16px;font-weight:700;color:var(--ld-text)}
+    .lesson-details-dialog .ld-assessment-sources{display:flex;flex-wrap:wrap;gap:5px 15px;margin-top:8px;font-size:12px}
+    .lesson-details-dialog .ld-assessment-terms{display:grid;gap:14px}
+    .lesson-details-dialog .ld-curriculum details{margin-top:10px}
+    .lesson-details-dialog .ld-curriculum details .ld-assessment-kind{font-size:13px;font-weight:600}
+    .lesson-details-dialog .ld-curriculum details .ld-assessment-terms{padding-top:7px}
+    .lesson-details-dialog .ld-curriculum-provenance{display:grid;gap:3px;margin-top:14px;padding-top:11px;border-top:1px solid var(--ld-border);font-size:12px;color:var(--ld-muted)}
     [data-lesson-card]{cursor:pointer}
     .schedule-feed-card-title.lesson-details-button{display:block;background:none;border:0;padding:0;text-align:left;color:inherit;cursor:pointer}
     @media(max-width:600px){

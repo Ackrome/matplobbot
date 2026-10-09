@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+from datetime import UTC, datetime
 
 import aiohttp
 import aiohttp.web
@@ -33,6 +34,7 @@ from shared_lib.operational_metrics import get_operational_snapshot
 from shared_lib.product_metrics import purge_expired_product_events
 from shared_lib.redis_client import redis_client
 from shared_lib.schedule_outbox import get_schedule_outbox_health
+from shared_lib.services.curriculum_service import process_curriculum_queue, refresh_due_curricula
 from shared_lib.services.university_api import create_ruz_api_client
 
 # --- Logging Setup ---
@@ -118,6 +120,27 @@ async def main():
         ):
             ruz_api_client_instance = create_ruz_api_client(ruz_session)
             scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
+            # The hourly tick consults persisted due dates; documents are fetched weekly
+            # (or every 14 days), surviving restarts without resetting their cadence.
+            scheduler.add_job(
+                refresh_due_curricula,
+                "interval",
+                hours=1,
+                kwargs={"http_session": ruz_session},
+                id="curriculum_documents",
+                max_instances=1,
+                coalesce=True,
+                next_run_time=datetime.now(UTC),
+            )
+            scheduler.add_job(
+                process_curriculum_queue,
+                "interval",
+                minutes=1,
+                id="curriculum_processing",
+                max_instances=1,
+                coalesce=True,
+                next_run_time=datetime.now(UTC),
+            )
 
             scheduler.add_job(
                 monitor_job("daily_schedules", send_daily_schedules),

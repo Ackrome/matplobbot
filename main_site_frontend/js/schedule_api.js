@@ -49,6 +49,13 @@
         });
     }
 
+    function loadCurriculumData({ group_id, discipline, lesson_date, signal }) {
+        const params = new URLSearchParams({ group_id, discipline, lesson_date });
+        return requestJson(`${getBaseUrl()}/schedule/curriculum?${params}`, {
+            signal, cache: "no-store",
+        });
+    }
+
     function refreshSemesterCache({ type, id, token }) {
         const headers = {};
         if (token) headers.Authorization = `Bearer ${token}`;
@@ -64,6 +71,7 @@
     window.ScheduleApi = {
         getCachedSchedules,
         loadCachedScheduleData,
+        loadCurriculumData,
         loadScheduleData,
         requestJson,
         refreshSemesterCache,

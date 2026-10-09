@@ -1,0 +1,482 @@
+{
+  "schema": "schedule-curriculum-title-coverage-v1",
+  "checked_on": "2026-10-09",
+  "matching": "casefold + whitespace only; no fuzzy aliases",
+  "note": "Title coverage is not assessment coverage in the current semester. No unmatched title has been silently mapped.",
+  "cohorts": [
+    {
+      "admission_year": 2023,
+      "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3",
+      "distinct_schedule_titles": 17,
+      "exact_title_matches": 14,
+      "sources": [
+        {
+          "group_id": "162426",
+          "group_name": "ПМ23-1",
+          "schedule_sha256": "718f1fb59e56981aa36a3aecf58b70986fcb0b9f5651e7fc9c48043d77c59e8d",
+          "events": 468,
+          "first_date": "2026-09-01",
+          "last_date": "2026-12-29"
+        },
+        {
+          "group_id": "162428",
+          "group_name": "ПМ23-2",
+          "schedule_sha256": "0c4af7bdfa925716c46a865bc677197aa1e6584be175a661f2aa595307b734f5",
+          "events": 468,
+          "first_date": "2026-09-01",
+          "last_date": "2026-12-29"
+        },
+        {
+          "group_id": "162430",
+          "group_name": "ПМ23-3",
+          "schedule_sha256": "d7fce3859d7471a3766cbbd8ce19d564d834a1f35417f8013c698da242d4c6b3",
+          "events": 519,
+          "first_date": "2026-09-01",
+          "last_date": "2026-12-29"
+        },
+        {
+          "group_id": "162432",
+          "group_name": "ПМ23-4",
+          "schedule_sha256": "4bba2dee982d34f1b6c8b74a6edfaf804832583c9fd66736ae9abf5170169a18",
+          "events": 468,
+          "first_date": "2026-09-01",
+          "last_date": "2026-12-29"
+        },
+        {
+          "group_id": "162434",
+          "group_name": "ПМ23-5",
+          "schedule_sha256": "3f82e170024ef0f0b528788a5e5e5384041161930077b8cde166db6e3d9e9070",
+          "events": 468,
+          "first_date": "2026-09-01",
+          "last_date": "2026-12-29"
+        }
+      ],
+      "titles": [
+        {
+          "schedule_title": "Архитектура и дизайн программного обеспечения",
+          "groups": [
+            "ПМ23-1",
+            "ПМ23-2",
+            "ПМ23-3",
+            "ПМ23-4",
+            "ПМ23-5"
+          ],
+          "source_title": "Архитектура и дизайн программного обеспечения",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Военная подготовка",
+          "groups": [
+            "ПМ23-1",
+            "ПМ23-2",
+            "ПМ23-3",
+            "ПМ23-4",
+            "ПМ23-5"
+          ],
+          "source_title": null,
+          "match": "unresolved"
+        },
+        {
+          "schedule_title": "Машинное обучение на графах",
+          "groups": [
+            "ПМ23-1",
+            "ПМ23-2",
+            "ПМ23-3",
+            "ПМ23-4",
+            "ПМ23-5"
+          ],
+          "source_title": null,
+          "match": "unresolved"
+        },
+        {
+          "schedule_title": "Микросервисная архитектура",
+          "groups": [
+            "ПМ23-1",
+            "ПМ23-2",
+            "ПМ23-3",
+            "ПМ23-4",
+            "ПМ23-5"
+          ],
+          "source_title": "Микросервисная архитектура",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Основы деловой и публичной коммуникации",
+          "groups": [
+            "ПМ23-1",
+            "ПМ23-2",
+            "ПМ23-3",
+            "ПМ23-4",
+            "ПМ23-5"
+          ],
+          "source_title": "Основы деловой и публичной коммуникации",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Основы математического моделирования",
+          "groups": [
+            "ПМ23-1",
+            "ПМ23-2",
+            "ПМ23-3",
+            "ПМ23-4",
+            "ПМ23-5"
+          ],
+          "source_title": "Основы математического моделирования",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Основы мобильной разработки",
+          "groups": [
+            "ПМ23-1",
+            "ПМ23-2",
+            "ПМ23-3",
+            "ПМ23-4",
+            "ПМ23-5"
+          ],
+          "source_title": "Основы мобильной разработки",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Основы технологий интернета вещей",
+          "groups": [
+            "ПМ23-1",
+            "ПМ23-2",
+            "ПМ23-3",
+            "ПМ23-4",
+            "ПМ23-5"
+          ],
+          "source_title": "Основы технологий интернета вещей",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Основы численных методов",
+          "groups": [
+            "ПМ23-1",
+            "ПМ23-2",
+            "ПМ23-3",
+            "ПМ23-4",
+            "ПМ23-5"
+          ],
+          "source_title": "Основы численных методов",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Прикладные задачи машинного обучения",
+          "groups": [
+            "ПМ23-1",
+            "ПМ23-2",
+            "ПМ23-3",
+            "ПМ23-4",
+            "ПМ23-5"
+          ],
+          "source_title": "Прикладные задачи машинного обучения",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Программирование для встраиваемых систем",
+          "groups": [
+            "ПМ23-1",
+            "ПМ23-2",
+            "ПМ23-3",
+            "ПМ23-4",
+            "ПМ23-5"
+          ],
+          "source_title": "Программирование для встраиваемых систем",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Разработка приложений в системе 1С Предприятие",
+          "groups": [
+            "ПМ23-1",
+            "ПМ23-2",
+            "ПМ23-3",
+            "ПМ23-4",
+            "ПМ23-5"
+          ],
+          "source_title": "Разработка приложений в системе 1С Предприятие",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Семантические технологии",
+          "groups": [
+            "ПМ23-1",
+            "ПМ23-2",
+            "ПМ23-3",
+            "ПМ23-4",
+            "ПМ23-5"
+          ],
+          "source_title": "Семантические технологии",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Тестирование программного обеспечения",
+          "groups": [
+            "ПМ23-1",
+            "ПМ23-2",
+            "ПМ23-3",
+            "ПМ23-4",
+            "ПМ23-5"
+          ],
+          "source_title": "Тестирование программного обеспечения",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Технологии и алгоритмы анализа сетевых моделей",
+          "groups": [
+            "ПМ23-1",
+            "ПМ23-2",
+            "ПМ23-3",
+            "ПМ23-4",
+            "ПМ23-5"
+          ],
+          "source_title": null,
+          "match": "unresolved"
+        },
+        {
+          "schedule_title": "Технологии работы с открытыми данными",
+          "groups": [
+            "ПМ23-1",
+            "ПМ23-2",
+            "ПМ23-3",
+            "ПМ23-4",
+            "ПМ23-5"
+          ],
+          "source_title": "Технологии работы с открытыми данными",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Электронные деньги",
+          "groups": [
+            "ПМ23-1",
+            "ПМ23-2",
+            "ПМ23-3",
+            "ПМ23-4",
+            "ПМ23-5"
+          ],
+          "source_title": "Электронные деньги",
+          "match": "exact_normalized"
+        }
+      ]
+    },
+    {
+      "admission_year": 2025,
+      "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86",
+      "distinct_schedule_titles": 13,
+      "exact_title_matches": 11,
+      "sources": [
+        {
+          "group_id": "164554",
+          "group_name": "ПМ25-1",
+          "schedule_sha256": "5508be5301165b882602eb628d389a3f53178eb20f3f63963de7ffa9a2e452f2",
+          "events": 377,
+          "first_date": "2026-09-01",
+          "last_date": "2026-12-28"
+        },
+        {
+          "group_id": "164555",
+          "group_name": "ПМ25-2",
+          "schedule_sha256": "8415447f8189da3de8bd141ad6464fa998177faf29f7f5d82b884492d04fd6dd",
+          "events": 376,
+          "first_date": "2026-09-01",
+          "last_date": "2026-12-28"
+        },
+        {
+          "group_id": "164556",
+          "group_name": "ПМ25-3",
+          "schedule_sha256": "3fdaace73446ebc45dbdd647c46004e827b1c6b233a1b6ba5f73d7697cf9336d",
+          "events": 393,
+          "first_date": "2026-09-01",
+          "last_date": "2026-12-28"
+        },
+        {
+          "group_id": "164557",
+          "group_name": "ПМ25-4",
+          "schedule_sha256": "baace4ae969178784fc914a4efeb3645933382d6fe284bdd08b99440db50628f",
+          "events": 376,
+          "first_date": "2026-09-01",
+          "last_date": "2026-12-28"
+        },
+        {
+          "group_id": "164558",
+          "group_name": "ПМ25-5",
+          "schedule_sha256": "3fc16a5f6cd6dc34a8e9d47fabf23c86aa44843bbb3058f6fb7406a0fcc5c90d",
+          "events": 392,
+          "first_date": "2026-09-01",
+          "last_date": "2026-12-28"
+        },
+        {
+          "group_id": "164559",
+          "group_name": "ПМ25-6",
+          "schedule_sha256": "c2deef60c500221c05dd2083bc806e7493484b52488e5c82910bc3dd5f8f1c11",
+          "events": 392,
+          "first_date": "2026-09-01",
+          "last_date": "2026-12-29"
+        }
+      ],
+      "titles": [
+        {
+          "schedule_title": "Алгебра и геометрия",
+          "groups": [
+            "ПМ25-1",
+            "ПМ25-2",
+            "ПМ25-3",
+            "ПМ25-4",
+            "ПМ25-5",
+            "ПМ25-6"
+          ],
+          "source_title": "Алгебра и геометрия",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Военная подготовка",
+          "groups": [
+            "ПМ25-1",
+            "ПМ25-2",
+            "ПМ25-3",
+            "ПМ25-4",
+            "ПМ25-5",
+            "ПМ25-6"
+          ],
+          "source_title": null,
+          "match": "unresolved"
+        },
+        {
+          "schedule_title": "Дифференциальные уравнения",
+          "groups": [
+            "ПМ25-1",
+            "ПМ25-2",
+            "ПМ25-3",
+            "ПМ25-4",
+            "ПМ25-5",
+            "ПМ25-6"
+          ],
+          "source_title": "Дифференциальные уравнения",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Иностранный язык",
+          "groups": [
+            "ПМ25-1",
+            "ПМ25-2",
+            "ПМ25-3",
+            "ПМ25-4",
+            "ПМ25-5",
+            "ПМ25-6"
+          ],
+          "source_title": "Иностранный язык",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Математика искусственного интеллекта",
+          "groups": [
+            "ПМ25-1",
+            "ПМ25-2",
+            "ПМ25-3",
+            "ПМ25-4",
+            "ПМ25-5",
+            "ПМ25-6"
+          ],
+          "source_title": "Математика искусственного интеллекта",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Машинное обучение",
+          "groups": [
+            "ПМ25-1",
+            "ПМ25-2",
+            "ПМ25-3",
+            "ПМ25-4",
+            "ПМ25-5",
+            "ПМ25-6"
+          ],
+          "source_title": "Машинное обучение",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Практикум по программированию",
+          "groups": [
+            "ПМ25-1",
+            "ПМ25-2",
+            "ПМ25-3",
+            "ПМ25-4",
+            "ПМ25-5",
+            "ПМ25-6"
+          ],
+          "source_title": "Практикум по программированию",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Практическая подготовка ",
+          "groups": [
+            "ПМ25-1"
+          ],
+          "source_title": null,
+          "match": "unresolved"
+        },
+        {
+          "schedule_title": "Системы управления базами данных",
+          "groups": [
+            "ПМ25-1",
+            "ПМ25-2",
+            "ПМ25-3",
+            "ПМ25-4",
+            "ПМ25-5",
+            "ПМ25-6"
+          ],
+          "source_title": "Системы управления базами данных",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Теория вероятностей и математическая статистика",
+          "groups": [
+            "ПМ25-1",
+            "ПМ25-2",
+            "ПМ25-3",
+            "ПМ25-4",
+            "ПМ25-5",
+            "ПМ25-6"
+          ],
+          "source_title": "Теория вероятностей и математическая статистика",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Учебно-научный семинар",
+          "groups": [
+            "ПМ25-1",
+            "ПМ25-2",
+            "ПМ25-3",
+            "ПМ25-4",
+            "ПМ25-5",
+            "ПМ25-6"
+          ],
+          "source_title": "Учебно-научный семинар",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Эконометрика",
+          "groups": [
+            "ПМ25-1",
+            "ПМ25-2",
+            "ПМ25-3",
+            "ПМ25-4",
+            "ПМ25-5",
+            "ПМ25-6"
+          ],
+          "source_title": "Эконометрика",
+          "match": "exact_normalized"
+        },
+        {
+          "schedule_title": "Элективные дисциплины по физической культуре и спорту",
+          "groups": [
+            "ПМ25-1",
+            "ПМ25-2",
+            "ПМ25-3"
+          ],
+          "source_title": "Элективные дисциплины по физической культуре и спорту",
+          "match": "exact_normalized"
+        }
+      ]
+    }
+  ],
+  "schedule_window": "Actual observed event date ranges are recorded per source snapshot; no request-range assumption."
+}

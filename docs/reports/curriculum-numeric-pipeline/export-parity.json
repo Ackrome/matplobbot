@@ -1,0 +1,10 @@
+{
+  "model_sha256": "88bc1d21d5cc709db75a17e2ef8cf2ffd695b0b8e6b22c3c40f6de4265bc8c01",
+  "samples": 256,
+  "new_synthetic_seed": 20190000,
+  "compared": "PyTorch CPU vs ONNX Runtime CPU logits and decoded strings",
+  "maximum_logit_absolute_error": 2.002716064453125e-05,
+  "decoded_mismatches": [],
+  "torch": "2.13.0+cu132",
+  "onnxruntime": "1.23.2"
+}

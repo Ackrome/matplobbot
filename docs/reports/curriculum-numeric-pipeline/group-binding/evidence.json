@@ -1,0 +1,715 @@
+{
+  "verified_on": "2026-10-09",
+  "exact_group_pattern": "^ПМ(23|25)-[0-9]+$",
+  "total_exact_groups": 11,
+  "sources": {
+    "groups": {
+      "url": "https://ruz.fa.ru/api/dictionary/groups",
+      "total_records": 4060
+    },
+    "faculties": {
+      "url": "https://ruz.fa.ru/api/dictionary/faculties",
+      "faculty": {
+        "facultyOid": 6,
+        "abbr": "ФИТиАБД",
+        "code": "63",
+        "facultyGid": 0,
+        "facultyUID": "25031.281474976714802",
+        "facultySP_UID": null,
+        "facultyMDM_UID": null,
+        "facultyASAV_UID": null,
+        "facultyHR_UID": null,
+        "institute": "Московский кампус",
+        "name": "Факультет информационных технологий и анализа больших данных",
+        "created_at": "2025-08-21T09:12:33.000000Z",
+        "updated_at": "2026-10-09T00:25:15.000000Z"
+      }
+    },
+    "catalog": {
+      "url": "https://www.fa.ru/sveden/education/edupr/?v=20261009"
+    },
+    "centerai": {
+      "url": "https://www.fa.ru/university/structure/scientific-educational-departments/itabd/centrai/"
+    },
+    "calendar2023": {
+      "url": "https://www.fa.ru/upload/constructor/097/bz23oq9v6en1grnexho4qvh7119g6tnf/KUG.pdf",
+      "sha256": "0089aae4968b3a2cd605ad67b1f1ec084445ab403484566de02de828b52486b0",
+      "title": "Календарный учебный график, 01.03.02, очная, 2023–2027",
+      "approved": "2023-01-31"
+    },
+    "calendar2025": {
+      "url": "https://www.fa.ru/upload/constructor/908/3504j6nh3idpc6elldfzlpvl9klpboe2/KUG_PMiI_25_och.pdf",
+      "sha256": "17536829aa988c11d4e84739c806a7760d6f7f198a55789d9a61d59618ace5df",
+      "title": "Календарный учебный график, 01.03.02, очная, 2025–2029",
+      "approved": "2025-01-31"
+    },
+    "plan2025_catalog": {
+      "url": "https://www.fa.ru/upload/constructor/07f/6hoeielk52accyytn19mbnfs6jtxfcl4/uch_plan_PMiI-OP-PMO_PMO_25.pdf",
+      "sha256": "4de019ce8ffd0ec18abfad63a199e2417b8bf55b509ab97e55ac25d07f65556f",
+      "printed_plan_id": "006088",
+      "approved": "2025-01-31"
+    },
+    "plan2025_centerai": {
+      "url": "https://www.fa.ru/upload/constructor/e13/mm7ghxp0y1dumv3ons4kyeey1qy0haj1/uchebnyy-plan-PMO_2025-new.pdf",
+      "sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86"
+    }
+  },
+  "groups": [
+    {
+      "groupOid": 162426,
+      "name": "ПМ23-1",
+      "facultyOid": 6,
+      "course": 4,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "kind": 0,
+      "is_schedule": 1,
+      "campus": "Московский кампус",
+      "faculty": "Факультет информационных технологий и анализа больших данных",
+      "cohort": 2023,
+      "semester": 7,
+      "calendar_bound_start": "2026-09-01",
+      "calendar_bound_end": "2027-01-25",
+      "calendar_source_key": "calendar2023",
+      "date_interpretation": "Inclusive bounds read from the official cohort KUG; no separate annual override verified. Vacation Jan26-Feb1 is excluded.",
+      "schedule_source_url": "https://ruz.fa.ru/api/schedule/group/162426?start=2026.09.01&finish=2027.02.28&lng=1",
+      "schedule_evidence": [
+        {
+          "parentschedule": "*7 семестр - ПМ23-1-5 - 4 курс",
+          "lesson_count": 468,
+          "observed_first_lesson": "2026-09-01",
+          "observed_last_lesson": "2026-12-29",
+          "discipline_in_plan_ids": [
+            3860,
+            6142
+          ],
+          "discipline_names": [
+            "Архитектура и дизайн программного обеспечения",
+            "Военная подготовка",
+            "Машинное обучение на графах",
+            "Микросервисная архитектура",
+            "Основы деловой и публичной коммуникации",
+            "Основы математического моделирования",
+            "Основы мобильной разработки",
+            "Основы технологий интернета вещей",
+            "Основы численных методов",
+            "Прикладные задачи машинного обучения",
+            "Программирование для встраиваемых систем",
+            "Разработка приложений в системе 1С Предприятие",
+            "Семантические технологии",
+            "Тестирование программного обеспечения",
+            "Технологии и алгоритмы анализа сетевых моделей",
+            "Технологии работы с открытыми данными",
+            "Электронные деньги"
+          ],
+          "moscow_buildings": [
+            "4-й Вешняковский проезд, 4",
+            "ул. Касаткина 15, строение 1; 17, строение 1"
+          ]
+        }
+      ],
+      "speciality_from_ruz": "",
+      "profile_from_ruz": null
+    },
+    {
+      "groupOid": 162428,
+      "name": "ПМ23-2",
+      "facultyOid": 6,
+      "course": 4,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "kind": 0,
+      "is_schedule": 1,
+      "campus": "Московский кампус",
+      "faculty": "Факультет информационных технологий и анализа больших данных",
+      "cohort": 2023,
+      "semester": 7,
+      "calendar_bound_start": "2026-09-01",
+      "calendar_bound_end": "2027-01-25",
+      "calendar_source_key": "calendar2023",
+      "date_interpretation": "Inclusive bounds read from the official cohort KUG; no separate annual override verified. Vacation Jan26-Feb1 is excluded.",
+      "schedule_source_url": "https://ruz.fa.ru/api/schedule/group/162428?start=2026.09.01&finish=2027.02.28&lng=1",
+      "schedule_evidence": [
+        {
+          "parentschedule": "*7 семестр - ПМ23-1-5 - 4 курс",
+          "lesson_count": 468,
+          "observed_first_lesson": "2026-09-01",
+          "observed_last_lesson": "2026-12-29",
+          "discipline_in_plan_ids": [
+            3860,
+            6142
+          ],
+          "discipline_names": [
+            "Архитектура и дизайн программного обеспечения",
+            "Военная подготовка",
+            "Машинное обучение на графах",
+            "Микросервисная архитектура",
+            "Основы деловой и публичной коммуникации",
+            "Основы математического моделирования",
+            "Основы мобильной разработки",
+            "Основы технологий интернета вещей",
+            "Основы численных методов",
+            "Прикладные задачи машинного обучения",
+            "Программирование для встраиваемых систем",
+            "Разработка приложений в системе 1С Предприятие",
+            "Семантические технологии",
+            "Тестирование программного обеспечения",
+            "Технологии и алгоритмы анализа сетевых моделей",
+            "Технологии работы с открытыми данными",
+            "Электронные деньги"
+          ],
+          "moscow_buildings": [
+            "4-й Вешняковский проезд, 4",
+            "ул. Касаткина 15, строение 1; 17, строение 1"
+          ]
+        }
+      ],
+      "speciality_from_ruz": "",
+      "profile_from_ruz": null
+    },
+    {
+      "groupOid": 162430,
+      "name": "ПМ23-3",
+      "facultyOid": 6,
+      "course": 4,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "kind": 0,
+      "is_schedule": 1,
+      "campus": "Московский кампус",
+      "faculty": "Факультет информационных технологий и анализа больших данных",
+      "cohort": 2023,
+      "semester": 7,
+      "calendar_bound_start": "2026-09-01",
+      "calendar_bound_end": "2027-01-25",
+      "calendar_source_key": "calendar2023",
+      "date_interpretation": "Inclusive bounds read from the official cohort KUG; no separate annual override verified. Vacation Jan26-Feb1 is excluded.",
+      "schedule_source_url": "https://ruz.fa.ru/api/schedule/group/162430?start=2026.09.01&finish=2027.02.28&lng=1",
+      "schedule_evidence": [
+        {
+          "parentschedule": "*7 семестр - ПМ23-1-5 - 4 курс",
+          "lesson_count": 519,
+          "observed_first_lesson": "2026-09-01",
+          "observed_last_lesson": "2026-12-29",
+          "discipline_in_plan_ids": [
+            3860,
+            6142
+          ],
+          "discipline_names": [
+            "Архитектура и дизайн программного обеспечения",
+            "Военная подготовка",
+            "Машинное обучение на графах",
+            "Микросервисная архитектура",
+            "Основы деловой и публичной коммуникации",
+            "Основы математического моделирования",
+            "Основы мобильной разработки",
+            "Основы технологий интернета вещей",
+            "Основы численных методов",
+            "Прикладные задачи машинного обучения",
+            "Программирование для встраиваемых систем",
+            "Разработка приложений в системе 1С Предприятие",
+            "Семантические технологии",
+            "Тестирование программного обеспечения",
+            "Технологии и алгоритмы анализа сетевых моделей",
+            "Технологии работы с открытыми данными",
+            "Электронные деньги"
+          ],
+          "moscow_buildings": [
+            "4-й Вешняковский проезд, 4",
+            "ул. Касаткина 15, строение 1; 17, строение 1"
+          ]
+        }
+      ],
+      "speciality_from_ruz": "",
+      "profile_from_ruz": null
+    },
+    {
+      "groupOid": 162432,
+      "name": "ПМ23-4",
+      "facultyOid": 6,
+      "course": 4,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "kind": 0,
+      "is_schedule": 1,
+      "campus": "Московский кампус",
+      "faculty": "Факультет информационных технологий и анализа больших данных",
+      "cohort": 2023,
+      "semester": 7,
+      "calendar_bound_start": "2026-09-01",
+      "calendar_bound_end": "2027-01-25",
+      "calendar_source_key": "calendar2023",
+      "date_interpretation": "Inclusive bounds read from the official cohort KUG; no separate annual override verified. Vacation Jan26-Feb1 is excluded.",
+      "schedule_source_url": "https://ruz.fa.ru/api/schedule/group/162432?start=2026.09.01&finish=2027.02.28&lng=1",
+      "schedule_evidence": [
+        {
+          "parentschedule": "*7 семестр - ПМ23-1-5 - 4 курс",
+          "lesson_count": 468,
+          "observed_first_lesson": "2026-09-01",
+          "observed_last_lesson": "2026-12-29",
+          "discipline_in_plan_ids": [
+            3860,
+            6142
+          ],
+          "discipline_names": [
+            "Архитектура и дизайн программного обеспечения",
+            "Военная подготовка",
+            "Машинное обучение на графах",
+            "Микросервисная архитектура",
+            "Основы деловой и публичной коммуникации",
+            "Основы математического моделирования",
+            "Основы мобильной разработки",
+            "Основы технологий интернета вещей",
+            "Основы численных методов",
+            "Прикладные задачи машинного обучения",
+            "Программирование для встраиваемых систем",
+            "Разработка приложений в системе 1С Предприятие",
+            "Семантические технологии",
+            "Тестирование программного обеспечения",
+            "Технологии и алгоритмы анализа сетевых моделей",
+            "Технологии работы с открытыми данными",
+            "Электронные деньги"
+          ],
+          "moscow_buildings": [
+            "4-й Вешняковский проезд, 4",
+            "ул. Касаткина 15, строение 1; 17, строение 1"
+          ]
+        }
+      ],
+      "speciality_from_ruz": "",
+      "profile_from_ruz": null
+    },
+    {
+      "groupOid": 162434,
+      "name": "ПМ23-5",
+      "facultyOid": 6,
+      "course": 4,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "kind": 0,
+      "is_schedule": 1,
+      "campus": "Московский кампус",
+      "faculty": "Факультет информационных технологий и анализа больших данных",
+      "cohort": 2023,
+      "semester": 7,
+      "calendar_bound_start": "2026-09-01",
+      "calendar_bound_end": "2027-01-25",
+      "calendar_source_key": "calendar2023",
+      "date_interpretation": "Inclusive bounds read from the official cohort KUG; no separate annual override verified. Vacation Jan26-Feb1 is excluded.",
+      "schedule_source_url": "https://ruz.fa.ru/api/schedule/group/162434?start=2026.09.01&finish=2027.02.28&lng=1",
+      "schedule_evidence": [
+        {
+          "parentschedule": "*7 семестр - ПМ23-1-5 - 4 курс",
+          "lesson_count": 468,
+          "observed_first_lesson": "2026-09-01",
+          "observed_last_lesson": "2026-12-29",
+          "discipline_in_plan_ids": [
+            3860,
+            6142
+          ],
+          "discipline_names": [
+            "Архитектура и дизайн программного обеспечения",
+            "Военная подготовка",
+            "Машинное обучение на графах",
+            "Микросервисная архитектура",
+            "Основы деловой и публичной коммуникации",
+            "Основы математического моделирования",
+            "Основы мобильной разработки",
+            "Основы технологий интернета вещей",
+            "Основы численных методов",
+            "Прикладные задачи машинного обучения",
+            "Программирование для встраиваемых систем",
+            "Разработка приложений в системе 1С Предприятие",
+            "Семантические технологии",
+            "Тестирование программного обеспечения",
+            "Технологии и алгоритмы анализа сетевых моделей",
+            "Технологии работы с открытыми данными",
+            "Электронные деньги"
+          ],
+          "moscow_buildings": [
+            "4-й Вешняковский проезд, 4",
+            "ул. Касаткина 15, строение 1; 17, строение 1"
+          ]
+        }
+      ],
+      "speciality_from_ruz": "",
+      "profile_from_ruz": null
+    },
+    {
+      "groupOid": 164554,
+      "name": "ПМ25-1",
+      "facultyOid": 6,
+      "course": 2,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "kind": 0,
+      "is_schedule": 1,
+      "campus": "Московский кампус",
+      "faculty": "Факультет информационных технологий и анализа больших данных",
+      "cohort": 2025,
+      "semester": 3,
+      "calendar_bound_start": "2026-09-01",
+      "calendar_bound_end": "2027-01-25",
+      "calendar_source_key": "calendar2025",
+      "date_interpretation": "Inclusive bounds read from the official cohort KUG; no separate annual override verified. Vacation Jan26-Feb1 is excluded.",
+      "schedule_source_url": "https://ruz.fa.ru/api/schedule/group/164554?start=2026.09.01&finish=2027.02.28&lng=1",
+      "schedule_evidence": [
+        {
+          "parentschedule": "*3 семестр - ПМ25-1-6 - 2 курс",
+          "lesson_count": 377,
+          "observed_first_lesson": "2026-09-01",
+          "observed_last_lesson": "2026-12-28",
+          "discipline_in_plan_ids": [
+            6088,
+            6142,
+            6954,
+            6962
+          ],
+          "discipline_names": [
+            "Алгебра и геометрия",
+            "Военная подготовка",
+            "Дифференциальные уравнения",
+            "Иностранный язык",
+            "Математика искусственного интеллекта",
+            "Машинное обучение",
+            "Практикум по программированию",
+            "Практическая подготовка",
+            "Системы управления базами данных",
+            "Теория вероятностей и математическая статистика",
+            "Учебно-научный семинар",
+            "Эконометрика",
+            "Элективные дисциплины по физической культуре и спорту"
+          ],
+          "moscow_buildings": [
+            "4-й Вешняковский проезд, 4",
+            "Виртуальное",
+            "ул. Касаткина 15, строение 1; 17, строение 1"
+          ]
+        }
+      ],
+      "speciality_from_ruz": "",
+      "profile_from_ruz": null
+    },
+    {
+      "groupOid": 164555,
+      "name": "ПМ25-2",
+      "facultyOid": 6,
+      "course": 2,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "kind": 0,
+      "is_schedule": 1,
+      "campus": "Московский кампус",
+      "faculty": "Факультет информационных технологий и анализа больших данных",
+      "cohort": 2025,
+      "semester": 3,
+      "calendar_bound_start": "2026-09-01",
+      "calendar_bound_end": "2027-01-25",
+      "calendar_source_key": "calendar2025",
+      "date_interpretation": "Inclusive bounds read from the official cohort KUG; no separate annual override verified. Vacation Jan26-Feb1 is excluded.",
+      "schedule_source_url": "https://ruz.fa.ru/api/schedule/group/164555?start=2026.09.01&finish=2027.02.28&lng=1",
+      "schedule_evidence": [
+        {
+          "parentschedule": "*3 семестр - ПМ25-1-6 - 2 курс",
+          "lesson_count": 376,
+          "observed_first_lesson": "2026-09-01",
+          "observed_last_lesson": "2026-12-28",
+          "discipline_in_plan_ids": [
+            6088,
+            6142,
+            6954,
+            6962
+          ],
+          "discipline_names": [
+            "Алгебра и геометрия",
+            "Военная подготовка",
+            "Дифференциальные уравнения",
+            "Иностранный язык",
+            "Математика искусственного интеллекта",
+            "Машинное обучение",
+            "Практикум по программированию",
+            "Системы управления базами данных",
+            "Теория вероятностей и математическая статистика",
+            "Учебно-научный семинар",
+            "Эконометрика",
+            "Элективные дисциплины по физической культуре и спорту"
+          ],
+          "moscow_buildings": [
+            "4-й Вешняковский проезд, 4",
+            "Виртуальное",
+            "ул. Касаткина 15, строение 1; 17, строение 1"
+          ]
+        }
+      ],
+      "speciality_from_ruz": "",
+      "profile_from_ruz": null
+    },
+    {
+      "groupOid": 164556,
+      "name": "ПМ25-3",
+      "facultyOid": 6,
+      "course": 2,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "kind": 0,
+      "is_schedule": 1,
+      "campus": "Московский кампус",
+      "faculty": "Факультет информационных технологий и анализа больших данных",
+      "cohort": 2025,
+      "semester": 3,
+      "calendar_bound_start": "2026-09-01",
+      "calendar_bound_end": "2027-01-25",
+      "calendar_source_key": "calendar2025",
+      "date_interpretation": "Inclusive bounds read from the official cohort KUG; no separate annual override verified. Vacation Jan26-Feb1 is excluded.",
+      "schedule_source_url": "https://ruz.fa.ru/api/schedule/group/164556?start=2026.09.01&finish=2027.02.28&lng=1",
+      "schedule_evidence": [
+        {
+          "parentschedule": "*3 семестр - ПМ25-1-6 - 2 курс",
+          "lesson_count": 376,
+          "observed_first_lesson": "2026-09-01",
+          "observed_last_lesson": "2026-12-28",
+          "discipline_in_plan_ids": [
+            6088,
+            6142,
+            6954,
+            6962
+          ],
+          "discipline_names": [
+            "Алгебра и геометрия",
+            "Военная подготовка",
+            "Дифференциальные уравнения",
+            "Иностранный язык",
+            "Математика искусственного интеллекта",
+            "Машинное обучение",
+            "Практикум по программированию",
+            "Системы управления базами данных",
+            "Теория вероятностей и математическая статистика",
+            "Учебно-научный семинар",
+            "Эконометрика",
+            "Элективные дисциплины по физической культуре и спорту"
+          ],
+          "moscow_buildings": [
+            "4-й Вешняковский проезд, 4",
+            "Виртуальное",
+            "ул. Касаткина 15, строение 1; 17, строение 1"
+          ]
+        },
+        {
+          "parentschedule": "Ю25-10-12 (3 семестр)",
+          "lesson_count": 17,
+          "observed_first_lesson": "2026-09-12",
+          "observed_last_lesson": "2026-12-19",
+          "discipline_in_plan_ids": [
+            6044
+          ],
+          "discipline_names": [
+            "Иностранный язык"
+          ],
+          "moscow_buildings": [
+            "Ленинградский проспект, 49/2"
+          ]
+        }
+      ],
+      "speciality_from_ruz": "",
+      "profile_from_ruz": null
+    },
+    {
+      "groupOid": 164557,
+      "name": "ПМ25-4",
+      "facultyOid": 6,
+      "course": 2,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "kind": 0,
+      "is_schedule": 1,
+      "campus": "Московский кампус",
+      "faculty": "Факультет информационных технологий и анализа больших данных",
+      "cohort": 2025,
+      "semester": 3,
+      "calendar_bound_start": "2026-09-01",
+      "calendar_bound_end": "2027-01-25",
+      "calendar_source_key": "calendar2025",
+      "date_interpretation": "Inclusive bounds read from the official cohort KUG; no separate annual override verified. Vacation Jan26-Feb1 is excluded.",
+      "schedule_source_url": "https://ruz.fa.ru/api/schedule/group/164557?start=2026.09.01&finish=2027.02.28&lng=1",
+      "schedule_evidence": [
+        {
+          "parentschedule": "*3 семестр - ПМ25-1-6 - 2 курс",
+          "lesson_count": 376,
+          "observed_first_lesson": "2026-09-01",
+          "observed_last_lesson": "2026-12-28",
+          "discipline_in_plan_ids": [
+            6088,
+            6142,
+            6954,
+            6962
+          ],
+          "discipline_names": [
+            "Алгебра и геометрия",
+            "Военная подготовка",
+            "Дифференциальные уравнения",
+            "Иностранный язык",
+            "Математика искусственного интеллекта",
+            "Машинное обучение",
+            "Практикум по программированию",
+            "Системы управления базами данных",
+            "Теория вероятностей и математическая статистика",
+            "Учебно-научный семинар",
+            "Эконометрика"
+          ],
+          "moscow_buildings": [
+            "4-й Вешняковский проезд, 4",
+            "Виртуальное",
+            "ул. Касаткина 15, строение 1; 17, строение 1"
+          ]
+        }
+      ],
+      "speciality_from_ruz": "",
+      "profile_from_ruz": null
+    },
+    {
+      "groupOid": 164558,
+      "name": "ПМ25-5",
+      "facultyOid": 6,
+      "course": 2,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "kind": 0,
+      "is_schedule": 1,
+      "campus": "Московский кампус",
+      "faculty": "Факультет информационных технологий и анализа больших данных",
+      "cohort": 2025,
+      "semester": 3,
+      "calendar_bound_start": "2026-09-01",
+      "calendar_bound_end": "2027-01-25",
+      "calendar_source_key": "calendar2025",
+      "date_interpretation": "Inclusive bounds read from the official cohort KUG; no separate annual override verified. Vacation Jan26-Feb1 is excluded.",
+      "schedule_source_url": "https://ruz.fa.ru/api/schedule/group/164558?start=2026.09.01&finish=2027.02.28&lng=1",
+      "schedule_evidence": [
+        {
+          "parentschedule": "*3 семестр - ПМ25-1-6 - 2 курс",
+          "lesson_count": 375,
+          "observed_first_lesson": "2026-09-01",
+          "observed_last_lesson": "2026-12-28",
+          "discipline_in_plan_ids": [
+            6088,
+            6142,
+            6954,
+            6962
+          ],
+          "discipline_names": [
+            "Алгебра и геометрия",
+            "Военная подготовка",
+            "Дифференциальные уравнения",
+            "Иностранный язык",
+            "Математика искусственного интеллекта",
+            "Машинное обучение",
+            "Практикум по программированию",
+            "Системы управления базами данных",
+            "Теория вероятностей и математическая статистика",
+            "Учебно-научный семинар",
+            "Эконометрика"
+          ],
+          "moscow_buildings": [
+            "4-й Вешняковский проезд, 4",
+            "Виртуальное",
+            "ул. Касаткина 15, строение 1; 17, строение 1"
+          ]
+        },
+        {
+          "parentschedule": "Ю25-10-12 (3 семестр)",
+          "lesson_count": 17,
+          "observed_first_lesson": "2026-09-12",
+          "observed_last_lesson": "2026-12-19",
+          "discipline_in_plan_ids": [
+            6044
+          ],
+          "discipline_names": [
+            "Иностранный язык"
+          ],
+          "moscow_buildings": [
+            "Ленинградский проспект, 49/2"
+          ]
+        }
+      ],
+      "speciality_from_ruz": "",
+      "profile_from_ruz": null
+    },
+    {
+      "groupOid": 164559,
+      "name": "ПМ25-6",
+      "facultyOid": 6,
+      "course": 2,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "kind": 0,
+      "is_schedule": 1,
+      "campus": "Московский кампус",
+      "faculty": "Факультет информационных технологий и анализа больших данных",
+      "cohort": 2025,
+      "semester": 3,
+      "calendar_bound_start": "2026-09-01",
+      "calendar_bound_end": "2027-01-25",
+      "calendar_source_key": "calendar2025",
+      "date_interpretation": "Inclusive bounds read from the official cohort KUG; no separate annual override verified. Vacation Jan26-Feb1 is excluded.",
+      "schedule_source_url": "https://ruz.fa.ru/api/schedule/group/164559?start=2026.09.01&finish=2027.02.28&lng=1",
+      "schedule_evidence": [
+        {
+          "parentschedule": "*3 семестр - ПМ25-1-6 - 2 курс",
+          "lesson_count": 375,
+          "observed_first_lesson": "2026-09-01",
+          "observed_last_lesson": "2026-12-29",
+          "discipline_in_plan_ids": [
+            6088,
+            6142,
+            6954,
+            6962
+          ],
+          "discipline_names": [
+            "Алгебра и геометрия",
+            "Военная подготовка",
+            "Дифференциальные уравнения",
+            "Иностранный язык",
+            "Математика искусственного интеллекта",
+            "Машинное обучение",
+            "Практикум по программированию",
+            "Системы управления базами данных",
+            "Теория вероятностей и математическая статистика",
+            "Учебно-научный семинар",
+            "Эконометрика"
+          ],
+          "moscow_buildings": [
+            "4-й Вешняковский проезд, 4",
+            "Виртуальное",
+            "ул. Касаткина 15, строение 1; 17, строение 1"
+          ]
+        },
+        {
+          "parentschedule": "2 курс - ИБ25-1-5 - 3 семестр*",
+          "lesson_count": 17,
+          "observed_first_lesson": "2026-09-10",
+          "observed_last_lesson": "2026-12-17",
+          "discipline_in_plan_ids": [
+            6044
+          ],
+          "discipline_names": [
+            "Иностранный язык"
+          ],
+          "moscow_buildings": [
+            "Ленинградский проспект, 49/2"
+          ]
+        }
+      ],
+      "speciality_from_ruz": "",
+      "profile_from_ruz": null
+    }
+  ],
+  "excluded_composites": [
+    165524,
+    165623
+  ],
+  "historical_unresolved_groups": [
+    "ПМ23-6",
+    "ПМ25-7"
+  ],
+  "historical_note": "Historical official documents mention these labels, but current complete RUZ dictionary and exact searches contain no corresponding group. No guessed ID or prefix binding."
+}

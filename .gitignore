@@ -36,3 +36,8 @@ blob-report/
 playwright/.cache/
 docs/.obsidian
 .vscode
+
+# Local validation and Python package builds
+.coverage
+build/
+*.egg-info/

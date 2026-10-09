@@ -1,0 +1,56 @@
+{
+  "verified_on": "2026-10-09",
+  "not_published_by_this_research": true,
+  "source_url": "https://www.fa.ru/upload/constructor/62f/cvigxrmcv4janm7wj3k351mqpl9o1lxd/-Obshchiy-fayl-BRS-1-sem-26_27.pdf",
+  "source_sha256": "812f37fe3592cc01b06ee859489ae22b167ffb7a9a43654795a19d244d175eac",
+  "source_title": "Балльно-рейтинговая система на 1 семестр 2026/2027 учебного года, Кафедра искусственного интеллекта, бакалавриат",
+  "source_index_url": "https://www.fa.ru/university/structure/scientific-educational-departments/itabd/ai/study/bachelor/",
+  "source_page_count": 41,
+  "cohort": 2023,
+  "numbered_semester": 7,
+  "semester_basis": "Current RUZ parentschedule *7 семестр - ПМ23-1-5 - 4 курс, not source wording Первый семестр изучения дисциплины.",
+  "group_ids": [
+    "162426",
+    "162428",
+    "162430",
+    "162432",
+    "162434"
+  ],
+  "facts": [
+    {
+      "discipline_name": "Машинное обучение на графах",
+      "source_discipline_title": "Машинное обучение графах",
+      "source_title_typo": "Source omits the preposition на; author/lecturer and exact subject corroborate identification.",
+      "kind": "pass",
+      "page": 13,
+      "source_author": "Кузина О.Н.",
+      "ruz_lecturers": [
+        "Кузина О.Н.",
+        "Рубцов Д.Ю."
+      ],
+      "discipline_in_plan": 3860,
+      "evidence": "Page13 explicit Зачет; assessment part60points. Current bachelor autumn2026 source."
+    },
+    {
+      "discipline_name": "Технологии и алгоритмы анализа сетевых моделей",
+      "source_discipline_title": "Технологии и алгоритмы анализа сетевых моделей",
+      "kind": "pass",
+      "page": 35,
+      "source_author": "Карпухин А.И.",
+      "ruz_lecturers": [
+        "Карпухин А.И."
+      ],
+      "discipline_in_plan": 3860,
+      "evidence": "Page35 explicit Зачет; assessment part60points. Current bachelor autumn2026 source."
+    }
+  ],
+  "negative_research": [
+    {
+      "source_url": "https://www.fa.ru/upload/constructor/7e0/4jrojlfpyex1y0xb713vduo09itelol5/RPD.rar",
+      "source_sha256": "6056190fd45f06caee271a74b4a8c72f1605cf6037926772f7423f97903fcd13",
+      "inspected_docx_count": 58,
+      "finding": "Neither exact graph-course title appears in any DOCX. Separate Машинное обучение в семантическом и сетевом анализе is not a proven alias."
+    }
+  ],
+  "integration_constraint": "These facts are from a separate41pageBRS PDF, not pages13/35 of the2pagecurriculum. Preserve this source/hash; do not attribute these rows to the original curriculum snapshot."
+}
