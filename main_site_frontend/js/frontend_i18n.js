@@ -1,5 +1,7 @@
 (() => {
     const STORAGE_KEY = "mpb_ui_lang";
+    // Keep the dictionary revision in sync with the service-worker precache.
+    const LOCALE_VERSION = "20261009-11";
     const SUPPORTED_LANGUAGES = new Set(["en", "ru"]);
     const dictionaries = { en: {}, ru: {} };
     const translators = new Set();
@@ -37,7 +39,7 @@
     }
 
     async function loadDictionary(locale) {
-        const response = await fetch(`/locales/${locale}.json`, { cache: "no-cache" });
+        const response = await fetch(`/locales/${locale}.json?v=${LOCALE_VERSION}`, { cache: "no-cache" });
         if (!response.ok) {
             throw new Error(`Locale ${locale} failed with HTTP ${response.status}`);
         }
@@ -48,11 +50,11 @@
         dictionaries[locale] = payload;
     }
 
-    const ready = Promise.all([...SUPPORTED_LANGUAGES].map(loadDictionary))
-        .catch((error) => {
-            console.error("Frontend locales failed to load", error);
-        })
-        .then(() => {
+    const ready = Promise.allSettled([...SUPPORTED_LANGUAGES].map(loadDictionary))
+        .then((results) => {
+            results.filter(result => result.status === "rejected").forEach(result => {
+                console.error("Frontend locale failed to load", result.reason);
+            });
             document.documentElement.lang = language;
             notifyTranslators();
         });

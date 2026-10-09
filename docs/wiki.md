@@ -766,6 +766,14 @@ What it does:
 - Shared top nav across pages.
 - Loads one shared EN/RU locale source for navbar, schedule, authentication, and stats runtime text.
 - Keeps locale dictionaries out of page scripts and applies runtime text updates through `window.mpbI18n`.
+- Locale requests include `LOCALE_VERSION`, so a previous service worker cannot
+  serve an unversioned dictionary that predates new UI keys. Locales use network
+  first, with the latest runtime copy preferred over the install snapshot when
+  offline or when the server returns an error. This prevents a new account
+  subscriptions section from showing English HTML fallbacks or raw keys such as
+  `count` and `signInTelegram` alongside an otherwise Russian page.
+- `mpbI18n.ready` waits until both dictionary requests settle. Failure of one
+  locale does not initialize the account UI before the other locale finishes.
 - Command palette and keyboard shortcuts.
 - Sun/moon theme toggle that persists the selected light/dark theme.
 - Admin-only nav item for stats page.
@@ -782,7 +790,14 @@ Maintenance:
 1. Add every new key to both locale JSON files and preserve the same `{placeholder}` names.
 2. Load `frontend_i18n.js` before `navbar.js` on pages that use the shared API.
 3. Run `python -m unittest discover -s tests -p test_localization_completeness.py -v` after locale changes.
-4. Advance the service-worker cache version when changing the loader or locale assets.
+4. Keep `LOCALE_VERSION` and the service-worker locale URLs in sync. Version the
+   loader URL in every HTML caller and its precache entry; advance the service-worker
+   cache version when changing the loader or locale assets (currently `mpb-site-v44`).
+5. Test with an installed old service worker and outdated dictionaries, not only
+   a clean browser with service workers blocked. Verify online refresh, offline
+   reuse of the newest copy, RU/EN switching, and account views with and without
+   a linked Telegram identity. `test_localization_completeness.py` covers loader
+   readiness, cache priority, dictionary parity and asset-version consistency.
 
 ### Unified Static Frontend
 
@@ -1952,7 +1967,7 @@ How to use:
   календаре сайту недоступно. Метрики best effort и не являются SLA.
 - API расписания возвращает исходные нормализованные интервалы `lessons` для
   визуализации. Прежние ограничения: до шести сущностей, до 14 дней, текущий семестр.
-- Офлайн-кэш `mpb-site-v43` включает новые оболочки, скрипты и общие стили.
+- Офлайн-кэш `mpb-site-v44` включает новые оболочки, скрипты и общие стили.
   Текст публичного README кэшируется отдельно на устройстве. Доступность библиотеки
   рендеринга и внешних изображений зависит от сети; предусмотрены понятные состояния.
 

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "mpb-site-v43";
+const CACHE_VERSION = "mpb-site-v44";
 const CORE_CACHE = `${CACHE_VERSION}-core`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const OFFLINE_URL = "/offline.html";
@@ -43,7 +43,7 @@ const CORE_ASSETS = [
     "/css/studio.css?v=2",
     "/js/runtime_config.js?v=20260821-6",
     "/js/ui_utils.js?v=2",
-    "/js/frontend_i18n.js?v=1",
+    "/js/frontend_i18n.js?v=20261009-11",
     "/js/navbar.js?v=20261009-4",
     "/js/theme_bootstrap.js?v=20260821-6",
     "/js/telegram_webapp.js?v=20260821-6",
@@ -64,8 +64,8 @@ const CORE_ASSETS = [
     "/js/insights.js?v=20261009-4",
     "/css/feature_panels.css?v=20261009-1",
     "/js/auth.js?v=20261009-4",
-    "/locales/en.json",
-    "/locales/ru.json",
+    "/locales/en.json?v=20261009-11",
+    "/locales/ru.json?v=20261009-11",
     "/favicon.ico",
     "/favicon-16x16.png",
     "/favicon-32x32.png",
@@ -139,6 +139,21 @@ async function networkFirstCodeAsset(request) {
     }
 }
 
+async function networkFirstLocale(request) {
+    const cache = await caches.open(RUNTIME_CACHE);
+    let response;
+    try {
+        response = await fetch(new Request(request, { cache: "no-cache" }));
+        if (response.ok) {
+            await cache.put(request, response.clone());
+            return response;
+        }
+    } catch (_error) {
+        // Offline: prefer the most recently fetched dictionary over the install snapshot.
+    }
+    return (await cache.match(request)) || (await caches.match(request)) || response || Response.error();
+}
+
 self.addEventListener("fetch", (event) => {
     const { request } = event;
     if (request.method !== "GET") return;
@@ -150,6 +165,11 @@ self.addEventListener("fetch", (event) => {
 
     if (request.mode === "navigate") {
         event.respondWith(networkFirstNavigation(request));
+        return;
+    }
+
+    if (url.origin === self.location.origin && /^\/locales\/(en|ru)\.json$/.test(url.pathname)) {
+        event.respondWith(networkFirstLocale(request));
         return;
     }
 
