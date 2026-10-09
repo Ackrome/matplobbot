@@ -1,0 +1,64 @@
+{
+  "checked_date": "2026-10-10",
+  "symptom": "The automated browser showed a full-cache loading error in the Algebra discipline tab for group 164554.",
+  "http_checks": [
+    {
+      "group_id": "162426",
+      "group_name": "ПМ23-1",
+      "status": 200,
+      "schedule_count": 473,
+      "content_length": 1786391,
+      "entity_id_type": "string",
+      "hosts": ["ivantishchenko.ru", "api.ivantishchenko.ru"],
+      "elapsed_seconds": [0.917, 1.076]
+    },
+    {
+      "group_id": "164554",
+      "group_name": "ПМ25-1",
+      "status": 200,
+      "schedule_count": 386,
+      "content_length": 1420766,
+      "entity_id_type": "string",
+      "hosts": ["ivantishchenko.ru", "api.ivantishchenko.ru"],
+      "elapsed_seconds": [0.611, 0.573]
+    }
+  ],
+  "http_contract": {
+    "path_template": "/api/schedule/cache/group/{group_id}",
+    "content_type": "application/json",
+    "content_encoding": null,
+    "transfer_encoding": null,
+    "response_keys": ["entity_id", "schedule", "source_checked_at"],
+    "entity_id_matches_request": true,
+    "all_schedule_items_are_objects": true
+  },
+  "server_log_checks": {
+    "group_id": "164554",
+    "browser_attempts": [
+      {"timestamp_utc": "2026-10-09T21:34:49.425Z", "status": 200},
+      {"timestamp_utc": "2026-10-09T21:35:55.747Z", "status": 200}
+    ],
+    "cache_source_checked_at": "2026-10-09T21:28:32.388627+00:00"
+  },
+  "node_vm_replay": {
+    "production_assets_downloaded": true,
+    "functions": ["normalizeScheduleLesson", "normalizeLesson", "relatedLessons"],
+    "input_count": 386,
+    "discipline": "Алгебра и геометрия",
+    "related_count": 43,
+    "exception": null,
+    "asset_sha256": {
+      "lesson_details.js": "78b957345ed1dbb6e0807c7e6c8f605c2919ad1ba9791d1242207a3f7d832b8e",
+      "schedule.js": "64908750053e640b17419118cc949b415a0296964260f93ef431664a9e54a0cd",
+      "schedule_api.js": "c35830a0d1ba0fd5faf939db5c474c8c0401cf7c2d39068e31bdb1c9915c3ec5"
+    }
+  },
+  "browser_restriction": {
+    "source": "Root agent's separate CUA direct-navigation check",
+    "url": "https://ivantishchenko.ru/api/schedule/cache/group/164554",
+    "error": "net::ERR_BLOCKED_BY_CLIENT",
+    "hidden_browser_state_inspected": false
+  },
+  "conclusion": "Stored cache, public HTTP contract and production JavaScript data transformations are valid. The automated browser blocks the same endpoint. No application defect was reproduced, and no application patch was made for this diagnostic.",
+  "limitation": "This verifies the public response and data transformations, not a successful full-cache rendering in the restricted CUA browser."
+}

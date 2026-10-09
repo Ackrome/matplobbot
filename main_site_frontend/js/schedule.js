@@ -1702,9 +1702,9 @@ async function changeWeek(offset) {
     currentWeekStart.setDate(currentWeekStart.getDate() + offset * 7);
     const weekEnd = new Date(currentWeekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
-    const loadedStart = parseDate(loadedBounds.start);
-    const loadedEnd = parseDate(loadedBounds.end);
-    if (currentWeekStart < loadedStart || weekEnd > loadedEnd) {
+    const loadedStart = loadedBounds.start ? parseDate(loadedBounds.start) : null;
+    const loadedEnd = loadedBounds.end ? parseDate(loadedBounds.end) : null;
+    if (!loadedStart || !loadedEnd || currentWeekStart < loadedStart || weekEnd > loadedEnd) {
         const targetDateStr = getISODateStr(currentWeekStart);
         await loadSchedule(currentEntity.type, currentEntity.id, currentEntity.name, targetDateStr, { urlMode: 'replace', preserveModules: true });
     } else {
@@ -1956,8 +1956,21 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
     if (entityChanged && !options.preserveModules) {
         selectedModules.clear();
     }
+    if (entityChanged) {
+        // Filters/language changes can rerender while this request is pending or
+        // failed. Never expose the previous entity's lessons under the new ID.
+        fullSchedule = [];
+        lessonActionMap.clear();
+        scheduleCacheEntityId = null;
+        loadedBounds = { start: null, end: null };
+        allAvailableModules = [];
+        sourceUpdatedAt = null;
+        scheduleFreshness = 'fresh_cache';
+        scheduleRefreshInProgress = false;
+        scheduleChangeSummary = null;
+        isOfflineMode = false;
+    }
     currentEntity = nextEntity;
-    if (entityChanged) scheduleCacheEntityId = null;
     const requestedDate = normalizeScheduleDate(targetDate) || getISODateStr(new Date());
     currentWeekStart = getMonday(parseDate(requestedDate));
     setSchedulePageState({

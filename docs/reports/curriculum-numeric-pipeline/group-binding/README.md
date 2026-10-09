@@ -93,3 +93,7 @@ The page renders `calendar2023-1.png` and `calendar2025-1.png` preserve the visu
 basis for the date reading. Hashes, source URLs, exact current groups, and slim
 lesson summaries are in `evidence.json`; individual lecturers/contact details
 are intentionally absent from this retained snapshot.
+
+The separate [full-cache browser diagnostic](cache-browser-diagnostic.md) records
+the successful public API and JavaScript replay checks for ПМ25-1, and the
+automated browser's `ERR_BLOCKED_BY_CLIENT` restriction during visual validation.

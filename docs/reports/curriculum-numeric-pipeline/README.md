@@ -3,6 +3,10 @@
 Validated on 2026-10-09. Production scans now use this pipeline instead of the
 legacy general-OCR control-cell parser. Native text PDFs retain their native path.
 
+The [production rollout](production-rollout.md) on 2026-10-10 published the
+reviewed 170 assessment records for all eleven verified ПМ23/ПМ25 groups.
+It includes the public API/hash audit and the limits of timetable-title coverage.
+
 ```mermaid
 flowchart LR
     A[PDF page] --> B[OpenCV deskew and ruled grid]

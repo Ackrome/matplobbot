@@ -138,6 +138,9 @@ with different course codes remain ambiguous. Teacher/room timetables require
 an explicit group ID on the selected lesson. On a group timetable, the selected
 group supplies the assessment context even when RUZ names a shared module group
 on the lesson itself; the assessment heading shows that same selected group.
+Switching entities clears the previous entity's snapshot and card actions before
+starting the new request, so a failed load or filter/language rerender cannot
+open old lessons under a new group. Refreshing the same entity retains its cache.
 Source absence, missing term dates,
 or an empty cached exam schedule never establishes that a course has no exam.
 
@@ -219,6 +222,12 @@ root documents exist. The prepared
 [publication bundle](reports/curriculum-numeric-pipeline/publication-bundle.json)
 contains 79 base 2023 facts, 89 updated 2025 facts and two 2023 graph-course passes
 from the separate official autumn 2026/27 BRS PDF (pages 13 and 35).
+
+The bundle was published on 2026-10-10 for ПМ23-1…5 and ПМ25-1…6. All 163
+public group/title checks and three PDF hashes matched the reviewed evidence;
+an identical apply preserved all document IDs and bindings. See the
+[production rollout report](reports/curriculum-numeric-pipeline/production-rollout.md)
+for deployment, browser evidence and the remaining unconfirmed titles.
 
 ### Historical full-table curriculum OCR audit
 
@@ -2313,4 +2322,4 @@ API; сохранение создаёт календарный профиль. 
 переходы, владельца, callback-кнопки и гонки ответа общего календаря. Реальные
 сообщения Telegram в локальных проверках не отправляются.
 
-Reviewed assessment sources may be curriculum plans or separately registered BRS documents. RU/EN lesson-card labels therefore say “Assessment type” and “Official document”, preserving each source title and page; locale generation 20261009-14 is synchronized with offline cache v48. Lesson details generation 20261010-1 preserves the selected group for modular lessons.
+Reviewed assessment sources may be curriculum plans or separately registered BRS documents. RU/EN lesson-card labels therefore say “Assessment type” and “Official document”, preserving each source title and page; locale generation 20261009-14 is synchronized with offline cache v49. Lesson details generation 20261010-1 preserves the selected group for modular lessons; schedule generation 20261010-2 clears stale data when switching entities.

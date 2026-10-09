@@ -39,6 +39,68 @@ class LessonDetailsTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def run_schedule_model(self, assertions):
+        self.run_model(
+            """
+            const source = fs.readFileSync('main_site_frontend/js/schedule.js', 'utf8');
+            const cut = (start, end) => source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
+            const elements = new Map();
+            const element = id => {
+                if (!elements.has(id)) elements.set(id, {innerHTML:'', classList:{add(){},remove(){},toggle(){},contains(){return true;}}});
+                return elements.get(id);
+            };
+            const pending = [];
+            const oldLesson = {...base, groupOid:7};
+            const state = {console, URL, AbortController, setTimeout, clearTimeout,
+                window:{ScheduleApi:{loadScheduleData:()=>new Promise((resolve,reject)=>pending.push({resolve,reject}))},
+                    mpbI18n:{registerTranslator:handler=>{state.translate=handler;}},
+                    MpbLessonDetails:{open:(lesson, context)=>{state.opened=context;}}},
+                document:{getElementById:id=>id==='offlineWarning'?null:element(id),
+                    addEventListener:(_event,handler)=>{state.domReady=handler;}},
+                scheduleRefreshPollTimer:null, scheduleLoadAbortController:null, scheduleLoadRequestSeq:0,
+                resultsBox:element('results'), groupInput:element('input'),
+                currentEntity:entity, scheduleCacheEntityId:'7', fullSchedule:[oldLesson],
+                selectedModules:new Set(['Module']), allAvailableModules:['Module'],
+                loadedBounds:{start:'2026-09-01',end:'2027-01-31'},
+                currentWeekStart:new Date('2026-10-05T12:00:00Z'), schedulePageState:{},
+                scheduleFreshness:'fresh_cache', sourceUpdatedAt:'2026-10-09',
+                scheduleRefreshInProgress:false, isOfflineMode:false,
+                scheduleChangeSummary:{added:[oldLesson]}, lessonActionMap:new Map(),
+                lessonActionIds:new WeakMap(), nextLessonActionId:0,
+                getScheduleEntityKey:e=>e.type+':'+e.id, normalizeScheduleEntity:e=>e,
+                normalizeScheduleDate:d=>d, getISODateStr:()=> '2026-10-09', getMonday:d=>d,
+                parseDate:d=>new Date(d), setSchedulePageState(){}, renderScheduleHome(){},
+                getCurrentWeekEnd:()=>new Date('2026-10-11'), formatUiDate:()=>'',
+                isLessonInCurrentDisplayedScope:()=>true,
+                renderDesktopGrid:rows=>{state.rendered=rows; rows.forEach(row=>state.getLessonActionId(row));},
+                renderMobileFeed(){}, commitScheduleState(){}, renderModuleFilters(){},
+                normalizeScheduleLesson:x=>x, canonicalizeSpecialModuleName:x=>x,
+                escapeHtml:x=>x, t:(_key,fallback)=>fallback,
+                initOfflineHistory:async()=>{}, loadInitialPreferences:async()=>{}, renderOfflineHistory(){},
+                buildAvailableModules:modules=>modules, getSnapshotEntityKey:e=>e.id,
+                loadScheduleSnapshots:()=>({}), buildScheduleChangeSummary:()=>null,
+                persistScheduleSnapshot(){}, savePreferences(){}, syncScheduleUrl(){},
+                MAX_SCHEDULE_REFRESH_POLLS:4,
+            };
+            vm.createContext(state);
+            vm.runInContext(
+                cut('async function loadSchedule(', 'async function applyScheduleStateFromUrl(') +
+                cut('function filterAndRender()', 'function renderDesktopGrid(') +
+                cut('window.showLessonDetails =', 'function bindLessonDetails(') +
+                cut('function getLessonActionId(', 'function getLessonActionLabels(') +
+                cut('function parseDate(', 'function getISODateStr(') +
+                cut('async function changeWeek(', 'async function setTodayWeek(') +
+                cut("document.addEventListener('DOMContentLoaded', async () => {", 'function formatRelativeDateTime('), state);
+            const oldAction = state.getLessonActionId(oldLesson);
+            (async()=>{
+                await state.domReady();
+            """
+            + assertions
+            + """
+            })().catch(error=>{console.error(error);process.exitCode=1;});
+            """
+        )
+
     def test_full_names_optional_metadata_and_identifiers(self):
         self.run_model("""
             const item = normalize({...base, lecturerEmail:'a@example.edu; a@example.edu, b@example.edu',
@@ -182,6 +244,76 @@ class LessonDetailsTests(unittest.TestCase):
                 }
                 assert.equal(group(normalize({...raw, group:''}, entity), entity).name, '162215');
             }
+        """)
+
+    def test_group_switch_pending_and_failure_cannot_restore_previous_lessons(self):
+        self.run_schedule_model("""
+            const request = state.loadSchedule('group', '8', 'ПМ25-1');
+            assert.equal(state.currentEntity.id, '8');
+            assert.equal(state.fullSchedule.length, 0);
+            assert.equal(state.lessonActionMap.has(oldAction), false);
+            assert.equal(state.scheduleCacheEntityId, null);
+            assert.equal(state.allAvailableModules.length, 0);
+            assert.equal(state.loadedBounds.start, null);
+            assert.equal(state.sourceUpdatedAt, null);
+            assert.equal(state.scheduleChangeSummary, null);
+            state.filterAndRender();
+            state.translate();
+            assert.equal(state.rendered.length, 0);
+            assert.equal(state.lessonActionMap.size, 0);
+            pending[0].reject(new Error('Network failure')); await request;
+            state.filterAndRender(); state.translate();
+            assert.equal(state.rendered.length, 0);
+            assert.equal(state.lessonActionMap.size, 0);
+            // With no bounds yet, Today/week navigation must fetch, not use an old range.
+            const retry = state.changeWeek(0);
+            assert.equal(pending.length, 2);
+            const newLesson = {...base, group:'ПМ25-1', groupOid:8};
+            pending[1].resolve({schedule:[newLesson], entity_id:8, available_modules:[],
+                loaded_bounds:{start:'2026-09-01',end:'2027-01-31'}, source_checked_at:'2026-10-10'});
+            await retry;
+            assert.equal(state.rendered.length, 1);
+            assert.equal(state.rendered[0], newLesson);
+            assert.equal(state.lessonActionMap.has(oldAction), false);
+            state.window.showLessonDetails(newLesson);
+            assert.equal(state.opened.entity.id, 8);
+            assert.equal(sandbox.window.MpbLessonDetails.curriculumContext(
+                normalize(newLesson, state.opened.entity), state.opened.entity).group_id, '8');
+        """)
+
+    def test_same_entity_silent_refresh_keeps_its_snapshot_on_failure(self):
+        self.run_schedule_model("""
+            const request = state.loadSchedule('group', '7', 'ПМ23-1', null, {silent:true, preserveModules:true});
+            assert.equal(state.fullSchedule[0], oldLesson);
+            assert.equal(state.scheduleCacheEntityId, '7');
+            assert.equal(state.loadedBounds.start, '2026-09-01');
+            assert.equal(state.lessonActionMap.get(oldAction), oldLesson);
+            state.translate();
+            assert.equal(state.rendered[0], oldLesson);
+            pending[0].reject(new Error('Network failure')); await request;
+            assert.equal(state.rendered[0], oldLesson);
+            assert.equal(state.lessonActionMap.get(oldAction), oldLesson);
+            assert.equal(state.scheduleFreshness, 'stale_fallback');
+            assert.equal(state.isOfflineMode, true);
+            state.window.showLessonDetails(oldLesson);
+            assert.equal(state.opened.entity.id, '7');
+        """)
+
+    def test_late_previous_request_does_not_replace_new_group_snapshot(self):
+        self.run_schedule_model("""
+            const previous = state.loadSchedule('group', '7', 'ПМ23-1', null, {silent:true});
+            const current = state.loadSchedule('group', '8', 'ПМ25-1');
+            const newLesson = {...base, group:'ПМ25-1', groupOid:8};
+            pending[1].resolve({schedule:[newLesson], entity_id:8, available_modules:[],
+                source_checked_at:'2026-10-10'});
+            await current;
+            pending[0].resolve({schedule:[oldLesson], entity_id:7, available_modules:[]});
+            await previous;
+            state.translate();
+            assert.equal(state.fullSchedule.length, 1);
+            assert.equal(state.fullSchedule[0], newLesson);
+            assert.equal(state.scheduleCacheEntityId, 8);
+            assert.equal(state.lessonActionMap.has(oldAction), false);
         """)
 
     def test_curriculum_assessments_preserve_terms_and_reject_untrusted_provenance(self):

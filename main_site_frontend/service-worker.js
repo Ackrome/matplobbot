@@ -1,4 +1,4 @@
-const CACHE_VERSION = "mpb-site-v48";
+const CACHE_VERSION = "mpb-site-v49";
 const CORE_CACHE = `${CACHE_VERSION}-core`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const OFFLINE_URL = "/offline.html";
@@ -54,7 +54,7 @@ const CORE_ASSETS = [
     "/js/schedule_api.js?v=20261009-12",
     "/js/schedule_filters.js?v=20260821-6",
     "/js/schedule_render.js?v=20260924-2",
-    "/js/schedule.js?v=20261009-10",
+    "/js/schedule.js?v=20261010-2",
     "/js/calendar_sync.js?v=20261009-9",
     "/js/schedule_ux.js?v=20260831-10",
     "/js/stats.js?v=20261009-4",
