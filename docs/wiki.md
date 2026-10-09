@@ -161,6 +161,13 @@ failures, actual pinned preview libraries, auth redirects, account export gating
 incomplete planning sources and logout during metric requests. Local controlled
 DB/queue doubles do not replace a real PostgreSQL/Celery deployment smoke test.
 
+The Studio offline-cache regression checks the current local script/stylesheet
+URLs from both Studio HTML pages against `CORE_ASSETS`, including their version
+queries and file existence. Cache generation numbers and local asset revisions
+are not hardcoded in the tests. Intentional cache bumps can pass while missing,
+unversioned or mismatched resources still fail. Run the authorization guards and
+full CI coverage command after changing shared navbar/service-worker versions.
+
 ## Sprint 3 P2 Reliability And Security (2026-09-24)
 
 Sprint 3 closes BUG-03, BUG-06, BUG-09, SEC-03, SEC-04, PROD-01, ARCH-01, ARCH-03,

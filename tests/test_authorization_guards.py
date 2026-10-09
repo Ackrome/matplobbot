@@ -5,6 +5,7 @@ import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
+from urllib.parse import parse_qs, urlsplit
 
 FASTAPI_AVAILABLE = True
 try:
@@ -200,15 +201,15 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
         sanitizer = "dompurify@3.4.16/dist/purify.min.js"
         self.assertIn(sanitizer, html)
         self.assertIn('id="studio-library-manifest"', html)
-        self.assertIn("/js/studio_libraries.js?v=1", html)
+        self.assertRegex(html, r'src="/js/studio_libraries\.js\?v=[^"\s]+"')
         self.assertLess(html.index(sanitizer), html.index("marked@15.0.12/marked.min.js"))
-        self.assertIn("/js/studio.js?v=13", html)
+        self.assertRegex(html, r'src="/js/studio\.js\?v=[^"\s]+"')
         frame = (PROJECT_ROOT / "main_site_frontend" / "studio-editor.html").read_text(
             encoding="utf-8"
         )
         self.assertIn("monaco-editor/0.38.0/min/vs/loader.min.js", frame)
         self.assertIn('integrity="sha384-', frame)
-        self.assertIn("/js/studio_monaco.js?v=1", frame)
+        self.assertRegex(frame, r'src="/js/studio_monaco\.js\?v=[^"\s]+"')
 
         cdn_tags = re.findall(
             r"<(?:script|link)\b[^>]+(?:cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com)[^>]*>",
@@ -241,9 +242,24 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
             encoding="utf-8"
         )
 
-        self.assertIn('const CACHE_VERSION = "mpb-site-v35"', service_worker)
-        self.assertIn('"/css/studio.css?v=2"', service_worker)
-        self.assertIn('"/js/studio.js?v=13"', service_worker)
+        self.assertRegex(service_worker, r'const CACHE_VERSION = "mpb-site-v[1-9]\d*";')
+        core_assets_match = re.search(r"const CORE_ASSETS\s*=\s*\[([\s\S]*?)\];", service_worker)
+        self.assertIsNotNone(core_assets_match, "Service worker must declare its precache")
+        core_assets = set(re.findall(r'"([^"\n]+)"', core_assets_match.group(1)))
+
+        # Compare actual page URLs with precached URLs, including their versions.
+        # A normal cache generation bump must not require editing this test.
+        frontend = PROJECT_ROOT / "main_site_frontend"
+        for page in ("studio.html", "studio-editor.html"):
+            html = (frontend / page).read_text(encoding="utf-8")
+            assets = re.findall(r'(?:src|href)="(/(?:js|css)/[^"\s]+)"', html)
+            self.assertTrue(assets, f"{page} must load local code assets")
+            for asset in assets:
+                with self.subTest(page=page, asset=asset):
+                    url = urlsplit(asset)
+                    self.assertTrue(parse_qs(url.query).get("v"), "Asset needs a version")
+                    self.assertIn(asset, core_assets, "Page and precache versions must match")
+                    self.assertTrue((frontend / url.path.lstrip("/")).is_file())
 
     def test_studio_csp_rejects_inline_scripts_and_event_attributes(self):
         html = (PROJECT_ROOT / "main_site_frontend" / "studio.html").read_text(encoding="utf-8")
