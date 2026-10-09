@@ -43,6 +43,12 @@
         );
     }
 
+    function loadCachedScheduleData({ type, id, signal }) {
+        return requestJson(`${getBaseUrl()}/schedule/cache/${type}/${encodeURIComponent(id)}`, {
+            signal, cache: "no-store",
+        });
+    }
+
     function refreshSemesterCache({ type, id, token }) {
         const headers = {};
         if (token) headers.Authorization = `Bearer ${token}`;
@@ -57,6 +63,7 @@
 
     window.ScheduleApi = {
         getCachedSchedules,
+        loadCachedScheduleData,
         loadScheduleData,
         requestJson,
         refreshSemesterCache,

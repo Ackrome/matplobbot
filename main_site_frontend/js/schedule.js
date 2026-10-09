@@ -29,6 +29,7 @@ const SPECIAL_MODULE_FALLBACKS = [
 let fixedTimeSlotRangesCache = null;
 
 let fullSchedule =[];
+let scheduleCacheEntityId = null;
 let loadedBounds = { start: null, end: null };
 let sourceUpdatedAt = null;
 let scheduleFreshness = 'fresh_cache';
@@ -1956,6 +1957,7 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         selectedModules.clear();
     }
     currentEntity = nextEntity;
+    if (entityChanged) scheduleCacheEntityId = null;
     const requestedDate = normalizeScheduleDate(targetDate) || getISODateStr(new Date());
     currentWeekStart = getMonday(parseDate(requestedDate));
     setSchedulePageState({
@@ -1991,6 +1993,7 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         // A silent poll may observe cache written by a background request. Its own
         // content_changed flag is false, so always adopt the returned snapshot.
         fullSchedule = receivedSchedule;
+        scheduleCacheEntityId = data.entity_id || nextEntity.id;
         allAvailableModules = buildAvailableModules(data.available_modules || [], fullSchedule);
         loadedBounds = data.loaded_bounds || {start: "2000-01-01", end: "2099-01-01"};
         sourceUpdatedAt = data.source_checked_at || data.source_updated_at || null;
@@ -2537,7 +2540,8 @@ function renderMobileFeed(lessons) {
 
 window.showLessonDetails = function(lesson, trigger) {
     window.MpbLessonDetails?.open(lesson, {
-        schedule: fullSchedule, entity: { ...currentEntity }, bounds: { ...loadedBounds },
+        schedule: fullSchedule, entity: { ...currentEntity, id: scheduleCacheEntityId || currentEntity.id }, bounds: { ...loadedBounds },
+        prepareLesson: normalizeScheduleLesson,
         sourceUpdatedAt, freshness: scheduleFreshness, offline: isOfflineMode,
         refreshing: scheduleRefreshInProgress,
     }, trigger);

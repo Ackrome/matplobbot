@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import date, timedelta
+from datetime import UTC, date, timedelta
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared_lib.database import (
     get_all_short_names,
+    get_cached_schedule_snapshot,
     get_cached_schedule_updated_at,
     get_db_session_dependency,
     get_discipline_modules_map,
@@ -18,6 +19,7 @@ from shared_lib.database import (
 from shared_lib.schemas import (
     CachedScheduleEntitySchema,
     ScheduleCacheBulkRefreshResponse,
+    ScheduleCacheResponse,
     ScheduleDataResponse,
     ScheduleFallbackCountersResponse,
     ScheduleSearchResultSchema,
@@ -444,6 +446,51 @@ async def refresh_schedule_semester_cache(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
+async def _enrich_schedule_lessons(schedule: list[dict]) -> list[dict]:
+    short_names = await get_all_short_names()
+    discipline_to_module = await get_discipline_modules_map()
+    result = []
+    for original in schedule:
+        lesson = dict(original)
+        full_name = lesson.get("discipline", "")
+        lesson["discipline_short"] = short_names.get(full_name, full_name)
+        lesson["discipline_full"] = full_name
+        group_val = lesson.get("group")
+        explicit_mod = get_module_name(group_val) if isinstance(group_val, str) else None
+        mapped_mod = discipline_to_module.get(full_name)
+        lesson["module"] = mapped_mod if mapped_mod else explicit_mod
+        result.append(lesson)
+    return result
+
+
+@router.get(
+    "/cache/{type}/{id}",
+    response_model=ScheduleCacheResponse,
+    summary="Read every cached lesson for a resolved schedule entity",
+    description=(
+        "Reads the existing server snapshot without date or module filters or an upstream "
+        "request. Normally populated for the semester, but not a guarantee of a complete "
+        "curriculum. Use entity_id from the schedule data response. Missing cache returns 404; "
+        "an authoritative empty snapshot returns an empty schedule."
+    ),
+)
+async def get_schedule_cache(request: Request, type: str, id: str):
+    await enforce_rate_limit(request, scope="schedule_data", settings=RATE_LIMIT_SCHEDULE_DATA)
+    entity_type = _normalize_schedule_entity_type(type)
+    schedule, checked_at = await get_cached_schedule_snapshot(entity_type, id)
+    if schedule is None:
+        raise HTTPException(status_code=404, detail="No cached schedule exists for this entity.")
+    if not isinstance(schedule, list) or any(not isinstance(item, dict) for item in schedule):
+        raise HTTPException(status_code=503, detail="Cached schedule is unavailable.")
+    if checked_at is not None and checked_at.tzinfo is None:
+        checked_at = checked_at.replace(tzinfo=UTC)
+    return {
+        "entity_id": id,
+        "schedule": await _enrich_schedule_lessons(schedule),
+        "source_checked_at": checked_at.isoformat() if checked_at else None,
+    }
+
+
 @router.get(
     "/data/{type}/{id}",
     response_model=ScheduleDataResponse,
@@ -508,27 +555,14 @@ async def get_schedule_data(
             failure_cooldown_seconds=SCHEDULE_REFRESH_FAILURE_COOLDOWN_SECONDS,
             force_refresh=refresh,
         )
-        schedule = freshness_result.schedule
-
-        short_names = await get_all_short_names()
-        discipline_to_module = await get_discipline_modules_map()
-
-        for lesson in schedule:
-            full_name = lesson.get("discipline", "")
-            lesson["discipline_short"] = short_names.get(full_name, full_name)
-            # Keep full discipline name so frontend can toggle between short/full.
-            lesson["discipline_full"] = full_name
-
-            group_val = lesson.get("group")
-            explicit_mod = get_module_name(group_val) if isinstance(group_val, str) else None
-            mapped_mod = discipline_to_module.get(full_name)
-            lesson["module"] = mapped_mod if mapped_mod else explicit_mod
+        schedule = await _enrich_schedule_lessons(freshness_result.schedule)
 
         modules = await get_unique_modules_hybrid(schedule)
         source_checked_at = freshness_result.source_checked_at
         source_checked_at_value = source_checked_at.isoformat() if source_checked_at else None
 
         return {
+            "entity_id": resolved_id,
             "schedule": schedule,
             "available_modules": modules,
             "is_offline": freshness_result.is_offline,

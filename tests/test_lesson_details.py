@@ -98,6 +98,21 @@ class LessonDetailsTests(unittest.TestCase):
             assert.equal(related(normalize({}), [{}]).length, 1);
         """)
 
+    def test_complete_cache_replaces_window_and_does_not_restore_removed_classes(self):
+        self.run_model("""
+            const selected = normalize(base, entity);
+            const semester = [{...base, date:'2027.01.31'}, {...base, date:'2026.08.25'},
+                {...base, date:'2026.08.25', subgroup:'2'}, {...base, date:'2026.08.25'},
+                {...base, discipline_full:'Other'}];
+            const result = related(selected, semester, entity, false);
+            assert.equal(result.length, 3);
+            assert.equal(result[0].date, '2026-08-25');
+            assert.equal(result.at(-1).date, '2027-01-31');
+            assert.equal(result.some(item=>item.date==='2026-10-09'), false);
+            assert.equal(related(selected, [], entity, false).length, 0);
+            assert.equal(related(selected, [], entity).length, 1);
+        """)
+
     def test_explicit_discipline_ids_take_precedence_over_titles(self):
         self.run_model("""
             const chosen = {...base, disciplineOid:1};

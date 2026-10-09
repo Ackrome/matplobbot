@@ -530,6 +530,7 @@ class ScheduleCacheBulkRefreshResponse(BaseModel):
 
 
 class ScheduleDataResponse(BaseModel):
+    entity_id: str | None = Field(None, description="Resolved entity identifier used by the cache.")
     schedule: list[ScheduleLessonSchema] = Field(default_factory=list)
     available_modules: list[str] = Field(default_factory=list)
     is_offline: bool = False
@@ -540,6 +541,14 @@ class ScheduleDataResponse(BaseModel):
     cache_age_seconds: int | None = Field(None, ge=0)
     content_changed: bool = False
     loaded_bounds: LoadedBoundsSchema
+
+    model_config = BASE_CONFIG
+
+
+class ScheduleCacheResponse(BaseModel):
+    entity_id: str
+    schedule: list[ScheduleLessonSchema]
+    source_checked_at: str | None = None
 
     model_config = BASE_CONFIG
 

@@ -1,4 +1,4 @@
-/* Lesson occurrences and their discipline, using the already loaded schedule. */
+/* Lesson details and all cached occurrences of their discipline. */
 (() => {
     'use strict';
     const text = value => typeof value === 'string' ? value.trim() : typeof value === 'number' ? String(value) : '';
@@ -53,9 +53,10 @@
             item.kind, item.module, item.room, item.roomId, item.building, item.teacher, item.teacherId,
             item.group, item.groupId, item.subgroup, item.emails, item.links, item.notes]);
     }
-    function relatedLessons(selected, schedule, entity) {
+    function relatedLessons(selected, schedule, entity, includeSelected = true) {
         const seen = new Set();
-        return [selected.raw, ...(schedule || [])].map(raw => normalizeLesson(raw, entity)).filter(item => {
+        const records = includeSelected ? [selected.raw, ...(schedule || [])] : schedule || [];
+        return records.map(raw => normalizeLesson(raw, entity)).filter(item => {
             const same = selected.disciplineId && item.disciplineId
                 ? selected.disciplineId === item.disciplineId
                 : Boolean(selected.title && canonical(selected.title) === canonical(item.title))
@@ -94,7 +95,9 @@
         const dialog = node('dialog', 'lesson-details-dialog');
         dialog.id = 'lessonDetailsDialog'; dialog.setAttribute('aria-labelledby', 'lessonDetailsTitle');
         let selected = normalizeLesson(raw, context.entity), tab = 'lesson';
-        const occurrences = relatedLessons(selected, context.schedule, context.entity);
+        const original = selected;
+        let occurrences = relatedLessons(original, context.schedule, context.entity);
+        let cacheState = 'idle', cacheSnapshot = null, cacheController = null, selectedFromCache = false;
         const sourceOpen = new Set();
         const previousOverflow = document.documentElement.style.overflow;
         const scroll = { left: window.scrollX, top: window.scrollY };
@@ -104,6 +107,7 @@
         function cleanup() {
             if (closed) return;
             closed = true;
+            cacheController?.abort();
             document.documentElement.style.overflow = previousOverflow;
             window.removeEventListener('mpb-language-change', languageChanged);
             dialog.remove();
@@ -125,9 +129,51 @@
             details.addEventListener('toggle', () => { if (details.isConnected) { if (details.open) sourceOpen.add(id); else sourceOpen.delete(id); } });
             return details;
         }
-        function rangeLabel() {
-            const start = isoDate(context.bounds?.start), end = isoDate(context.bounds?.end);
+        function rangeLabel(bounds = context.bounds) {
+            const start = isoDate(bounds?.start), end = isoDate(bounds?.end);
             return start && end ? `${dateLabel(start)} — ${dateLabel(end)}` : t('rangeUnknown');
+        }
+        function cachedRangeLabel() {
+            const dates = occurrences.map(item => item.date).filter(Boolean).sort();
+            return dates.length ? t('cachedRange', { range: rangeLabel({ start: dates[0], end: dates.at(-1) }) }) : '';
+        }
+        function checkedLabel(value) {
+            const checked = value && new Date(value);
+            return checked && !Number.isNaN(checked.getTime()) ? t('checked', {
+                time: new Intl.DateTimeFormat(locale(), { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(checked),
+            }) : t('checkedUnknown');
+        }
+        function updateCourse() {
+            const panel = dialog.querySelector('#lessonDetailsCourse');
+            const hadFocus = panel.contains(document.activeElement);
+            const replacement = renderCourse(); replacement.hidden = tab !== 'course';
+            panel.replaceWith(replacement);
+            if (hadFocus) dialog.querySelector('[data-tab="course"]').focus({ preventScroll: true });
+        }
+        async function loadCourse() {
+            if (closed || cacheState === 'loading' || cacheState === 'ready') return;
+            cacheState = 'loading'; updateCourse();
+            cacheController = new AbortController();
+            const controller = cacheController;
+            const timeout = setTimeout(() => controller.abort(), 12000);
+            try {
+                if (!context.entity?.type || !context.entity?.id) throw new Error('Missing entity');
+                const data = await window.ScheduleApi.loadCachedScheduleData({ ...context.entity, signal: controller.signal });
+                if (closed) return;
+                if (controller.signal.aborted) throw new Error('Cache request timed out');
+                if (!Array.isArray(data?.schedule) || data.schedule.some(item => !item || typeof item !== 'object' || Array.isArray(item))) throw new Error('Invalid cached schedule');
+                const schedule = context.prepareLesson ? data.schedule.map(context.prepareLesson) : data.schedule;
+                occurrences = relatedLessons(original, schedule, context.entity, false);
+                cacheSnapshot = data;
+                cacheState = 'ready';
+            } catch {
+                if (closed) return;
+                cacheState = 'error';
+            } finally {
+                clearTimeout(timeout);
+                if (cacheController === controller) cacheController = null;
+                if (!closed) updateCourse();
+            }
         }
         function showTab(next, focusTab = false) {
             tab = next;
@@ -140,6 +186,7 @@
             dialog.querySelector('[data-course]').textContent = t(tab === 'lesson' ? 'allClasses' : 'backToLesson');
             dialog.querySelector('.ld-copy').hidden = true;
             if (focusTab) dialog.querySelector(`[data-tab="${tab}"]`).focus({ preventScroll: true });
+            if (tab === 'course' && cacheState === 'idle') void loadCourse();
         }
         async function navigate(type, id, label) {
             dialog.close(); cleanup();
@@ -159,14 +206,10 @@
             const details = disclosure('source', t('source'));
             const contents = node('div', 'ld-source');
             contents.append(node('span', '', t('university')));
-            const checked = context.sourceUpdatedAt && new Date(context.sourceUpdatedAt);
-            if (checked && !Number.isNaN(checked.getTime())) contents.append(node('span', '', t('checked', {
-                time: new Intl.DateTimeFormat(locale(), { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(checked),
-            })));
-            else contents.append(node('span', '', t('checkedUnknown')));
-            if (context.offline || context.freshness === 'stale_fallback') contents.append(node('span', 'ld-warning', t('cached')));
-            if (context.refreshing) contents.append(node('span', '', t('refreshing')));
-            contents.append(node('span', '', t('loadedRange', { range: rangeLabel() })));
+            contents.append(node('span', '', checkedLabel(selectedFromCache ? cacheSnapshot.source_checked_at : context.sourceUpdatedAt)));
+            if (selectedFromCache || context.offline || context.freshness === 'stale_fallback') contents.append(node('span', 'ld-warning', t('cached')));
+            if (!selectedFromCache && context.refreshing) contents.append(node('span', '', t('refreshing')));
+            contents.append(node('span', '', selectedFromCache ? t('allCached') : t('loadedRange', { range: rangeLabel() })));
             details.append(contents);
             return details;
         }
@@ -208,14 +251,25 @@
             const body = node('div', 'ld-body'); body.id = 'lessonDetailsCourse';
             body.setAttribute('role', 'tabpanel'); body.setAttribute('aria-labelledby', 'lessonDetailsCourseTab');
             body.append(node('h3', '', t('courseClasses')));
-            body.append(node('p', 'ld-subtitle', [text(context.entity?.name), t('loadedRange', { range: rangeLabel() })].filter(Boolean).join(' · ')));
+            body.append(node('p', 'ld-subtitle', [text(context.entity?.name), cacheState === 'ready' ? t('allCached') : t('loadedRange', { range: rangeLabel() })].filter(Boolean).join(' · ')));
+            const status = node('div', 'ld-subtitle'); status.setAttribute('role', 'status');
+            if (cacheState === 'ready') {
+                status.append(node('span', 'ld-small', cachedRangeLabel()), node('span', 'ld-small', checkedLabel(cacheSnapshot.source_checked_at)));
+                status.append(node('span', 'ld-small', t('cacheScope')));
+            } else {
+                status.append(node('p', '', t(cacheState === 'error' ? 'cacheError' : 'cacheLoading')));
+                if (cacheState === 'error') status.append(button(t('retry'), () => void loadCourse()));
+            }
+            body.append(status);
             const counts = new Map();
             occurrences.forEach(item => counts.set(item.kind || t('kindUnknown'), (counts.get(item.kind || t('kindUnknown')) || 0) + 1));
-            body.append(node('div', 'ld-count', `${t('classCount', { count: occurrences.length })} · ${[...counts].map(([kind, count]) => `${kind}: ${count}`).join(' · ')}`));
+            body.append(node('div', 'ld-count', [t(cacheState === 'ready' ? 'classCount' : 'partialCount', { count: occurrences.length }), [...counts].map(([kind, count]) => `${kind}: ${count}`).join(' · ')].filter(Boolean).join(' · ')));
+            if (cacheState === 'ready' && !occurrences.length) body.append(node('p', 'ld-small', t('cacheEmpty')));
             const list = node('div', 'ld-occurrences');
             occurrences.forEach(item => {
-                const entry = button('', () => { selected = item; tab = 'lesson'; render(); dialog.querySelector('[data-tab="lesson"]').focus({ preventScroll: true }); }, 'ld-occurrence');
+                const entry = button('', () => { selected = item; selectedFromCache = cacheState === 'ready'; tab = 'lesson'; render(); dialog.querySelector('[data-tab="lesson"]').focus({ preventScroll: true }); }, 'ld-occurrence');
                 const date = node('span'); date.append(node('b', '', dateLabel(item.date, { month: 'short', year: undefined })), node('span', 'ld-small', item.date ? dateLabel(item.date, { day: undefined, month: undefined, year: undefined, weekday: 'long' }) : ''));
+                if (item.date && item.date.slice(0, 4) !== original.date.slice(0, 4)) date.append(node('span', 'ld-small', item.date.slice(0, 4)));
                 const summary = node('span'); summary.append(node('b', '', timeLabel(item)), node('span', 'ld-small', [item.kind, item.room].filter(Boolean).join(' · ')));
                 summary.append(node('span', 'ld-small', [item.teacher, item.group, item.subgroup ? `${t('subgroup')}: ${item.subgroup}` : ''].filter(Boolean).join(' · ')));
                 if (occurrenceKey(item) === occurrenceKey(selected)) entry.setAttribute('aria-current', 'true');
