@@ -958,60 +958,57 @@ How to use:
 Files:
 
 - `main_site_frontend/js/calendar_sync.js`
+- `main_site_frontend/css/calendar_sync.css`
+- `main_site_frontend/js/schedule_workspace.js` (focus and scroll lifecycle)
 
 What it does:
 
-- Shows eligibility based on Telegram linkage. Bot subscriptions are no longer required for website-owned iCal profiles.
-- Opens from the `Calendar` button in the schedule toolbar; `/schedule?calendar=1` still opens the panel directly.
-- On desktop, the panel is embedded as a right rail inside the schedule shell and scrolls internally instead of stretching the full page. On mobile and narrow widths it falls back to a dismissible drawer with backdrop and `Esc`/outside-click close.
-- The desktop rail and shared drawer are wider than before, so the connection flow, summary cards, and preset controls no longer feel cramped in the right column.
-- Internal panel sections adapt to the actual rail/drawer width instead of global viewport breakpoints, so tablet drawers and the desktop rail keep compact stacked controls instead of overflowing into wide multi-column layouts.
-- Manages profile-based iCal feeds:
-- built-in `All classes`
-- built-in `Exams only`
-- custom presets from current schedule page
-- Stores custom presets in the signed-in user's website preferences, so each account keeps its own presets across reloads and browser sessions.
-- Treats custom website profiles as independent calendar sources. Built-in feeds include both active Telegram subscriptions and saved website profiles.
-- Warms the semester schedule cache when a website profile is saved, then the background scheduler keeps these web-only sources refreshed.
-- Supports:
-- expand/collapse panel state
-- collapsed summary with active preset, event count, next event, cache-updated time, and fast actions
-- expanded top overview cards for active preset, event count, next event, and last cache update, so everyday status is visible without opening diagnostics
-- compact selected-state preset rows for built-in and custom profiles
-- separate connection, current-page preset save, preset settings, and diagnostics/management sections ordered by everyday usage priority
-- shorter preset description copy in the rail header/settings when the panel is still relatively narrow, so key actions stay above the fold instead of being pushed down by wrapped metadata
-- visible selected-module chips for every preset, including the `All modules` state
-- custom preset module checklist on the matching schedule page
-- copy/reveal/hide URL
-- Apple/Google/Outlook setup guidance with persisted target-calendar choice
-- preview and download
-- enable/disable sync
-- rotate secret
-- delete custom preset
-- edit custom preset name, lesson mode, and saved module set
-- switching presets preserves the currently viewed week on `/schedule`
-- custom presets with `All modules` restore the full module set even if the user previously narrowed the page to a subset
-- direct bot deep link through `window.__MPB_BOT_DEEPLINK__` / `https://t.me/matplobbot?start=calendar_sync`
-- Telegram Mini App launch from the bot's `Calendar Sync` Web App button, which opens `/schedule?tg=1&calendar=1`, signs in with Telegram init data, and opens the right drawer directly.
-- In Telegram Mini App, the collapsed sync card remains visible while Telegram auth is pending or unavailable, so users can expand it and see the sign-in state instead of the panel disappearing.
-- Shows profile health (event count, next event, cache status, source updated, last access).
-- Adds the last university-site schedule parsing time to every generated iCal event description.
-- Every personal iCal/WebCal feed, including profile-specific and Telegram-filtered variants, covers the full current or upcoming semester instead of a fixed rolling future window.
-- `Exams only` calendar feeds include pre-exam consultations together with exams and pass/fail assessments, while preserving the `Consultation` event type label.
+- Opens from `Add to calendar`; `/schedule?calendar=1` and Telegram Mini App
+  `/schedule?tg=1&calendar=1` links still open it directly.
+- Uses a centered 590 px modal on desktop and a full-screen sheet at 600 px and
+  below. A 10 px blurred backdrop separates it from the schedule. Opening the
+  dialog does not resize the timetable or rearrange its toolbar.
+- Locks background scrolling and interaction, keeps keyboard focus inside the
+  dialog, includes disclosure summaries in Tab order, and restores focus and
+  page scroll on close. Escape, the close button, and the backdrop dismiss it.
+- Keeps the first screen focused on source, effective module selection, calendar
+  app and one primary action. Apple opens WebCal; Google/Outlook copy the private
+  HTTPS subscription URL. Feedback confirms only the action the website can
+  observe, never successful subscription by an external app.
+- Builds RU/EN profile descriptions from structured fields. Legacy generated
+  names containing stale module counts are displayed as the source name; custom
+  names are retained. Built-in profiles and Moscow timezone labels are localized.
+- `Change selection` exposes modules, lesson mode, timezone, name and current
+  filters. Draft module changes require saving; rerenders preserve disclosures,
+  scroll and the focused control, including while requests are pending.
+- `My subscriptions` contains built-in All classes/Exams only feeds, custom
+  profiles and creation from the currently open schedule. Selecting a feed
+  changes the calendar selection without navigating the underlying timetable.
+  `Open schedule` remains an explicit action for editing another source's modules.
+- `Other options and settings` contains one-time ICS download, private URL
+  reveal/copy, feed preview, event count, next class, source update time, Telegram
+  link, secret rotation, enable/disable and deletion. Destructive actions retain
+  their existing confirmations. A downloaded snapshot is labeled as not updating.
+- Keeps a close button available during loading, failures, anonymous access and
+  Telegram authorization. Errors offer retry; users without Telegram linkage are
+  directed to their account. Closing a pending request does not reopen the dialog.
+- Uses the existing canonical subscription API and private feed URLs; no schema
+  or delivery behavior changes. Website profiles and Telegram schedules continue
+  sharing effective filters and timezone. Built-in feeds aggregate their sources.
+- Custom profiles warm the semester cache; the scheduler refreshes web-only
+  sources. Feeds cover the current/upcoming semester and include parsing time in
+  event descriptions. Exams-only feeds include pre-exam consultations.
 
 How to use:
 
-1. Sign in and open `/schedule`.
-2. Link the website account to Telegram to generate the private secret link.
-3. Click `Calendar` in the schedule toolbar to open the rail/drawer.
-4. Use the top overview cards and `Connection` section for the normal flow: confirm the active preset and feed health, then copy the link, open the feed in the target calendar app, or jump to bot management.
-5. In `Presets`, switch between built-in feeds and custom website presets. Built-in presets update the current lesson mode, and custom presets also reopen their saved schedule entity/modules on the page while keeping the currently selected week.
-6. Open any group, lecturer, or room schedule and use `Save current view` to create a website-only iCal profile.
-7. In `Profile settings`, inspect which modules are included in the selected preset. For custom presets, open the matching schedule from the module notice when needed, then use the checklist to add/remove modules and save the preset.
-8. In `Connection`, choose Apple, Google, Outlook, or another calendar app, preview the feed, download ICS, and follow the platform-specific action.
-9. In `Diagnostics and management`, inspect cache/source health, reset the secret URL, disable sync, or delete a custom preset.
-10. In Telegram, tap `Open in bot` or the bot's `Calendar Sync` miniapp button to manage the same WebCal feed without relying on Mini App auth.
-11. Open an event in your calendar app to see when Matplobbot last parsed that source from the university site.
+1. Sign in, link Telegram in the account if needed, and open a schedule.
+2. Click `Add to calendar`, check the selected source, choose an app and use its
+   primary action. Complete the subscription in the external calendar app.
+3. Expand `Change selection` to edit a custom profile. For a different source,
+   explicitly open its schedule before using the module checklist.
+4. Use `My subscriptions` to select another feed or save the current page as a
+   new profile. Use `Other options and settings` for downloads and maintenance.
+
 
 ### Stats Dashboard
 
@@ -1055,7 +1052,11 @@ older requests and ignores late responses.
 The README describes the current repository, not a verified production release.
 It covers schedule/calendar workflows, Studio recovery and builds, account data,
 administration, local Compose startup and explicit password-admin provisioning.
-Its interface screenshots in `image/notes/ui/` use demonstration data. Keep local
+Its interface screenshots in `image/notes/ui/` use demonstration data. The schedule
+and calendar captures dated `20261009` show compact lesson cards, the blurred
+desktop subscription dialog and its full-screen mobile layout. Each README uses
+the matching RU/EN screenshots for these views; versioned filenames avoid reusing
+the old images from browser or GitHub image caches. Keep local
 paths and heading links valid, and check the page at desktop and mobile widths
 when changing document structure or screenshots. Local edits appear on the public
 page only after publication to GitHub and a content refresh. Mermaid code fences
@@ -1926,7 +1927,7 @@ How to use:
 | 3–4 | Прямые действия и последние открытые объекты на главной; `/project` загружает настоящий README Ackrome/matplobbot через GitHub API с оглавлением, кодом, ссылками, санитизацией и сохранённой копией. |
 | 5–10 | Компактный первый экран расписания; «Сегодня» открывает и фокусирует день; поиск Arrow/Enter/Escape; компактная таблица и полные сведения о занятии; подсказка пустого поиска; спокойный статус свежих данных, заметные предупреждения при сбое. |
 | 11–12 | Сохраняемое сравнение выбранных сущностей с модулями/режимом занятий, inline-валидацией дат и времени, шкалой занятий и общих свободных окон. Неизвестные данные не считаются свободным временем. |
-| 13, 34 | Основное действие календаря зависит от выбранного приложения; разовый ICS явно обозначен. Модальный мобильный календарь удерживает фокус и возвращает его к кнопке открытия. |
+| 13, 34 | Основное действие календаря зависит от выбранного приложения; разовый ICS явно обозначен. Модальное окно календаря удерживает фокус и возвращает его к кнопке открытия. |
 | 14–15, 19 | Аккаунт объединяет инструменты, тему, язык и переходы к настройкам/данным Telegram. Выгрузка ZIP содержит account.json, описание и исходные файлы по исходным относительным путям; JSON доступен отдельно. Удаление вынесено в раскрываемую опасную зону с прежними проверками свежей выгрузки. |
 | 17–18 | Контекстный заголовок входа; пароль администратора раскрывается отдельно; поля имеют labels/autocomplete и переключатель видимости. |
 | 20–24 | Атомарное сохранение черновика как проекта; помощь до первой сборки; поиск/переименование/копия/удаление проектов; схемы шаблонов; отдельные сохранение Ctrl/Cmd+S и сборка Ctrl/Cmd+Enter; увеличенные цели действий. |
@@ -1951,7 +1952,7 @@ How to use:
   календаре сайту недоступно. Метрики best effort и не являются SLA.
 - API расписания возвращает исходные нормализованные интервалы `lessons` для
   визуализации. Прежние ограничения: до шести сущностей, до 14 дней, текущий семестр.
-- Офлайн-кэш `mpb-site-v39` включает новые оболочки, скрипты и общие стили.
+- Офлайн-кэш `mpb-site-v40` включает новые оболочки, скрипты и общие стили.
   Текст публичного README кэшируется отдельно на устройстве. Доступность библиотеки
   рендеринга и внешних изображений зависит от сети; предусмотрены понятные состояния.
 

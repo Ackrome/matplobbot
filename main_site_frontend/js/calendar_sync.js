@@ -1,6 +1,5 @@
 ﻿const CALENDAR_PLATFORM_KEY = "mpb_calendar_sync_platform";
 const CALENDAR_REVEALED_PROFILES_KEY = "mpb_calendar_sync_revealed_profiles";
-const CALENDAR_PANEL_COLLAPSED_KEY = "mpb_calendar_sync_collapsed";
 const CALENDAR_BOT_DEEPLINK =
     window.__MPB_BOT_DEEPLINK__ || "https://t.me/matplobbot?start=calendar_sync";
 const calendarSyncLaunchParams = new URLSearchParams(window.location.search);
@@ -9,11 +8,7 @@ const shouldFocusCalendarSyncPanel =
     calendarSyncLaunchParams.get('panel') === 'calendar';
 let calendarPlatform = loadCalendarPlatform();
 let revealedCalendarProfileIds = loadRevealedCalendarProfileIds();
-let isCalendarPanelCollapsed = loadCalendarPanelCollapsed();
 let isCalendarSyncPanelOpen = shouldFocusCalendarSyncPanel;
-let hasUserToggledCalendarPanel = false;
-let hasFocusedCalendarSyncPanel = false;
-let isCalendarDrawerDragging = false;
 window.calendarCurrentViewMode = 'all';
 
 function createDefaultCalendarSubscriptionState() {
@@ -74,129 +69,21 @@ function persistRevealedCalendarProfileIds() {
         );
     } catch (error) {}
 }
-function loadCalendarPanelCollapsed() {
-    try {
-        const saved = localStorage.getItem(CALENDAR_PANEL_COLLAPSED_KEY);
-        if (saved === 'false') return false;
-        if (saved === 'true') return true;
-    } catch (error) {}
-    return true;
-}
-function persistCalendarPanelCollapsed() {
-    try {
-        localStorage.setItem(CALENDAR_PANEL_COLLAPSED_KEY, String(isCalendarPanelCollapsed));
-    } catch (error) {}
-}
-
-function focusCalendarSyncPanelIfRequested(container) {
-    if (!shouldFocusCalendarSyncPanel || hasFocusedCalendarSyncPanel || !container) return;
-    hasFocusedCalendarSyncPanel = true;
-    window.requestAnimationFrame(() => {
-        const focusTarget = container.querySelector('button, a, input, select, textarea');
-        focusTarget?.focus?.({ preventScroll: true });
-    });
-}
-
-function getCalendarDrawerWidth() {
-    const container = document.getElementById('calendarSubscriptionSection');
-    const width = container?.getBoundingClientRect?.().width || Math.min(544, window.innerWidth - 16);
-    return Math.max(0, width);
-}
-
-function setCalendarDrawerOffset(offset, { dragging = false } = {}) {
-    const container = document.getElementById('calendarSubscriptionSection');
-    if (!container) return;
-    const width = getCalendarDrawerWidth();
-    const nextOffset = Math.max(0, Math.min(width, Number(offset) || 0));
-    container.style.setProperty('--calendar-sync-drawer-offset', `${nextOffset}px`);
-    container.classList.toggle('is-dragging', dragging);
-}
-
-function isDesktopCalendarRail() {
-    return window.matchMedia('(min-width: 1280px)').matches;
-}
-
-function syncCalendarShellLayout(open) {
-    const shell = document.getElementById('mainScheduleBlock');
-    shell?.classList.toggle('schedule-shell--calendar-open', Boolean(open) && isDesktopCalendarRail());
-}
-
-function syncCalendarDrawerTriggers() {
-    document.querySelectorAll('[data-calendar-sync-trigger]').forEach((button) => {
-        button.setAttribute('aria-expanded', String(isCalendarSyncPanelOpen));
-    });
-}
-
-function setCalendarDrawerVisibility(open, { immediate = false, dragging = false } = {}) {
-    window.MpbScheduleUX?.calendarFocus(open && !isDesktopCalendarRail());
+function setCalendarDrawerVisibility(open) {
     const container = document.getElementById('calendarSubscriptionSection');
     const backdrop = document.getElementById('calendarSubscriptionBackdrop');
     if (!container) return;
-    window.clearTimeout(container._calendarHideTimer);
-    syncCalendarShellLayout(open);
-    if (isDesktopCalendarRail()) {
-        container.classList.toggle('hidden', !open);
-        container.classList.toggle('is-open', open);
-        container.classList.remove('is-dragging');
-        container.setAttribute('aria-hidden', open ? 'false' : 'true');
-        backdrop?.classList.add('hidden');
-        backdrop?.classList.remove('is-open');
-        syncCalendarDrawerTriggers();
-        if (!open) container.innerHTML = '';
-        return;
-    }
-    const width = getCalendarDrawerWidth();
-    syncCalendarDrawerTriggers();
-    if (open) {
-        const alreadyVisible = !container.classList.contains('hidden') && container.classList.contains('is-open');
-        container.classList.remove('hidden');
-        container.setAttribute('aria-hidden', 'false');
-        backdrop?.classList.remove('hidden');
-        window.requestAnimationFrame(() => backdrop?.classList.add('is-open'));
-        if (alreadyVisible && !immediate && !dragging) {
-            setCalendarDrawerOffset(0);
-            return;
-        }
-        if (immediate || dragging) {
-            setCalendarDrawerOffset(dragging ? width : 0, { dragging });
-            container.classList.add('is-open');
-            return;
-        }
-        setCalendarDrawerOffset(width);
-        window.requestAnimationFrame(() => {
-            container.classList.add('is-open');
-            setCalendarDrawerOffset(0);
-        });
-        return;
-    }
-    container.setAttribute('aria-hidden', 'true');
-    container.classList.remove('is-open');
-    setCalendarDrawerOffset(width, { dragging });
-    backdrop?.classList.remove('is-open');
-    backdrop?._hideTimer && window.clearTimeout(backdrop._hideTimer);
-    backdrop._hideTimer = window.setTimeout(() => {
-        if (isCalendarSyncPanelOpen) return;
-        backdrop?.classList.add('hidden');
-    }, immediate ? 0 : 220);
-    if (immediate) {
-        container.classList.add('hidden');
-        container.innerHTML = '';
-        return;
-    }
-    container._calendarHideTimer = window.setTimeout(() => {
-        if (isCalendarSyncPanelOpen) return;
-        container.classList.add('hidden');
-        container.innerHTML = '';
-    }, 240);
-}
-
-function renderCalendarButton(labelKey, fallback, className, attributes = '') {
-    return `
-        <button type="button" ${attributes}
-            class="inline-flex items-center justify-center rounded-xl px-3 py-2 text-center text-xs font-bold leading-tight whitespace-normal transition-colors ${className}">
-            ${escapeHtml(t(labelKey, fallback))}
-        </button>
-    `;
+    container.classList.toggle('hidden', !open);
+    container.classList.toggle('is-open', open);
+    container.setAttribute('aria-hidden', String(!open));
+    backdrop?.classList.toggle('hidden', !open);
+    backdrop?.classList.toggle('is-open', open);
+    document.querySelectorAll('[data-calendar-sync-trigger]').forEach(button => {
+        button.setAttribute('aria-expanded', String(open));
+        button.setAttribute('aria-haspopup', 'dialog');
+        button.setAttribute('aria-controls', 'calendarSubscriptionSection');
+    });
+    if (!open) window.MpbScheduleUX?.calendarFocus(false);
 }
 
 function renderCalendarBotLink(className = '') {
@@ -206,12 +93,6 @@ function renderCalendarBotLink(className = '') {
             ${escapeHtml(t('schedule.calendar.botManage', 'Open in bot'))}
         </a>
     `;
-}
-
-function getCalendarProfileKindLabel(profile) {
-    return profile?.kind === 'custom'
-        ? t('schedule.calendar.profile.custom', 'Preset')
-        : t('schedule.calendar.profile.builtin', 'Built-in');
 }
 
 function getCalendarLessonModeLabel(profileOrMode) {
@@ -273,73 +154,8 @@ function getCalendarProfileModulePayload(profile) {
     return normalized.sort((a, b) => a.localeCompare(b));
 }
 
-function renderCalendarModuleChips(modules, emptyKey = 'schedule.calendar.currentView.allModules', emptyFallback = 'All modules') {
-    const normalized = Array.isArray(modules) ? modules.filter(Boolean) : [];
-    if (!normalized.length) {
-        return `
-            <span class="inline-flex w-fit rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-300">
-                ${escapeHtml(t(emptyKey, emptyFallback))}
-            </span>
-        `;
-    }
-    return normalized.map((module) => `
-        <span class="inline-flex max-w-full rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-slate-600 ring-1 ring-slate-200 dark:bg-slate-900/60 dark:text-slate-200 dark:ring-slate-700">
-            <span class="break-all whitespace-normal">${escapeHtml(module)}</span>
-        </span>
-    `).join('');
-}
-
-function getCalendarProfileDescription(profile, { compact = false } = {}) {
-    if (!profile) return t('schedule.calendar.summary', 'Personal calendar feed for your active schedule subscriptions and filters.');
-    const parts = [
-        profile.scope_label || profile.entity_name || profile.name,
-        getCalendarLessonModeLabel(profile),
-        ...(compact ? [] : [getCalendarModulesLabel(profile)])
-    ].filter(Boolean);
-    return parts.join(compact ? ' / ' : ' - ');
-}
-
-function renderCalendarValueCard(label, valueHtml, className = '') {
-    return `
-        <div class="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/40 ${className}">
-            <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(label)}</div>
-            <div class="mt-1 line-clamp-2 text-sm font-black leading-5 text-slate-700 dark:text-slate-200">${valueHtml}</div>
-        </div>
-    `;
-}
-
-function renderCalendarPlatformTab(platform, labelKey, fallback, extraClass = '') {
-    const active = calendarPlatform === platform;
-    return `
-        <button type="button" onclick="setCalendarPlatform('${escapeJsString(platform)}')"
-            class="inline-flex items-center justify-center rounded-xl px-3 py-2 text-center text-xs font-black leading-tight whitespace-normal transition-colors ${extraClass} ${active
-                ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
-                : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'}">
-            ${escapeHtml(t(labelKey, fallback))}
-        </button>
-    `;
-}
-
-function renderCalendarDisclosureChevron() {
-    return `
-        <svg class="h-3.5 w-3.5 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-        </svg>
-    `;
-}
-
-window.toggleCalendarSubscriptionPanel = function() {
-    hasUserToggledCalendarPanel = true;
-    isCalendarPanelCollapsed = !isCalendarPanelCollapsed;
-    persistCalendarPanelCollapsed();
-    renderCalendarSubscription();
-}
-
 window.openCalendarSyncPanel = function() {
     isCalendarSyncPanelOpen = true;
-    hasUserToggledCalendarPanel = true;
-    isCalendarPanelCollapsed = false;
-    persistCalendarPanelCollapsed();
     window.MpbUI?.start('calendar_connected');
     renderCalendarSubscription();
 }
@@ -375,548 +191,208 @@ function installCalendarSyncHandle() {
     }
     if (document.body.dataset.calendarResizeBound !== '1') {
         document.body.dataset.calendarResizeBound = '1';
-        window.addEventListener('resize', () => setCalendarDrawerVisibility(isCalendarSyncPanelOpen, { immediate: true }));
+        window.addEventListener('resize', () => setCalendarDrawerVisibility(isCalendarSyncPanelOpen));
     }
-    syncCalendarDrawerTriggers();
+    setCalendarDrawerVisibility(isCalendarSyncPanelOpen);
 }
 
-function renderTelegramCalendarAuthPlaceholder(container) {
-    if (!hasUserToggledCalendarPanel) isCalendarPanelCollapsed = true;
-    const authState = window.mpbTelegramAuthState || {};
-    const cardPaddingClass = getCalendarDrawerWidth() >= 460 ? 'p-6' : 'p-5';
-    const isPending = Boolean(authState.pending);
-    const statusKey = isPending ? 'schedule.calendar.statusSetup' : 'schedule.calendar.statusUnavailable';
-    const statusFallback = getUiLanguage() === 'ru' ? (isPending ? 'Настройка' : 'Недоступно') : (isPending ? 'Setup' : 'Unavailable');
-    const statusClass = isPending
-        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
-        : 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300';
-    const toggleLabel = isCalendarPanelCollapsed
-        ? t('schedule.calendar.expand', 'Expand')
-        : t('schedule.calendar.collapse', 'Collapse');
-    const detail = isPending
-        ? t('schedule.calendar.telegramAuthPending', getUiLanguage() === 'ru' ? 'Входим через Telegram...' : 'Signing in through Telegram...')
-        : t(
-            'schedule.calendar.telegramAuthUnavailable',
-            getUiLanguage() === 'ru'
-                ? 'Для синхронизации нужен вход через Telegram Mini App. Откройте страницу кнопкой Web App из бота.'
-                : 'Calendar sync needs Telegram Mini App sign-in. Open this page from the bot Web App button.'
-        );
-    const bodyHtml = isCalendarPanelCollapsed
-        ? ''
-        : `
-            <div id="calendarSubscriptionBody" class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
-                ${escapeHtml(detail)}
-            </div>
-        `;
+const calendarDialogView = { open: new Set(), focus: '', scroll: 0 };
 
-    container.innerHTML = `
-        <div class="calendar-sync-card rounded-3xl border border-slate-200 bg-white ${cardPaddingClass} shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div class="min-w-0">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <span class="rounded-full px-3 py-1 text-xs font-black ${statusClass}">${escapeHtml(t(statusKey, statusFallback))}</span>
-                        <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:bg-slate-900 dark:text-slate-300">${escapeHtml(t('schedule.calendar.openDrawer', 'Calendar'))}</span>
-                    </div>
-                    <h2 class="mt-3 text-lg font-black text-slate-900 dark:text-slate-100">${escapeHtml(t('schedule.calendar.openDrawer', 'Calendar'))}</h2>
-                    <p class="mt-1 max-w-3xl text-sm text-slate-600 dark:text-slate-300">${escapeHtml(t('schedule.calendar.description', 'Connect your personal ICS feed to Apple Calendar, Google Calendar, or any other calendar app.'))}</p>
-                </div>
-                <div class="flex flex-wrap items-center gap-2">
-                    ${renderCalendarBotLink('border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50')}
-                    <button type="button" onclick="toggleCalendarSubscriptionPanel()"
-                        aria-expanded="${String(!isCalendarPanelCollapsed)}"
-                        aria-controls="calendarSubscriptionBody"
-                        aria-label="${escapeHtml(toggleLabel)}"
-                        class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
-                        <span>${escapeHtml(toggleLabel)}</span>
-                        <svg class="h-3.5 w-3.5 transition-transform ${isCalendarPanelCollapsed ? '' : 'rotate-180'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                        </svg>
-                    </button>
-                    <button type="button" onclick="closeCalendarSyncPanel()"
-                        aria-label="${escapeHtml(t('schedule.calendar.hidePanel', 'Hide calendar sync'))}"
-                        class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-xs font-black text-slate-500 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">✕</button>
-                </div>
-            </div>
-            ${bodyHtml}
-        </div>
-    `;
-    focusCalendarSyncPanelIfRequested(container);
+function calendarButton(key, fallback, action, variant = '', focus = key) {
+    return `<button type="button" class="calendar-button ${variant}" data-calendar-focus="${escapeHtml(focus)}" onclick="${escapeHtml(action)}">${escapeHtml(t(key, fallback))}</button>`;
+}
+
+function getCalendarProfileTitle(profile) {
+    if (!profile) return t('schedule.calendar.dialog.noProfile', 'Choose a subscription');
+    if (profile.kind !== 'custom') return getCalendarLessonModeLabel(profile);
+    // Older automatically generated names contain counts that can become stale.
+    const source = String(profile.entity_name || '');
+    const name = String(profile.name || source);
+    const generated = name === source || name.replace(/(?: - exams)?(?: \(\d+ modules\))?$/, '') === source;
+    return generated ? source : name;
+}
+
+function getCalendarProfileDescription(profile) {
+    if (!profile) return '';
+    if (profile.kind !== 'custom') return t('schedule.calendar.dialog.combined', 'From your Telegram and website subscriptions');
+    const modules = getCalendarProfileModules(profile);
+    const total = isCalendarProfileOnCurrentEntity(profile) ? getCalendarAvailableModulesForProfile(profile).length : 0;
+    const count = modules.length && total
+        ? t('schedule.calendar.dialog.moduleCount', '{count} of {total} modules', { count: modules.length, total })
+        : getCalendarModulesLabel(profile);
+    return `${count} · ${getCalendarLessonModeLabel(profile)}`;
+}
+
+function getCalendarTimezoneLabel(value, fallback = '') {
+    return value === 'Europe/Moscow'
+        ? t('schedule.calendar.dialog.moscow', 'Moscow, UTC+3')
+        : (fallback || value || 'UTC');
+}
+
+function renderCalendarDialog(body) {
+    const container = document.getElementById('calendarSubscriptionSection');
+    const active = document.activeElement;
+    const hadFocus = container.contains(active);
+    if (container.dataset.loading !== 'true') {
+        container.querySelectorAll('details[id]').forEach(el => {
+            if (el.open) calendarDialogView.open.add(el.id);
+            else calendarDialogView.open.delete(el.id);
+        });
+        if (hadFocus) calendarDialogView.focus = active.dataset.calendarFocus || '';
+        calendarDialogView.scroll = container.scrollTop;
+    }
+    const loading = Boolean(calendarSubscriptionState.loading);
+    container.dataset.loading = String(loading);
+    container.setAttribute('aria-busy', String(loading));
+    container.innerHTML = `<div class="calendar-sync-card">
+        <header class="calendar-dialog-header">
+            <div><h2 id="calendar-dialog-title">${escapeHtml(t('schedule.calendar.dialog.title', 'Add your schedule'))}</h2>
+            <p>${escapeHtml(t('schedule.calendar.dialog.subtitle', 'To your calendar app'))}</p></div>
+            <button type="button" class="calendar-close" data-calendar-focus="close" onclick="closeCalendarSyncPanel()" aria-label="${escapeHtml(t('schedule.calendar.hidePanel', 'Close'))}">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </button>
+        </header>${body}</div>`;
+    container.querySelectorAll('details[id]').forEach(el => { if (calendarDialogView.open.has(el.id)) el.open = true; });
+    if (hadFocus) {
+        const target = [...container.querySelectorAll('[data-calendar-focus]')].find(el => el.dataset.calendarFocus === calendarDialogView.focus);
+        (target || container.querySelector('.calendar-close')).focus({ preventScroll: true });
+    }
+    container.scrollTop = calendarDialogView.scroll;
+    window.MpbScheduleUX?.calendarFocus(true);
+}
+
+function renderCalendarSourceSettings(profile, state) {
+    if (!profile) return '';
+    const id = JSON.stringify(profile.id);
+    const custom = profile.kind === 'custom';
+    const available = getCalendarAvailableModulesForProfile(profile);
+    const draft = getCalendarProfileModuleDraft(profile);
+    const canEditModules = custom && isCalendarProfileOnCurrentEntity(profile) && available.length;
+    const mode = `<label class="calendar-field">${escapeHtml(t('schedule.calendar.meta.mode', 'Classes'))}
+        <select data-calendar-focus="mode" aria-label="${escapeHtml(t('schedule.calendar.meta.mode', 'Classes'))}" onchange="${escapeHtml(`updateCalendarSubscriptionProfile(${id}, {lesson_mode:this.value})`)}">
+            <option value="all" ${profile.lesson_mode !== 'exams_only' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.all', 'All classes'))}</option>
+            <option value="exams_only" ${profile.lesson_mode === 'exams_only' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.exams', 'Exams only'))}</option>
+        </select></label>`;
+    const timezone = `<label class="calendar-field">${escapeHtml(t('schedule.calendar.meta.timezone', 'Timezone'))}
+        <select data-calendar-focus="timezone" aria-label="${escapeHtml(t('schedule.calendar.meta.timezone', 'Timezone'))}" onchange="${escapeHtml(`updateCalendarSubscriptionProfile(${id}, {timezone:this.value})`)}">
+            ${(state.timezone_options || []).map(option => `<option value="${escapeHtml(option.value)}" ${option.value === profile.timezone ? 'selected' : ''}>${escapeHtml(getCalendarTimezoneLabel(option.value, option.label))}</option>`).join('')}
+        </select></label>`;
+    const moduleEditor = canEditModules ? `<fieldset class="calendar-modules">
+        <legend>${escapeHtml(t('schedule.calendar.modules.editorTitle', 'Choose modules'))}</legend>
+        ${available.map((module, index) => `<label><input type="checkbox" data-calendar-focus="module-${index}" ${draft.has(module) ? 'checked' : ''}
+            onchange="${escapeHtml(`setCalendarPresetModuleDraft(${id}, ${JSON.stringify(module)}, this.checked)`)}"><span>${escapeHtml(module)}</span></label>`).join('')}
+        <div class="calendar-actions">
+            ${calendarButton('schedule.calendar.modules.save', 'Save modules', `saveCalendarProfileModuleDraft(${id})`)}
+            ${calendarButton('schedule.calendar.modules.useAll', 'Select all', `selectAllCalendarPresetModules(${id})`, 'calendar-link')}
+            ${calendarButton('schedule.calendar.modules.resetDraft', 'Reset', `resetCalendarProfileModuleDraft(${id})`, 'calendar-link')}
+        </div></fieldset>` : custom ? `<p class="calendar-note">${escapeHtml(t('schedule.calendar.modules.openScheduleHint', 'Open this schedule to edit modules.'))}</p>
+            ${calendarButton('schedule.calendar.modules.openSchedule', 'Open schedule', `openCalendarPresetSchedule(${id})`)}` : '';
+    return `<div class="calendar-settings">
+        ${custom ? `<div class="calendar-fields">${mode}${timezone}</div>${moduleEditor}
+        <div class="calendar-actions">${calendarButton('schedule.calendar.rename', 'Rename', `renameCalendarSubscriptionProfile(${id})`, 'calendar-link')}
+        ${isCalendarProfileOnCurrentEntity(profile) ? calendarButton('schedule.calendar.updateModules', 'Use current filters', `updateCalendarSubscriptionProfile(${id}, {modules:window.getCalendarCurrentViewModules()})`, 'calendar-link') : ''}</div>`
+        : `<p>${escapeHtml(t('schedule.calendar.dialog.combinedHint', 'This subscription combines your saved schedules. Manage its sources below or in Telegram.'))}</p>
+            <p class="calendar-note">${escapeHtml(getCalendarTimezoneLabel(profile.timezone, profile.timezone_label))}</p>`}
+    </div>`;
 }
 
 function renderCalendarSubscription() {
-    const container = document.getElementById('calendarSubscriptionSection');
-    if (!container) return;
-    const cardPaddingClass = getCalendarDrawerWidth() >= 460 ? 'p-6' : 'p-5';
-
-    if (!isCalendarSyncPanelOpen) {
-        setCalendarDrawerVisibility(false);
-        return;
-    }
-    setCalendarDrawerVisibility(true, { dragging: isCalendarDrawerDragging });
-    const state = calendarSubscriptionState || createDefaultCalendarSubscriptionState();
-    const selectedProfile = window.getSelectedCalendarProfile?.() || state.profiles?.[0] || null;
-    const embeddedRail = isDesktopCalendarRail();
-    const isReady = Boolean(state.enabled && state.sync_enabled && selectedProfile?.links?.http_url);
-    const statusKey = state.sync_enabled
-        ? (state.eligibility?.available ? 'schedule.calendar.statusReady' : 'schedule.calendar.statusSetup')
-        : 'schedule.calendar.statusPaused';
-    const statusFallback = state.sync_enabled
-        ? (state.eligibility?.available ? 'Ready' : 'Setup')
-        : 'Paused';
-    const statusClass = isReady
-        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-        : (!state.sync_enabled
-            ? 'bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-300'
-            : 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300');
-
+    if (!document.getElementById('calendarSubscriptionSection')) return;
+    if (!isCalendarSyncPanelOpen) { setCalendarDrawerVisibility(false); return; }
+    setCalendarDrawerVisibility(true);
+    const state = calendarSubscriptionState;
+    const profiles = state.profiles || [];
+    const profile = window.getSelectedCalendarProfile?.() || profiles[0];
+    const message = (text, action = '', error = false) => `<div class="calendar-dialog-body"><div class="calendar-message ${error ? 'is-error' : ''}" role="${error ? 'alert' : 'status'}"><p>${escapeHtml(text)}</p>${action}</div></div>`;
     if (state.loading) {
-        container.innerHTML = `
-            <div class="rounded-3xl border border-slate-200 bg-white ${cardPaddingClass} shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                <div class="flex items-center gap-3 text-sm font-bold text-slate-600 dark:text-slate-300">
-                    <span class="h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"></span>
-                    ${escapeHtml(t('schedule.calendar.loading', 'Loading your personal subscription link...'))}
-                </div>
-            </div>
-        `;
+        renderCalendarDialog(message(t('schedule.calendar.loading', 'Loading your subscription…')));
         return;
     }
-
-    if (state.hasError) {
-        container.innerHTML = `
-            <div class="rounded-3xl border border-rose-200 bg-rose-50 p-5 shadow-sm dark:border-rose-900/60 dark:bg-rose-950/30">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <div class="text-sm font-black text-rose-700 dark:text-rose-300">${escapeHtml(t('schedule.calendar.error', 'Failed to load the calendar subscription.'))}</div>
-                        <div class="mt-1 text-xs text-rose-600/80 dark:text-rose-200/80">${escapeHtml(t('schedule.action.retry', 'Retry'))}</div>
-                    </div>
-                    ${renderCalendarButton('schedule.action.retry', 'Retry', 'bg-rose-600 text-white hover:bg-rose-700', 'onclick="refreshCalendarSubscription()"')}
-                </div>
-            </div>
-        `;
-        return;
-    }
-
     if (!scheduleAuthUser) {
-        if (window.mpbTelegramWebApp?.isActive) {
-            renderTelegramCalendarAuthPlaceholder(container);
-        } else {
-            container.innerHTML = `
-                <div class="calendar-sync-card rounded-3xl border border-slate-200 bg-white ${cardPaddingClass} shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                    <div class="flex flex-col gap-4">
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">${escapeHtml(t('schedule.calendar.statusSetup', 'Setup'))}</span>
-                            <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:bg-slate-900 dark:text-slate-300">${escapeHtml(t('schedule.calendar.openDrawer', 'Calendar'))}</span>
-                        </div>
-                        <div>
-                            <h2 class="text-lg font-black text-slate-900 dark:text-slate-100">${escapeHtml(t('schedule.calendar.openDrawer', 'Calendar'))}</h2>
-                            <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">${escapeHtml(t('schedule.calendar.authRequired', 'Sign in on the website or open the bot to manage your personal calendar feed.'))}</p>
-                        </div>
-                        <div class="flex flex-wrap gap-2">
-                            <a href="/login" class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500">${escapeHtml(t('schedule.calendar.signIn', 'Sign in'))}</a>
-                            ${renderCalendarBotLink('border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50')}
-                        </div>
-                    </div>
-                </div>
-            `;
-            focusCalendarSyncPanelIfRequested(container);
-        }
+        const miniApp = window.mpbTelegramWebApp?.isActive;
+        const pending = miniApp && window.mpbTelegramAuthState?.pending;
+        const key = pending ? 'schedule.calendar.telegramAuthPending' : miniApp ? 'schedule.calendar.telegramAuthUnavailable' : 'schedule.calendar.authRequired';
+        const signIn = miniApp ? '' : `<a class="calendar-button calendar-primary" href="/login?next=${encodeURIComponent(location.pathname + location.search)}">${escapeHtml(t('schedule.calendar.signIn', 'Sign in'))}</a>`;
+        renderCalendarDialog(message(t(key, 'Sign in to manage your calendar subscriptions.'), `${signIn}${pending ? '' : renderCalendarBotLink('calendar-button')}`));
         return;
     }
-
-    const profiles = Array.isArray(state.profiles) ? state.profiles :[];
-    const health = selectedProfile?.health || {};
-    const eventCount = Number.isFinite(Number(health.event_count)) ? Number(health.event_count) : 0;
-    const eventCountLabel = t('schedule.calendar.eventsCount', '{count} events', { count: eventCount });
-    const nextEventLabel = health.next_event_at
-        ? formatCalendarDateTime(health.next_event_at, health.next_event_label || '')
-        : escapeHtml(t('schedule.calendar.noNextEvent', 'No upcoming event'));
-    const updatedAtLabel = health.source_updated_at
-        ? formatCalendarDateTime(health.source_updated_at, '')
-        : escapeHtml(t('schedule.calendar.notUpdatedYet', 'Not updated yet'));
-    const panelWidth = getCalendarDrawerWidth();
-    const panelUsesCompactLayout = panelWidth < 430;
-    const panelUsesWideLayout = panelWidth >= 460;
-    const panelCardPaddingClass = panelUsesWideLayout ? 'p-6' : 'p-5';
-    const profileTextCompact = panelWidth < 560;
-    const selectedProfileDescription = getCalendarProfileDescription(selectedProfile, { compact: profileTextCompact });
-    const profileKindLabel = getCalendarProfileKindLabel(selectedProfile);
-    const lessonModeLabel = getCalendarLessonModeLabel(selectedProfile);
-    const modulesLabel = getCalendarModulesLabel(selectedProfile);
-    const unavailableMessage = state.eligibility?.detail || t('schedule.calendar.unavailable', 'Calendar subscription requires a linked Telegram account.');
-    const urlValue = selectedProfile?.links?.http_url || state.http_url || '';
-    const maskedUrl = selectedProfile?.links?.masked_http_url || state.masked_http_url || urlValue;
-    const isRevealed = selectedProfile?.id && revealedCalendarProfileIds.has(selectedProfile.id);
-    const shownUrl = isRevealed ? urlValue : maskedUrl;
-    const canUpdateModulesFromCurrentView = isCalendarProfileOnCurrentEntity(selectedProfile);
-    const selectedProfileModules = getCalendarProfileModules(selectedProfile);
-    const availableProfileModules = getCalendarAvailableModulesForProfile(selectedProfile);
-    const moduleDraft = getCalendarProfileModuleDraft(selectedProfile);
-    const moduleDraftCount = moduleDraft.size;
-    const moduleEditorCanSave = Boolean(selectedProfile?.kind === 'custom' && canUpdateModulesFromCurrentView && availableProfileModules.length);
-    const splitPanelClass = panelUsesCompactLayout ? 'flex flex-col gap-4' : 'grid gap-3 grid-cols-[minmax(0,1fr)_auto] items-start';
-    const splitActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 grid-cols-2';
-    const sectionHeaderClass = panelUsesCompactLayout ? 'flex flex-col gap-3' : 'grid gap-3 grid-cols-[minmax(0,1fr)_auto] items-start';
-    const sectionActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'flex flex-wrap justify-end gap-2';
-    const metadataGridClass = panelUsesCompactLayout ? 'sm:grid-cols-2' : 'grid-cols-2';
-    const moduleDraftGridClass = panelUsesCompactLayout ? 'sm:grid-cols-2' : 'grid-cols-2';
-    const diagnosticsGridClass = panelUsesCompactLayout ? 'sm:grid-cols-2' : 'grid-cols-2';
-    const connectionUrlGridClass = panelUsesCompactLayout ? 'grid gap-2' : 'grid gap-3 grid-cols-[minmax(0,1fr)_auto] items-start';
-    const connectionTabGridClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 grid-cols-3';
-    const connectionLinkActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 grid-cols-2';
-    const platformActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 grid-cols-2';
-    const destructiveActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 grid-cols-2';
-    const bodyHeaderClass = panelUsesCompactLayout ? 'flex flex-col gap-4' : 'grid gap-4 grid-cols-[minmax(0,1fr)_auto] items-start';
-    const bodyHeaderActionsClass = panelUsesCompactLayout ? 'grid gap-2 sm:grid-cols-2' : 'flex max-w-[22rem] flex-wrap items-center justify-end gap-2';
-    const summaryGridClass = panelUsesCompactLayout ? 'sm:grid-cols-2' : 'grid-cols-2';
-    const profileButtons = profiles.map((profile) => {
-        const active = profile.selected;
-        return `
-            <button type="button" onclick="selectCalendarSubscriptionProfile('${escapeJsString(profile.id)}')"
-                class="group min-w-0 rounded-2xl border p-3.5 text-left transition-all ${active
-                    ? 'border-blue-300 bg-blue-50 text-blue-800 shadow-sm shadow-blue-500/10 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300 dark:hover:border-blue-800 dark:hover:bg-slate-800'}">
-                <div class="flex items-start justify-between gap-3">
-                    <div class="min-w-0">
-                        <div class="flex flex-wrap items-center gap-2">
-                            <div class="truncate text-sm font-black">${escapeHtml(profile.name)}</div>
-                            <span class="rounded-full bg-white/80 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.16em] text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(getCalendarProfileKindLabel(profile))}</span>
-                        </div>
-                        <p class="mt-1 line-clamp-2 text-xs font-medium opacity-80">${escapeHtml(getCalendarProfileDescription(profile, { compact: profileTextCompact }))}</p>
-                        <div class="mt-2 flex flex-wrap gap-1.5">
-                            <span class="rounded-full bg-white/80 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(getCalendarLessonModeLabel(profile))}</span>
-                            <span class="rounded-full bg-white/80 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900/60 dark:text-slate-300 dark:ring-slate-700">${escapeHtml(getCalendarModulesLabel(profile))}</span>
-                        </div>
-                    </div>
-                    <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}">
-                        ${active ? '<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>' : ''}
-                    </span>
-                </div>
-            </button>
-        `;
-    }).join('');
-
-    const currentViewSave = currentEntity?.id
-        ? `
-            <div class="rounded-2xl border border-blue-100 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20">
-                <div class="${splitPanelClass}">
-                    <div class="min-w-0">
-                        <div class="text-xs font-black uppercase tracking-[0.18em] text-blue-500 dark:text-blue-300">${escapeHtml(t('schedule.calendar.currentView.title', 'Current page preset'))}</div>
-                        <div class="mt-1 text-sm font-black text-slate-900 dark:text-slate-100">${window.getCalendarCurrentViewSummary()}</div>
-                        <p class="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">${escapeHtml(t('schedule.calendar.currentView.description', 'Save this page as an iCal feed.'))}</p>
-                    </div>
-                    <div class="${splitActionsClass}">
-                        <select onchange="window.calendarCurrentViewMode=this.value; renderCalendarSubscription();"
-                            class="rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none dark:border-blue-900/60 dark:bg-slate-900 dark:text-slate-100">
-                            <option value="all" ${window.calendarCurrentViewMode === 'all' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.all', 'All classes'))}</option>
-                            <option value="exams_only" ${window.calendarCurrentViewMode === 'exams_only' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.exams', 'Exams only'))}</option>
-                        </select>
-                        ${renderCalendarButton('schedule.calendar.currentView.save', 'Save', 'bg-blue-600 text-white hover:bg-blue-700 dark:hover:bg-blue-500', 'onclick="createCalendarProfileFromCurrentView()"')}
-                    </div>
-                </div>
-            </div>
-        `
-        : '';
-
-    const healthRows = selectedProfile ? [
-        [t('schedule.calendar.health.cached', 'Cache'), getCalendarCacheStatusLabel(health.cache_status)],
-        [t('schedule.calendar.meta.scope', 'Scope'), escapeHtml(selectedProfile.scope_label || selectedProfile.entity_name || selectedProfile.name)],
-        [t('schedule.calendar.health.events', 'Events'), escapeHtml(eventCountLabel)],
-        [t('schedule.calendar.health.next', 'Next'), nextEventLabel],
-        [t('schedule.calendar.health.updated', 'Cache updated'), updatedAtLabel]
-    ] : [];
-    const summaryOverview = selectedProfile
-        ? `
-            <div class="grid gap-2 ${summaryGridClass}">
-                ${renderCalendarValueCard(t('schedule.calendar.activePreset', 'Active preset'), escapeHtml(selectedProfile.name), 'bg-slate-50 dark:bg-slate-900/40')}
-                ${renderCalendarValueCard(t('schedule.calendar.health.events', 'Events'), escapeHtml(eventCountLabel), 'bg-slate-50 dark:bg-slate-900/40')}
-                ${renderCalendarValueCard(t('schedule.calendar.health.next', 'Next'), nextEventLabel, 'bg-slate-50 dark:bg-slate-900/40')}
-                ${renderCalendarValueCard(t('schedule.calendar.health.updated', 'Cache updated'), updatedAtLabel, 'bg-slate-50 dark:bg-slate-900/40')}
-            </div>
-        `
-        : '';
-    const compactSummary = summaryOverview ? `<div class="mt-4">${summaryOverview}</div>` : '';
-
-    const moduleDetailsPanel = selectedProfile
-        ? `
-            <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/60">
-                <div class="${sectionHeaderClass}">
-                    <div class="min-w-0">
-                        <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400">${escapeHtml(t('schedule.calendar.modules.title', 'Preset modules'))}</div>
-                        <p class="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">${escapeHtml(selectedProfileModules.length
-                            ? t('schedule.calendar.modules.selectedDescription', 'Only these modules are included in the feed.')
-                            : t('schedule.calendar.modules.allDescription', 'This preset includes every module for this schedule.'))}</p>
-                    </div>
-                    <span class="w-fit rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700">
-                        ${escapeHtml(modulesLabel)}
-                    </span>
-                </div>
-                <div class="mt-3 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto pr-1">
-                    ${renderCalendarModuleChips(selectedProfileModules)}
-                </div>
-                ${selectedProfile.kind === 'custom' ? `
-                    ${moduleEditorCanSave ? `
-                        <div class="mt-4 rounded-2xl border border-blue-100 bg-white p-3 dark:border-blue-900/60 dark:bg-slate-900/60">
-                            <div class="${sectionHeaderClass}">
-                                <div>
-                                    <div class="text-xs font-black text-slate-900 dark:text-slate-100">${escapeHtml(t('schedule.calendar.modules.editorTitle', 'Edit modules'))}</div>
-                                    <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">${escapeHtml(t('schedule.calendar.modules.editorDescription', 'Pick modules from the currently opened schedule and save the preset.'))}</p>
-                                </div>
-                                <div class="${sectionActionsClass}">
-                                    ${renderCalendarButton('schedule.calendar.modules.useAll', 'Use all modules', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="selectAllCalendarPresetModules('${escapeJsString(selectedProfile.id)}')"`) }
-                                    ${renderCalendarButton('schedule.calendar.modules.resetDraft', 'Reset', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="resetCalendarProfileModuleDraft('${escapeJsString(selectedProfile.id)}')"`) }
-                                </div>
-                            </div>
-                            <div class="mt-3 grid max-h-52 gap-2 overflow-y-auto pr-1 ${moduleDraftGridClass}">
-                                ${availableProfileModules.map((module) => {
-                                    const checked = moduleDraft.has(module);
-                                    return `
-                                        <label class="flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${checked
-                                            ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200'
-                                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'}">
-                                            <input type="checkbox" ${checked ? 'checked' : ''}
-                                                onchange="setCalendarPresetModuleDraft('${escapeJsString(selectedProfile.id)}', '${escapeJsString(module)}', this.checked)"
-                                                class="h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
-                                            <span class="min-w-0 flex-1 break-all whitespace-normal">${escapeHtml(module)}</span>
-                                        </label>
-                                    `;
-                                }).join('')}
-                            </div>
-                            <div class="${splitPanelClass}">
-                                <div class="text-xs font-medium text-slate-500 dark:text-slate-400">
-                                    ${escapeHtml(t('schedule.calendar.modules.draftCount', 'Selected now: {count}', { count: moduleDraftCount }))}
-                                </div>
-                                ${renderCalendarButton('schedule.calendar.modules.save', 'Save modules', 'bg-blue-600 text-white hover:bg-blue-700 dark:hover:bg-blue-500', `onclick="saveCalendarProfileModuleDraft('${escapeJsString(selectedProfile.id)}')"`) }
-                            </div>
-                        </div>
-                    ` : `
-                        <div class="mt-4 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300 sm:flex-row sm:items-center sm:justify-between">
-                            <span>${escapeHtml(t('schedule.calendar.modules.openScheduleHint', 'Open this preset schedule page to edit its module checklist.'))}</span>
-                            ${selectedProfile.entity_type && selectedProfile.entity_id
-                                ? renderCalendarButton('schedule.calendar.modules.openSchedule', 'Open schedule', 'border border-amber-200 bg-white text-amber-700 hover:bg-amber-100 dark:border-amber-900/70 dark:bg-slate-900 dark:text-amber-300 dark:hover:bg-amber-950/40', `onclick="openCalendarPresetSchedule('${escapeJsString(selectedProfile.id)}')"`)
-                                : ''}
-                        </div>
-                    `}
-                ` : ''}
-            </div>
-        `
-        : '';
-
-    const profileSettings = selectedProfile
-        ? `
-            <div class="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/40">
-                <div class="${sectionHeaderClass}">
-                    <div class="min-w-0">
-                        <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400">${escapeHtml(t('schedule.calendar.profileSettings', 'Profile settings'))}</div>
-                        <div class="mt-1 text-base font-black text-slate-900 dark:text-slate-100">${escapeHtml(selectedProfile.name)}</div>
-                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">${escapeHtml(selectedProfileDescription)}</p>
-                    </div>
-                    ${selectedProfile.kind === 'custom' ? `
-                        <div class="${sectionActionsClass}">
-                            ${renderCalendarButton('schedule.calendar.rename', 'Rename', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="renameCalendarSubscriptionProfile('${escapeJsString(selectedProfile.id)}')"`) }
-                            ${canUpdateModulesFromCurrentView ? renderCalendarButton('schedule.calendar.updateModules', 'Use current filters', 'border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50', `onclick="updateCalendarSubscriptionProfile('${escapeJsString(selectedProfile.id)}', { modules: window.getCalendarCurrentViewModules() })"`) : ''}
-                        </div>
-                    ` : ''}
-                </div>
-                <div class="mt-4 grid gap-2 ${metadataGridClass}">
-                    <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70">
-                        <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(t('schedule.calendar.meta.type', 'Type'))}</div>
-                        <div class="mt-1 text-xs font-bold text-slate-700 dark:text-slate-200">${escapeHtml(profileKindLabel)}</div>
-                    </div>
-                    <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70">
-                        <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(t('schedule.calendar.meta.mode', 'Mode'))}</div>
-                        ${selectedProfile.kind === 'custom' ? `
-                            <select onchange="updateCalendarSubscriptionProfile('${escapeJsString(selectedProfile.id)}', { lesson_mode: this.value })"
-                                class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                                <option value="all" ${selectedProfile.lesson_mode === 'all' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.all', 'All classes'))}</option>
-                                <option value="exams_only" ${selectedProfile.lesson_mode === 'exams_only' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.exams', 'Exams only'))}</option>
-                            </select>
-                        ` : `<div class="mt-1 text-xs font-bold text-slate-700 dark:text-slate-200">${escapeHtml(lessonModeLabel)}</div>`}
-                    </div>
-                    <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70">
-                        <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(t('schedule.calendar.meta.timezone', 'Timezone'))}</div>
-                        ${selectedProfile.kind === 'custom' ? `
-                            <select onchange="updateCalendarSubscriptionProfile('${escapeJsString(selectedProfile.id)}', { timezone: this.value })"
-                                class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                                ${(state.timezone_options || [{ value: 'Europe/Moscow', label: 'GMT+3 (Moscow)' }]).map((option) => `<option value="${escapeHtml(option.value)}" ${option.value === selectedProfile.timezone ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
-                            </select>
-                        ` : `<div class="mt-1 text-xs font-bold text-slate-700 dark:text-slate-200">${escapeHtml(selectedProfile.timezone_label || 'GMT+3 (Moscow)')}</div>`}
-                    </div>
-                    <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70">
-                        <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(t('schedule.calendar.meta.modules', 'Modules'))}</div>
-                        <div class="mt-1 text-xs font-bold text-slate-700 dark:text-slate-200">${escapeHtml(modulesLabel)}</div>
-                    </div>
-                    <div class="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/70">
-                        <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(t('schedule.calendar.meta.subscriptions', 'Subscriptions'))}</div>
-                        <div class="mt-1 text-xs font-bold text-slate-700 dark:text-slate-200">${escapeHtml(String(selectedProfile.subscription_count ?? 0))}</div>
-                    </div>
-                </div>
-                ${moduleDetailsPanel}
-            </div>
-        `
-        : '';
-
-    const platformGuideKey = calendarPlatform === 'google'
-        ? 'schedule.calendar.platform.googleHint'
-        : calendarPlatform === 'outlook'
-            ? 'schedule.calendar.platform.outlookHint'
-            : 'schedule.calendar.platform.appleHint';
-    const platformGuideFallback = calendarPlatform === 'google'
-        ? 'Copy the HTTPS URL and add it in Google Calendar from Other calendars -> From URL.'
-        : calendarPlatform === 'outlook'
-            ? 'Copy the HTTPS URL and add it as an internet calendar in Outlook or another calendar app.'
-            : 'Use the iOS / Mac button to open the subscription directly in Apple Calendar.';
-    const platformPrimaryAction = calendarPlatform === 'apple'
-        ? renderCalendarButton('schedule.calendar.apple', 'Open on iOS / Mac', 'bg-blue-600 text-white hover:bg-blue-700 dark:hover:bg-blue-500', `onclick="openCalendarProfileLink('webcal')"`)
-        : renderCalendarButton('schedule.calendar.copy', 'Copy link', 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500', 'onclick="copyCalendarSubscriptionLink(event)"');
-    const connectionPanel = state.eligibility?.available
-        ? `
-            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/60">
-                <div class="${sectionHeaderClass}">
-                    <div class="min-w-0">
-                        <div class="text-xs font-black uppercase tracking-[0.18em] text-slate-400">${escapeHtml(t('schedule.calendar.connectionTitle', 'Connection'))}</div>
-                        <div class="mt-1 text-base font-black text-slate-900 dark:text-slate-100">${escapeHtml(isReady ? t('schedule.calendar.connectionReady', 'Subscription link is ready') : t('schedule.calendar.connectionNeedsSetup', 'Subscription needs attention'))}</div>
-                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">${escapeHtml(t('schedule.calendar.connectionDescription', panelUsesCompactLayout ? 'Choose the calendar app and use the private feed URL.' : 'Choose the target calendar app, then copy or open the private URL.'))}</p>
-                    </div>
-                    ${isReady ? `<span class="w-fit rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">${escapeHtml(t('schedule.calendar.linkReady', 'Link ready'))}</span>` : ''}
-                </div>
-                ${isReady ? `
-                    <div class="mt-4 ${connectionUrlGridClass}">
-                        <input readonly value="${escapeHtml(shownUrl)}"
-                            class="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-600 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                        <div class="${connectionLinkActionsClass}">
-                            ${renderCalendarButton(isRevealed ? 'schedule.calendar.hide' : 'schedule.calendar.reveal', isRevealed ? 'Hide' : 'Show', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="toggleCalendarProfileReveal('${escapeJsString(selectedProfile.id)}')"`) }
-
-                        </div>
-                    </div>
-                    <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/50">
-                        <div class="${connectionTabGridClass}">
-                            ${renderCalendarPlatformTab('apple', 'schedule.calendar.platform.apple', 'iOS / Mac', panelUsesCompactLayout ? 'w-full' : '')}
-                            ${renderCalendarPlatformTab('google', 'schedule.calendar.platform.google', 'Google', panelUsesCompactLayout ? 'w-full' : '')}
-                            ${renderCalendarPlatformTab('outlook', 'schedule.calendar.platform.outlook', 'Outlook / other', panelUsesCompactLayout ? 'w-full' : '')}
-                        </div>
-                        <div class="${splitPanelClass} mt-3">
-                            <p class="text-sm font-medium text-slate-600 dark:text-slate-300">${escapeHtml(t(platformGuideKey, platformGuideFallback))}</p>
-                            <div class="${platformActionsClass}">
-                                ${platformPrimaryAction}
-                                ${renderCalendarButton('schedule.calendar.preview', 'Preview feed', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="openCalendarProfileLink('preview')"`) }
-                                ${renderCalendarButton('schedule.calendar.download', 'Download ICS', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="openCalendarProfileLink('download')"`) }
-                            </div>
-                        </div>
-                    </div>
-                ` : `
-                    <div class="mt-4 flex flex-col gap-3 rounded-xl bg-amber-50 px-3 py-3 text-sm font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 sm:flex-row sm:items-center sm:justify-between">
-                        <span>${escapeHtml(unavailableMessage)}</span>
-                        ${!state.sync_enabled ? renderCalendarButton('schedule.calendar.enable', 'Enable', 'bg-amber-600 text-white hover:bg-amber-700', `onclick="toggleCalendarSync(true)"`) : ''}
-                    </div>
-                `}
-            </div>
-        `
-        : `
-            <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
-                ${escapeHtml(t('schedule.calendar.unavailable', unavailableMessage))}
-            </div>
-        `;
-
-    const diagnosticsPanel = selectedProfile
-        ? `
-            <details class="group rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/40">
-                <summary class="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-slate-800 dark:text-slate-100">
-                    <span>${escapeHtml(t('schedule.calendar.diagnostics', 'Diagnostics and management'))}</span>
-                    ${renderCalendarDisclosureChevron()}
-                </summary>
-                <div class="mt-4 grid gap-2 ${diagnosticsGridClass}">
-                    ${healthRows.map(([label, value]) => renderCalendarValueCard(label, value)).join('')}
-                </div>
-                <div class="mt-4 rounded-2xl border border-rose-100 bg-rose-50/50 p-4 dark:border-rose-900/50 dark:bg-rose-950/20">
-                    <div class="${sectionHeaderClass}">
-                        <div>
-                            <div class="text-xs font-black uppercase tracking-[0.16em] text-rose-500 dark:text-rose-300">${escapeHtml(t('schedule.calendar.dangerZone', 'Danger zone'))}</div>
-                            <p class="mt-1 text-sm font-medium text-rose-700 dark:text-rose-200">${escapeHtml(t('schedule.calendar.dangerDescription', 'Resetting or disabling affects all external calendar apps using this link.'))}</p>
-                        </div>
-                        <div class="${destructiveActionsClass}">
-                            ${renderCalendarButton('schedule.calendar.reset', 'Reset link', 'border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 dark:border-rose-900/70 dark:bg-slate-800 dark:text-rose-300 dark:hover:bg-rose-950/30', 'onclick="resetCalendarSubscription()"')}
-                            ${renderCalendarButton(state.sync_enabled ? 'schedule.calendar.disable' : 'schedule.calendar.enable', state.sync_enabled ? 'Disable' : 'Enable', 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700', `onclick="toggleCalendarSync(${state.sync_enabled ? 'false' : 'true'})"`)}
-                            ${selectedProfile.can_delete ? renderCalendarButton('schedule.calendar.delete', 'Delete preset', 'border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 dark:border-rose-900/70 dark:bg-slate-800 dark:text-rose-300 dark:hover:bg-rose-950/30', `onclick="deleteCalendarSubscriptionProfile('${escapeJsString(selectedProfile.id)}')"`) : ''}
-                        </div>
-                    </div>
-                </div>
-            </details>
-        `
-        : '';
-    const toggleLabel = isCalendarPanelCollapsed
-        ? t('schedule.calendar.expand', 'Expand')
-        : t('schedule.calendar.collapse', 'Collapse');
-    const bodyHtml = isCalendarPanelCollapsed
-        ? ''
-        : `
-            <div id="calendarSubscriptionBody" class="mt-5 space-y-4">
-                ${summaryOverview}
-                ${connectionPanel}
-                ${currentViewSave}
-                ${profileSettings}
-                ${profiles.length ? `
-                    <section class="space-y-3">
-                        <div class="flex items-center justify-between gap-3">
-                            <h3 class="text-sm font-black text-slate-900 dark:text-slate-100">${escapeHtml(t('schedule.calendar.presetsTitle', 'Presets'))}</h3>
-                            <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500 dark:bg-slate-900 dark:text-slate-300">${escapeHtml(t('schedule.calendar.presetsCount', '{count} profiles', { count: profiles.length }))}</span>
-                        </div>
-                        <div class="grid gap-2">${profileButtons}</div>
-                    </section>
-                ` : ''}
-                ${diagnosticsPanel}
-                <p class="text-xs text-slate-500 dark:text-slate-400">${escapeHtml(t('schedule.calendar.instructions', 'Use the iOS / Mac button for Apple Calendar. For Google Calendar, copy the HTTPS URL and add it from URL in the web version.'))}</p>
-            </div>
-        `;
-
-    container.innerHTML = `
-        <div class="calendar-sync-card rounded-3xl border border-slate-200 bg-white ${panelCardPaddingClass} shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <div class="${bodyHeaderClass}">
-                <div class="min-w-0">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <span class="rounded-full px-3 py-1 text-xs font-black ${statusClass}">${escapeHtml(t(statusKey, statusFallback))}</span>
-                        <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:bg-slate-900 dark:text-slate-300">${escapeHtml(t('schedule.calendar.openDrawer', 'Calendar'))}</span>
-                    </div>
-                    <h2 class="mt-3 text-lg font-black text-slate-900 dark:text-slate-100">${escapeHtml(t('schedule.calendar.openDrawer', 'Calendar'))}</h2>
-                    <p class="mt-1 max-w-3xl text-sm text-slate-600 dark:text-slate-300">${escapeHtml(selectedProfile ? selectedProfileDescription : t('schedule.calendar.description', 'Connect your personal ICS feed to Apple Calendar, Google Calendar, or any other calendar app.'))}</p>
-                    ${selectedProfile ? `
-                        <div class="mt-3 flex flex-wrap gap-1.5">
-                            <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-600 dark:bg-slate-900 dark:text-slate-300">${escapeHtml(selectedProfile.name)}</span>
-                            <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-600 dark:bg-slate-900 dark:text-slate-300">${escapeHtml(eventCountLabel)}</span>
-                            <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-600 dark:bg-slate-900 dark:text-slate-300">${escapeHtml(modulesLabel)}</span>
-                        </div>
-                    ` : ''}
-                </div>
-                <div class="${bodyHeaderActionsClass}">
-
-                    ${!state.sync_enabled ? renderCalendarButton('schedule.calendar.enable', 'Enable', 'bg-blue-600 text-white hover:bg-blue-700 dark:hover:bg-blue-500', `onclick="toggleCalendarSync(true)"`) : ''}
-                    ${renderCalendarBotLink('border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/50')}
-                    <button type="button" onclick="toggleCalendarSubscriptionPanel()"
-                        aria-expanded="${String(!isCalendarPanelCollapsed)}"
-                        aria-controls="calendarSubscriptionBody"
-                        aria-label="${escapeHtml(toggleLabel)}"
-                        class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
-                        <span>${escapeHtml(toggleLabel)}</span>
-                        <svg class="h-3.5 w-3.5 transition-transform ${isCalendarPanelCollapsed ? '' : 'rotate-180'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path d="M19 9l-7 7-7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                        </svg>
-                    </button>
-                    <button type="button" onclick="closeCalendarSyncPanel()"
-                        aria-label="${escapeHtml(t('schedule.calendar.hidePanel', 'Hide calendar sync'))}"
-                        class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-xs font-black text-slate-500 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">✕</button>
-                </div>
-            </div>
-            ${isCalendarPanelCollapsed ? compactSummary : bodyHtml}
+    if (state.hasError) {
+        renderCalendarDialog(message(t('schedule.calendar.error', 'Could not load your subscriptions.'), calendarButton('schedule.action.retry', 'Retry', 'refreshCalendarSubscription()', 'calendar-primary'), true));
+        return;
+    }
+    const ready = Boolean(state.enabled && state.sync_enabled && profile?.links?.http_url);
+    const id = JSON.stringify(profile?.id || '');
+    const source = profile ? `<details id="calendar-source" class="calendar-source">
+        <summary data-calendar-focus="source"><span><strong>${escapeHtml(getCalendarProfileTitle(profile))}</strong><span class="calendar-source-caption">${escapeHtml(getCalendarProfileDescription(profile))}</span></span>
+        <span class="calendar-change">${escapeHtml(t('schedule.calendar.dialog.editSource', 'Change selection'))}</span></summary>
+        ${renderCalendarSourceSettings(profile, state)}
+    </details>` : '';
+    const primary = calendarPlatform === 'apple'
+        ? calendarButton('schedule.calendar.dialog.openApple', 'Open Apple Calendar', "openCalendarProfileLink('webcal')", 'calendar-primary', 'connect')
+        : calendarButton('schedule.calendar.dialog.copySubscription', 'Copy subscription link', 'copyCalendarSubscriptionLink(event)', 'calendar-primary', 'connect');
+    const connection = ready ? `<div class="calendar-connection">
+        <h3>${escapeHtml(t('schedule.calendar.dialog.chooseApp', 'Where would you like to add it?'))}</h3>
+        <div class="calendar-apps" role="group" aria-label="${escapeHtml(t('schedule.calendar.dialog.chooseApp', 'Calendar app'))}">
+            ${[['apple', 'schedule.calendar.platform.apple', 'Apple Calendar'], ['google', 'schedule.calendar.platform.google', 'Google Calendar'], ['outlook', 'schedule.calendar.platform.outlook', 'Outlook / other']].map(([app, key, fallback]) => `<button type="button" data-calendar-focus="app-${app}" aria-pressed="${app === calendarPlatform}" onclick="setCalendarPlatform('${app}')">${escapeHtml(t(key, fallback))}</button>`).join('')}
         </div>
-    `;
-    focusCalendarSyncPanelIfRequested(container);
+        <p class="calendar-guide">${escapeHtml(t(`schedule.calendar.platform.${calendarPlatform === 'apple' ? 'appleHint' : calendarPlatform === 'google' ? 'googleHint' : 'outlookHint'}`, 'Add this subscription in your calendar app.'))}</p>
+        ${primary}<p class="calendar-footnote">${escapeHtml(t('schedule.calendar.dialog.updates', 'A subscription receives future schedule changes.'))}</p>
+        <p id="calendar-action-feedback" class="calendar-feedback" role="status" hidden></p>
+    </div>` : `<div class="calendar-message" role="status"><p>${escapeHtml(t(!state.sync_enabled ? 'schedule.calendar.dialog.paused' : !state.eligibility?.has_telegram_link ? 'schedule.calendar.dialog.linkRequired' : 'schedule.calendar.dialog.empty', 'Set up a subscription to continue.'))}</p>
+        ${!state.sync_enabled ? calendarButton('schedule.calendar.enable', 'Enable', 'toggleCalendarSync(true)', 'calendar-primary') : !state.eligibility?.has_telegram_link ? `<a class="calendar-button calendar-primary" href="/account">${escapeHtml(t('schedule.calendar.dialog.linkAccount', 'Link Telegram'))}</a>` : ''}</div>`;
+    const currentView = currentEntity?.id ? `<div class="calendar-current-view">
+        <h4>${escapeHtml(t('schedule.calendar.dialog.currentSchedule', 'Currently open schedule'))}</h4>
+        <p class="calendar-note">${window.getCalendarCurrentViewSummary()}</p>
+        <div class="calendar-fields"><label class="calendar-field">${escapeHtml(t('schedule.calendar.meta.mode', 'Classes'))}<select data-calendar-focus="new-mode" onchange="window.calendarCurrentViewMode=this.value">
+            <option value="all" ${window.calendarCurrentViewMode !== 'exams_only' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.all', 'All classes'))}</option>
+            <option value="exams_only" ${window.calendarCurrentViewMode === 'exams_only' ? 'selected' : ''}>${escapeHtml(t('schedule.calendar.mode.exams', 'Exams only'))}</option>
+        </select></label></div>
+        ${calendarButton('schedule.calendar.dialog.saveCurrent', 'Create subscription from this schedule', 'createCalendarProfileFromCurrentView()')}
+    </div>` : '';
+    const saved = `<details id="calendar-profiles" class="calendar-disclosure" ${!profile ? 'open' : ''}>
+        <summary data-calendar-focus="profiles">${escapeHtml(t('schedule.calendar.dialog.mySubscriptions', 'My subscriptions'))}</summary>
+        <div class="calendar-profile-list">${profiles.map(item => `<button type="button" class="calendar-profile" data-calendar-focus="profile-${escapeHtml(item.id)}" aria-pressed="${item.id === profile?.id}"
+            onclick="${escapeHtml(`selectCalendarSubscriptionProfile(${JSON.stringify(item.id)})`)}">
+            <span><strong>${escapeHtml(getCalendarProfileTitle(item))}</strong><span>${escapeHtml(getCalendarProfileDescription(item))}</span></span>
+            ${item.id === profile?.id ? `<span class="calendar-selection">${escapeHtml(t('schedule.calendar.dialog.selected', 'Selected'))}</span>` : ''}
+        </button>`).join('')}</div>${state.eligibility?.has_telegram_link ? currentView : ''}
+    </details>`;
+    const health = profile?.health || {};
+    const shownUrl = profile && (revealedCalendarProfileIds.has(profile.id) ? profile.links?.http_url : profile.links?.masked_http_url);
+    const extra = `<details id="calendar-options" class="calendar-disclosure">
+        <summary data-calendar-focus="options">${escapeHtml(t('schedule.calendar.dialog.other', 'Other options and settings'))}</summary>
+        <div class="calendar-settings">
+        ${ready ? `<section><h4>${escapeHtml(t('schedule.calendar.dialog.oneTime', 'One-time copy'))}</h4>
+            <p class="calendar-note">${escapeHtml(t('schedule.calendar.dialog.oneTimeHint', 'An .ics file is a snapshot. It does not receive later changes.'))}</p>
+            ${calendarButton('schedule.calendar.download', 'Download one-time .ics file', "openCalendarProfileLink('download')", 'calendar-link')}
+        </section><section><h4>${escapeHtml(t('schedule.calendar.linkReady', 'Subscription link ready'))}</h4>
+            <div class="calendar-url"><input readonly aria-label="${escapeHtml(t('schedule.calendar.dialog.privateLink', 'Private subscription link'))}" value="${escapeHtml(shownUrl || t('schedule.calendar.dialog.hiddenLink', 'Private link hidden'))}">
+            ${calendarButton(revealedCalendarProfileIds.has(profile.id) ? 'schedule.calendar.hide' : 'schedule.calendar.reveal', 'Show', `toggleCalendarProfileReveal(${id})`, '', 'reveal')}</div>
+            <div class="calendar-actions">${calendarButton('schedule.calendar.copy', 'Copy link', 'copyCalendarSubscriptionLink(event)', '', 'copy-extra')}
+            ${calendarButton('schedule.calendar.preview', 'Check feed', "openCalendarProfileLink('preview')", 'calendar-link')}</div>
+        </section>` : ''}
+        ${profile ? `<section><h4>${escapeHtml(t('schedule.calendar.dialog.sourceStatus', 'Schedule source'))}</h4><dl class="calendar-health">
+            <div><dt>${escapeHtml(t('schedule.calendar.health.events', 'Events'))}</dt><dd>${escapeHtml(String(health.event_count ?? 0))}</dd></div>
+            <div><dt>${escapeHtml(t('schedule.calendar.health.next', 'Next class'))}</dt><dd>${health.next_event_at ? formatCalendarDateTime(health.next_event_at, '') : escapeHtml(t('schedule.calendar.noNextEvent', 'No upcoming class'))}</dd></div>
+            <div><dt>${escapeHtml(t('schedule.calendar.dialog.checked', 'Schedule checked'))}</dt><dd>${health.source_updated_at ? formatCalendarDateTime(health.source_updated_at, '') : escapeHtml(t('schedule.calendar.notUpdatedYet', 'Not checked yet'))}</dd></div>
+        </dl></section>` : ''}
+        ${renderCalendarBotLink('calendar-button calendar-link')}
+        ${profile ? `<section class="calendar-danger"><h4>${escapeHtml(t('schedule.calendar.dialog.manage', 'Manage subscription'))}</h4>
+            <p class="calendar-note">${escapeHtml(t('schedule.calendar.dangerDescription', 'Changing the link or disabling subscriptions affects external calendar apps.'))}</p>
+            <div class="calendar-actions">${calendarButton('schedule.calendar.reset', 'Reset link', 'resetCalendarSubscription()', 'calendar-danger-button')}
+            ${calendarButton(state.sync_enabled ? 'schedule.calendar.disable' : 'schedule.calendar.enable', 'Enable', `toggleCalendarSync(${!state.sync_enabled})`)}
+            ${profile.can_delete ? calendarButton('schedule.calendar.delete', 'Delete subscription', `deleteCalendarSubscriptionProfile(${id})`, 'calendar-danger-button') : ''}</div>
+        </section>` : ''}
+        </div>
+    </details>`;
+    renderCalendarDialog(`<div class="calendar-dialog-body">${source}${connection}${state.justReset ? `<p class="calendar-feedback" role="status">${escapeHtml(t('schedule.calendar.dialog.resetDone', 'The link has changed. Add the new link in your calendar app.'))}</p>` : ''}</div>
+        <footer class="calendar-dialog-footer">${saved}${extra}</footer>`);
 }
 
 window.renderCalendarSubscription = renderCalendarSubscription;
 window._renderCalendarSubscriptionImpl = renderCalendarSubscription;
+window.addEventListener('mpb-telegram-auth-settled', () => { if (!scheduleAuthUser) renderCalendarSubscription(); });
 
-window.addEventListener('mpb-telegram-auth-settled', () => {
-    if (!scheduleAuthUser) renderCalendarSubscription();
-});
 
 window.getSelectedCalendarProfile = function() {
     return (calendarSubscriptionState.profiles ||[]).find((profile) => profile.selected) || null;
@@ -1031,12 +507,6 @@ window.getCalendarCurrentViewSummary = function() {
     return `${escapeHtml(currentEntity.name)} - ${modulesLabel}`;
 }
 
-function getCalendarCacheStatusLabel(status) {
-    if (status === 'cached') return escapeHtml(t('schedule.calendar.health.cached', 'Cache ready'));
-    if (status === 'partial-cache') return escapeHtml(t('schedule.calendar.health.partial', 'Partial cache'));
-    return escapeHtml(t('schedule.calendar.health.empty', 'No cached classes'));
-}
-
 async function parseCalendarError(response) {
     try {
         const data = await response.json();
@@ -1088,22 +558,39 @@ window.refreshCalendarSubscription = async function() {
     renderCalendarSubscription();
 }
 
-window.copyCalendarSubscriptionLink = function(event) {
+function showCalendarActionFeedback(key, fallback) {
+    const feedback = document.getElementById('calendar-action-feedback');
+    if (!feedback) return;
+    feedback.textContent = t(key, fallback);
+    feedback.hidden = false;
+}
+
+window.copyCalendarSubscriptionLink = async function() {
     const selectedProfile = window.getSelectedCalendarProfile();
     if (!selectedProfile?.links?.http_url || !calendarSubscriptionState.sync_enabled) return;
-    navigator.clipboard.writeText(selectedProfile.links.http_url).then(()=>{window.MpbUI?.finish('calendar_connected');showScheduleNotice('success',t('schedule.copy.done','Copied'),t('schedule.copy.done','Copied'));}).catch(()=>showScheduleNotice('error',t('schedule.copy.failed','Could not copy'),t('schedule.copy.failed','Could not copy')));
+    try {
+        await navigator.clipboard.writeText(selectedProfile.links.http_url);
+        window.MpbUI?.finish('calendar_connected');
+        showCalendarActionFeedback('schedule.calendar.dialog.copied', 'Link copied. Add it as a subscription in your calendar app.');
+    } catch {
+        showCalendarActionFeedback('schedule.calendar.dialog.copyFailed', 'Could not copy. Open Other options, reveal the link and copy it manually.');
+    }
 }
 
 window.openCalendarProfileLink = function(kind) {
     const selectedProfile = window.getSelectedCalendarProfile();
-    if (!selectedProfile || !calendarSubscriptionState.sync_enabled) return;
+    if (!selectedProfile?.links || !calendarSubscriptionState.sync_enabled) return;
     const targetUrl = kind === 'download'
         ? selectedProfile.links.download_url
         : kind === 'webcal'
             ? selectedProfile.links.webcal_url
             : selectedProfile.links.preview_url;
     if (!targetUrl) return;
-    if (kind === 'webcal') {window.MpbUI?.finish('calendar_connected');window.location.href = targetUrl;}
+    if (kind === 'webcal') {
+        window.MpbUI?.finish('calendar_connected');
+        showCalendarActionFeedback('schedule.calendar.dialog.appleNext', 'Confirm the subscription in Apple Calendar.');
+        window.location.href = targetUrl;
+    }
     else window.open(targetUrl, '_blank', 'noopener');
 }
 
@@ -1175,12 +662,10 @@ window.toggleCalendarSync = async function(enabled) {
 
 window.selectCalendarSubscriptionProfile = async function(profileId) {
     if (!profileId || profileId === calendarSubscriptionState.selected_profile_id) return;
-    const nextState = await performCalendarMutation(`${API_BASE}/cal/subscription/select`, {
+    await performCalendarMutation(`${API_BASE}/cal/subscription/select`, {
         method: 'POST',
         body: JSON.stringify({ profile_id: profileId })
     });
-    const selectedProfile = (nextState?.profiles || []).find((profile) => profile.selected);
-    if (selectedProfile) await applyCalendarProfileToSchedule(selectedProfile, { urlMode: 'push' });
 }
 
 window.createCalendarProfileFromCurrentView = async function() {

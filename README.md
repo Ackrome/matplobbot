@@ -40,6 +40,7 @@ The website supports English and Russian, light and dark themes, desktop and mob
 - Compare up to six schedules across a period of up to 14 days. See overlapping classes and common free windows on a shared timeline. Missing source data is not treated as free time.
 - Keep schedule subscriptions in sync between the website and Telegram. Receive daily notifications and alerts about changed, added or cancelled classes.
 - Subscribe through a private WebCal/iCalendar link, or download a one-time ICS snapshot. Calendar profiles support different selections and filters.
+- Use **Add to calendar** to choose Apple Calendar, Google Calendar or Outlook in a focused dialog. Edit modules and manage saved subscriptions without squeezing the timetable; on mobile, the dialog fills the screen.
 - Reopen cached schedules when the upstream source is unavailable, with visible freshness information. The installable web app also caches its interface for offline access.
 
 ### Document Studio
@@ -71,11 +72,25 @@ Drafts and the last 20 build records are stored on the current device. Build res
 
 ## Interface
 
-Screenshots show the current interface with demonstration data.
+Schedule and calendar screenshots were refreshed on October 9, 2026, from the current local interface with demonstration data. Other screenshots show the Studio, account and service health views.
 
 ### Weekly schedule
 
-![Weekly timetable with lesson times, modules and locations](image/notes/ui/schedule-desktop.png)
+Compact lesson cards keep the subject, room and lecturer together while preserving the timetable's time scale.
+
+![Weekly timetable with compact lesson cards, times, modules and locations](image/notes/ui/schedule-desktop-20261009-en.png)
+
+### Add a calendar subscription
+
+Choose your calendar app and use the main action. The dialog keeps the schedule in place behind a blurred backdrop; module selection, saved subscriptions and other settings are expandable. A subscription receives future schedule changes, while an ICS download is a one-time copy.
+
+![Calendar subscription dialog with app selection and expandable settings](image/notes/ui/calendar-desktop-20261009-en.png)
+
+On phones, the same flow uses a full-screen sheet:
+
+<p>
+  <img src="image/notes/ui/calendar-mobile-20261009-en.png" alt="Full-screen mobile calendar subscription with Apple, Google and Outlook choices" width="300">
+</p>
 
 ### Studio with live Markdown and formulas
 
