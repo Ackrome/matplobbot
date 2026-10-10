@@ -57,7 +57,9 @@ def _loaded(name):
     try:
         profiles = LOADED_PROFILES.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
-        raise RuntimeError("Cannot verify loaded worker AppArmor policy on the daemon host") from exc
+        raise RuntimeError(
+            "Cannot verify loaded worker AppArmor policy on the daemon host"
+        ) from exc
     # flags=(unconfined) grants only this named workload the documented Ubuntu
     # userns exception. Complain-mode profiles are not accepted as installed proof.
     return f"{name} (unconfined)" in profiles

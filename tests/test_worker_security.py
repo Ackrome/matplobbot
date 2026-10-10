@@ -69,7 +69,12 @@ class WorkerPolicyTests(unittest.TestCase):
             loaded.assert_not_called()
 
     def test_drift_symlink_and_writable_file_fail_closed(self):
-        for options in ({"content": b"different"}, {"symlink": True}, {"uid": 1000}, {"mode": 0o664}):
+        for options in (
+            {"content": b"different"},
+            {"symlink": True},
+            {"uid": 1000},
+            {"mode": 0o664},
+        ):
             with self.subTest(options=options):
                 installed, _ = self.installed(**options)
                 with installed, self.assertRaises(RuntimeError):
@@ -94,16 +99,23 @@ class WorkerPolicyTests(unittest.TestCase):
             security.verify_installed_profile("../../other-policy", "content")
 
     def test_daemon_capability_detection_is_strict(self):
-        for values, expected in ((["name=apparmor", "name=seccomp,profile=builtin"], True), ([], False)):
+        for values, expected in (
+            (["name=apparmor", "name=seccomp,profile=builtin"], True),
+            ([], False),
+        ):
             with patch.object(
                 security.subprocess, "run", return_value=SimpleNamespace(stdout=json.dumps(values))
             ):
                 self.assertEqual(security.docker_uses_apparmor(), expected)
         for output in ("not-json", "null", '{"apparmor":true}', "[12]"):
-            with patch.object(security.subprocess, "run", return_value=SimpleNamespace(stdout=output)):
+            with patch.object(
+                security.subprocess, "run", return_value=SimpleNamespace(stdout=output)
+            ):
                 with self.assertRaises(RuntimeError):
                     security.docker_uses_apparmor()
-        with patch.object(security.subprocess, "run", side_effect=subprocess.TimeoutExpired("docker", 30)):
+        with patch.object(
+            security.subprocess, "run", side_effect=subprocess.TimeoutExpired("docker", 30)
+        ):
             with self.assertRaises(RuntimeError):
                 security.docker_uses_apparmor()
 
@@ -142,9 +154,14 @@ class WorkerPolicyTests(unittest.TestCase):
             patch.object(security.subprocess, "run") as run,
         ):
             name = security.install_policy(self.root)
-            self.assertEqual((directory / name).read_bytes(), security.profile_text(self.root).encode())
+            self.assertEqual(
+                (directory / name).read_bytes(), security.profile_text(self.root).encode()
+            )
             run.assert_called_once()
-            self.assertEqual(run.call_args.args[0], ["apparmor_parser", "--add", "--skip-cache", str(directory / name)])
+            self.assertEqual(
+                run.call_args.args[0],
+                ["apparmor_parser", "--add", "--skip-cache", str(directory / name)],
+            )
 
     def test_install_requires_root(self):
         with (
@@ -157,13 +174,17 @@ class WorkerPolicyTests(unittest.TestCase):
     def test_install_rejects_unprotected_file_before_privileged_parser(self):
         directory = self.root / "installed"
         directory.mkdir()
-        (directory / security.profile_name(self.root)).write_bytes(security.profile_text(self.root).encode())
+        (directory / security.profile_name(self.root)).write_bytes(
+            security.profile_text(self.root).encode()
+        )
         with (
             patch.object(security, "PROFILE_DIRECTORY", directory),
             patch.object(security.sys, "platform", "linux"),
             patch.object(security.os, "geteuid", return_value=0, create=True),
             patch.object(security, "docker_uses_apparmor", return_value=True),
-            patch.object(security, "verify_installed_profile", side_effect=RuntimeError("unprotected policy")),
+            patch.object(
+                security, "verify_installed_profile", side_effect=RuntimeError("unprotected policy")
+            ),
             patch.object(security.subprocess, "run") as run,
             self.assertRaisesRegex(RuntimeError, "unprotected"),
         ):
