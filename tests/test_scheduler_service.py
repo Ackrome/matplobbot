@@ -690,8 +690,12 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first, retry)
         self.assertNotEqual(first, later)
         self.assertNotEqual(
-            jobs.build_schedule_change_event_key("group", "123", "old", "new", checked_at, source_revision=1),
-            jobs.build_schedule_change_event_key("group", "123", "old", "new", checked_at, source_revision=3),
+            jobs.build_schedule_change_event_key(
+                "group", "123", "old", "new", checked_at, source_revision=1
+            ),
+            jobs.build_schedule_change_event_key(
+                "group", "123", "old", "new", checked_at, source_revision=3
+            ),
         )
 
     async def test_update_schedule_cache_uses_shared_semester_bounds(self):

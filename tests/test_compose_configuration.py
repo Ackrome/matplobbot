@@ -389,7 +389,9 @@ curl() {
             ):
                 root = Path(directory)
                 (root / ".env").write_text("touch smoke-dotenv-executed\n", encoding="utf-8")
-                (root / "deploy.sh").write_text("[ \"$1\" = --finalize ] && touch smoke-finalized\n", encoding="utf-8")
+                (root / "deploy.sh").write_text(
+                    '[ "$1" = --finalize ] && touch smoke-finalized\n', encoding="utf-8"
+                )
                 password = "space ' quote $HOME `touch smoke-secret-executed` $(touch smoke-secret-executed)"
                 smoke = root / "smoke.sh"
                 smoke.write_text(fake_commands + script, encoding="utf-8")
@@ -424,8 +426,12 @@ curl() {
     @unittest.skipUnless(_find_bash(), "bash is required for the deploy entrypoint check")
     def test_deployment_rejects_unbound_tags_and_latest(self):
         for arguments in ([], ["latest"], ["a" * 40] * 4):
-            result = subprocess.run([_find_bash(), _bash_path(DEPLOY_SCRIPT), *arguments],
-                                    capture_output=True, text=True, timeout=10)
+            result = subprocess.run(
+                [_find_bash(), _bash_path(DEPLOY_SCRIPT), *arguments],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
             self.assertEqual(result.returncode, 2)
             self.assertIn("--manifest", result.stderr)
 
