@@ -4,6 +4,14 @@ PostgreSQL healthchecks must use TCP loopback in both Compose files; this exclud
 the temporary Unix-only initialization server and preserves configured user/DB
 variable expansion.
 
+Smoke tests now use the tracked `scripts/release_smoke.sh` body. The fake Docker
+command actively consumes stdin; byte-mode input preserves LF on Windows and
+reproduces the old streamed-shell exit-zero failure. Repaired smoke execution
+must reach all checks and finalization without consuming input. Wrong accepted
+commit/pending-state cases fail. An executable Jenkins wrapper test also rejects
+SSH success with absent/wrong completion text, so no source-only assertion can
+substitute for the acceptance protocol.
+
 ## Purpose
 
 Protects the intentional relationship between the local and production Docker Compose stacks without introducing a separate `compose.dev` file.

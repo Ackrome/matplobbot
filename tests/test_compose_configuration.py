@@ -15,6 +15,7 @@ LOCAL_COMPOSE = PROJECT_ROOT / "docker-compose.yml"
 PRODUCTION_COMPOSE = PROJECT_ROOT / "docker-compose.prod.yml"
 GITHUB_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "ci-cd.yml"
 JENKINSFILE = PROJECT_ROOT / "Jenkinsfile.groovy"
+RELEASE_SMOKE = PROJECT_ROOT / "scripts" / "release_smoke.sh"
 DEPLOY_SCRIPT = PROJECT_ROOT / "deploy.sh"
 PRIVATE_IPV4_RESOLVER = PROJECT_ROOT / "scripts" / "resolve_private_ipv4.sh"
 VALIDATION_REQUIREMENTS = PROJECT_ROOT / "requirements-validation.txt"
@@ -333,28 +334,28 @@ class TestComposeConfiguration(unittest.TestCase):
     def test_frontend_nginx_proxies_websocket_upgrades(self):
         nginx = FRONTEND_NGINX.read_text(encoding="utf-8")
         jenkinsfile = JENKINSFILE.read_text(encoding="utf-8")
+        smoke_script = RELEASE_SMOKE.read_text(encoding="utf-8")
 
         ws_location = nginx.split("location /ws/", 1)[1].split("location /", 1)[0]
         self.assertIn("proxy_pass $stats_api", ws_location)
         self.assertIn("proxy_http_version 1.1", ws_location)
         self.assertIn("proxy_set_header Upgrade $http_upgrade", ws_location)
         self.assertIn('proxy_set_header Connection "upgrade"', ws_location)
-        self.assertIn("check_ws_upgrade", jenkinsfile)
-        self.assertIn('if [ "$status" != "101" ]', jenkinsfile)
-        self.assertIn("http://127.0.0.1:8080/ws/stats/total_actions", jenkinsfile)
+        self.assertIn("check_ws_upgrade", smoke_script)
+        self.assertIn('if [ "$status" != "101" ]', smoke_script)
+        self.assertIn("http://127.0.0.1:8080/ws/stats/total_actions", smoke_script)
         self.assertNotIn("http://127.0.0.1:9584/ws/", jenkinsfile)
-        self.assertIn("expected admin login returned HTTP", jenkinsfile)
+        self.assertIn("expected admin login returned HTTP", smoke_script)
         self.assertNotIn("falling back to protected-endpoint contract", jenkinsfile)
-        self.assertIn("${PUBLIC_SITE_URL%/}/ws/stats/total_actions", jenkinsfile)
+        self.assertIn("${PUBLIC_SITE_URL%/}/ws/stats/total_actions", smoke_script)
 
     @unittest.skipUnless(_find_bash(), "bash is required for the isolated smoke script test")
     def test_jenkins_smoke_requires_successful_expected_admin_login_at_runtime(self):
-        jenkinsfile = JENKINSFILE.read_text(encoding="utf-8")
-        script = jenkinsfile.rsplit("<<'REMOTE_EOF'", 1)[1].split("REMOTE_EOF", 1)[0]
-        # The pipeline's Groovy string consumes one layer of escaped backslashes.
-        script = script.replace("\\\\", "\\")
+        script = RELEASE_SMOKE.read_text(encoding="utf-8")
         fake_commands = r"""
+python3() { "$SMOKE_PYTHON" "$@"; }
 docker() {
+  cat > smoke-consumed-stdin
   if [ "$FAKE_ENV_FAILURE" = 1 ]; then return 1; fi
   STATS_USER="$TEST_STATS_USER" STATS_PASS="$TEST_STATS_PASS" PUBLIC_SITE_URL="" \
     "$SMOKE_PYTHON" -c "${@: -1}"
@@ -384,11 +385,13 @@ curl() {
   return 0
 }
 """
-        for login_status, env_failure, expected_returncode in (
-            ("200", "0", 0),
-            ("500", "0", 1),
-            ("401", "0", 1),
-            ("200", "1", 1),
+        for login_status, env_failure, final_state, expected_returncode in (
+            ("200", "0", "correct", 0),
+            ("500", "0", "correct", 1),
+            ("401", "0", "correct", 1),
+            ("200", "1", "correct", 1),
+            ("200", "0", "wrong-commit", 1),
+            ("200", "0", "pending", 1),
         ):
             with (
                 self.subTest(login_status=login_status, env_failure=env_failure),
@@ -397,13 +400,20 @@ curl() {
                 root = Path(directory)
                 (root / ".env").write_text("touch smoke-dotenv-executed\n", encoding="utf-8")
                 (root / "deploy.sh").write_text(
-                    '[ "$1" = --finalize ] && touch smoke-finalized\n', encoding="utf-8"
+                    '[ "$1" = --finalize ] || exit 1\n'
+                    "cat > finalize-consumed-stdin\n"
+                    "mkdir -p .release-state\n"
+                    'commit="$TEST_COMMIT"\n'
+                    '[ "$FAKE_FINAL_STATE" != wrong-commit ] || commit=wrong\n'
+                    'printf \'{"status":"successful","manifest":{"commit":"%s"}}\' "$commit" > .release-state/current.json\n'
+                    '[ "$FAKE_FINAL_STATE" != pending ] || touch .release-state/pending.json\n'
+                    "touch smoke-finalized\n",
+                    encoding="utf-8",
                 )
                 password = "space ' quote $HOME `touch smoke-secret-executed` $(touch smoke-secret-executed)"
-                smoke = root / "smoke.sh"
-                smoke.write_text(fake_commands + script, encoding="utf-8")
                 result = subprocess.run(
-                    [_find_bash(), _bash_path(smoke)],
+                    [_find_bash(), "-s", "--", "c" * 40],
+                    input=(fake_commands + script).encode("utf-8"),
                     cwd=root,
                     env={
                         **os.environ,
@@ -412,23 +422,78 @@ curl() {
                         "TEST_STATS_USER": "test admin",
                         "TEST_STATS_PASS": password,
                         "SMOKE_PYTHON": sys.executable,
+                        "TEST_COMMIT": "c" * 40,
+                        "FAKE_FINAL_STATE": final_state,
                     },
                     capture_output=True,
-                    text=True,
                     timeout=10,
                 )
-                self.assertEqual(
-                    result.returncode, expected_returncode, result.stdout + result.stderr
-                )
+                stdout, stderr = result.stdout.decode(), result.stderr.decode()
+                self.assertEqual(result.returncode, expected_returncode, stdout + stderr)
                 ws_calls = root / "smoke-ws-calls.txt"
                 self.assertFalse((root / "smoke-dotenv-executed").exists())
                 self.assertFalse((root / "smoke-secret-executed").exists())
-                self.assertNotIn(password, result.stdout + result.stderr)
-                self.assertEqual((root / "smoke-finalized").exists(), expected_returncode == 0)
-                if expected_returncode == 0:
+                self.assertNotIn(password, stdout + stderr)
+                self.assertEqual((root / "smoke-consumed-stdin").read_bytes(), b"")
+                reached_finalize = login_status == "200" and env_failure == "0"
+                self.assertEqual((root / "smoke-finalized").exists(), reached_finalize)
+                self.assertEqual(
+                    "Release smoke and finalization completed:" in stdout, expected_returncode == 0
+                )
+                if reached_finalize:
+                    self.assertEqual((root / "finalize-consumed-stdin").read_bytes(), b"")
                     self.assertIn("127.0.0.1:8080/ws/", ws_calls.read_text(encoding="utf-8"))
                 else:
                     self.assertFalse(ws_calls.exists())
+
+    @unittest.skipUnless(_find_bash(), "bash is required for stdin-drain reproduction")
+    def test_streamed_shell_input_drain_reproduces_false_success_without_redirection(self):
+        for redirection, completed in (("", False), (" </dev/null", True)):
+            script = (
+                "set -eu\n"
+                "docker() { cat >/dev/null; printf 'fixture'; }\n"
+                f'value="$(docker{redirection})"\n'
+                "printf 'COMPLETED\\n'\n"
+            )
+            result = subprocess.run(
+                [_find_bash(), "-s"], input=script.encode(), capture_output=True, timeout=10
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(b"COMPLETED" in result.stdout, completed)
+
+    @unittest.skipUnless(_find_bash(), "bash is required for remote-completion guard")
+    def test_jenkins_smoke_rejects_ssh_success_without_exact_completion_marker(self):
+        pipeline = JENKINSFILE.read_text(encoding="utf-8")
+        wrapper = (
+            'SMOKE_RESULT_FILE="$(mktemp)"'
+            + pipeline.split('SMOKE_RESULT_FILE="$(mktemp)"', 1)[1].split("} 2>&1 | tee", 1)[0]
+        )
+        prefix = 'set -euo pipefail\nssh() { cat > ssh-consumed-stdin; printf "%s\\n" "$FAKE_OUTPUT"; }\n'
+        commit = "c" * 40
+        for output, expected in (
+            ("", 1),
+            ("Release smoke and finalization completed: wrong", 1),
+            (f"Release smoke and finalization completed: {commit}", 0),
+        ):
+            with tempfile.TemporaryDirectory() as directory:
+                result = subprocess.run(
+                    [_find_bash(), "-c", prefix + wrapper],
+                    input=b"must-not-be-read-by-ssh",
+                    cwd=directory,
+                    env={
+                        **os.environ,
+                        "SOURCE_COMMIT": commit,
+                        "SSH_OPTS": "",
+                        "SSH_USER": "fixture",
+                        "DEPLOY_HOST": "fixture",
+                        "DEPLOY_PATH": "/fixture",
+                        "FAKE_OUTPUT": output,
+                    },
+                    capture_output=True,
+                    timeout=10,
+                )
+                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+                self.assertEqual((Path(directory) / "ssh-consumed-stdin").read_bytes(), b"")
 
     @unittest.skipUnless(_find_bash(), "bash is required for the deploy entrypoint check")
     def test_deployment_rejects_unbound_tags_and_latest(self):

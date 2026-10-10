@@ -1,0 +1,21 @@
+{
+  "status": "passed",
+  "scope": "Synthetic shell regression; no production requests or finalization",
+  "original_failure_reproduced": true,
+  "checks": [
+    "stdin-draining child can skip a streamed script and still return zero",
+    "credential and finalize children receive EOF",
+    "positive login and WebSocket probes precede finalization",
+    "wrong current commit and pending state reject completion",
+    "Jenkins rejects SSH exit zero without exact completion marker"
+  ],
+  "local_tests": 23,
+  "jenkins_user_tests": 23,
+  "jenkins_python": "3.12.3",
+  "jenkins_seconds": 0.504,
+  "source_sha256": {
+    "Jenkinsfile.groovy": "1ed0a85bc3672b7ab3b212d8cc3a4b3e9a29a45b484a3bd7a9137f55ab38e5fb",
+    "scripts/release_smoke.sh": "5e02fcade7fb6ee8a01991bd48df878e628430d7f9e5e845340f5f0369adab8b",
+    "tests/test_compose_configuration.py": "062d47b8e7f3d0fd626e73d6faf3ed567ee53e933bb9dc2512dbe74bbc32f092"
+  }
+}

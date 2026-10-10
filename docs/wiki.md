@@ -2577,3 +2577,15 @@ a private cache outside the checkout, extracts only the regular Node executable,
 verifies its version/platform, then prepends its bin directory only within the
 quality shell. There is no global host package installation. Tests cover checksum,
 cache corruption, archive symlink, host/runtime mismatch and gate-pin consistency.
+
+### Post-deployment smoke completion is verified
+
+Jenkins build 347 exposed a false-green shell failure: `docker compose exec -T`
+consumed the remainder of a smoke script streamed to `bash -s`, leaving exit zero
+without checks or finalization. Smoke logic now lives in `scripts/release_smoke.sh`
+and runs from a file with stdin closed. Credential reading and finalization also
+close stdin explicitly. After positive health/login/access/WebSocket checks,
+the script verifies the successful release pointer matches the accepted commit
+and no pending state remains. Jenkins independently requires the exact completion
+line. Runtime regressions reproduce stdin drain and reject missing completion,
+wrong commit and pending-state scenarios; the same tests pass as the Jenkins user.
