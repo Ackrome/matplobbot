@@ -2516,3 +2516,53 @@ source bytes with Python's AST loader, so BOM handling matches Python imports
 without executing migration code. Tests include a BOM fixture and parse every
 current repository migration. This failure also occurred before RC execution or
 the Jenkins trigger; successful image builds remain separate from acceptance.
+
+## Scoped AppArmor permission for renderer namespaces (2026-10-10)
+
+Ubuntu 24.04 restricts capabilities inside unprivileged user namespaces even for
+`apparmor=unconfined` containers. `security/worker-apparmor.template` supplies the
+documented named `userns` exception only for explicitly selected worker/probe
+containers; global kernel restrictions remain enabled. Its content hash becomes
+the profile name, so a candidate never reloads an existing worker's policy.
+
+`scripts/worker_security.py` selects policy based on the Docker daemon's AppArmor
+support and verifies exact protected root-owned installed bytes. Root-only
+`install` persists one add-only profile under `/etc/apparmor.d`; prior profiles
+remain for rollback and reboot. Normal Docker-group users cannot read AppArmor's
+kernel profile list, so an actual named-profile sandbox compilation must prove
+loadedness before deployment or rollback stops services. Docker Desktop without
+AppArmor omits the option and retains the mandatory bubblewrap/seccomp boundary.
+See `scripts/wiki_worker_security.md` and `security/wiki_worker-apparmor.md`.
+
+The same Ubuntu kernel also rejects a fresh private proc mount when Docker has
+masked paths beneath the outer container's proc mount. The scoped worker/probe
+`systempaths=unconfined` option permits that mount while retaining the separate
+renderer PID/proc namespace. The real integration suite additionally checks
+non-root UID, zero effective/permitted/bounding capabilities, no-new-privileges,
+and denied kernel-setting writes in both outer worker and inner renderer. Other
+services retain their existing Docker system-path protections.
+
+Release preparation records the selected policy independently of `.env`, which
+Jenkins rewrites afterwards. Base Compose lists contain no AppArmor entry; generated
+overrides add exactly one profile, verified with actual Compose merging. Runtime
+snapshots preserve the worker's observed profile plus managed policy/seccomp bytes.
+Rollback verifies and positively probes the retained profile/image before any
+service stop or source checkout, and retained recovery tools include the policy
+helper. The refreshed isolated legacy rollback drill still passes; its scope does
+not replace managed-policy kernel tests on the runner.
+
+Ubuntu runner testing also exposed Docker's masked-parent-procfs restriction.
+Worker and disposable compile probes now use the scoped `systempaths=unconfined`
+option while retaining a new PID namespace/fresh procfs, non-root UID, zero
+capabilities, no-new-privileges, seccomp, network isolation and read-only runtime.
+Ten actual sandbox tests including all six formats passed on the runner after
+this option; an additional regression covers outer/inner kernel-control write
+denial and effective/permitted/bounding capability sets. No other service gets
+this option and no global host restriction is disabled.
+
+The real RC restore exposed a PostgreSQL initialization race: its temporary
+Unix-socket server can accept `pg_isready` before the configured database exists.
+Restore and RC now require a successful `SELECT 1` over TCP loopback; the regular
+Compose and rollback-drill healthchecks also use TCP, which the temporary setup
+server does not expose. Delayed database initialization is covered by a regression
+that prevents loading the dump before the target query succeeds.

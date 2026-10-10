@@ -1,5 +1,8 @@
 # Rollback drill safety tests
 
+The fixture's PostgreSQL readiness check must address TCP loopback so initial
+migration cannot race the image's temporary Unix-only setup server.
+
 `RollbackDrillSafetyTests` checks that generated fixture services use only the
 internal network, publish no host ports, mount only the named disposable DB volume
 or read-only frontend fixture, and cannot start real provider-capable workers.

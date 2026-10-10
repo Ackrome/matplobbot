@@ -56,7 +56,7 @@ def fixture_compose(api_image, bot_image):
                 },
                 "volumes": ["db:/var/lib/postgresql/data"],
                 "healthcheck": {
-                    "test": ["CMD", "pg_isready", "-U", "drill", "-d", "drill"],
+                    "test": ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "drill", "-d", "drill"],
                     "interval": "1s",
                     "timeout": "5s",
                     "retries": 60,
@@ -241,7 +241,12 @@ except urllib.error.HTTPError as error:
             )
             (checkout / "scripts").mkdir()
             helper_hashes = {}
-            for name in ("release_deploy.py", "release_manifest.py", "release_backup.py"):
+            for name in (
+                "release_deploy.py",
+                "release_manifest.py",
+                "release_backup.py",
+                "worker_security.py",
+            ):
                 shutil.copyfile(root / "scripts" / name, checkout / "scripts" / name)
                 helper_hashes[name] = hashlib.sha256(
                     (checkout / "scripts" / name).read_bytes()

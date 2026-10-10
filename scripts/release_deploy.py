@@ -19,6 +19,12 @@ from release_manifest import (
     verify,
     verify_no_untracked_inputs,
 )
+from worker_security import (
+    apparmor_security_option,
+    docker_uses_apparmor,
+    profile_text,
+    verify_installed_profile,
+)
 
 ROOT = Path.cwd()
 STATE = ROOT / ".release-state"
@@ -42,8 +48,44 @@ def execute(args, **kwargs):
     subprocess.run(args, check=True, **kwargs)
 
 
+def runtime_overrides(records):
+    """Freeze observed worker profile alongside image identity for recovery."""
+    services = {}
+    for item in records:
+        name = item["Config"]["Labels"]["com.docker.compose.service"]
+        services[name] = {"image": item["Image"]}
+        if name == "mpb-worker" and item.get("AppArmorProfile"):
+            services[name]["security_opt"] = ["apparmor=" + item["AppArmorProfile"]]
+    return services
+
+
+def verify_saved_worker_policy(saved, legacy=False):
+    """Check retained profile before stopping services or changing checkout."""
+    services = json.loads((saved / "compose.json").read_text(encoding="utf-8"))["services"]
+    options = services.get("mpb-worker", {}).get("security_opt", [])
+    profiles = [item.removeprefix("apparmor=") for item in options if item.startswith("apparmor=")]
+    if len(profiles) > 1:
+        raise ValueError("Rollback has multiple worker AppArmor selections")
+    if profiles and profiles[0].startswith("matplobbot-render-"):
+        policy = json.loads((saved / "worker-apparmor.json").read_text(encoding="utf-8"))
+        if policy["name"] != profiles[0]:
+            raise ValueError("Rollback worker profile differs from saved policy")
+        verify_installed_profile(policy["name"], policy["text"])
+    elif not legacy and (profiles or docker_uses_apparmor()):
+        raise ValueError("Rollback requires its verified managed worker AppArmor profile")
+    return "apparmor=" + profiles[0] if profiles else None
+
+
 def probe_worker(image, candidate):
     """Positive isolated compile on the destination kernel before live mutation."""
+    worker_apparmor = apparmor_security_option(candidate)
+    return run_worker_probe(
+        image, candidate.resolve() / "security/worker-seccomp.json", worker_apparmor
+    )
+
+
+def run_worker_probe(image, seccomp_path, worker_apparmor):
+    """Prove selected profile is loaded and usable, including a rollback target."""
     name = "mpb-release-probe-" + uuid.uuid4().hex[:12]
     script = (
         "import base64;from shared_lib.tasks import compile_full_latex_task;"
@@ -68,9 +110,10 @@ def probe_worker(image, candidate):
                 "--security-opt",
                 "no-new-privileges:true",
                 "--security-opt",
-                "seccomp=" + str(candidate.resolve() / "security/worker-seccomp.json"),
+                "seccomp=" + str(seccomp_path),
                 "--security-opt",
-                "apparmor=unconfined",
+                "systempaths=unconfined",
+                *(["--security-opt", worker_apparmor] if worker_apparmor else []),
                 "--memory",
                 "2g",
                 "--pids-limit",
@@ -85,6 +128,7 @@ def probe_worker(image, candidate):
             ],
             timeout=120,
         )
+        return worker_apparmor
     except BaseException:
         subprocess.run(
             ["docker", "rm", "-f", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
@@ -111,7 +155,7 @@ def prepare(path, candidate):
     for image in manifest["images"].values():
         execute(["docker", "pull", image])
     verify(manifest, candidate.resolve(), inspect_images=True, require_rc=True)
-    probe_worker(manifest["images"]["worker"], candidate)
+    worker_apparmor = probe_worker(manifest["images"]["worker"], candidate)
     if (STATE / "attempt.json").exists() or (STATE / "rollback-pending.json").exists():
         raise ValueError("Resolve the previous deployment/rollback attempt before another switch")
     if run("git", "diff", "--name-only", "HEAD", cwd=ROOT):
@@ -142,12 +186,7 @@ def prepare(path, candidate):
         saved.mkdir(parents=True, mode=0o700)
         write_private(
             saved / "compose.json",
-            {
-                "services": {
-                    item["Config"]["Labels"]["com.docker.compose.service"]: {"image": item["Image"]}
-                    for item in runtime
-                }
-            },
+            {"services": runtime_overrides(runtime)},
         )
         for name in (".env", "Caddyfile.local"):
             if (ROOT / name).exists():
@@ -165,10 +204,18 @@ def prepare(path, candidate):
         write_private(STATE / "current.json", record)
     recovery = STATE / "recovery-tools"
     recovery.mkdir(exist_ok=True, mode=0o700)
-    for name in ("release_deploy.py", "release_manifest.py", "release_backup.py"):
+    for name in (
+        "release_deploy.py",
+        "release_manifest.py",
+        "release_backup.py",
+        "worker_security.py",
+    ):
         shutil.copyfile(candidate / "scripts" / name, recovery / name)
     # The marker precedes any visible source change or service stop.
-    write_private(STATE / "attempt.json", {"commit": manifest["commit"], "phase": "prepared"})
+    write_private(
+        STATE / "attempt.json",
+        {"commit": manifest["commit"], "phase": "prepared", "worker_apparmor": worker_apparmor},
+    )
     config = json.loads(run(*prefix, "config", "--format", "json"))
     bound_services = [
         name
@@ -222,6 +269,12 @@ def deploy(path):
         raise ValueError("prepare must capture the previous runtime before deployment")
     override = STATE / "pending-compose.json"
     frozen = compose_override(manifest)
+    worker_apparmor = apparmor_security_option(ROOT)
+    prepared = json.loads(attempt.read_text(encoding="utf-8"))
+    if worker_apparmor != prepared.get("worker_apparmor"):
+        raise ValueError("Worker security policy changed after prepare")
+    if worker_apparmor:
+        frozen["services"]["mpb-worker"]["security_opt"] = [worker_apparmor]
     support = json.loads((STATE / "support-compose.json").read_text(encoding="utf-8"))
     frozen["services"].update(support["services"])
     write_private(override, frozen)
@@ -334,10 +387,17 @@ def finalize():
     # Preserve image IDs for support containers too; no post-deploy image prune.
     containers = run(*prefix, "ps", "-q").splitlines()
     records = json.loads(run("docker", "inspect", *containers))
-    runtime_images = {
-        item["Config"]["Labels"]["com.docker.compose.service"]: {"image": item["Image"]}
-        for item in records
-    }
+    runtime_images = runtime_overrides(records)
+    expected = apparmor_security_option(ROOT)
+    actual = runtime_images.get("mpb-worker", {}).get("security_opt", [])
+    if actual != ([expected] if expected else []):
+        raise ValueError("Running worker AppArmor profile differs from accepted policy")
+    if expected:
+        write_private(
+            saved / "worker-apparmor.json",
+            {"name": expected.removeprefix("apparmor="), "text": profile_text(ROOT)},
+        )
+    shutil.copyfile(ROOT / "security/worker-seccomp.json", saved / "worker-seccomp.json")
     runtime_images["migrator"] = {"image": record["manifest"]["images"]["bot"]}
     write_private(saved / "compose.json", {"services": runtime_images})
     for name in (".env", "Caddyfile.local"):
@@ -369,6 +429,12 @@ def rollback(compatible_schema=None):
     saved = (ROOT / target["snapshot"]).resolve()
     if not saved.is_relative_to(STATE.resolve()) or not (saved / ".env").is_file():
         raise ValueError("Invalid or incomplete private release snapshot")
+    worker_apparmor = verify_saved_worker_policy(saved, legacy=target.get("legacy", False))
+    if not target.get("legacy"):
+        runtime = json.loads((saved / "compose.json").read_text(encoding="utf-8"))["services"]
+        run_worker_probe(
+            runtime["mpb-worker"]["image"], saved / "worker-seccomp.json", worker_apparmor
+        )
     live_config = json.loads(
         run("docker", "compose", "-f", "docker-compose.prod.yml", "config", "--format", "json")
     )

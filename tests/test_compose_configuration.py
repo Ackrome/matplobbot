@@ -109,6 +109,13 @@ class TestComposeConfiguration(unittest.TestCase):
             frontend_volumes,
         )
 
+    def test_postgres_readiness_excludes_temporary_unix_only_setup_server(self):
+        for compose in (self.local, self.production):
+            test = compose["services"]["postgres"]["healthcheck"]["test"]
+            self.assertEqual(test[0], "CMD-SHELL")
+            self.assertIn("pg_isready -h 127.0.0.1", test[1])
+            self.assertIn("-U $$POSTGRES_USER -d $$POSTGRES_DB", test[1])
+
     def test_long_running_services_have_bounded_docker_logs(self):
         for compose in (self.local, self.production):
             expected_services = set(COMMON_LONG_RUNNING_SERVICES)

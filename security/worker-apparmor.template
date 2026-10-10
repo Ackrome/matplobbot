@@ -1,0 +1,9 @@
+abi <abi/4.0>,
+
+# Explicitly selected for Matplobbot worker containers only. The actual boundary
+# remains the mandatory non-root bubblewrap sandbox, seccomp and Docker limits.
+# Ubuntu 24.04 otherwise strips capabilities inside unprivileged user namespaces
+# even for containers started with apparmor=unconfined.
+profile @PROFILE_NAME@ flags=(unconfined) {
+  userns,
+}

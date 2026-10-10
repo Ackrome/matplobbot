@@ -1,0 +1,41 @@
+{
+  "status": "passed",
+  "commit": "40b1606d9b48b79959556f6b9b8c2b70eff01471-working-tree",
+  "images": {
+    "bot": "ghcr.io/ackrome/matplobbot-bot@sha256:2c92aba5298df1cc2724f7f9dac99f5e194dc764d1b38f2cd937370028bbd196",
+    "api": "ghcr.io/ackrome/matplobbot-api@sha256:bab01c246917fa99df9788e0c092a852c3ae4c55ff84173ec29cab34b22902c6",
+    "scheduler": "ghcr.io/ackrome/matplobbot-scheduler@sha256:b81209680af8bbc57da2af61c6f3584fd04419c27324d97d8b3c627392a093f0",
+    "worker": "ghcr.io/ackrome/matplobbot-worker@sha256:9a249a1f2aae28261fa35e494d677a0eb82793ab937b9554df61cfd40434bd57"
+  },
+  "worker_apparmor": "apparmor=matplobbot-render-b0baf697e84b0ca11eeedcf5",
+  "runtime_image_ids": {
+    "bot": "sha256:2c92aba5298df1cc2724f7f9dac99f5e194dc764d1b38f2cd937370028bbd196",
+    "api": "sha256:bab01c246917fa99df9788e0c092a852c3ae4c55ff84173ec29cab34b22902c6",
+    "scheduler": "sha256:b81209680af8bbc57da2af61c6f3584fd04419c27324d97d8b3c627392a093f0",
+    "worker": "sha256:9a249a1f2aae28261fa35e494d677a0eb82793ab937b9554df61cfd40434bd57"
+  },
+  "started_at": "2026-10-10T10:12:35.616577+00:00",
+  "external_boundaries": "Synthetic Telegram login; local Telegram HTTP 503/200 fixture; seeded RUZ cache. No real users or external delivery.",
+  "restore_verified": true,
+  "restore_seconds": 14.13,
+  "tables_verified": 23,
+  "schema_heads": [
+    "fe4e5f607182"
+  ],
+  "backup_sha256": "b0bcaaadf57bf512d6cc1ce158de259f099eacf29080ddab1633e7733dafb471",
+  "completed_at": "2026-10-10T10:14:24.626486+00:00",
+  "checks": [
+    "alembic fresh PostgreSQL",
+    "Telegram HTTP login and ownership isolation",
+    "project persistence across API restart",
+    "real Redis/Celery LaTeX Markdown Mermaid artifacts",
+    "production worker sandbox and six render paths",
+    "calendar profile persistence and ICS",
+    "owner export/delete and persistent session revocation",
+    "password login HTTP limits and revoked open/new WebSockets",
+    "real Redis Lua shared budgets and expiry",
+    "scheduler HTTP failure/retry/outbox dedupe",
+    "PostgreSQL SKIP LOCKED, baseline CAS and cancellation",
+    "snapshot backup/restore row fingerprints"
+  ]
+}

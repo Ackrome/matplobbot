@@ -157,10 +157,24 @@ def restore_drill(dump, *, postgres_image="postgres:15-alpine"):
     )
     try:
         for _ in range(60):
+            # The image's temporary initialization server accepts Unix-socket
+            # connections before POSTGRES_DB exists. TCP is enabled only after
+            # initialization; a real query also proves the target DB is usable.
             result = subprocess.run(
-                ["docker", "exec", name, "pg_isready", "-U", "rc", "-d", "rc"], capture_output=True
+                [
+                    "docker",
+                    "exec",
+                    name,
+                    "sh",
+                    "-c",
+                    'PGPASSWORD="$POSTGRES_PASSWORD" PGCONNECT_TIMEOUT=2 exec psql '
+                    '-XAtw -v ON_ERROR_STOP=1 -h 127.0.0.1 -U "$POSTGRES_USER" '
+                    '-d "$POSTGRES_DB" -c "SELECT 1"',
+                ],
+                capture_output=True,
+                text=True,
             )
-            if result.returncode == 0:
+            if result.returncode == 0 and result.stdout.strip() == "1":
                 break
             time.sleep(1)
         else:

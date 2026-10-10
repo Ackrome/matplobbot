@@ -214,11 +214,110 @@ class TestReleaseEngineering(unittest.TestCase):
     def test_rc_network_has_no_production_config_ports_or_egress(self):
         config = build_compose(manifest()["images"], ROOT)
         self.assertTrue(config["networks"]["isolated"]["internal"])
+        postgres_health = config["services"]["postgres"]["healthcheck"]["test"]
+        self.assertEqual(postgres_health[0], "CMD-SHELL")
+        self.assertIn("-h 127.0.0.1", postgres_health[1])
+        self.assertIn('-d "$${POSTGRES_DB}" -c "SELECT 1"', postgres_health[1])
         for service in config["services"].values():
             self.assertNotIn("env_file", service)
             self.assertNotIn("ports", service)
             self.assertNotIn("privileged", service)
         self.assertEqual(config["services"]["worker"]["cap_drop"], ["ALL"])
+        self.assertIn("systempaths=unconfined", config["services"]["worker"]["security_opt"])
+        for name, service in config["services"].items():
+            if name != "worker":
+                self.assertNotIn("systempaths=unconfined", service.get("security_opt", []))
+        self.assertFalse(
+            any("apparmor=" in item for item in config["services"]["worker"]["security_opt"])
+        )
+        profiled = build_compose(manifest()["images"], ROOT, "apparmor=matplobbot-render-test")
+        self.assertEqual(
+            [
+                item
+                for item in profiled["services"]["worker"]["security_opt"]
+                if item.startswith("apparmor=")
+            ],
+            ["apparmor=matplobbot-render-test"],
+        )
+
+    def test_runtime_snapshot_preserves_observed_worker_profile(self):
+        records = [
+            {
+                "Image": "sha256:worker",
+                "AppArmorProfile": "matplobbot-render-old",
+                "Config": {"Labels": {"com.docker.compose.service": "mpb-worker"}},
+            }
+        ]
+        self.assertEqual(
+            release_deploy.runtime_overrides(records)["mpb-worker"],
+            {"image": "sha256:worker", "security_opt": ["apparmor=matplobbot-render-old"]},
+        )
+        records[0]["AppArmorProfile"] = "unconfined"
+        self.assertEqual(
+            release_deploy.runtime_overrides(records)["mpb-worker"]["security_opt"],
+            ["apparmor=unconfined"],
+        )
+        records[0]["AppArmorProfile"] = ""
+        self.assertNotIn("security_opt", release_deploy.runtime_overrides(records)["mpb-worker"])
+
+    def test_rollback_profile_probe_failure_precedes_any_service_or_source_change(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state = root / ".release-state"
+            saved = state / "saved"
+            saved.mkdir(parents=True)
+            (saved / ".env").write_text("KEY=restored")
+            (saved / "compose.json").write_text(
+                json.dumps(
+                    {
+                        "services": {
+                            "mpb-worker": {
+                                "image": "sha256:old",
+                                "security_opt": ["apparmor=matplobbot-render-old"],
+                            }
+                        }
+                    }
+                )
+            )
+            (saved / "worker-apparmor.json").write_text(
+                json.dumps({"name": "matplobbot-render-old", "text": "retained policy"})
+            )
+            record = {
+                "schema_heads": ["old"],
+                "snapshot": ".release-state/saved",
+                "manifest": {"commit": "a" * 40},
+            }
+            for name in ("current", "previous"):
+                (state / (name + ".json")).write_text(json.dumps(record))
+            with (
+                patch.object(release_deploy, "ROOT", root),
+                patch.object(release_deploy, "STATE", state),
+                patch.object(release_deploy, "heads", return_value=["old"]),
+                patch.object(release_deploy, "verify_installed_profile") as verify_policy,
+                patch.object(
+                    release_deploy, "run_worker_probe", side_effect=RuntimeError("not loaded")
+                ) as probe,
+                patch.object(release_deploy, "execute") as execute,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "not loaded"):
+                    release_deploy.rollback()
+                verify_policy.assert_called_once_with("matplobbot-render-old", "retained policy")
+                probe.assert_called_once_with(
+                    "sha256:old",
+                    saved.resolve() / "worker-seccomp.json",
+                    "apparmor=matplobbot-render-old",
+                )
+                execute.assert_not_called()
+
+    def test_no_apparmor_daemon_probe_omits_the_option(self):
+        with (
+            patch.object(release_deploy, "apparmor_security_option", return_value=None),
+            patch.object(release_deploy, "execute") as execute,
+        ):
+            release_deploy.probe_worker("worker-image", ROOT)
+        self.assertFalse(
+            any(str(value).startswith("apparmor=") for value in execute.call_args.args[0])
+        )
 
     def test_restore_checksum_failure_happens_before_any_docker_mutation(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -229,6 +328,50 @@ class TestReleaseEngineering(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "checksum"):
                     release_backup.restore_drill(dump)
                 command.assert_not_called()
+
+    def test_restore_waits_for_target_database_over_tcp_before_loading_dump(self):
+        from unittest.mock import Mock
+
+        with tempfile.TemporaryDirectory() as directory:
+            dump = Path(directory) / "backup.dump"
+            dump.write_bytes(b"synthetic dump")
+            dump.with_suffix(".json").write_text(
+                json.dumps(
+                    {
+                        "sha256": release_backup.file_sha256(dump),
+                        "tables": {},
+                        "schema_heads": ["head"],
+                    }
+                )
+            )
+            ready = False
+            attempts = 0
+
+            def readiness(args, **kwargs):
+                nonlocal ready, attempts
+                self.assertEqual(args[3:5], ["sh", "-c"])
+                self.assertIn("-h 127.0.0.1", args[5])
+                self.assertIn('-d "$POSTGRES_DB" -c "SELECT 1"', args[5])
+                attempts += 1
+                ready = attempts == 3
+                return subprocess.CompletedProcess(args, 0 if ready else 2, "1\n" if ready else "")
+
+            def command(args, **kwargs):
+                if "pg_restore" in args:
+                    self.assertTrue(ready, "Restore must wait for the actual target database")
+
+            with (
+                patch.object(release_backup, "command", side_effect=command),
+                patch.object(release_backup.subprocess, "run", side_effect=readiness),
+                patch.object(release_backup.time, "sleep") as sleep,
+                patch.object(
+                    release_backup, "Snapshot", return_value=Mock(query=Mock(return_value=["head"]))
+                ),
+                patch.object(release_backup, "witness", return_value={}),
+            ):
+                self.assertTrue(release_backup.restore_drill(dump)["restore_verified"])
+            self.assertEqual(attempts, 3)
+            self.assertEqual(sleep.call_count, 2)
 
     def test_deploy_bootstrap_failure_never_advances_last_successful(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -252,6 +395,7 @@ class TestReleaseEngineering(unittest.TestCase):
             with (
                 patch.object(release_deploy, "STATE", state),
                 patch.object(release_deploy, "verify"),
+                patch.object(release_deploy, "apparmor_security_option", return_value=None),
                 patch.object(release_deploy, "run", return_value=""),
                 patch.object(
                     release_deploy.subprocess,
@@ -296,7 +440,12 @@ class TestReleaseEngineering(unittest.TestCase):
             state = root / ".release-state"
             candidate = root / "candidate"
             (candidate / "scripts").mkdir(parents=True)
-            for name in ("release_deploy.py", "release_manifest.py", "release_backup.py"):
+            for name in (
+                "release_deploy.py",
+                "release_manifest.py",
+                "release_backup.py",
+                "worker_security.py",
+            ):
                 (candidate / "scripts" / name).write_text("# retained recovery helper")
             path = root / "accepted.json"
             path.write_text(json.dumps(manifest()))
@@ -347,6 +496,8 @@ class TestReleaseEngineering(unittest.TestCase):
                     self.assertEqual(command[command.index("--network") + 1], "none")
                     self.assertIn("no-new-privileges:true", command)
                     self.assertIn("--cap-drop", command)
+                    self.assertIn("systempaths=unconfined", command)
+                    self.assertEqual(command.count("apparmor=matplobbot-render-test"), 1)
                     self.assertEqual(kwargs["timeout"], 120)
                 if "stop" in command or "checkout" in command:
                     self.assertTrue((state / "attempt.json").exists())
@@ -362,6 +513,11 @@ class TestReleaseEngineering(unittest.TestCase):
                 patch.object(release_deploy, "ROOT", root),
                 patch.object(release_deploy, "STATE", state),
                 patch.object(release_deploy, "verify"),
+                patch.object(
+                    release_deploy,
+                    "apparmor_security_option",
+                    return_value="apparmor=matplobbot-render-test",
+                ),
                 patch.object(release_deploy, "verify_no_untracked_inputs"),
                 patch.object(release_deploy, "source_files", return_value={"deploy.sh": "a" * 64}),
                 patch.object(release_deploy, "heads", return_value=["old"]),

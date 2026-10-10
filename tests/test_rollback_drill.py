@@ -14,6 +14,8 @@ class RollbackDrillSafetyTests(unittest.TestCase):
     def test_every_service_is_internal_without_host_ports_or_privileged_mounts(self):
         compose = rollback_drill.fixture_compose("synthetic-api", "synthetic-bot")
         self.assertEqual(compose["networks"], {"isolated": {"internal": True}})
+        readiness = compose["services"]["postgres"]["healthcheck"]["test"]
+        self.assertEqual(readiness[readiness.index("-h") + 1], "127.0.0.1")
         for name, service in compose["services"].items():
             with self.subTest(service=name):
                 self.assertEqual(service["networks"], ["isolated"])

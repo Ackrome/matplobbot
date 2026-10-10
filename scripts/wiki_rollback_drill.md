@@ -1,5 +1,10 @@
 # Isolated rollback drill
 
+The temporary fixture copies `worker_security.py` with the three release helpers,
+so it exercises recovery with the current helper dependency graph. The observed
+legacy fixture intentionally retains its historical security selection; managed
+profile rollback additionally requires the release policy/positive-probe tests.
+
 `rollback_drill.py` runs the actual `release_deploy.py rollback` and `finalize`
 commands against a temporary Git repository and unique Docker Compose project.
 It never reads the real `.env`, release snapshots or database. All credentials,
@@ -30,3 +35,6 @@ success and failure and verifies no resources with the project label remain.
 Only the requested JSON report survives. Reports contain helper hashes and image
 IDs but exclude credentials and JWTs. Keep the observed-legacy fixture explicit;
 do not manufacture a GHCR release attestation from these development images.
+
+The PostgreSQL fixture healthcheck uses TCP loopback, excluding the image's
+temporary Unix-only initialization server before migration starts.

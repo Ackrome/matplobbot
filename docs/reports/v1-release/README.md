@@ -3,6 +3,12 @@
 These reports distinguish development checks from accepted immutable release evidence.
 The local RC uses working-tree images and cannot be used as a deployment manifest.
 
+The self-hosted CI runner's inactive September 4 Buildx cache was removed after
+fresh checks found no container, process mount or open-file references. Free space
+increased by 11,774,816,256 bytes to 12,786,122,752 bytes; all nine images and the
+running builder were preserved. This was CI cache maintenance, not release
+acceptance: [runner-cache-reclaim.json](runner-cache-reclaim.json).
+
 The agreed ten release-readiness items are implemented as follows:
 
 1. Rendering uses a mandatory non-root Linux namespace sandbox with bounded
@@ -31,11 +37,13 @@ The agreed ten release-readiness items are implemented as follows:
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Application regression suite | 653 tests, 8 platform/optional skips; passed | Root project `.venv`, `coverage run --branch -m unittest discover -s tests -v` |
+| Application regression suite | 671 tests, 9 platform/optional skips; passed | Root project `.venv`, `coverage run --branch -m unittest discover -s tests -v` |
 | Application-only coverage | 52.62%, including unimported modules | `bot`, `fastapi_stats_app`, `scheduler_app`, `shared_lib`; floor 50% |
 | CI critical Ruff / mypy | Passed / all 6 configured files passed | Same commands as CI |
 | Locked dependency audit | 46 packages, no known vulnerabilities reported | CI `pip_audit --strict`, existing narrow joblib exception retained |
 | Real local service RC | Passed | [rc-acceptance-local.json](rc-acceptance-local.json) |
+| Ubuntu runner service RC diagnostic | Passed, including 23-table restore and cleanup | [rc-ubuntu-diagnostic-40b.json](rc-ubuntu-diagnostic-40b.json) |
+| Ubuntu runner sandbox compatibility | 11 distinct tests passed, including all six render formats and outer/inner kernel-access restrictions | [worker-host-sandbox.json](worker-host-sandbox.json); published `40b1606` worker with updated host policy, not final release acceptance |
 | Production snapshot restore | 21 tables matched; 5.49 seconds | [production-restore.json](production-restore.json) |
 | Migration of restored production data | Passed; all original rows preserved | [production-migration.json](production-migration.json) |
 | Isolated real rollback | Source, private configuration, all 9 runtime image IDs, old admin login and schema verified | [rollback-local.json](rollback-local.json) |
@@ -48,6 +56,12 @@ scheduler delivery code. Only external Telegram and RUZ boundaries use synthetic
 fixtures. It covers HTTP throttling, active/new WebSocket revocation, account
 isolation/export/delete, calendar feeds, restart persistence, failed delivery retry,
 PostgreSQL concurrent claiming/CAS/cancellation, and isolated backup restoration.
+
+The Ubuntu diagnostic reused published `40b1606` application images with the updated
+orchestration, explicit worker AppArmor policy and TCP database readiness checks.
+Its report is marked `working-tree`: it verifies the runner's actual service and
+kernel compatibility, but cannot attest a different source commit or replace the
+mandatory final-image CI acceptance.
 
 The first legacy rollback has a concrete compatibility restriction. Do not use
 `--compatible-schema fe4e5f607182` to return to the observed `9fac7e87` runtime:

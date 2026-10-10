@@ -1,5 +1,9 @@
 # `test_compose_configuration.py`
 
+PostgreSQL healthchecks must use TCP loopback in both Compose files; this excludes
+the temporary Unix-only initialization server and preserves configured user/DB
+variable expansion.
+
 ## Purpose
 
 Protects the intentional relationship between the local and production Docker Compose stacks without introducing a separate `compose.dev` file.

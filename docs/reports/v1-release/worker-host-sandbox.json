@@ -1,0 +1,90 @@
+{
+  "checked_at_utc": "2026-10-10T10:06:37.371621+00:00",
+  "evidence_kind": "development host compatibility; not immutable-release acceptance",
+  "accepted_release": false,
+  "source_commit_of_tested_worker": "40b1606d9b48b79959556f6b9b8c2b70eff01471",
+  "worker_image": "ghcr.io/ackrome/matplobbot-worker@sha256:9a249a1f2aae28261fa35e494d677a0eb82793ab937b9554df61cfd40434bd57",
+  "host": "github-runner-vm",
+  "kernel": "6.8.0-139-generic",
+  "profile": "matplobbot-render-b0baf697e84b0ca11eeedcf5",
+  "template_sha256": "b0baf697e84b0ca11eeedcf55ac44600a87884187b2a6a8b53c6a4b9c039cb0e",
+  "helper_sha256": "5ec19889cf628f0d14beff4b7de95b79bd63c982f3db8d3a32264e3131a7d17e",
+  "test_source_sha256": "4cd6a5ff18d6ce2e4c01c357d3a82a9db114d72ab3ba1100d006017d6825441f",
+  "runtime_controls": {
+    "apparmor": "named content-hash policy with userns permission",
+    "systempaths": "unconfined only for disposable worker probe",
+    "user": "image non-root appuser (UID1001)",
+    "cap_drop": [
+      "ALL"
+    ],
+    "no_new_privileges": true,
+    "read_only_root": true,
+    "seccomp_sha256": "ca2e4a00b9888537ed1e52c638496453c71854341ca00c6ccc1204891e270d42",
+    "memory_bytes": 2147483648,
+    "pids_limit": 256,
+    "tmpfs": "/tmp:size=512m,mode=1777",
+    "network": "none"
+  },
+  "results": {
+    "distinct_tests_passed": 11,
+    "six_renderer_formats_passed": [
+      "quick LaTeX",
+      "project",
+      "formula",
+      "Markdown",
+      "Mermaid",
+      "Markdown with Mermaid image"
+    ],
+    "filesystem_environment_network_pid_isolation": "passed",
+    "child_cleanup_timeout_and_successful_exit": "passed",
+    "outer_and_inner_nonroot_zero_effective_permitted_bounding_caps_no_new_privileges": "passed",
+    "outer_and_inner_kernel_setting_write_access": "denied without writing bytes"
+  },
+  "logs": [
+    {
+      "name": "matplobbot-sandbox-40b-systempaths-stdout.log",
+      "sha256": "74cef9040cdd755bb0490fddb330e083ac2f97c7ce2b2db4a061420a15c5ee31",
+      "test_results": [
+        "test_config_and_traversal_files_rejected (test_render_sandbox.TestRenderPolicy.test_config_and_traversal_files_rejected) ... ok",
+        "test_no_unsandboxed_fallback (test_render_sandbox.TestRenderPolicy.test_no_unsandboxed_fallback) ... ok",
+        "test_root_worker_is_rejected (test_render_sandbox.TestRenderPolicy.test_root_worker_is_rejected) ... ok",
+        "test_every_render_task_produces_a_real_artifact (test_render_sandbox.TestRenderSandboxIntegration.test_every_render_task_produces_a_real_artifact) ... ok",
+        "test_files_env_processes_network_and_readonly_runtime (test_render_sandbox.TestRenderSandboxIntegration.test_files_env_processes_network_and_readonly_runtime) ... ok",
+        "test_latex_success_and_local_rc_never_executes (test_render_sandbox.TestRenderSandboxIntegration.test_latex_success_and_local_rc_never_executes) ... ok",
+        "test_macro_file_read_cannot_escape_workdir (test_render_sandbox.TestRenderSandboxIntegration.test_macro_file_read_cannot_escape_workdir) ... ok",
+        "test_output_symlink_is_rejected_before_worker_reads_it (test_render_sandbox.TestRenderSandboxIntegration.test_output_symlink_is_rejected_before_worker_reads_it) ... ok",
+        "test_successful_exit_reaps_detached_background_writer (test_render_sandbox.TestRenderSandboxIntegration.test_successful_exit_reaps_detached_background_writer) ... ok",
+        "test_timeout_cleans_up_a_background_child (test_render_sandbox.TestRenderSandboxIntegration.test_timeout_cleans_up_a_background_child) ... ok",
+        "Ran 10 tests in 57.708s",
+        "OK"
+      ]
+    },
+    {
+      "name": "matplobbot-sandbox-40b-kernel-controls-stdout.log",
+      "sha256": "86263d4733fbd2767b9d9fb32e15496eb2b02e3fc8291c0fde7b62af7fa2386d",
+      "test_results": [
+        "test_outer_and_inner_have_no_capabilities_or_kernel_write_access (test_render_sandbox.TestRenderSandboxIntegration.test_outer_and_inner_have_no_capabilities_or_kernel_write_access) ... ok",
+        "Ran 1 test in 0.335s",
+        "OK"
+      ]
+    }
+  ],
+  "host_profile_provisioning": {
+    "github-runner-vm": {
+      "root_installer_loaded_profile_check": "passed, reported by coordinating root agent",
+      "nonroot_installed_policy_validation": "passed as github-runner-vm",
+      "actual_sandbox_compile": "passed"
+    },
+    "app-vm": {
+      "root_installer_loaded_profile_check": "passed, reported by coordinating root agent",
+      "nonroot_installed_policy_validation": "passed as deploy",
+      "actual_sandbox_compile": "pending destination release preflight"
+    }
+  },
+  "global_kernel_policy_changed": false,
+  "limitations": [
+    "Tests used the published 40b worker with updated host policy and test fixture; this is not a new accepted source manifest.",
+    "Full updated Compose RC is pending and must verify actual MaskedPaths/ReadonlyPaths and all service checks.",
+    "Production-host positive compile remains mandatory before maintenance."
+  ]
+}

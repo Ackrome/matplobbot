@@ -1,0 +1,98 @@
+{
+  "checked_at_utc": "2026-10-10T09:45:57.268851+00:00",
+  "host": "github-runner-vm",
+  "scope": "One inactive Buildx builder and its exact linked cache volume only",
+  "candidate_builder": "builder-11168b86-00ff-4065-94a8-066282294ea7",
+  "candidate_inspect_before": "Name:          builder-11168b86-00ff-4065-94a8-066282294ea7\nDriver:        docker-container\nLast Activity: 2026-09-04 10:51:47 +0000 UTC\n\nNodes:\nName:                  builder-11168b86-00ff-4065-94a8-066282294ea70\nEndpoint:              unix:///var/run/docker.sock\nStatus:                inactive\nBuildKit daemon flags: --allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host\n",
+  "candidate_volume": "buildx_buildkit_builder-11168b86-00ff-4065-94a8-066282294ea70_state",
+  "candidate_volume_bytes_before": 11774926848,
+  "preflight": {
+    "inactive_last_activity_verified": true,
+    "no_container_mounts": true,
+    "no_process_mounts_or_open_fds": true
+  },
+  "operations": [
+    {
+      "command": [
+        "runuser",
+        "-u",
+        "github-runner-vm",
+        "--",
+        "docker",
+        "buildx",
+        "rm",
+        "builder-11168b86-00ff-4065-94a8-066282294ea7"
+      ],
+      "output": "builder-11168b86-00ff-4065-94a8-066282294ea7 removed"
+    },
+    {
+      "command": [
+        "docker",
+        "volume",
+        "rm",
+        "buildx_buildkit_builder-11168b86-00ff-4065-94a8-066282294ea70_state"
+      ],
+      "output": "buildx_buildkit_builder-11168b86-00ff-4065-94a8-066282294ea70_state"
+    }
+  ],
+  "before": {
+    "free_bytes": 1011306496,
+    "containers": [
+      {
+        "id": "9a37f30cfb00c05efb35d79380e628badd846b829de8a06171924d175b767ab7",
+        "name": "/buildx_buildkit_builder-8529d834-ed90-4503-8db8-9af75272d78d0",
+        "image": "sha256:1e110c71d389d6d24f67b9438e2f7b8da749a6ff407b22a1631e025c95599368",
+        "status": "running",
+        "volumes": [
+          "buildx_buildkit_builder-8529d834-ed90-4503-8db8-9af75272d78d0_state"
+        ]
+      }
+    ],
+    "image_ids": [
+      "sha256:1e110c71d389d6d24f67b9438e2f7b8da749a6ff407b22a1631e025c95599368",
+      "sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8",
+      "sha256:2c92aba5298df1cc2724f7f9dac99f5e194dc764d1b38f2cd937370028bbd196",
+      "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+      "sha256:9a249a1f2aae28261fa35e494d677a0eb82793ab937b9554df61cfd40434bd57",
+      "sha256:b81209680af8bbc57da2af61c6f3584fd04419c27324d97d8b3c627392a093f0",
+      "sha256:bab01c246917fa99df9788e0c092a852c3ae4c55ff84173ec29cab34b22902c6",
+      "sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea",
+      "sha256:f7d23353e1b15400d22ebe31189f4d314b87a4c129cc400c8c2d8d4ca127bf81"
+    ],
+    "active_builder": "Name:          builder-8529d834-ed90-4503-8db8-9af75272d78d\nDriver:        docker-container\nLast Activity: 2026-02-10 13:16:33 +0000 UTC\n\nNodes:\nName:                  builder-8529d834-ed90-4503-8db8-9af75272d78d0\nEndpoint:              unix:///var/run/docker.sock\nStatus:                running\nBuildKit daemon flags: --allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host\nBuildKit version:      v0.27.1\nPlatforms:             linux/amd64, linux/amd64/v2, linux/386\nLabels:\n org.mobyproject.buildkit.worker.executor:         oci\n org.mobyproject.buildkit.worker.hostname:         9a37f30cfb00\n org.mobyproject.buildkit.worker.network:          host\n org.mobyproject.buildkit.worker.oci.process-mode: sandbox\n org.mobyproject.buildkit.worker.selinux.enabled:  false\n org.mobyproject.buildkit.worker.snapshotter:      overlayfs\nGC Policy rule#0:\n All:            false\n Filters:        type==source.local,type==exec.cachemount,type==source.git.checkout\n Keep Duration:  48h0m0s\n Max Used Space: 488.3MiB\nGC Policy rule#1:\n All:            false\n Keep Duration:  1440h0m0s\n Reserved Space: 3.725GiB\n Max Used Space: 28.87GiB\n Min Free Space: 7.451GiB\nGC Policy rule#2:\n All:            false\n Reserved Space: 3.725GiB\n Max Used Space: 28.87GiB\n Min Free Space: 7.451GiB\nGC Policy rule#3:\n All:            true\n Reserved Space: 3.725GiB\n Max Used Space: 28.87GiB\n Min Free Space: 7.451GiB\n"
+  },
+  "after": {
+    "free_bytes": 12786122752,
+    "containers": [
+      {
+        "id": "9a37f30cfb00c05efb35d79380e628badd846b829de8a06171924d175b767ab7",
+        "name": "/buildx_buildkit_builder-8529d834-ed90-4503-8db8-9af75272d78d0",
+        "image": "sha256:1e110c71d389d6d24f67b9438e2f7b8da749a6ff407b22a1631e025c95599368",
+        "status": "running",
+        "volumes": [
+          "buildx_buildkit_builder-8529d834-ed90-4503-8db8-9af75272d78d0_state"
+        ]
+      }
+    ],
+    "image_ids": [
+      "sha256:1e110c71d389d6d24f67b9438e2f7b8da749a6ff407b22a1631e025c95599368",
+      "sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8",
+      "sha256:2c92aba5298df1cc2724f7f9dac99f5e194dc764d1b38f2cd937370028bbd196",
+      "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+      "sha256:9a249a1f2aae28261fa35e494d677a0eb82793ab937b9554df61cfd40434bd57",
+      "sha256:b81209680af8bbc57da2af61c6f3584fd04419c27324d97d8b3c627392a093f0",
+      "sha256:bab01c246917fa99df9788e0c092a852c3ae4c55ff84173ec29cab34b22902c6",
+      "sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea",
+      "sha256:f7d23353e1b15400d22ebe31189f4d314b87a4c129cc400c8c2d8d4ca127bf81"
+    ],
+    "active_builder": "Name:          builder-8529d834-ed90-4503-8db8-9af75272d78d\nDriver:        docker-container\nLast Activity: 2026-02-10 13:16:33 +0000 UTC\n\nNodes:\nName:                  builder-8529d834-ed90-4503-8db8-9af75272d78d0\nEndpoint:              unix:///var/run/docker.sock\nStatus:                running\nBuildKit daemon flags: --allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host\nBuildKit version:      v0.27.1\nPlatforms:             linux/amd64, linux/amd64/v2, linux/386\nLabels:\n org.mobyproject.buildkit.worker.executor:         oci\n org.mobyproject.buildkit.worker.hostname:         9a37f30cfb00\n org.mobyproject.buildkit.worker.network:          host\n org.mobyproject.buildkit.worker.oci.process-mode: sandbox\n org.mobyproject.buildkit.worker.selinux.enabled:  false\n org.mobyproject.buildkit.worker.snapshotter:      overlayfs\nGC Policy rule#0:\n All:            false\n Filters:        type==source.local,type==exec.cachemount,type==source.git.checkout\n Keep Duration:  48h0m0s\n Max Used Space: 488.3MiB\nGC Policy rule#1:\n All:            false\n Keep Duration:  1440h0m0s\n Reserved Space: 3.725GiB\n Max Used Space: 28.87GiB\n Min Free Space: 7.451GiB\nGC Policy rule#2:\n All:            false\n Reserved Space: 3.725GiB\n Max Used Space: 28.87GiB\n Min Free Space: 7.451GiB\nGC Policy rule#3:\n All:            true\n Reserved Space: 3.725GiB\n Max Used Space: 28.87GiB\n Min Free Space: 7.451GiB\n"
+  },
+  "free_bytes_increase": 11774816256,
+  "verification": {
+    "candidate_volume_absent": true,
+    "all_images_preserved": true,
+    "all_containers_preserved": true,
+    "active_builder_preserved": true
+  },
+  "limitations": "Cache was rebuildable CI state; source, published images and production host were not changed."
+}

@@ -15,3 +15,11 @@ with a Mermaid image verified in its resulting PDF. All inputs
 are generated in temporary directories; no production services, secrets or accounts
 are used. Dependencies are the built worker runtime, Pillow and unittest. Keep the
 runtime suite in the release container gate whenever namespace/profile settings change.
+
+The outer-worker/inner-renderer kernel-access regression verifies non-root UID,
+zero effective/permitted/bounding capabilities, no-new-privileges, and denied
+write access to kernel settings. Its write-open probes never truncate or write
+any bytes. This covers the worker-scoped Docker `systempaths=unconfined` exception:
+Docker's outer proc masks can otherwise prevent the Linux kernel from mounting
+the renderer's new private proc filesystem. Existing PID, filesystem, environment,
+network and child-cleanup probes remain mandatory alongside this check.

@@ -89,6 +89,34 @@ print(json.dumps({"outside":p.exists(),"env":os.getenv("AUDIT_SECRET_CANARY"),
                 },
             )
 
+    def test_outer_and_inner_have_no_capabilities_or_kernel_write_access(self):
+        # Opening without O_TRUNC/O_CREAT or writing any bytes is non-mutating.
+        # This covers the scoped Docker proc-mask exception needed for nested proc.
+        code = """import json,os,pathlib
+status={line.split(':',1)[0]:line.split(':',1)[1].strip()
+        for line in pathlib.Path('/proc/self/status').read_text().splitlines() if ':' in line}
+writable=[]
+for path in ('/proc/sys/kernel/core_pattern','/proc/sysrq-trigger','/sys/kernel/uevent_helper'):
+    try:fd=os.open(path,os.O_WRONLY)
+    except OSError:continue
+    else:os.close(fd);writable.append(path)
+print(json.dumps({'uid':os.geteuid(),'cap_effective':status['CapEff'],
+                  'cap_permitted':status['CapPrm'],'cap_bounding':status['CapBnd'],
+                  'no_new_privileges':status['NoNewPrivs'],'writable':writable}))
+"""
+        outer = subprocess.run(["python3", "-c", code], capture_output=True, text=True, check=True)
+        with tempfile.TemporaryDirectory() as directory:
+            inner = self.run_process(["python3", "-c", code], directory)
+        self.assertEqual(inner.returncode, 0, inner.stderr)
+        for position, result in (("worker", outer), ("renderer", inner)):
+            with self.subTest(position=position):
+                status = json.loads(result.stdout)
+                self.assertNotEqual(status["uid"], 0)
+                for key in ("cap_effective", "cap_permitted", "cap_bounding"):
+                    self.assertEqual(int(status[key], 16), 0, status)
+                self.assertEqual(status["no_new_privileges"], "1")
+                self.assertEqual(status["writable"], [])
+
     def test_latex_success_and_local_rc_never_executes(self):
         with tempfile.TemporaryDirectory() as directory:
             Path(directory, ".latexmkrc").write_text(

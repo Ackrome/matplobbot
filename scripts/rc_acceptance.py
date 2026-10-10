@@ -12,9 +12,10 @@ from pathlib import Path
 import yaml
 from release_backup import backup, restore_drill
 from release_manifest import SERVICES, run, verify
+from worker_security import apparmor_security_option
 
 
-def build_compose(images, root):
+def build_compose(images, root, worker_apparmor=None):
     environment = {
         "MPB_ISOLATED_RC": "1",
         "ENVIRONMENT": "development",
@@ -55,6 +56,8 @@ def build_compose(images, root):
     ):
         if key in production:
             worker[key] = production[key]
+    if worker_apparmor:
+        worker.setdefault("security_opt", []).append(worker_apparmor)
     services = {
         "postgres": {
             "image": "postgres:15-alpine",
@@ -66,7 +69,12 @@ def build_compose(images, root):
             "volumes": ["db:/var/lib/postgresql/data"],
             "networks": ["isolated"],
             "healthcheck": {
-                "test": ["CMD", "pg_isready", "-U", "rc", "-d", "rc"],
+                "test": [
+                    "CMD-SHELL",
+                    'PGPASSWORD="$${POSTGRES_PASSWORD}" PGCONNECT_TIMEOUT=2 psql '
+                    '-XAtw -v ON_ERROR_STOP=1 -h 127.0.0.1 -U "$${POSTGRES_USER}" '
+                    '-d "$${POSTGRES_DB}" -c "SELECT 1"',
+                ],
                 "interval": "1s",
                 "timeout": "5s",
                 "retries": 60,
@@ -120,6 +128,7 @@ def main():
             parser.error("Four service images are required")
         commit = run("git", "rev-parse", "HEAD") + "-working-tree"
     subprocess.run(["docker", "info"], check=True, stdout=subprocess.DEVNULL)
+    worker_apparmor = apparmor_security_option(root)
     project = "mpb-rc-" + uuid.uuid4().hex[:12]
     args.output = args.output.resolve()
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -127,6 +136,7 @@ def main():
         "status": "failed",
         "commit": commit,
         "images": images,
+        "worker_apparmor": worker_apparmor,
         "runtime_image_ids": {
             key: json.loads(run("docker", "image", "inspect", ref))[0]["Id"]
             for key, ref in images.items()
@@ -137,7 +147,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix=project + "-") as directory:
         work = Path(directory)
         config = work / "compose.json"
-        config.write_text(json.dumps(build_compose(images, root)), encoding="utf-8")
+        config.write_text(
+            json.dumps(build_compose(images, root, worker_apparmor)), encoding="utf-8"
+        )
         compose = [
             "docker",
             "compose",

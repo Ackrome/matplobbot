@@ -7,6 +7,32 @@ unit-test job alone is not an accepted application release.
 
 ## Acceptance and deployment
 
+On a Docker host with AppArmor, review `security/worker-apparmor.template` and run
+`sudo python3 scripts/worker_security.py install --root .` from the reviewed
+candidate before RC or deployment. This adds a content-hash-named policy under
+`/etc/apparmor.d`, verifies it is loaded, and preserves older policies. It changes
+no global user-namespace setting. The ordinary deployment user can then run
+`python3 scripts/worker_security.py check`; the positive compile remains required
+because that user may not read securityfs. Daemons without AppArmor omit this
+selection. Do not replace the named policy with `apparmor=unconfined` on Ubuntu 24:
+that still invokes its restricted unprivileged-user-namespace profile.
+
+Both base Compose files deliberately omit AppArmor selection. The RC/deploy helpers
+add exactly one verified named option in their generated worker override. Direct
+Compose operators must provision the same policy and supply a worker
+`security_opt` override containing the option returned by `check`; retain the
+base seccomp and no-new-privileges options. Use the release helper for accepted
+deployments and keep older hash-named policies through the rollback window.
+
+The worker/probe alone also use `systempaths=unconfined`, as documented by Moby
+for nested rootless process sandboxes: Docker's masked parent `/proc` paths can
+make Linux reject a new PID-namespace procfs mount. The renderer still mounts a
+fresh `/proc` in its own PID namespace; it never binds the worker's process view.
+Non-root UID, zero effective/permitted/bounding capabilities, no-new-privileges,
+read-only root, seccomp and resource limits remain mandatory. The actual sandbox
+suite checks both outer and inner processes cannot open sensitive kernel controls
+for writing. Do not apply this exception to other services or add SYS_ADMIN.
+
 GitHub Actions validates the source, builds all four images with its exact source
 revision label, then runs `scripts/rc_acceptance.py` against those digests. This
 mandatory step creates an internal Docker network, fresh PostgreSQL and Redis,
