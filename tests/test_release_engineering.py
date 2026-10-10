@@ -163,13 +163,17 @@ class TestReleaseEngineering(unittest.TestCase):
             versions = root / "alembic/versions"
             versions.mkdir(parents=True)
             (versions / "a.py").write_text(
-                "revision='a'\ndown_revision=None\nraise RuntimeError('must not run')\n"
+                "revision='a'\ndown_revision=None\nraise RuntimeError('must not run')\n",
+                encoding="utf-8-sig",
             )
             (versions / "b.py").write_text("revision: str='b'\ndown_revision: str='a'\n")
             self.assertEqual(release_manifest.schema_heads(root), ["b"])
             (versions / "c.py").write_text("revision='c'\ndown_revision='a'\n")
             with self.assertRaises(ValueError):
                 release_manifest.schema_heads(root)
+
+    def test_current_repository_migrations_parse_to_one_release_head(self):
+        self.assertEqual(len(release_manifest.schema_heads(ROOT)), 1)
 
     def test_untracked_deploy_inputs_rejected_but_runtime_state_allowed(self):
         with patch.object(

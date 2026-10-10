@@ -80,7 +80,8 @@ def schema_heads(root):
     revisions, parents = set(), set()
     for path in (root / "alembic/versions").glob("*.py"):
         values = {}
-        for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        # Parse bytes like Python's loader, preserving support for UTF-8 BOMs.
+        for node in ast.parse(path.read_bytes(), filename=str(path)).body:
             if isinstance(node, (ast.Assign, ast.AnnAssign)):
                 targets = node.targets if isinstance(node, ast.Assign) else [node.target]
                 for target in targets:

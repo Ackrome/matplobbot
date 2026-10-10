@@ -3,9 +3,35 @@
 These reports distinguish development checks from accepted immutable release evidence.
 The local RC uses working-tree images and cannot be used as a deployment manifest.
 
+The agreed ten release-readiness items are implemented as follows:
+
+1. Rendering uses a mandatory non-root Linux namespace sandbox with bounded
+   processes, output and runtime. LaTeX ignores local configuration files.
+2. Studio assets require authenticated requests. Verified raster images can be
+   previewed; other legacy assets download with restrictive response headers.
+   Asset URLs no longer carry session tokens.
+3. Notification comparison uses its own durable database snapshot and revision
+   checks, so an interactive timetable refresh cannot consume a change.
+4. Paused/deleted subscriptions cancel unsent deliveries; claimed deliveries
+   recheck eligibility. Recent terminal failures and bounded retention are visible.
+5. Login budgets are shared through Redis. Session revocation survives restarts,
+   supports current/all sessions and reaches existing WebSocket connections.
+6. Web-to-Telegram destinations survive onboarding and intermediate menus, then
+   resume once for the correct user, bot and chat.
+7. Deployment binds source, four image digests, assets/configuration and schema;
+   preserves support image IDs and prior private state; finalizes after smoke.
+8. A real production snapshot was restored and its original rows checked through
+   the new migrations. Matching private configuration was retained off-host.
+9. CI requires built-image acceptance with real database, queue, API, worker,
+   renderer and restore checks. Coverage excludes test code and includes unimported
+   application modules.
+10. Live queues were inspected, failure/retention behavior was tested, and grouped
+    delivery was exercised for 1,000 synthetic recipients. The limitations below
+    distinguish that evidence from production capacity.
+
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Application regression suite | 652 tests, 8 platform/optional skips; passed | Root project `.venv`, `coverage run --branch -m unittest discover -s tests -v` |
+| Application regression suite | 653 tests, 8 platform/optional skips; passed | Root project `.venv`, `coverage run --branch -m unittest discover -s tests -v` |
 | Application-only coverage | 52.62%, including unimported modules | `bot`, `fastapi_stats_app`, `scheduler_app`, `shared_lib`; floor 50% |
 | CI critical Ruff / mypy | Passed / all 6 configured files passed | Same commands as CI |
 | Locked dependency audit | 46 packages, no known vulnerabilities reported | CI `pip_audit --strict`, existing narrow joblib exception retained |

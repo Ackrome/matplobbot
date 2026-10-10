@@ -2509,3 +2509,10 @@ stopped before RC tests because the self-hosted runner's system Python lacked
 the validation runtime and removes the implicit host `python3-venv` dependency;
 the runner's system packages are unchanged. An image build alone is not release
 acceptance, so this failed attempt did not trigger Jenkins.
+
+CI run `38040881101` proved the explicit Python setup, then exposed an existing
+UTF-8 BOM in a migration during manifest creation. `schema_heads` now parses
+source bytes with Python's AST loader, so BOM handling matches Python imports
+without executing migration code. Tests include a BOM fixture and parse every
+current repository migration. This failure also occurred before RC execution or
+the Jenkins trigger; successful image builds remain separate from acceptance.
