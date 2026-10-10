@@ -22,7 +22,9 @@ from PIL import Image
 
 from .celery_app import app
 from .constants import LATEX_POSTAMBLE, LATEX_PREAMBLE
-from .studio_process import StudioBuildCancelled, run_studio_process
+from .render_assets import MAX_PROJECT_BYTES, MAX_PROJECT_FILES, allowed_project_path
+from .render_sandbox import run_render_process
+from .studio_process import StudioBuildCancelled
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +132,7 @@ def render_latex(self, latex_string: str, padding: int, dpi: int, is_display: bo
             with open(tex_path, "w", encoding="utf-8") as f:
                 f.write(full_latex_code)
 
-            subprocess.run(
+            run_render_process(
                 [
                     "latex",
                     "-no-shell-escape",
@@ -138,10 +140,11 @@ def render_latex(self, latex_string: str, padding: int, dpi: int, is_display: bo
                     "-interaction=nonstopmode",
                     "-output-directory",
                     temp_dir,
-                    tex_path,
+                    os.path.basename(tex_path),
                 ],
                 capture_output=True,
                 timeout=30,
+                workdir=temp_dir,
             )
 
             if not os.path.exists(dvi_path):
@@ -154,7 +157,7 @@ def render_latex(self, latex_string: str, padding: int, dpi: int, is_display: bo
                     error_msg = "\n".join(errors[:3]) if errors else "\n".join(log_lines[-10:])
                 return {"status": "error", "error": error_msg}
 
-            subprocess.run(
+            run_render_process(
                 [
                     "dvipng",
                     "-D",
@@ -169,6 +172,7 @@ def render_latex(self, latex_string: str, padding: int, dpi: int, is_display: bo
                 ],
                 capture_output=True,
                 timeout=10,
+                workdir=temp_dir,
             )
 
             if not os.path.exists(png_path):
@@ -216,13 +220,15 @@ def render_mermaid(self, mermaid_code: str, studio_job_id: str | None = None):
                 "-b",
                 "transparent",
             ]
-            process = run_studio_process(
+            process = run_render_process(
                 studio_job_id=studio_job_id,
                 command=command,
                 capture_output=True,
                 text=True,
                 errors="ignore",
                 timeout=30,
+                workdir=temp_dir,
+                resources=(PUPPETEER_CONFIG_PATH,),
             )
 
             if process.returncode != 0 or not os.path.exists(output_path):
@@ -278,18 +284,20 @@ def render_pdf_task(
                 "--variable",
                 "geometry:margin=2cm",
                 "-o",
-                tex_path,
+                os.path.relpath(tex_path, temp_dir),
             ]
 
             if re.search(r"^# ", markdown_string, re.MULTILINE):
                 pandoc_cmd.append("--toc")
 
-            proc_pandoc = run_studio_process(
+            proc_pandoc = run_render_process(
                 studio_job_id=studio_job_id,
                 command=pandoc_cmd,
                 input=markdown_string.encode("utf-8"),
                 capture_output=True,
                 timeout=45,
+                workdir=temp_dir,
+                resources=(MERMAID_FILTER_PATH, MATH_FILTER_PATH, PUPPETEER_CONFIG_PATH),
             )
 
             if proc_pandoc.returncode != 0:
@@ -300,15 +308,17 @@ def render_pdf_task(
 
             compile_cmd = [
                 "latexmk",
+                "-norc",
                 "-pdf",
                 "-xelatex",
+                "-no-shell-escape",
                 "-interaction=nonstopmode",
                 "-halt-on-error",
-                f"-output-directory={temp_dir}",
-                tex_path,
+                "-output-directory=.",
+                os.path.relpath(tex_path, temp_dir),
             ]
 
-            proc_latex = run_studio_process(
+            proc_latex = run_render_process(
                 studio_job_id=studio_job_id,
                 command=compile_cmd,
                 capture_output=True,
@@ -316,6 +326,7 @@ def render_pdf_task(
                 encoding="utf-8",
                 errors="ignore",
                 timeout=60,
+                workdir=temp_dir,
             )
 
             if not os.path.exists(pdf_path) or proc_latex.returncode != 0:
@@ -527,21 +538,22 @@ def compile_full_latex_task(self, latex_code: str, studio_job_id: str | None = N
             with open(tex_path, "w", encoding="utf-8") as f:
                 f.write(latex_code)
 
-            run_studio_process(
+            run_render_process(
                 studio_job_id=studio_job_id,
                 command=[
                     "latexmk",
+                    "-norc",
                     "-pdf",
                     "-interaction=nonstopmode",
                     "-halt-on-error",
                     "-no-shell-escape",
                     "-file-line-error",
-                    f"-output-directory={temp_dir}",
-                    tex_path,
+                    "-output-directory=.",
+                    os.path.basename(tex_path),
                 ],
                 capture_output=True,
                 timeout=50,
-                cwd=temp_dir,
+                workdir=temp_dir,
             )
 
             if not os.path.exists(pdf_path):
@@ -594,7 +606,13 @@ def _safe_join(base_dir: str, path: str | None) -> str | None:
 
 
 def _safe_extract_zip(zf: zipfile.ZipFile, destination: str):
-    for member in zf.infolist():
+    members = zf.infolist()
+    if len(members) > 1000 or sum(member.file_size for member in members) > MAX_PROJECT_BYTES:
+        raise ValueError("Build cache exceeds extraction limit")
+    cache_extensions = {".aux", ".fls", ".fdb_latexmk", ".gz", ".toc", ".bbl", ".out"}
+    for member in members:
+        if Path(member.filename).suffix not in cache_extensions:
+            continue
         target_path = _safe_join(destination, member.filename)
         if not target_path:
             logger.warning(f"Skipped unsafe zip entry: {member.filename}")
@@ -671,6 +689,15 @@ def compile_project_task(
 ):
     """Многофайловая компиляция с поддержкой Инкрементальной сборки и SyncTeX"""
     try:
+        if len(project_files) > MAX_PROJECT_FILES or not allowed_project_path(main_file):
+            raise ValueError("Invalid project files or main file")
+        source_bytes = 0
+        for item in project_files:
+            if not allowed_project_path(item.get("path")):
+                raise ValueError("Unsupported or unsafe project file")
+            source_bytes += len(item.get("text", "").encode("utf-8")) + len(item.get("binary", ""))
+        if source_bytes > MAX_PROJECT_BYTES:
+            raise ValueError("Project exceeds compilation input limit")
         with tempfile.TemporaryDirectory() as temp_dir:
             # 1. Распаковка кэша предыдущей сборки (если есть)
             if build_cache_b64:
@@ -749,23 +776,24 @@ def compile_project_task(
             # 3. Компиляция (с защитой от выполнения шелла и SyncTeX)
             compile_cmd = [
                 "latexmk",
+                "-norc",
                 "-pdf",
                 "-interaction=nonstopmode",
                 "-halt-on-error",
                 "-no-shell-escape",
                 "-file-line-error",
                 "-synctex=1",
-                f"-output-directory={temp_dir}",
-                tex_path,
+                "-output-directory=.",
+                os.path.relpath(tex_path, temp_dir),
             ]
-            run_studio_process(
+            run_render_process(
                 studio_job_id=studio_job_id,
                 command=compile_cmd,
                 capture_output=True,
                 text=True,
                 errors="ignore",
                 timeout=50,
-                cwd=temp_dir,
+                workdir=temp_dir,
             )
 
             # 4. Упаковка артефактов в новый кэш

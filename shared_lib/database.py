@@ -807,6 +807,11 @@ async def toggle_subscription_status(
         sub.is_active = not sub.is_active
         sub.deactivated_at = func.now() if not sub.is_active else None
 
+        if not sub.is_active:
+            from .schedule_outbox import cancel_inactive_schedule_deliveries
+
+            await session.flush()
+            await cancel_inactive_schedule_deliveries(session, user_id=sub.user_id)
         await session.commit()
         await session.refresh(sub)
         return sub.is_active, sub.entity_name
@@ -826,8 +831,16 @@ async def remove_schedule_subscription(
             stmt = stmt.where(UserScheduleSubscription.user_id == user_id)
 
         result = await session.execute(stmt)
+        entity_name = result.scalar()
+        if entity_name is not None:
+            from .schedule_outbox import cancel_inactive_schedule_deliveries
+
+            # The authorized chat-admin path can remove another user's row.
+            await cancel_inactive_schedule_deliveries(
+                session, user_id=None if is_chat_admin else user_id
+            )
         await session.commit()
-        return result.scalar()
+        return entity_name
 
 
 async def update_subscription_notification_time(

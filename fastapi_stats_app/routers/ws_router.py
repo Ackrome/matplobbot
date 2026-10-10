@@ -22,7 +22,7 @@ from shared_lib.database import (
 from shared_lib.models import WebAccount
 from shared_lib.redis_client import redis_client
 
-from ..auth import get_ws_user, require_ws_admin, resolve_account_role
+from ..auth import get_ws_user, require_ws_admin, resolve_account_role, session_is_active
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -41,6 +41,10 @@ async def websocket_account_is_active(
                 account = (
                     await session.execute(select(WebAccount).where(WebAccount.id == user["id"]))
                 ).scalar_one_or_none()
+                if account is None or not await session_is_active(
+                    session, account, user.get("token_claims", {})
+                ):
+                    return False
         if account is None:
             return False
         role = resolve_account_role(account)

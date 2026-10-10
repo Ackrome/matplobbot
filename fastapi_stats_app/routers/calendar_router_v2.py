@@ -21,6 +21,7 @@ from shared_lib.database import (
 )
 from shared_lib.models import CachedSchedule, UserScheduleSubscription, WebAccount
 from shared_lib.redis_client import redis_client
+from shared_lib.schedule_outbox import cancel_inactive_schedule_deliveries
 from shared_lib.schemas import (
     CalendarSubscriptionProfileCreateRequest,
     CalendarSubscriptionProfileSelectRequest,
@@ -1126,6 +1127,7 @@ async def delete_calendar_subscription_profile(
             )
             .values(is_active=False, calendar_enabled=False)
         )
+        await cancel_inactive_schedule_deliveries(db, user_id=telegram_id)
         await db.commit()
         return await _build_calendar_subscription_response(request, current_user, db)
 
@@ -1142,6 +1144,7 @@ async def delete_calendar_subscription_profile(
         )
         .values(is_active=False, calendar_enabled=False)
     )
+    await cancel_inactive_schedule_deliveries(db, user_id=telegram_id)
     await db.commit()
 
     account = await _save_calendar_sync_state(account, db, sync_state)

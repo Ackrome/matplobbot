@@ -1,0 +1,64 @@
+{
+  "status": "passed",
+  "started_at": "2026-10-10T08:33:14.115929+00:00",
+  "scope": "Restored real production snapshot; migration only. No bot/API/scheduler or external delivery.",
+  "network": "PostgreSQL network=none; migrator shares only that isolated network namespace.",
+  "source_schema_heads": [
+    "fc2c3d4e5f60"
+  ],
+  "snapshot_sha256": "5abfce5fb191d5a360862a04f696935d84d2d7530175cd0579c437170f1f2309",
+  "migrator_image_id": "sha256:71b8c94ce50124388498d2f3590ac3de372ad2ca7844cf50d7db0d859b6e0141",
+  "postgres_image_id": "sha256:fe0737ba566a2c5b2a28f34433c0a423261900ec17b9bf7ad115e1aae7e57f1b",
+  "migration_image_matches_current_source": true,
+  "restore_all_table_fingerprints_verified": true,
+  "source_table_count": 21,
+  "schema_heads": [
+    "fe4e5f607182"
+  ],
+  "backfill": {
+    "cached_rows": 42,
+    "eligible_rows": 42,
+    "skipped_invalid_rows": 0,
+    "snapshot_rows": 42,
+    "exact_payload_hash_revision_timestamp_matches": 42,
+    "verified": true
+  },
+  "auth_version": {
+    "account_rows": 26,
+    "zero_initialized_rows": 26,
+    "verified": true
+  },
+  "revocation_rows": 0,
+  "historical_delivery_outcomes": {
+    "rows": 47,
+    "unknown_failed_at_rows": 47,
+    "verified": true
+  },
+  "migration_and_validation_seconds": 2.249,
+  "unchanged_original_table_count": 20,
+  "original_rows_preserved": true,
+  "original_table_row_counts": {
+    "cached_schedules": 42,
+    "chat_settings": 1,
+    "curriculum_documents": 3,
+    "curriculum_groups": 11,
+    "discipline_modules": 22,
+    "discipline_short_names": 10,
+    "latex_cache": 0,
+    "mail_accounts": 8,
+    "product_events": 34,
+    "project_files": 12,
+    "projects": 9,
+    "schedule_change_deliveries": 47,
+    "search_documents": 209,
+    "user_actions": 1929,
+    "user_disabled_short_names": 0,
+    "user_favorites": 0,
+    "user_github_repos": 1,
+    "user_schedule_subscriptions": 9,
+    "users": 29,
+    "web_accounts": 26
+  },
+  "disposable_container_and_volume_removed": true,
+  "total_seconds": 9.146
+}

@@ -1,0 +1,148 @@
+# Release and recovery contract
+
+The application release identity is the full Git commit plus four OCI image digests,
+the tracked deployment-file hashes and the single Alembic head. The Python shared
+package version is an independent package identifier. A `latest` tag or a green
+unit-test job alone is not an accepted application release.
+
+## Acceptance and deployment
+
+GitHub Actions validates the source, builds all four images with its exact source
+revision label, then runs `scripts/rc_acceptance.py` against those digests. This
+mandatory step creates an internal Docker network, fresh PostgreSQL and Redis,
+and the actual API, Celery worker and scheduler image. No host ports, production
+environment file or real users are used. It checks migrations, signed synthetic
+Telegram login, ownership, project persistence across API restart, real compiler
+artifacts, worker isolation, calendar feeds, account export/delete, session
+revocation, shared Redis Lua limits, scheduler delivery retry and PostgreSQL locks.
+The external boundaries are a seeded RUZ cache and a local HTTP fixture returning
+Telegram-shaped responses; this does not certify live Telegram/RUZ availability.
+
+The same run exports a consistent PostgreSQL snapshot and restores it into a second
+fresh `--network none` PostgreSQL container. It compares the schema and every public
+table's row count/content fingerprint, including project binary data and session
+revocations. Both disposable databases and their volumes are removed. Missing Docker,
+denied worker namespaces, failed compilation or failed restore fail the job.
+
+Only a passed report can be embedded in `release-manifest-accepted.json`. Jenkins
+receives `SOURCE_COMMIT` and `RELEASE_MANIFEST_B64`, checks out that exact commit,
+reruns quality checks and prepares a detached candidate worktree on the application
+host. Tracked edits and unexpected untracked deployment inputs fail verification.
+The candidate is validated and its images downloaded before maintenance starts.
+The destination host then runs a disposable positive LaTeX compile from the accepted
+worker digest under the production security profile, no network/environment/mounts
+from production, and a 120-second bound. This proves the destination kernel permits
+the sandbox; a denied namespace fails while the old site is still running.
+`release_deploy.py prepare` saves the old private configuration and observed legacy
+runtime if needed, retains recovery tools, writes an attempt marker, stops every
+service with a host bind mount, then switches the live checkout. This bounded
+maintenance window prevents new frontend/config files being served with the old
+API. Jenkins writes the new credentials only after this baseline is safe.
+
+For an existing Jenkins job, new pipeline parameters must be installed before the
+first `buildWithParameters` call. The workflow invokes
+`scripts/jenkins_release_parameters.py --apply` with its existing Jenkins identity
+and verified LAN address. It adds missing string `SOURCE_COMMIT` and text
+`RELEASE_MANIFEST_B64` definitions with empty defaults, binds the known Git SCM
+branch to `${SOURCE_COMMIT}`, and disables lightweight checkout so parameter
+expansion loads `Jenkinsfile.groovy` from the accepted commit itself. Unexpected
+SCM/branch/script configurations fail. All other job settings are preserved. It
+rereads parameters and SCM binding before queuing a build. A Read/Configure
+permission failure stops the workflow with an operator instruction; it never runs
+the old deployment pipeline to bootstrap parameters. The CLI is read-only unless
+`--apply` is supplied. Avoid concurrent manual job configuration edits.
+
+`bash deploy.sh --manifest .release-state/accepted.json` verifies source/digests,
+backs up an existing running PostgreSQL database, stops the old scheduler before
+the notification-baseline migration, migrates and starts the accepted services.
+The dedicated admin bootstrap must succeed. Jenkins then runs positive authenticated
+smoke checks and invokes `bash deploy.sh --finalize`. Only finalize advances
+`.release-state/current.json`; failed startup/bootstrap/smoke leaves the previous
+successful pointer intact. Previous source, configuration and runtime image IDs are
+retained. Production deployment does not prune images.
+
+Preparation requires five healthy existing support services: PostgreSQL, Redis,
+Caddy, frontend nginx and proxy. Their observed runtime image IDs are frozen into
+the deployment override. Deployment uses `--no-build --pull never`; no mutable
+support image is resolved or proxy rebuilt during an application release. Support
+bootstrap/repair or a deliberate support-image upgrade is a separate operation
+with its own validation. The RC tests the four application images; it does not
+claim fresh-build reproducibility of the observed support stack.
+
+Keep `.release-state` private and backed up to an access-controlled location. Its
+configuration snapshots contain signing and mail-encryption keys. The Docker data
+volumes and external secret stores are not replaced by a Git checkout. Do not prune
+retained images or delete backups during the rollback window. Operator-managed
+proxy/TLS stores remain external dependencies and need their own backup policy.
+
+## Restore drill
+
+For a recently acquired production backup, run the backup helper on the source host
+without starting or changing application services:
+
+```bash
+python3 scripts/release_backup.py backup --output /private/backup/production.dump
+```
+
+Transfer `production.dump` and `production.json` through an authorized private
+channel. The JSON contains hashes/counts, not row values. On a host with Docker:
+
+```bash
+.venv/bin/python scripts/release_backup.py restore-drill /private/backup/production.dump \
+  --output /private/backup/production-restore-report.json
+```
+
+On Windows use `.venv/Scripts/python.exe`. This command has no production target
+option: it creates a random isolated PostgreSQL container, verifies the dump hash,
+restores, compares witnesses, and removes only its own container/anonymous volume.
+Record the report time, schema and dump hash alongside the private backup provenance.
+A synthetic RC restore proves the mechanism; it does not prove that the latest
+production backup is complete or that production secrets are recoverable. A real
+production restore drill must be recorded separately. The tool verifies DB contents;
+it does not start delivery services or send user notifications.
+
+## Rollback
+
+Run `bash deploy.sh --rollback` after reviewing the recorded state. After a failed
+deployment it targets the last successful release; after a completed release it
+targets the preceding one. It restores that source, private configuration and saved
+image IDs without pulling/building, running migrations or deleting data volumes.
+It refuses a different database head. Only after an explicit old-code/schema
+compatibility review may an operator supply `--compatible-schema <current-head>`.
+The collision-safe admin bootstrap resynchronizes the restored smoke credentials.
+Run the same authenticated post-deploy smoke checks, then `bash deploy.sh --finalize`
+to record a successful rollback. If the restored legacy checkout has no manifest
+tools, invoke the retained helper instead:
+
+```bash
+python3 .release-state/recovery-tools/release_deploy.py rollback
+# After authenticated smoke passes:
+python3 .release-state/recovery-tools/release_deploy.py finalize
+```
+
+An incompatible schema requires a separately authorized maintenance restore of the
+pre-migration backup and its matching encryption keys, with an explicit decision
+about writes since that backup. The tool deliberately does not automate production
+database replacement or Alembic downgrade. The first adoption of this release
+format has no prior accepted manifest. Preparation records its actual source hashes,
+schema, configuration and running image IDs as an explicitly `observed-legacy`
+baseline, so early checkout/env-write failure can restore it. That observation is
+not a retroactive RC pass. Schema incompatibility still requires the maintenance
+restore/compatibility decision above.
+
+## Local evidence and coverage
+
+For development evidence, pass four `--local-image service=tag` arguments to
+`scripts/rc_acceptance.py`. Such reports are marked `-working-tree` and cannot be
+attested or deployed as an immutable release. Dockerfiles expose `PYTHON_BASE_IMAGE`
+and `WORKER_BASE_IMAGE` build arguments so cached local bases can be used for this
+check. CI still tests and records the final immutable image digests.
+
+Coverage measures branches and statements in `bot`, `fastapi_stats_app`,
+`scheduler_app` and `shared_lib`, including unimported application modules and
+excluding test files. The pre-change application-only baseline was 50.30%; the
+initial fail-under floor is 50%, replacing the misleading combined test/source
+metric and 10% floor. PR trend comparison uses this same scope for both revisions.
+Ordinary cross-platform unit runs may skip Linux compiler integration; the separate
+mandatory built-image acceptance step explicitly enables it and allows no skip for
+an unavailable sandbox.

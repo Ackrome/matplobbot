@@ -56,6 +56,7 @@ async def provision_admin(db: AsyncSession, username: str, password: str) -> str
             ) from exc
 
     account.password_hash = get_password_hash(password)
+    account.auth_version = (getattr(account, "auth_version", 0) or 0) + 1
     await db.flush()
     return "password synchronized"
 

@@ -1,6 +1,6 @@
 """Admin-only operational outcomes and privacy-minimal product aggregates."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import func, select
@@ -43,6 +43,18 @@ async def operational_insights(
     snapshot["deliveries"] = {
         "counts": counts,
         "oldest_pending_age_seconds": max(0, (now - oldest).total_seconds()) if oldest else None,
+        "recently_failed": int(
+            await db.scalar(
+                select(func.count())
+                .select_from(ScheduleChangeDelivery)
+                .where(
+                    ScheduleChangeDelivery.status == "failed",
+                    ScheduleChangeDelivery.failed_at >= now - timedelta(hours=1),
+                )
+            )
+            or 0
+        ),
+        "recent_failure_window_seconds": 3600,
     }
     snapshot["schedule_last_checked_at"] = last_checked.isoformat() if last_checked else None
     snapshot["scope"] = "last schedule cache write is global, not freshness of every entity"

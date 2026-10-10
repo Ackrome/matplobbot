@@ -1,5 +1,11 @@
 # Dockerfile.worker
-FROM ghcr.io/ackrome/matplobbot-base-worker:latest
+ARG WORKER_BASE_IMAGE=ghcr.io/ackrome/matplobbot-base-worker:latest
+FROM ${WORKER_BASE_IMAGE}
+
+USER root
+# Runtime isolation must also be present when reusing an older base image.
+RUN apt-get update && apt-get install -y --no-install-recommends bubblewrap util-linux chromium && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 ENV APP_BOT_DIR=/app/bot \
@@ -8,7 +14,7 @@ ENV APP_BOT_DIR=/app/bot \
 # Copy shared lib and install
 COPY shared_lib/ /shared_lib/
 COPY setup.py /
-RUN pip install --no-cache-dir /
+RUN pip install --no-cache-dir --timeout 100 --retries 5 /
 
 # Copy application resources
 COPY bot/puppeteer-config.json /app/bot/

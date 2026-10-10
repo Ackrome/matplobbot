@@ -55,7 +55,14 @@ function authT(key) {
     return AUTH_TEXT[lang]?.[key] || AUTH_TEXT.ru[key] || key;
 }
 
-function getErrorMessage(errData, defaultMsg) {
+function getErrorMessage(errData, defaultMsg, response) {
+    if (response?.status === 429) {
+        const seconds = Math.max(1, Number(response.headers.get("Retry-After")) || 60);
+        return window.mpbI18n.t("login.rateLimited", "Too many sign-in attempts. Try again in {seconds} seconds.", {seconds});
+    }
+    if (response?.status === 503) {
+        return window.mpbI18n.t("login.serviceUnavailable", "Sign-in is temporarily unavailable. Please try again shortly.");
+    }
     if (errData && Array.isArray(errData.detail) && errData.detail.length > 0) {
         return errData.detail[0].msg;
     }
@@ -85,7 +92,7 @@ window.handleTelegramLogin = async function handleTelegramLogin(telegramUser) {
         }
 
         const errData = await response.json();
-        const message = getErrorMessage(errData, authT("telegramAuthError"));
+        const message = getErrorMessage(errData, authT("telegramAuthError"), response);
         if (errorEl) {
             errorEl.innerText = message;
             errorEl.classList.remove("hidden");
@@ -140,7 +147,7 @@ if (loginForm) {
             }
 
             const errData = await response.json();
-            errorEl.innerText = getErrorMessage(errData, authT("loginError"));
+            errorEl.innerText = getErrorMessage(errData, authT("loginError"), response);
             errorEl.classList.remove("hidden");
         } catch (err) {
             errorEl.innerText = authT("apiUnavailable");
@@ -199,7 +206,7 @@ if (registerForm) {
             }
 
             const errData = await response.json();
-            errorEl.innerText = getErrorMessage(errData, authT("registerError"));
+            errorEl.innerText = getErrorMessage(errData, authT("registerError"), response);
             errorEl.classList.remove("hidden");
             btn.disabled = false;
             btn.innerText = authT("registerButton");

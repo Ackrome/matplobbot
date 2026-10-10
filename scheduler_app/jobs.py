@@ -33,8 +33,13 @@ from shared_lib.schedule_outbox import (
     commit_schedule_change_transition,
     enqueue_daily_schedule_delivery,
     get_existing_schedule_deliveries,
+    get_schedule_notification_snapshot,
+    is_schedule_delivery_current,
     mark_schedule_change_delivery_sent,
+    normalize_schedule_snapshot,
+    prune_schedule_delivery_history,
     reschedule_schedule_change_delivery,
+    schedule_snapshot_hash,
 )
 from shared_lib.services.schedule_service import (
     diff_schedules,
@@ -51,6 +56,7 @@ from .config import (
     SCHEDULE_DAILY_CATCHUP_SECONDS,
     SCHEDULE_OUTBOX_BASE_DELAY_SECONDS,
     SCHEDULE_OUTBOX_MAX_ATTEMPTS,
+    SCHEDULE_OUTBOX_RETENTION_DAYS,
     TELEGRAM_REQUEST_RETRY_ATTEMPTS,
     TELEGRAM_REQUEST_RETRY_DELAY_SECONDS,
 )
@@ -221,7 +227,7 @@ async def deliver_pending_schedule_change_notifications(
     # recipients' leases expire while the worker is still sending earlier rows.
     while summary["claimed"] < 100 and time.monotonic() < batch_deadline:
         deliveries = await claim_schedule_change_deliveries(
-            limit=1, max_attempts=SCHEDULE_OUTBOX_MAX_ATTEMPTS
+            limit=1, max_attempts=SCHEDULE_OUTBOX_MAX_ATTEMPTS, summary=summary
         )
         if not deliveries:
             break
@@ -229,6 +235,9 @@ async def deliver_pending_schedule_change_notifications(
         for delivery in deliveries:
             delivery_id = int(delivery["id"])
             attempt_count = int(delivery.get("attempt_count") or 1)
+            if not await is_schedule_delivery_current(delivery_id, attempt_count):
+                summary["cancelled"] = summary.get("cancelled", 0) + 1
+                continue
             error_message = "Telegram API did not accept the message"
             try:
                 async with asyncio.timeout(840):
@@ -426,41 +435,29 @@ async def check_for_schedule_updates(
             entity_name = subs_for_entity[0]["entity_name"]
 
             try:
+                # Capture the revision before awaiting the source. A slower poll
+                # cannot treat a newer scanner's baseline as its starting point.
+                baseline = await get_schedule_notification_snapshot(entity_type, entity_id)
                 # 1. Получаем новое расписание из API
                 new_schedule_data = await ruz_api_client.get_schedule(
                     entity_type, entity_id, start=start_date_str, finish=end_date_str
                 )
 
-                # Считаем хэш
-                new_hash = hashlib.sha256(
-                    json.dumps(new_schedule_data, sort_keys=True).encode()
-                ).hexdigest()
-
-                # Treat the entity as the notification unit. If any recipient already carries the
-                # new hash, the transition was handled and the remaining rows only need repair.
-                reference_hashes = sorted(
-                    {
-                        str(sub["last_schedule_hash"])
-                        for sub in subs_for_entity
-                        if sub.get("last_schedule_hash")
-                    }
-                )
-                reference_hash = (
-                    new_hash
-                    if new_hash in reference_hashes
-                    else (reference_hashes[0] if reference_hashes else None)
-                )
+                if not isinstance(new_schedule_data, list):
+                    raise ValueError("Unexpected schedule response")
+                new_schedule_data = normalize_schedule_snapshot(new_schedule_data)
+                new_hash = schedule_snapshot_hash(new_schedule_data)
+                reference_hash = baseline["schedule_hash"] if baseline else None
 
                 if reference_hash and new_hash != reference_hash:
                     logger.info(
                         f"Change detected for entity '{entity_name}' ({entity_type}:{entity_id})."
                     )
 
-                    # 2. Получаем СТАРЫЕ данные из БД (CachedSchedule) для сравнения
-                    # Важно сделать это ДО обновления кэша
-                    old_schedule_data, source_checked_at = await get_cached_schedule_snapshot(
-                        entity_type, entity_id
-                    )
+                    # The interactive entity cache can already contain the new schedule.
+                    # Only this transactionally advanced baseline defines notified changes.
+                    old_schedule_data = baseline["schedule_data"]
+                    source_checked_at = baseline["updated_at"]
 
                     deliveries = []
                     if old_schedule_data is not None:
@@ -503,18 +500,10 @@ async def check_for_schedule_updates(
                             reference_hash,
                             new_hash,
                             source_checked_at,
+                            source_revision=baseline["revision"],
                         )
                     else:
-                        logger.info(
-                            f"Old schedule not found in cache for '{entity_name}'. Skipping diff notification, but updating hash."
-                        )
-                        event_key = build_schedule_change_event_key(
-                            entity_type,
-                            entity_id,
-                            reference_hash,
-                            new_hash,
-                            source_checked_at,
-                        )
+                        raise ValueError("Invalid notification baseline payload")
 
                     # Commit the outbox and checkpoint atomically. If this fails, the next poll
                     # sees the same transition and retries it without losing recipients.
@@ -526,12 +515,23 @@ async def check_for_schedule_updates(
                         schedule_data=new_schedule_data,
                         new_hash=new_hash,
                         deliveries=deliveries,
+                        expected_revision=baseline["revision"],
                     )
 
                 elif not reference_hash:
-                    # Если хэша нет (первый запуск для этой подписки), просто сохраняем текущий
-                    await batch_update_subscription_hashes(entity_type, entity_id, new_hash)
-                    await upsert_cached_schedule(entity_type, entity_id, new_schedule_data)
+                    # First observation establishes a baseline without announcing every lesson.
+                    await commit_schedule_change_transition(
+                        event_key=build_schedule_change_event_key(
+                            entity_type, entity_id, "", new_hash, None
+                        ),
+                        entity_type=entity_type,
+                        entity_id=entity_id,
+                        entity_name=entity_name,
+                        schedule_data=new_schedule_data,
+                        new_hash=new_hash,
+                        deliveries=[],
+                        expected_revision=None,
+                    )
                 else:
                     # The schedule did not change, but the API poll succeeded. Refresh the
                     # DB cache timestamp and repair any divergent per-subscription hashes.
@@ -662,6 +662,16 @@ async def prune_inactive_subscriptions():
         deleted_count = await delete_old_inactive_subscriptions(days_inactive=30)
         if deleted_count > 0:
             logger.info(f"Successfully pruned {deleted_count} old, inactive subscriptions.")
+        # Bounded batches avoid a long transaction after a prolonged maintenance gap.
+        pruned = 0
+        for _ in range(20):
+            count = await prune_schedule_delivery_history(
+                retention_days=SCHEDULE_OUTBOX_RETENTION_DAYS
+            )
+            pruned += count
+            if count < 5000:
+                break
+        logger.info("Pruned terminal schedule deliveries: %s", pruned)
     except Exception as e:
         logger.error(f"Critical error in prune_inactive_subscriptions job: {e}", exc_info=True)
 

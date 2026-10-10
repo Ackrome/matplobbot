@@ -36,7 +36,9 @@ and Telegram send require a successful save first.
 Requires auth/local storage, `frontend_i18n.js`, the existing Studio API, and the supporting state
 and loader modules. It writes private drafts/job metadata to account-scoped browser storage and
 project text/assets to the API. Auth tokens remain in the established auth storage; draft keys do
-not include them. The asset preview URL retains the existing authenticated token-query contract.
+not include them. Asset previews fetch with the Authorization header and turn only verified
+raster responses into temporary blob URLs. Credentials never enter asset URLs; project changes
+and preview regeneration revoke the old blob URLs and discard late responses.
 Exports create short-lived blob URLs. The controller never sends a Telegram message except from
 the explicit send button. All UI copy lives in the shared RU/EN locale JSON.
 

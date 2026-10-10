@@ -187,6 +187,19 @@ class UserScheduleSubscription(Base):
     )
 
 
+class ScheduleNotificationSnapshot(Base):
+    """Notification baseline; interactive cache refreshes never write this table."""
+
+    __tablename__ = "schedule_notification_snapshots"
+
+    entity_type = Column(String(32), primary_key=True)
+    entity_id = Column(String, primary_key=True)
+    schedule_data = Column(JSON, nullable=False)
+    schedule_hash = Column(String(64), nullable=False)
+    revision = Column(Integer, nullable=False, server_default="1")
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 class ScheduleChangeDelivery(Base):
     """Durable Telegram outbox item for one schedule change and application user."""
 
@@ -212,6 +225,7 @@ class ScheduleChangeDelivery(Base):
     locked_at = Column(DateTime(timezone=True), nullable=True)
     sent_at = Column(DateTime(timezone=True), nullable=True)
     last_error = Column(Text, nullable=True)
+    failed_at = Column(DateTime(timezone=True), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True),
@@ -334,6 +348,7 @@ class WebAccount(Base):
     # Для входа по логину/паролю
     username = Column(String, unique=True, nullable=True, index=True)
     password_hash = Column(String, nullable=True)
+    auth_version = Column(Integer, nullable=False, default=0, server_default="0")
 
     # Для входа через Telegram
     telegram_id = Column(
@@ -341,6 +356,17 @@ class WebAccount(Base):
     )
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class WebTokenRevocation(Base):
+    """Persist revoked session identifiers until their signed expiration."""
+
+    __tablename__ = "web_token_revocations"
+    jti = Column(String(64), primary_key=True)
+    account_id = Column(
+        Integer, ForeignKey("web_accounts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
 
 
 class Project(Base):

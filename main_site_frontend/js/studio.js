@@ -8,6 +8,7 @@ let projectsList = [], projectFiles = [], previewGeneration = 0, editorGeneratio
 let changingEditor = false, transitionBusy = false, saveTimer, transitionQueue = Promise.resolve();
 let currentStatus = 'ready', statusParams = {}, lastFocus, selectedMobilePane = 'editor-pane';
 let markdownConfigured = false, jobPolling = false, jobStarting = false, storageWarningShown = false;
+const previewAssetUrls = new Set();
 const TEMPLATES = {
     latex: '\\documentclass[12pt,a4paper]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage[T2A]{fontenc}\n\\usepackage[russian]{babel}\n\\usepackage{amsmath,graphicx}\n\\begin{document}\n\\section{Introduction}\n$E=mc^2$\n\\end{document}',
     markdown: '# Document\n\n$$E=mc^2$$\n',
@@ -15,7 +16,7 @@ const TEMPLATES = {
 };
 const STUDIO_MARKDOWN_SANITIZE_CONFIG = Object.freeze({
     ALLOWED_TAGS: ['a','b','blockquote','br','code','del','div','em','h1','h2','h3','h4','h5','h6','hr','i','img','li','ol','p','pre','span','strong','table','tbody','td','th','thead','tr','ul'],
-    ALLOWED_ATTR: ['alt','class','colspan','href','rel','rowspan','src','target','title'],
+    ALLOWED_ATTR: ['alt','class','colspan','data-studio-asset','href','rel','rowspan','src','target','title'],
     ALLOW_DATA_ATTR: false, ALLOW_UNKNOWN_PROTOCOLS: false,
     FORBID_TAGS: ['embed','form','iframe','input','math','object','script','style','svg'],
 });
@@ -295,11 +296,32 @@ function switchMobileTab(targetPaneId) {
 }
 function resetPreview() {
     previewGeneration++;
+    clearPreviewAssetUrls();
     if(currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
     currentBlobUrl=null;
     $('pdf-viewer').removeAttribute('src');
     ['pdf-viewer','btn-download-pdf','live-preview','pdf-stale'].forEach(id=>$(id).classList.add('hidden'));
     $('empty-state').classList.remove('hidden');
+}
+function clearPreviewAssetUrls() {
+    previewAssetUrls.forEach(url=>URL.revokeObjectURL(url));
+    previewAssetUrls.clear();
+}
+async function loadPreviewAssets(container, generation, projectId) {
+    for(const image of container.querySelectorAll('img[data-studio-asset]')) {
+        if(generation!==previewGeneration || projectId!==currentProjectId)return;
+        const path=image.getAttribute('data-studio-asset');
+        image.removeAttribute('data-studio-asset');
+        try {
+            const response=await api(`/studio/projects/${projectId}/assets/${encodeURIComponent(path)}`);
+            const mime=response.headers.get('content-type')?.split(';')[0];
+            if(!['image/png','image/jpeg','image/gif','image/webp'].includes(mime))continue;
+            const blob=await response.blob();
+            if(generation!==previewGeneration || projectId!==currentProjectId)return;
+            const url=URL.createObjectURL(blob);
+            previewAssetUrls.add(url);image.src=url;
+        } catch(error) { if(generation===previewGeneration)image.title=error.message; }
+    }
 }
 function configureMarkdown() {
     if(markdownConfigured)return;
@@ -308,8 +330,10 @@ function configureMarkdown() {
         let href,title,text;
         if(typeof tokenOrHref === 'object')({href='',title='',text=''}=tokenOrHref);
         else {href=String(tokenOrHref||'');title=legacyTitle||'';text=legacyText||'';}
-        if(currentMode==='project'&&currentProjectId&&!/^(https?:|data:)/i.test(href)) href=`${API_BASE}/studio/projects/${currentProjectId}/assets/${encodeURIComponent(href.replace(/^\/+/,''))}?token=${encodeURIComponent(token)}`;
-        const image=document.createElement('img');image.src=href;image.alt=text;image.title=title;image.loading='lazy';
+        const image=document.createElement('img');
+        if(currentMode==='project'&&currentProjectId&&!/^(https?:|data:|blob:)/i.test(href))image.setAttribute('data-studio-asset',href.replace(/^\/+/,''));
+        else image.src=href;
+        image.alt=text;image.title=title;image.loading='lazy';
         return image.outerHTML;
     };
     marked.use({renderer});markdownConfigured=true;
@@ -326,9 +350,11 @@ async function updateLivePreview() {
         if(generation!==previewGeneration)return;
         if(type==='markdown') {
             configureMarkdown();
+            clearPreviewAssetUrls();
             contentDiv.innerHTML=sanitizeStudioMarkdownPreview(code);
             contentDiv.querySelectorAll('a[target="_blank"]').forEach(link=>{link.rel='noopener noreferrer';});
             renderMathInElement(contentDiv,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
+            if(currentMode==='project')await loadPreviewAssets(contentDiv,generation,currentProjectId);
         } else {
             mermaid.initialize({startOnLoad:false,theme:document.documentElement.classList.contains('dark')?'dark':'default',securityLevel:'strict',flowchart:{htmlLabels:false}});
             const renderedDiagram=await mermaid.render(`studio-diagram-${generation}`,code);

@@ -15,11 +15,12 @@ from fastapi import Depends, HTTPException, WebSocket, WebSocketException, statu
 from fastapi.security import OAuth2PasswordBearer
 from jwt import PyJWTError as JWTError
 from passlib.context import CryptContext
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared_lib.database import get_db_session_dependency, get_session
-from shared_lib.models import User, WebAccount
+from shared_lib.models import User, WebAccount, WebTokenRevocation
 
 from .config import ADMIN_USER_IDS
 
@@ -89,6 +90,8 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
             "exp": expire,
             "iss": JWT_ISSUER,
             "aud": JWT_AUDIENCE,
+            "jti": secrets.token_hex(24),
+            "auth_version": int(to_encode.get("auth_version", 0)),
         }
     )
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -102,8 +105,51 @@ def decode_access_token(token: str) -> dict[str, Any]:
         audience=JWT_AUDIENCE,
         issuer=JWT_ISSUER,
         leeway=JWT_LEEWAY_SECONDS,
-        options={"require": ["sub", "iat", "nbf", "exp", "iss", "aud"]},
+        options={"require": ["sub", "iat", "nbf", "exp", "iss", "aud", "jti", "auth_version"]},
     )
+
+
+async def session_is_active(db: AsyncSession, account: WebAccount, claims: dict) -> bool:
+    """Shared REST/WS check; DB errors deliberately fail closed."""
+    if claims.get("auth_version") != (account.auth_version or 0):
+        return False
+    jti = claims.get("jti")
+    if not isinstance(jti, str) or len(jti) != 48:
+        return False
+    if claims.get("exp", 0) <= time.time() - JWT_LEEWAY_SECONDS:
+        return False
+    revoked = await db.execute(select(WebTokenRevocation.jti).where(WebTokenRevocation.jti == jti))
+    return revoked.scalar_one_or_none() is None
+
+
+async def revoke_session(db: AsyncSession, account_id: int, claims: dict) -> None:
+    """Idempotently revoke this JWT and prune already expired revocations."""
+    await db.execute(
+        delete(WebTokenRevocation).where(
+            WebTokenRevocation.expires_at
+            < datetime.now(UTC) - timedelta(seconds=JWT_LEEWAY_SECONDS)
+        )
+    )
+    await db.execute(
+        pg_insert(WebTokenRevocation)
+        .values(
+            jti=claims["jti"],
+            account_id=account_id,
+            expires_at=datetime.fromtimestamp(claims["exp"], UTC),
+        )
+        .on_conflict_do_nothing(index_elements=["jti"])
+    )
+    await db.commit()
+
+
+async def revoke_all_sessions(db: AsyncSession, account_id: int) -> None:
+    """Atomic generation bump prevents concurrent logout-all updates being lost."""
+    await db.execute(
+        update(WebAccount)
+        .where(WebAccount.id == account_id)
+        .values(auth_version=WebAccount.auth_version + 1)
+    )
+    await db.commit()
 
 
 def create_account_export_token(account_id: int) -> str:
@@ -266,6 +312,8 @@ async def get_current_user(
 
     if not account:
         raise credentials_exception
+    if not await session_is_active(db, account, payload):
+        raise credentials_exception
 
     display_name = account.username or "User"
     avatar_url = None
@@ -287,6 +335,7 @@ async def get_current_user(
         "avatar_url": avatar_url,
         "preferences": account.preferences,
         "db_obj": account,
+        "token_claims": payload,
     }
 
 
@@ -316,12 +365,15 @@ async def get_ws_user(websocket: WebSocket) -> dict:
             account = result.scalar_one_or_none()
             if not account:
                 raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
+            if not await session_is_active(db, account, payload):
+                raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
 
             return {
                 "id": account.id,
                 "role": resolve_account_role(account),
                 "telegram_id": account.telegram_id,
                 "db_obj": account,
+                "token_claims": payload,
             }
 
     except (JWTError, ValueError) as exc:

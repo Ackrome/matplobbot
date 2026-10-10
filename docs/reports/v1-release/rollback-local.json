@@ -1,0 +1,50 @@
+{
+  "status": "passed",
+  "scope": "isolated local working-tree rollback proof; not production release attestation",
+  "started_at": "2026-10-10T08:41:27.295980+00:00",
+  "project": "mpb-rollback-drill-5365327dd318",
+  "external_provider_requests": 0,
+  "limitations": [
+    "Same current schema for baseline/candidate; no schema downgrade or backup restoration",
+    "Bot/scheduler/worker/Caddy/proxy are idle fixture services; production ingress is not exercised"
+  ],
+  "helper_sha256": {
+    "release_deploy.py": "271398c3136c57af4e7f130230f159c6b48be40abe483d470f4941970ec69ca3",
+    "release_manifest.py": "aae3826566124681076c51927705a55b50c710e427df7e79d93a861e021f1c7b",
+    "release_backup.py": "6808e486ab05faec11eaa25586bdb2cde1662d7fe1bc13b6caa3c6eba9a0e108"
+  },
+  "schema_heads": [
+    "fe4e5f607182"
+  ],
+  "baseline_fixture_commit": "a9812fe48f4d4764cc22c3fd42100b0f01c5f197",
+  "candidate_fixture_commit": "2d2d32c8b8adb50cc487eae93c2340987d9f69c7",
+  "baseline_runtime_images": {
+    "caddy": "sha256:529d2d94802393d71fae00320f336a1328731d2f5fc88f3cbca52fc6477eae38",
+    "main-site-frontend": "sha256:529d2d94802393d71fae00320f336a1328731d2f5fc88f3cbca52fc6477eae38",
+    "mpb-fastapi-stats": "sha256:529d2d94802393d71fae00320f336a1328731d2f5fc88f3cbca52fc6477eae38",
+    "mpb-scheduler": "sha256:529d2d94802393d71fae00320f336a1328731d2f5fc88f3cbca52fc6477eae38",
+    "mpb-telegram-bot": "sha256:529d2d94802393d71fae00320f336a1328731d2f5fc88f3cbca52fc6477eae38",
+    "mpb-worker": "sha256:529d2d94802393d71fae00320f336a1328731d2f5fc88f3cbca52fc6477eae38",
+    "postgres": "sha256:fe0737ba566a2c5b2a28f34433c0a423261900ec17b9bf7ad115e1aae7e57f1b",
+    "proxy": "sha256:529d2d94802393d71fae00320f336a1328731d2f5fc88f3cbca52fc6477eae38",
+    "redis": "sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99"
+  },
+  "candidate_api_image": "sha256:1bd0b7fb50251ca36626eee7f4e5000a718fb651ca74dd7d390570db6aae2964",
+  "checks": {
+    "internal_network": true,
+    "no_host_ports": true,
+    "candidate_password_changed": true,
+    "candidate_runtime_changed": true,
+    "tracked_source_restored": true,
+    "private_configuration_restored": true,
+    "runtime_images_restored": true,
+    "schema_preserved": true,
+    "account_row_preserved": true,
+    "old_password_accepted_new_rejected": true,
+    "frontend_canary_restored": true,
+    "pointer_unchanged_before_smoke": true,
+    "finalize_advances_after_smoke": true
+  },
+  "cleanup_verified": true,
+  "finished_at": "2026-10-10T08:42:04.950073+00:00"
+}

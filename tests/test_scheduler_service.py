@@ -157,12 +157,13 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(inserted, 1)
-        self.assertEqual(session.execute.await_count, 3)
+        self.assertEqual(session.execute.await_count, 4)
         session.commit.assert_awaited_once()
         statements = [str(call.args[0]) for call in session.execute.await_args_list]
-        self.assertIn("schedule_change_deliveries", statements[0])
-        self.assertIn("cached_schedules", statements[1])
-        self.assertIn("user_schedule_subscriptions", statements[2])
+        self.assertIn("schedule_notification_snapshots", statements[0])
+        self.assertIn("schedule_change_deliveries", statements[1])
+        self.assertIn("cached_schedules", statements[2])
+        self.assertIn("user_schedule_subscriptions", statements[3])
 
     async def test_send_telegram_message_returns_none_on_transport_error(self):
         session = Mock()
@@ -390,6 +391,7 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
                 AsyncMock(side_effect=[{"message_id": 1}, None, {"message_id": 2}]),
             ) as send_message,
             patch.object(jobs, "mark_schedule_change_delivery_sent", AsyncMock()) as mark_sent,
+            patch.object(jobs, "is_schedule_delivery_current", AsyncMock(return_value=True)),
             patch.object(jobs, "reschedule_schedule_change_delivery", AsyncMock()) as reschedule,
         ):
             first_summary = await jobs.deliver_pending_schedule_change_notifications(object())
@@ -485,6 +487,11 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             patch.object(jobs, "get_all_short_names", AsyncMock(return_value={})),
             patch.object(jobs, "batch_update_subscription_hashes", AsyncMock()) as update_hashes,
             patch.object(jobs, "upsert_cached_schedule", AsyncMock()) as upsert_cache,
+            patch.object(
+                jobs,
+                "get_schedule_notification_snapshot",
+                AsyncMock(return_value={"schedule_hash": existing_hash}),
+            ),
             patch.object(jobs.asyncio, "sleep", AsyncMock()),
         ):
             await jobs.check_for_schedule_updates(object(), ruz_api_client)
@@ -532,8 +539,15 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             patch.object(jobs, "get_all_short_names", AsyncMock(return_value={})),
             patch.object(
                 jobs,
-                "get_cached_schedule_snapshot",
-                AsyncMock(return_value=(old_schedule, source_checked_at)),
+                "get_schedule_notification_snapshot",
+                AsyncMock(
+                    return_value={
+                        "schedule_data": old_schedule,
+                        "updated_at": source_checked_at,
+                        "schedule_hash": "old-hash",
+                        "revision": 1,
+                    }
+                ),
             ),
             patch.object(jobs.translator, "get_language", AsyncMock(return_value="en")),
             patch.object(jobs.translator, "gettext", return_value="Changed"),
@@ -596,6 +610,11 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             ) as commit_transition,
             patch.object(jobs, "upsert_cached_schedule", AsyncMock()),
             patch.object(jobs, "batch_update_subscription_hashes", AsyncMock()) as update_hashes,
+            patch.object(
+                jobs,
+                "get_schedule_notification_snapshot",
+                AsyncMock(return_value={"schedule_hash": current_hash}),
+            ),
             patch.object(jobs.asyncio, "sleep", AsyncMock()),
         ):
             await jobs.check_for_schedule_updates(object(), ruz_api_client)
@@ -633,8 +652,15 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             patch.object(jobs, "get_all_short_names", AsyncMock(return_value={})),
             patch.object(
                 jobs,
-                "get_cached_schedule_snapshot",
-                AsyncMock(return_value=(old_schedule, datetime.now(UTC))),
+                "get_schedule_notification_snapshot",
+                AsyncMock(
+                    return_value={
+                        "schedule_data": old_schedule,
+                        "updated_at": datetime.now(UTC),
+                        "schedule_hash": "old-hash",
+                        "revision": 1,
+                    }
+                ),
             ),
             patch.object(jobs.translator, "get_language", AsyncMock(return_value="en")),
             patch.object(jobs.translator, "gettext", return_value="Changed"),
@@ -663,6 +689,10 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(first, retry)
         self.assertNotEqual(first, later)
+        self.assertNotEqual(
+            jobs.build_schedule_change_event_key("group", "123", "old", "new", checked_at, source_revision=1),
+            jobs.build_schedule_change_event_key("group", "123", "old", "new", checked_at, source_revision=3),
+        )
 
     async def test_update_schedule_cache_uses_shared_semester_bounds(self):
         schedule_data = [{"date": "2026.08.27", "discipline": "Math"}]

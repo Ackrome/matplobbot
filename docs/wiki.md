@@ -2323,3 +2323,171 @@ API; сохранение создаёт календарный профиль. 
 сообщения Telegram в локальных проверках не отправляются.
 
 Reviewed assessment sources may be curriculum plans or separately registered BRS documents. RU/EN lesson-card labels therefore say “Assessment type” and “Official document”, preserving each source title and page; locale generation 20261009-14 is synchronized with offline cache v49. Lesson details generation 20261010-1 preserves the selected group for modular lessons; schedule generation 20261010-2 clears stale data when switching entities.
+
+## v1 release hardening: authentication and first-time Telegram links
+
+Website JWTs now require a random `jti` and the account's `auth_version`.
+Migration `fd3d4e5f6071` adds durable individual revocations and the account-wide
+version. `POST /api/auth/logout` commits a revocation before confirming success;
+`POST /api/auth/logout-all` atomically increments the account version. The account
+page exposes “Sign out on all devices” in RU/EN. A failed logout keeps the local
+token and displays an error so the UI does not imply a successful server revoke.
+Admin password synchronization also increments the version only if the password
+actually changes. Old JWTs require a fresh login once after this rollout.
+
+REST and WebSocket connections check revocation and version in PostgreSQL. Existing
+streams revalidate before each send and every 15 seconds while idle. Expired
+revocation rows are pruned during logout after JWT clock leeway; account deletion
+cascades revocations. Ordinary logout does not invalidate other devices. Calendar
+subscription secrets remain separate from website sessions.
+
+Password login applies the Redis-backed fail-closed limiter from
+`fastapi_stats_app/login_limits.py` before database lookup/password verification.
+Per-minute client/account/pair limits are 60/20/10, counters expire atomically and
+rejected requests do not prolong expiry. Forwarded client addresses are trusted
+only behind `AUTH_TRUSTED_PROXY_NETWORKS` (configure the actual proxy CIDRs).
+Redis outage returns 503; limits return 429 + Retry-After, localized by the frontend.
+Password hashing runs in a thread pool to avoid blocking the API event loop.
+
+Known `/start` destinations (`web_account`, `web_settings`, `web_subscriptions`,
+`web_subscribe`, `calendar_sync`, `cal_sync`) survive initial language selection,
+tour feature detours, finish and skip. Their pending destination uses a dedicated
+Redis key under `user_cache:{user_id}:onboarding_destination:{bot_id}:{chat_id}`,
+independent of the feature FSM and user settings. The key expires after 30 days;
+atomic `GETDEL` consumes it once, and existing account erasure removes the owner
+namespace. Completing a search or LaTeX exercise can clear its FSM without losing
+the destination. Resume uses the human callback identity, not the
+bot-authored message identity. A new `/start` resets old destinations; onboarding
+and these private destinations never expose personal data in group chats.
+
+Regression coverage: `tests/test_auth_sessions.py` exercises real relational
+persistence and HTTP/WS rejection; `tests/test_onboarding_destinations.py` uses
+the real aiogram Router and FSM, including the actual schedule/LaTeX completion
+handlers that clear feature state, rather than only invoking the final handler.
+Local account screenshots under `docs/reports/v1-release/screenshots/` use a
+synthetic account and real local auth endpoints, not a production identity.
+
+
+## Immutable releases and real-service acceptance (2026-10-10)
+
+Application coverage now includes every Python module in bot, fastapi_stats_app, scheduler_app and shared_lib, including unimported modules, and excludes tests/offline research from the product denominator. The pre-change measured baseline is 50.30%; both providers enforce an initial 50% floor. Node is mandatory for frontend state regressions. This percentage complements the required journeys, not a guarantee of runtime correctness.
+
+CI labels all four application images with the complete source commit and records their immutable GHCR digests, Alembic head and tracked frontend/config/security hashes in release_manifest. Before Jenkins can be triggered, rc_acceptance starts a disposable internal Docker network, migrates real PostgreSQL, exercises actual API/Redis/Celery compiles, calendar/ICS, account isolation/revocation, scheduler outbox retries and verifies a consistent backup in a second isolated PostgreSQL instance. RUZ source cache and external Telegram HTTP replies are synthetic; internal DB/queue/worker behavior is real. A failed or unavailable Docker gate stops release; it cannot silently skip. Local-image reports remain explicitly working-tree development evidence.
+
+Jenkins accepts SOURCE_COMMIT and the encoded accepted manifest, pins both validation and deployment checkouts, rejects altered deploy files and incorrect OCI revision labels, and deploys digest overrides. It makes a pre-migration snapshot backup, stops the old scheduler before the notification baseline migration, verifies schema and provisions the dedicated admin. Only successful post-deploy smoke advances .release-state/current.json; previous manifests, private environment snapshots and image references remain available.
+
+See [release operator runbook](release-runbook.md) for backup, isolated restore, rollback, evidence and environment prerequisites. Never commit .release-state or database dumps. Candidate source and image validation happen before a bounded maintenance window; the observed legacy/current source/configuration/runtime baseline and attempt marker are saved before stopping host bind mounts or switching source.
+
+The existing five support services are captured by runtime image ID; app rollout
+uses `--no-build --pull never`. `scripts/jenkins_release_parameters.py` installs
+the two immutable-release input definitions with empty defaults through authenticated
+Jenkins config.xml, binds the known Git SCM branch to `${SOURCE_COMMIT}` and disables
+lightweight checkout. This pins the loaded Jenkinsfile itself before pipeline stages
+start; all other job settings remain. CI rereads this binding before triggering. Read/Configure
+denial fails safely. No bootstrap deployment is used. Its CLI defaults to dry run.
+
+`scripts/rollback_drill.py` exercises the actual rollback and finalize helpers in
+a temporary synthetic Git checkout and unique internal Docker Compose network,
+with no published ports. Real PostgreSQL/API/Redis and the bot migration image
+establish an observed-legacy baseline. The candidate changes tracked source,
+private settings, admin password and runtime image identity. The drill confirms
+restoration with actual HTTP login, frontend canary content, source/config hashes,
+image IDs, schema/account preservation and post-smoke pointer advancement. Local
+evidence is `docs/reports/v1-release/rollback-local.json`; it records helper hashes
+and full cleanup. Non-API application/ingress services idle, the schema stays the
+same, and this synthetic local drill is not production restore/ingress evidence.
+
+## Durable schedule delivery and bounded failure signals (2026-10-10)
+
+Schedule change detection now compares against `schedule_notification_snapshots`,
+an independent durable baseline that interactive and periodic cache refreshes do
+not overwrite. A revision check makes the baseline, new outbox events, shared
+cache and subscription hashes commit together; concurrent stale scanners roll
+back and retry on a later tick. Event identity includes the baseline revision,
+so a later A→B change remains distinct from an earlier A→B cycle. Formatter-only
+`date_obj` fields do not affect source hashes.
+The scanner captures the revision before awaiting the source, preventing a slow
+reply from reversing a concurrent scanner's newer committed observation.
+
+Pausing or deleting the last active Telegram profile for the same user, entity,
+chat and topic cancels its pending/claimed deliveries in the subscription
+transaction and clears their payloads. Another active profile at that exact
+destination preserves eligibility. The worker checks eligibility again before
+sending. An already in-flight external send cannot be recalled, and Telegram's
+lack of an idempotency key still permits a duplicate after an ambiguous success.
+
+Expired and exhausted rows count as new failures even when a drain finds no
+sendable work. New terminal failures carry `failed_at`; scheduler health and
+admin insights expose the preceding hour's `recently_failed` count. Successful
+empty ticks do not clear this signal, and historical failures age out of health.
+Cancellation is separate from failure. Daily maintenance deletes terminal
+history in bounded batches after `SCHEDULE_OUTBOX_RETENTION_DAYS` (default 30,
+minimum 2), retaining live work and every valid daily catch-up deduplication key.
+
+Migration `fe4e5f607182`, following auth migration `fd3d4e5f6071`, seeds baselines
+from valid cached schedules and leaves historical failure timestamps unknown.
+Stop the old scheduler before migration/backfill and start the new scheduler
+afterward. Previously overwritten historical schedules cannot be reconstructed.
+
+`tests/test_schedule_delivery.py` covers real relational rollback, cancellation,
+cache/scanner interference, failure accounting and retention. The disposable
+PostgreSQL acceptance harness additionally uses `scripts/rc_delivery_probe.py`
+to verify concurrent claims, competing baseline updates and recipient-FK rollback.
+`scripts/benchmark_schedule_delivery.py` measures safe offline SQL/grouping work
+with synthetic delays/outages and zero network requests. Its continuous local
+drain excludes the minute scheduler cadence and provider rate limits; it is not
+production capacity evidence.
+
+## Mandatory renderer isolation and Studio assets (v1.0 hardening, 2026-10-10)
+
+Every server-rendered format now enters `shared_lib/render_sandbox.py`: Studio
+projects and quick LaTeX, Telegram formulas, Mermaid, and Markdown/Pandoc (including
+embedded Mermaid). The Linux worker must run as non-root `appuser`; root, missing
+bubblewrap/prlimit, or denied namespace creation fail closed. There is no host
+compiler fallback. Each invocation has private PID/network/mount namespaces, a
+cleared environment, read-only runtime mounts and one writable job directory.
+Successful exit and timeout both terminate descendants; a post-exit `lstat` scan
+rejects symlinks and special files before the worker reads PDF/log/cache outputs.
+All latexmk commands use `-norc` and `-no-shell-escape`. Compiler diagnostics returned
+to Python are capped at 2 MiB per stream.
+
+`shared_lib/render_assets.py` centralizes accepted source/image/document extensions,
+rejecting hidden/configuration/executable files. API uploads are bounded at 5 MiB;
+worker project inputs at 100 files / 20 MiB and extracted build caches at 20 MiB.
+Studio asset reads require the Authorization bearer header and project ownership.
+Only byte-verified PNG/JPEG/GIF/WebP images render inline. Other legacy assets are
+sandboxed downloads with nosniff, no-store and no-referrer headers. The Markdown
+preview fetches image bytes through the API and uses revocable blob URLs, so JWTs
+never enter preview asset URLs; stale responses cannot enter a different project.
+
+Both Compose worker definitions require a read-only root filesystem, all capabilities
+dropped, no-new-privileges, 2 GiB RAM, 256 PIDs, and a 512 MiB temporary filesystem.
+Ship `security/worker-seccomp.json` alongside Compose. The dedicated profile preserves
+Docker's default-deny policy with namespace-setup exceptions; the outer AppArmor
+profile permits bubblewrap's nested mounts. The worker Dockerfile installs system
+Chromium, bubblewrap and util-linux. Hosts that prohibit unprivileged user namespaces
+must fail release acceptance instead of bypassing isolation.
+
+Validation: run `tests/test_render_sandbox.py` with `RENDER_SANDBOX_INTEGRATION=1` in
+the actual worker image and production Compose security settings. It exercises all
+six renderer paths and real environment/filesystem/network/process/output attacks
+using synthetic canaries. Run `node scripts/check_studio_asset_preview.mjs` for the
+browser transport/blob lifecycle regression and the Studio router/process unit
+suites for authentication, MIME and timeout handling. The browser fixture loads the
+production preview functions with a synthetic API; full editor/CDN startup remains
+part of the separate frontend acceptance check. Re-run the real image gate whenever
+compiler packages, kernel/profile settings or mounted resources change.
+
+### Production snapshot migration rehearsal (2026-10-10)
+
+`docs/reports/v1-release/production-migration.json` records an isolated migration
+of the freshly verified production snapshot from `fc2c3d4e5f60` to `fe4e5f607182`.
+All 21 restored table fingerprints matched the private backup; original columns
+and rows in all 20 data tables remained unchanged after migration. All 42 cached
+schedule rows were backfilled with exact payload/hash/revision/timestamp checks,
+and all 26 accounts received `auth_version=0`. The migrator's current migration
+source hashes were verified before execution. PostgreSQL used `network=none`;
+only the local migrator shared that namespace, with no bot/API/scheduler startup.
+The generated container and anonymous volume were removed. The report contains
+only aggregates and artifact identifiers; private dump/metadata remain outside Git.
+This local-image rehearsal supplements the mandatory final immutable-image RC gate.

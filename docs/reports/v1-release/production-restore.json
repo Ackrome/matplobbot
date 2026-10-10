@@ -1,0 +1,12 @@
+{
+  "restore_verified": true,
+  "restore_seconds": 5.49,
+  "tables_verified": 21,
+  "schema_heads": [
+    "fc2c3d4e5f60"
+  ],
+  "backup_sha256": "5abfce5fb191d5a360862a04f696935d84d2d7530175cd0579c437170f1f2309",
+  "matching_environment_snapshot_copied_off_host": true,
+  "environment_snapshot_remote_local_sha256_matched": true,
+  "private_backup_location": "Owner-accessible private backup directory outside the checkout and temporary directory; excluded from Git. Production environment was preserved without displaying its contents."
+}

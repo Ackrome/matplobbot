@@ -1,7 +1,7 @@
 (() => {
     const STORAGE_KEY = "mpb_ui_lang";
     // Keep the dictionary revision in sync with the service-worker precache.
-    const LOCALE_VERSION = "20261009-14";
+    const LOCALE_VERSION = "20261010-1";
     const SUPPORTED_LANGUAGES = new Set(["en", "ru"]);
     const dictionaries = { en: {}, ru: {} };
     const translators = new Set();

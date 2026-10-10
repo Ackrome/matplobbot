@@ -1,9 +1,12 @@
 import base64
+import io
 import os
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 from urllib.parse import unquote
+
+from PIL import Image
 
 FASTAPI_AVAILABLE = True
 try:
@@ -151,10 +154,57 @@ class TestStudioRouterAPI(unittest.TestCase):
 
     def test_project_filename_rejects_paths_and_control_characters(self):
         self.assertEqual(studio_router._sanitize_project_filename("diagram.png"), "diagram.png")
-        for filename in ("../secret.txt", "nested/image.png", r"nested\image.png", "bad\x00.txt"):
+        for filename in (
+            "../secret.txt",
+            "nested/image.png",
+            r"nested\image.png",
+            "bad\x00.txt",
+            ".latexmkrc",
+            "latexmkrc",
+            "texmf.cnf",
+            "attack.html",
+            "attack.svg",
+        ):
             with self.subTest(filename=filename), self.assertRaises(HTTPException) as raised:
                 studio_router._sanitize_project_filename(filename)
             self.assertEqual(raised.exception.status_code, 400)
+
+    def test_asset_query_token_does_not_authenticate(self):
+        self.app.dependency_overrides.pop(studio_router.get_current_user)
+        response = self.client.get("/api/studio/projects/9/assets/image.png?token=not-a-session")
+        self.assertEqual(response.status_code, 401)
+
+    def test_legacy_html_or_disguised_image_is_sandboxed_download(self):
+        for name in ("attack.html", "fake.png", "attack.svg"):
+            self.db.execute.side_effect = [
+                _mock_scalar_result(SimpleNamespace(id=9, owner_id=1)),
+                _mock_scalar_result(
+                    SimpleNamespace(
+                        content_binary=b'<script>window.marker="executed"</script>',
+                        content_text=None,
+                    )
+                ),
+            ]
+            response = self.client.get(f"/api/studio/projects/9/assets/{name}")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers["content-type"], "application/octet-stream")
+            self.assertEqual(response.headers["content-disposition"], "attachment")
+            self.assertIn("sandbox", response.headers["content-security-policy"])
+            self.assertEqual(response.headers["x-content-type-options"], "nosniff")
+            self.assertEqual(response.headers["cache-control"], "no-store")
+
+    def test_valid_raster_keeps_inline_preview(self):
+        buffer = io.BytesIO()
+        Image.new("RGB", (2, 2), "red").save(buffer, format="PNG")
+        content = buffer.getvalue()
+        self.db.execute.side_effect = [
+            _mock_scalar_result(SimpleNamespace(id=9, owner_id=1)),
+            _mock_scalar_result(SimpleNamespace(content_binary=content, content_text=None)),
+        ]
+        response = self.client.get("/api/studio/projects/9/assets/picture.png")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "image/png")
+        self.assertEqual(response.content, content)
 
     def test_project_ownership_guard_returns_404(self):
         self.db.execute.return_value = _mock_scalar_result(None)

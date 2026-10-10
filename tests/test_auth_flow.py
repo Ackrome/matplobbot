@@ -34,6 +34,9 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
         token_patch = patch.object(fastapi_auth, "BOT_TOKEN", "123456:test-token")
         token_patch.start()
         self.addCleanup(token_patch.stop)
+        throttle_patch = patch.object(auth_router, "enforce_login_limits", AsyncMock())
+        throttle_patch.start()
+        self.addCleanup(throttle_patch.stop)
         self.app = FastAPI()
         self.app.include_router(auth_router.router, prefix="/api")
         self.client = TestClient(self.app)
@@ -497,9 +500,12 @@ class TestAuthFlow(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(parsed)
 
     def test_logout_returns_success_for_authenticated_user(self):
+        db = self._mock_db()
+        self.app.dependency_overrides[auth_router.get_db_session_dependency] = lambda: db
         self.app.dependency_overrides[auth_router.get_current_user] = lambda: {
             "id": 1,
             "role": "user",
+            "token_claims": {"jti": "a" * 48, "exp": time.time() + 60},
         }
 
         response = self.client.post("/api/auth/logout")

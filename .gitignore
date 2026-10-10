@@ -41,3 +41,8 @@ docs/.obsidian
 .coverage
 build/
 *.egg-info/
+.release-state/
+/release-manifest*.json
+/rc-acceptance*.json
+coverage.xml
+coverage.json

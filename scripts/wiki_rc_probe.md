@@ -1,0 +1,3 @@
+# rc_probe.py
+
+Внутренний сценарий изолированного RC: prepare создаёт синтетические аккаунты/проект/календарь и ставит Celery job, verify проверяет результат после restart API, logout/logout-all, export/delete и Redis Lua; outbox вызывает настоящий scheduler с реальным PostgreSQL и локальным HTTP-приёмником вместо Telegram. Вызов только через rc_acceptance, MPB_ISOLATED_RC=1; данные промежуточного состояния лежат в/tmp с0600. Зависимости — runtime API/scheduler image. Не указывать production URL/credentials и не заменять внутренние БД/очереди mock-объектами. Временные auth-токены никогда не включаются в итоговый отчёт.

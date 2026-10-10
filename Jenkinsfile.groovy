@@ -2,10 +2,8 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'BOT_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag for the bot')
-        string(name: 'WORKER_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag for the worker')
-        string(name: 'API_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag for the API')
-        string(name: 'SCHEDULER_IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag for the scheduler')
+        string(name: 'SOURCE_COMMIT', defaultValue: '', description: 'Required full source commit accepted by CI')
+        text(name: 'RELEASE_MANIFEST_B64', defaultValue: '', description: 'Base64 accepted CI manifest, including immutable image digests and RC/restore evidence')
         string(name: 'DEPLOY_HOST', defaultValue: '192.168.1.40', description: 'LAN hostname or private IP of app-vm; it must resolve to exactly one RFC1918 address')
         string(name: 'DEPLOY_HOST_FINGERPRINT', defaultValue: '', description: 'Optional override for pinned SHA256 host key fingerprint from APP_VM_SHA256')
         string(name: 'DEPLOY_ADMIN_USERNAME', defaultValue: 'matplobbot-deploy', description: 'Dedicated unlinked password administrator for deployment smoke checks; never use a Telegram or ordinary account')
@@ -30,7 +28,26 @@ pipeline {
         PROD_MAIL_CREDENTIAL_KEY = credentials('MAIL_CREDENTIAL_KEY')
     }
 
+    options { disableConcurrentBuilds() }
+
     stages {
+        stage('Pin Accepted Source') {
+            steps {
+                sh '''
+                    set -eu
+                    printf '%s' "$SOURCE_COMMIT" | grep -Eq '^[0-9a-f]{40}$'
+                    test -n "$RELEASE_MANIFEST_B64"
+                    # The job's SCM definition must itself load Jenkinsfile from this SHA.
+                    test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+                    git fetch origin "$SOURCE_COMMIT"
+                    git checkout --detach "$SOURCE_COMMIT"
+                    mkdir -p .release-state
+                    python3 scripts/release_manifest.py decode --commit "$SOURCE_COMMIT" --output .release-state/accepted.json
+                    python3 scripts/release_manifest.py verify .release-state/accepted.json --require-rc
+                '''
+            }
+        }
+
         stage('Pre-Deploy Quality Gate') {
             steps {
                 script {
@@ -100,7 +117,8 @@ PY
                         export ADMIN_USER_IDS=""
 
                         set +e
-                        python -m unittest discover -s tests -v 2>&1 | tee unittest_output.log
+                        command -v node >/dev/null || { echo "ERROR: Node 20+ is required for frontend regressions."; exit 1; }
+                        coverage run --branch -m unittest discover -s tests -v 2>&1 | tee unittest_output.log
                         test_status="${PIPESTATUS[0]}"
                         set -e
                         if [ "$test_status" -ne 0 ]; then
@@ -112,6 +130,7 @@ PY
                           exit 1
                         fi
 
+                        coverage report --skip-covered
                         } 2>&1 | tee -a "$LOG_FILE"
 BASH
                     '''
@@ -124,12 +143,7 @@ BASH
                 script {
                     env.FAIL_STAGE = 'Deploy to Production'
                     withCredentials([sshUserPrivateKey(credentialsId: 'app-vm-ssh-key', keyFileVariable: 'SSH_KEY_FILE', usernameVariable: 'SSH_USER')]) {
-                        withEnv([
-                            "BOT_TAG=${params.BOT_IMAGE_TAG}",
-                            "API_TAG=${params.API_IMAGE_TAG}",
-                            "SCHEDULER_TAG=${params.SCHEDULER_IMAGE_TAG}",
-                            "WORKER_TAG=${params.WORKER_IMAGE_TAG}",
-                        ]) {
+                        withEnv(["RELEASE_SOURCE=${params.SOURCE_COMMIT}"]) {
                             sh '''
                                 bash -euo pipefail <<'BASH'
 
@@ -173,7 +187,7 @@ BASH
                                 # Keep deployment repo deterministic and recover from local drift.
                                 # If deploy path exists but is not a git worktree, preserve it and bootstrap fresh clone.
                                 # Reset first, then switch branch, so tracked local edits cannot block checkout.
-                                ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' REPO_URL='https://github.com/Ackrome/matplobbot' bash -se" <<'REMOTE_EOF'
+                                ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' REPO_URL='https://github.com/Ackrome/matplobbot' SOURCE_COMMIT='$SOURCE_COMMIT' bash -se" <<'REMOTE_EOF'
 set -euo pipefail
 
 DEPLOY_DIR="${DEPLOY_PATH/#~/$HOME}"
@@ -195,13 +209,19 @@ fi
 
 cd "$DEPLOY_DIR"
 git remote set-url origin "$REPO_URL"
-git fetch origin main
-git reset --hard
-git clean -fd
-git checkout -B main origin/main
-git reset --hard origin/main
-git clean -fd
+printf '%s' "$SOURCE_COMMIT" | grep -Eq '^[0-9a-f]{40}$'
+git fetch origin "$SOURCE_COMMIT"
+mkdir -p .release-state
+if [ ! -d ".release-state/candidates/$SOURCE_COMMIT" ]; then
+  git worktree add --detach ".release-state/candidates/$SOURCE_COMMIT" "$SOURCE_COMMIT"
+fi
 REMOTE_EOF
+
+                                # Verify the candidate away from live bind mounts. prepare saves
+                                # the legacy/current runtime first and stops all bind-mounted
+                                # services before switching source in a bounded maintenance window.
+                                printf '%s' "$RELEASE_MANIFEST_B64" | ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && python3 .release-state/candidates/$SOURCE_COMMIT/scripts/release_manifest.py decode --stdin --commit $SOURCE_COMMIT --output .release-state/accepted.json"
+                                ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && python3 .release-state/candidates/$SOURCE_COMMIT/scripts/release_deploy.py prepare .release-state/accepted.json --candidate .release-state/candidates/$SOURCE_COMMIT"
 
                                 # Build the complete payload locally, then atomically replace the
                                 # remote file. Optional values stay in the same SSH stream and no
@@ -244,10 +264,7 @@ REMOTE_EOF
                                     fi
                                 } | ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && bash ./deploy.sh --write-env .env $EXPECTED_ENV_KEYS"
 
-                                # Safer cleanup policy than full system prune.
-                                ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "docker image prune -af --filter 'until=168h' && docker container prune -f --filter 'until=24h'"
-
-                                ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && chmod +x deploy.sh || true && bash ./deploy.sh $BOT_TAG $API_TAG $SCHEDULER_TAG $WORKER_TAG"
+                                ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && bash ./deploy.sh --manifest .release-state/accepted.json"
                                 } 2>&1 | tee -a "$LOG_FILE"
 BASH
                             '''
@@ -400,6 +417,7 @@ else
   echo "Smoke check FAILED: leaderboard endpoint returned unexpected HTTP $PROTECTED_STATUS without auth"
   exit 1
 fi
+bash ./deploy.sh --finalize
 REMOTE_EOF
                             } 2>&1 | tee -a "$LOG_FILE"
 BASH

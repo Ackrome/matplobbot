@@ -1,0 +1,40 @@
+{
+  "status": "passed",
+  "commit": "58c4ffcc911d2504abcfc15bb1b063fbf2a68864-working-tree",
+  "images": {
+    "bot": "matplobbot-rc-bot:local",
+    "api": "matplobbot-rc-api:local",
+    "scheduler": "matplobbot-rc-scheduler:local",
+    "worker": "matplobbot-render-audit:local"
+  },
+  "runtime_image_ids": {
+    "bot": "sha256:71b8c94ce50124388498d2f3590ac3de372ad2ca7844cf50d7db0d859b6e0141",
+    "api": "sha256:529d2d94802393d71fae00320f336a1328731d2f5fc88f3cbca52fc6477eae38",
+    "scheduler": "sha256:6450423e27c655fe22ba7dc98de699787bb908332e036fbbda549445f13decaf",
+    "worker": "sha256:781d5fb5345056430d66c615d11f957c53af8ef9605b888f50d30aaa3d183c1f"
+  },
+  "started_at": "2026-10-10T08:30:28.630452+00:00",
+  "external_boundaries": "Synthetic Telegram login; local Telegram HTTP 503/200 fixture; seeded RUZ cache. No real users or external delivery.",
+  "restore_verified": true,
+  "restore_seconds": 2.54,
+  "tables_verified": 23,
+  "schema_heads": [
+    "fe4e5f607182"
+  ],
+  "backup_sha256": "6ff5e96a17de62b8d2d4f0e6fec81c1a19fdfbc267158e82b8f2c883d13d06ea",
+  "completed_at": "2026-10-10T08:31:16.910780+00:00",
+  "checks": [
+    "alembic fresh PostgreSQL",
+    "Telegram HTTP login and ownership isolation",
+    "project persistence across API restart",
+    "real Redis/Celery LaTeX Markdown Mermaid artifacts",
+    "production worker sandbox and six render paths",
+    "calendar profile persistence and ICS",
+    "owner export/delete and persistent session revocation",
+    "password login HTTP limits and revoked open/new WebSockets",
+    "real Redis Lua shared budgets and expiry",
+    "scheduler HTTP failure/retry/outbox dedupe",
+    "PostgreSQL SKIP LOCKED, baseline CAS and cancellation",
+    "snapshot backup/restore row fingerprints"
+  ]
+}

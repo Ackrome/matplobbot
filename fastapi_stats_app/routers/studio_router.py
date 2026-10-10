@@ -3,7 +3,6 @@ import base64
 import html
 import io
 import logging
-import mimetypes
 import os
 import re
 import unicodedata
@@ -13,7 +12,7 @@ from typing import Literal
 from urllib.parse import quote
 
 import aiohttp
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import delete, select, update
@@ -24,6 +23,7 @@ from shared_lib.celery_app import dispatch_traced_task
 from shared_lib.database import get_db_session_dependency
 from shared_lib.egress import get_telegram_proxy_url
 from shared_lib.models import Project, ProjectFile
+from shared_lib.render_assets import MAX_ASSET_BYTES, allowed_project_path, raster_content_type
 from shared_lib.schemas import (
     StatusResponse,
     StudioCompileResponse,
@@ -125,6 +125,7 @@ def _sanitize_project_filename(filename: str | None) -> str:
         or any(separator in name for separator in ("/", "\\"))
         or ":" in name
         or len(name) > 255
+        or not allowed_project_path(name)
     ):
         raise HTTPException(status_code=400, detail="Invalid filename")
     return name
@@ -406,8 +407,8 @@ async def upload_asset(
     current_user: dict = Depends(get_current_user),
 ):
     await get_owned_project_or_404(db, project_id, current_user["id"])
-    content = await file.read()
-    if len(content) > 5 * 1024 * 1024:  # Лимит 5 МБ
+    content = await file.read(MAX_ASSET_BYTES + 1)
+    if len(content) > MAX_ASSET_BYTES:
         raise HTTPException(status_code=400, detail="File too large (max 5MB)")
 
     safe_filename = _sanitize_project_filename(file.filename)
@@ -603,15 +604,12 @@ async def export_project_zip(
 async def get_project_asset(
     project_id: int,
     file_path: str,
-    token: str = Query(...),
     db: AsyncSession = Depends(get_db_session_dependency),
+    current_user: dict = Depends(get_current_user),
 ):
-    # Верификация токена вручную, т.к. img src не поддерживает заголовки
-    try:
-        user = await get_current_user(token, db)
-    except HTTPException as exc:
-        raise HTTPException(status_code=401, detail="Invalid token") from exc
-    await get_owned_project_or_404(db, project_id, user["id"])
+    # Browser previews fetch with Authorization and use local blob image URLs.
+    # A shared URL alone must never authenticate another visitor to an asset.
+    await get_owned_project_or_404(db, project_id, current_user["id"])
 
     result = await db.execute(
         select(ProjectFile).where(
@@ -628,9 +626,18 @@ async def get_project_asset(
         if file_obj.content_binary
         else (file_obj.content_text.encode("utf-8") if file_obj.content_text else b"")
     )
-    mime_type, _ = mimetypes.guess_type(file_path)
-
-    return Response(content=content, media_type=mime_type or "application/octet-stream")
+    mime_type = raster_content_type(content)
+    return Response(
+        content=content,
+        media_type=mime_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": "inline" if mime_type else "attachment",
+            "Content-Security-Policy": "sandbox; default-src 'none'; frame-ancestors 'none'",
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store",
+            "Referrer-Policy": "no-referrer",
+        },
+    )
 
 
 @router.post(

@@ -29,18 +29,31 @@ does not make a detected change disappear.
 - `enqueue_schedule_change_deliveries(...)` inserts at most one row per event and application
   user.
 - `commit_schedule_change_transition(...)` writes recipient rows, the new cached schedule, and
-  matching subscription hashes in one database transaction. This is the scheduler's normal
-  transition path.
+  matching subscription hashes together with the independent notification snapshot in one
+  database transaction. `expected_revision` fences concurrent scanners; a conflict raises
+  `ScheduleBaselineConflict` and leaves every write uncommitted. A missing baseline is initialized
+  with no recipients. Interactive and periodic cache refreshes never modify this baseline.
+- `get_schedule_notification_snapshot(...)`, `normalize_schedule_snapshot(...)` and
+  `schedule_snapshot_hash(...)` load the notification baseline and exclude derived formatter fields.
+- `cancel_inactive_schedule_deliveries(session, ...)` participates in pause/delete transactions;
+  another active Telegram profile at the exact same entity/chat/topic keeps the event eligible.
+  `is_schedule_delivery_current(...)` rechecks eligibility just before sending. An already in-flight
+  Telegram send cannot be recalled, and pending private payloads are never redirected into a group.
 - `claim_schedule_change_deliveries(...)` atomically claims ready work with `FOR UPDATE SKIP
   LOCKED` and reclaims abandoned processing rows after the lock timeout.
 - `mark_schedule_change_delivery_sent(...)` finalizes a successful delivery.
 - `reschedule_schedule_change_delivery(...)` returns a failed attempt to the queue with backoff,
   or marks it terminally failed.
+- `prune_schedule_delivery_history(...)` deletes only terminal rows older than the configured
+  retention (30 days by default, minimum 2), in bounded batches. The independent baseline remains.
+  The two-day minimum exceeds every valid daily catch-up window and preserves daily event dedupe.
 
 ## Usage example
 
 ```python
-event_key = build_schedule_change_event_key("group", "42", old_hash, new_hash, checked_at)
+event_key = build_schedule_change_event_key(
+    "group", "42", old_hash, new_hash, checked_at, source_revision=baseline["revision"]
+)
 await commit_schedule_change_transition(
     event_key=event_key,
     entity_type="group",
@@ -49,6 +62,7 @@ await commit_schedule_change_transition(
     schedule_data=new_schedule,
     new_hash=new_hash,
     deliveries=[{"user_id": 1, "chat_id": 1, "payload": "Schedule changed"}],
+    expected_revision=baseline["revision"],
 )
 ```
 
@@ -62,8 +76,17 @@ directly.
 
 ## Maintenance notes
 
-Keep the event-key inputs stable until `commit_schedule_change_transition` commits. The previous
-cache timestamp distinguishes later repeated A→B transitions while preserving idempotency when the
-same transition is retried. Telegram has no idempotency key, so a process crash after Telegram
+Keep the event-key inputs stable until `commit_schedule_change_transition` commits. Pass the previous
+baseline revision into `build_schedule_change_event_key(source_revision=...)`; it distinguishes
+repeated A→B cycles even if timestamps happen to match. Capture that baseline before awaiting
+the upstream source, so a delayed reply cannot reverse a newer concurrent scan. Telegram has no idempotency key, so a process crash after Telegram
 accepts a message but before `mark_schedule_change_delivery_sent` can still produce one duplicate on
 retry.
+
+Claim cleanup reports newly expired/exhausted rows through its optional `summary` accumulator even
+when it returns no claims. New terminal failures set `failed_at`; scheduler health and admin insights
+expose the preceding hour's `recently_failed` count. Empty successful ticks do not erase that signal,
+while historical failures age out of health automatically. Cancellation is a separate, nonfailure
+outcome and clears the queued payload. Deploy migration `fe4e5f607182` with the old scheduler stopped
+before backfill; start the new scheduler after the migration. Existing historical failures keep a
+null `failed_at`, and already overwritten historical source payloads cannot be reconstructed.

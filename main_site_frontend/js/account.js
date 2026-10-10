@@ -15,6 +15,7 @@
     let statusFallback = "";
 
     function token() { return localStorage.getItem("jwt_token"); }
+    byId("account-logout-all").addEventListener("click", () => window.performLogout(true));
     function status(key, fallback) {
         statusKey = key;
         statusFallback = fallback;

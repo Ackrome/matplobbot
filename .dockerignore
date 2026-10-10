@@ -7,4 +7,13 @@ Dockerfile
 *.pyo
 .env
 venv/
+.venv/
+.jenkins-venv/
+node_modules/
+graphify-out/
+.release-state/
+.coverage
+coverage.*
+release-manifest*.json
+rc-acceptance*.json
 idea.md

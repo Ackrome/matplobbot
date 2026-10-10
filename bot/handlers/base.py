@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from .suggestions import SuggestionsManager
 
 from shared_lib.i18n import translator
+from shared_lib.redis_client import redis_client
 
 
 class Onboarding(Filter):
@@ -63,6 +64,18 @@ class MentionedFilter(Filter):
 
 
 class BaseManager:
+    ONBOARDING_DESTINATIONS = frozenset(
+        {
+            "web_subscribe",
+            "web_subscriptions",
+            "web_settings",
+            "web_account",
+            "calendar_sync",
+            "cal_sync",
+        }
+    )
+    ONBOARDING_DESTINATION_TTL = 30 * 24 * 60 * 60
+
     def __init__(
         self,
         library_manager: LibraryManager,
@@ -89,7 +102,9 @@ class BaseManager:
 
     def _register_handlers(self):
         # Onboarding
-        self.router.message(CommandStart(), Onboarding())(self.onboarding_language_choice)
+        self.router.message(CommandStart(), F.chat.type == "private", Onboarding())(
+            self.onboarding_language_choice
+        )
         self.router.callback_query(F.data.startswith("set_lang_init:"))(
             self.handle_initial_language_selection
         )
@@ -178,6 +193,15 @@ class BaseManager:
     async def onboarding_language_choice(self, message: Message, state: FSMContext):
         """Step 0: User chooses the language."""
         await state.clear()  # На случай, если пользователь перезапускает бота
+        parts = (message.text or "").split(maxsplit=1)
+        payload = parts[1].strip() if len(parts) > 1 else ""
+        key = self._onboarding_destination_key(message, message.from_user.id)
+        if payload in self.ONBOARDING_DESTINATIONS:
+            # Feature exercises clear FSM data when they finish. This independent
+            # key survives those detours and never rewrites user settings.
+            await redis_client.client.set(key, payload, ex=self.ONBOARDING_DESTINATION_TTL)
+        else:
+            await redis_client.client.delete(key)
         builder = InlineKeyboardBuilder()
         # Кнопки не зависят от языка, т.к. пользователь его еще не выбрал
         builder.row(InlineKeyboardButton(text="English 🇬🇧", callback_data="set_lang_init:en"))
@@ -306,6 +330,9 @@ class BaseManager:
             callback.from_user.id,
             await translator.get_language(callback.from_user.id, callback.message.chat.id),
         )
+        destination = await redis_client.client.getdel(
+            self._onboarding_destination_key(callback.message, user_id)
+        )
         await state.clear()
         await database.set_onboarding_completed(user_id)
         await callback.message.delete()  # Clean up the onboarding message
@@ -313,13 +340,17 @@ class BaseManager:
             translator.gettext(lang, "choose_next_command"),
             reply_markup=await kb.get_main_reply_keyboard(user_id),
         )
-        await self._send_onboarding_quick_set_prompt(callback.message, user_id, lang)
+        if not await self._resume_onboarding_destination(callback, state, destination):
+            await self._send_onboarding_quick_set_prompt(callback.message, user_id, lang)
         await callback.answer()
 
     async def onboarding_skip(self, callback: CallbackQuery, state: FSMContext):
         user_id, lang = (
             callback.from_user.id,
             await translator.get_language(callback.from_user.id, callback.message.chat.id),
+        )
+        destination = await redis_client.client.getdel(
+            self._onboarding_destination_key(callback.message, user_id)
         )
         await state.clear()
         await database.set_onboarding_completed(user_id)
@@ -328,9 +359,32 @@ class BaseManager:
             translator.gettext(lang, "start_welcome", full_name=callback.from_user.full_name),
             reply_markup=await kb.get_main_reply_keyboard(user_id),
         )
-        await self._send_onboarding_quick_set_prompt(callback.message, user_id, lang)
+        if not await self._resume_onboarding_destination(callback, state, destination):
+            await self._send_onboarding_quick_set_prompt(callback.message, user_id, lang)
         await callback.answer(translator.gettext(lang, "onboarding_skipped"))
-        await callback.answer()
+
+    @staticmethod
+    def _onboarding_destination_key(message: Message, user_id: int) -> str:
+        # Existing account erasure clears this owner's Redis namespace too.
+        return f"user_cache:{user_id}:onboarding_destination:{message.bot.id}:{message.chat.id}"
+
+    async def _resume_onboarding_destination(
+        self, callback: CallbackQuery, state: FSMContext, destination: str | None
+    ) -> bool:
+        """Resume only known private destinations using the human callback identity."""
+        if (
+            callback.message.chat.type != "private"
+            or destination not in self.ONBOARDING_DESTINATIONS
+        ):
+            return False
+        message = callback.message.model_copy(
+            update={
+                "from_user": callback.from_user,
+                "text": f"/start {destination}",
+            }
+        )
+        await self.command_start_regular(message, state, resuming_onboarding=True)
+        return True
 
     async def _send_onboarding_quick_set_prompt(self, message: Message, user_id: int, lang: str):
         builder = InlineKeyboardBuilder()
@@ -366,7 +420,15 @@ class BaseManager:
         await callback.message.edit_text(translator.gettext(lang, "onboarding_quick_set_skipped"))
         await callback.answer()
 
-    async def command_start_regular(self, message: Message, state: FSMContext):
+    async def command_start_regular(
+        self, message: Message, state: FSMContext, *, resuming_onboarding: bool = False
+    ):
+        if message.chat.type != "private":
+            return
+        if not resuming_onboarding:
+            await redis_client.client.delete(
+                self._onboarding_destination_key(message, message.from_user.id)
+            )
         payload = ""
         if message.text:
             parts = message.text.split(maxsplit=1)

@@ -1,5 +1,7 @@
 # Use your pre-built base image
-FROM ghcr.io/ackrome/matplobbot-base-python:latest
+ARG PYTHON_BASE_IMAGE=ghcr.io/ackrome/matplobbot-base-python:latest
+FROM ${PYTHON_BASE_IMAGE}
+USER root
 
 WORKDIR /
 

@@ -67,10 +67,24 @@ class TestStudioProcess(unittest.TestCase):
                     timeout=0.1,
                 )
 
-    def test_non_studio_call_keeps_existing_transport(self):
-        with patch("shared_lib.studio_process.subprocess.run", return_value="result") as run:
-            self.assertEqual(run_studio_process(["compiler"], timeout=2), "result")
-        run.assert_called_once_with(["compiler"], timeout=2)
+    def test_non_studio_call_has_timeout_cleanup_without_redis(self):
+        with patch("shared_lib.studio_process.Redis.from_url") as redis:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                run_studio_process(
+                    [sys.executable, "-c", "import time;time.sleep(30)"],
+                    capture_output=True,
+                    timeout=0.1,
+                )
+        redis.assert_not_called()
+
+    def test_compiler_output_is_bounded_in_worker_memory(self):
+        result = run_studio_process(
+            [sys.executable, "-c", "import sys;sys.stdout.write('x'*3000000)"],
+            capture_output=True,
+            timeout=5,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(len(result.stdout), 2 * 1024 * 1024)
 
 
 class TestCompilerErrorLocations(unittest.TestCase):

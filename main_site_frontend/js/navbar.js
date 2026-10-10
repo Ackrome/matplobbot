@@ -216,9 +216,34 @@ function renderNavbar() {
         `;
     }
 }
-window.performLogout = function performLogout() {
-    localStorage.removeItem("jwt_token");
-    window.location.href = "/login";
+let logoutPending = false;
+window.performLogout = async function performLogout(allDevices = false) {
+    if (logoutPending) return false;
+    const token = localStorage.getItem("jwt_token");
+    if (!token) { window.location.href = "/login"; return true; }
+    logoutPending = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const buttons = document.querySelectorAll("[data-logout-btn], #account-logout-all");
+    buttons.forEach(button => { button.disabled = true; });
+    try {
+        const response = await fetch(`${NAV_API_BASE}/auth/${allDevices ? "logout-all" : "logout"}`, {
+            method: "POST", headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: controller.signal,
+        });
+        if (!response.ok && response.status !== 401) throw new Error("logout failed");
+        if (localStorage.getItem("jwt_token") === token) {
+            localStorage.removeItem("jwt_token");
+            window.location.href = "/login";
+        }
+        return true;
+    } catch (error) {
+        window.alert(translate("account.logoutFailed"));
+        return false;
+    } finally {
+        clearTimeout(timeout);
+        logoutPending = false;
+        buttons.forEach(button => { button.disabled = false; });
+    }
 };
 async function checkAuthAndRenderNavbar() {
     const token = localStorage.getItem("jwt_token");

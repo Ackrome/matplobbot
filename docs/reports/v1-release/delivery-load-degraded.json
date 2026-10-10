@@ -1,0 +1,31 @@
+{
+  "scope": "offline SQLite SQL/grouping probe; synthetic source, formatter and Telegram; no production capacity claim",
+  "drain_mode": "continuous caller-driven batches; excludes minute scheduler cadence and provider rate limits",
+  "observed_at": "2026-10-10T08:17:34.216992+00:00",
+  "python": "3.13.11",
+  "scenario": {
+    "users": 1000,
+    "entities": 20,
+    "profiles_per_user": 2,
+    "source_delay_ms": 200,
+    "send_delay_ms": 5,
+    "fail_every": 2
+  },
+  "source_calls": 20,
+  "source_failures_with_cache": 10,
+  "network_requests": 0,
+  "synthetic_sends": 1000,
+  "preparation_and_first_batch_seconds": 6.025,
+  "total_drain_seconds": 17.633,
+  "effective_deliveries_per_second": 56.71,
+  "drain_batches": 10,
+  "preparation": {
+    "prepared": 1000,
+    "failed": 0,
+    "sent": 100
+  },
+  "status_counts": {
+    "sent": 1000
+  },
+  "repeated_tick_duplicates": 0
+}

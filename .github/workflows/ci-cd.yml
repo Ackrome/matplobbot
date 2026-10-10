@@ -134,6 +134,9 @@ jobs:
           pip install -e .
           pip install -r requirements.txt -r fastapi_stats_app/requirements.txt -r scheduler_app/requirements.txt
           pip install -r requirements-validation.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       - name: Lint checks
         run: |
           ruff check . --select E9,F63,F7,F82
@@ -143,7 +146,7 @@ jobs:
           JWT_SECRET_KEY: ci-test-secret
         run: |
           coverage run --branch -m unittest discover -s tests -v
-          coverage report --skip-covered --fail-under=10
+          coverage report --skip-covered
           coverage xml -o coverage.xml
           coverage json -o coverage.json
           python - <<'PY'
@@ -167,6 +170,8 @@ jobs:
           set -euo pipefail
 
           BASE_DIR="$(mktemp -d)"
+          # Compare the same application-only scope even while base has legacy config.
+          export COVERAGE_RCFILE="$PWD/pyproject.toml"
           cleanup() {
             git worktree remove "$BASE_DIR" --force >/dev/null 2>&1 || true
             rm -rf "$BASE_DIR"
@@ -179,7 +184,7 @@ jobs:
           pushd "$BASE_DIR" >/dev/null
           # Coverage trend reporting should not fail the whole validation gate.
           if python -m pip install -e . >/dev/null 2>&1 && coverage run --branch -m unittest discover -s tests -v >/dev/null 2>&1; then
-            coverage json -o coverage-base.json >/dev/null 2>&1
+            coverage json --fail-under=0 -o coverage-base.json >/dev/null 2>&1
             BASE_COVERAGE="$(python -c "import json; print(f\"{float(json.load(open('coverage-base.json', encoding='utf-8'))['totals']['percent_covered']):.2f}\")")"
             DELTA="$(python -c "current=float('${CURRENT_COVERAGE}'); base=float('${BASE_COVERAGE}'); print(f'{current-base:+.2f}')")"
             {
@@ -365,6 +370,7 @@ jobs:
 
       # WORKER (Uses Base Worker)
       - name: Build Worker
+        id: image_worker
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -373,9 +379,13 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-worker:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-worker:latest
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
       # BOT (Uses Base Python)
       - name: Build Bot
+        id: image_bot
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -384,9 +394,13 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-bot:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-bot:latest
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
       # API (Uses Base Python)
       - name: Build API
+        id: image_api
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -395,9 +409,13 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-api:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-api:latest
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
       # SCHEDULER (Uses Base Python)
       - name: Build Scheduler
+        id: image_scheduler
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -406,6 +424,32 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-scheduler:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/matplobbot-scheduler:latest
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Bind immutable release and run real-service RC acceptance
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install -r requirements-validation.txt
+          .venv/bin/python scripts/release_manifest.py create --commit "${{ github.sha }}" --ci-run "${{ github.run_id }}" --output release-manifest.json \
+            --image "bot=ghcr.io/ackrome/matplobbot-bot@${{ steps.image_bot.outputs.digest }}" \
+            --image "api=ghcr.io/ackrome/matplobbot-api@${{ steps.image_api.outputs.digest }}" \
+            --image "scheduler=ghcr.io/ackrome/matplobbot-scheduler@${{ steps.image_scheduler.outputs.digest }}" \
+            --image "worker=ghcr.io/ackrome/matplobbot-worker@${{ steps.image_worker.outputs.digest }}"
+          .venv/bin/python scripts/rc_acceptance.py --manifest release-manifest.json --output rc-acceptance.json
+          .venv/bin/python scripts/release_manifest.py attest release-manifest.json --report rc-acceptance.json --output release-manifest-accepted.json
+
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accepted-release-${{ github.sha }}
+          overwrite: true
+          path: |
+            release-manifest*.json
+            rc-acceptance.json
+            rc-acceptance.log
 
       - name: Soft Cleanup
         if: always()
@@ -428,7 +472,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: accepted-release-${{ github.sha }}
       - name: Trigger Jenkins Job via cURL
+        env:
+          JENKINS_USER: ${{ secrets.JENKINS_USER }}
+          JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
         run: |
           if [[ "$JENKINS_LAN_URL" =~ ^(https?)://([^/:]+)(:([0-9]+))?/?$ ]]; then
             JENKINS_SCHEME="${BASH_REMATCH[1]}"
@@ -450,13 +500,24 @@ jobs:
           JENKINS_LAN_IP="$(bash scripts/resolve_private_ipv4.sh "$JENKINS_HOST")"
           APP_VM_LAN_IP="$(bash scripts/resolve_private_ipv4.sh "$APP_VM_LAN_HOST")"
 
+          python3 scripts/jenkins_release_parameters.py \
+            --job-url "$JENKINS_SCHEME://$JENKINS_HOST:$JENKINS_PORT/job/matplobbot-deploy" \
+            --resolve-ip "$JENKINS_LAN_IP" --apply
+
+          # Existing Pipeline jobs may drop unknown parameters before a new
+          # Jenkinsfile has installed its properties. Never bootstrap by deploying.
+          curl --fail --show-error --silent \
+            --noproxy "$JENKINS_HOST,$JENKINS_LAN_IP" \
+            --resolve "$JENKINS_HOST:$JENKINS_PORT:$JENKINS_LAN_IP" \
+            --user "$JENKINS_USER:$JENKINS_TOKEN" \
+            "$JENKINS_SCHEME://$JENKINS_HOST:$JENKINS_PORT/job/matplobbot-deploy/api/json?tree=property%5BparameterDefinitions%5Bname%5D%5D" \
+            | python3 -c 'import json,sys; data=json.load(sys.stdin); names={p["name"] for prop in data.get("property",[]) for p in prop.get("parameterDefinitions",[])}; missing={"SOURCE_COMMIT","RELEASE_MANIFEST_B64"}-names; sys.exit("Install the Jenkins immutable-release parameter definitions before triggering deployment; see docs/release-runbook.md. Missing: " + ", ".join(sorted(missing)) if missing else 0)'
+
           curl --fail-with-body --show-error --silent \
             --noproxy "$JENKINS_HOST,$JENKINS_LAN_IP" \
             --resolve "$JENKINS_HOST:$JENKINS_PORT:$JENKINS_LAN_IP" \
             -X POST "$JENKINS_SCHEME://$JENKINS_HOST:$JENKINS_PORT/job/matplobbot-deploy/buildWithParameters" \
-            --user "${{ secrets.JENKINS_USER }}:${{ secrets.JENKINS_TOKEN }}" \
-            --data-urlencode "BOT_IMAGE_TAG=${{ github.sha }}" \
-            --data-urlencode "WORKER_IMAGE_TAG=${{ github.sha }}" \
-            --data-urlencode "API_IMAGE_TAG=${{ github.sha }}" \
-            --data-urlencode "SCHEDULER_IMAGE_TAG=${{ github.sha }}" \
+            --user "$JENKINS_USER:$JENKINS_TOKEN" \
+            --data-urlencode "SOURCE_COMMIT=${{ github.sha }}" \
+            --data-urlencode "RELEASE_MANIFEST_B64=$(base64 -w0 release-manifest-accepted.json)" \
             --data-urlencode "DEPLOY_HOST=$APP_VM_LAN_IP"

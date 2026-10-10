@@ -50,6 +50,11 @@
         <p id="account-login" hidden><a href="/login" data-i18n="account.signIn">Sign in to manage your account.</a></p>
         <div id="account-controls" hidden>
 <section class="account-card"><h2 data-i18n="ux.accountProfile">Профиль и настройки</h2><p id="account-telegram" class="ui-muted"></p><div class="ui-row"><a class="ui-button primary" href="/schedule" data-i18n="ux.mySchedule">Моё расписание</a><a class="ui-button" href="/studio?projects=1" data-i18n="ux.myProjects">Мои проекты</a><a class="ui-button" href="https://t.me/matplobbot?start=web_settings" data-i18n="ux.botSettings">Настройки Telegram</a></div><div class="account-preferences"><label for="account-language" data-i18n="ux.language">Язык</label><select class="ui-input" id="account-language"><option value="ru">Русский</option><option value="en">English</option></select><label for="account-theme" data-i18n="ux.theme">Тема</label><select class="ui-input" id="account-theme"><option value="light" data-i18n="ux.light">Светлая</option><option value="dark" data-i18n="ux.dark">Тёмная</option></select></div></section>
+            <section class="account-card" aria-labelledby="sessions-heading">
+                <h2 id="sessions-heading" data-i18n="account.sessionsHeading">Sign-in and sessions</h2>
+                <p data-i18n="account.sessionsHint">Sign out on every device, including this one. Your projects and subscriptions will be kept.</p>
+                <button id="account-logout-all" type="button" data-i18n="account.logoutAll">Sign out on all devices</button>
+            </section>
             <section class="account-card account-subscriptions" id="subscriptions" aria-labelledby="subscriptions-heading">
                 <div class="subscription-heading"><h2 id="subscriptions-heading" data-i18n="account.subscriptions.heading">Schedule subscriptions</h2><span id="subscriptions-count" role="status"></span></div>
                 <p class="subscription-intro" data-i18n="account.subscriptions.intro">Your saved schedules, calendar apps and Telegram notifications — in one place.</p>
@@ -104,13 +109,13 @@
     <div id="calendarSubscriptionBackdrop" class="hidden"></div>
     <section id="calendarSubscriptionSection" class="calendar-sync-modal hidden" aria-hidden="true" aria-labelledby="calendar-dialog-title"></section>
     <script src="/js/runtime_config.js?v=20260821-6"></script>
-    <script src="/js/frontend_i18n.js?v=20261009-14"></script>
+    <script src="/js/frontend_i18n.js?v=20261010-1"></script>
 <script src="/js/product_ui.js?v=20261009-4"></script>
-    <script src="/js/navbar.js?v=20261009-4"></script>
+    <script src="/js/navbar.js?v=20261010-1"></script>
     <script src="/js/archive_download.js?v=20261009-4"></script>
     <script src="/js/schedule_api.js?v=20261009-12"></script>
     <script src="/js/account_subscriptions.js?v=20261009-9"></script>
     <script src="/js/calendar_sync.js?v=20261009-9"></script>
-    <script src="/js/account.js?v=20261009-9"></script>
+    <script src="/js/account.js?v=20261010-1"></script>
 </body>
 </html>

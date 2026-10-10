@@ -123,6 +123,16 @@ services:
       context: .
       dockerfile: Dockerfile.worker
     restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./security/worker-seccomp.json
+      - apparmor=unconfined
+    mem_limit: 2g
+    pids_limit: 256
+    tmpfs:
+      - /tmp:size=512m,mode=1777
     logging:
       driver: "json-file"
       options:

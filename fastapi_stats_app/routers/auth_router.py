@@ -1,7 +1,8 @@
 # fastapi_stats_app/routers/auth_router.py
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
@@ -28,11 +29,14 @@ from ..auth import (
     get_current_user,
     get_password_hash,
     parse_verified_telegram_webapp_init_data,
+    revoke_all_sessions,
+    revoke_session,
     verify_account_export_token,
     verify_password,
     verify_telegram_authorization,
 )
 from ..config import ADMIN_USER_IDS, AUTH_PASSWORD_REGISTRATION_ENABLED
+from ..login_limits import enforce_login_limits
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -124,7 +128,13 @@ async def _issue_telegram_account_token(
 
     await db.commit()
 
-    access_token = create_access_token(data={"sub": str(account.id), "role": account.role})
+    access_token = create_access_token(
+        data={
+            "sub": str(account.id),
+            "role": account.role,
+            "auth_version": getattr(account, "auth_version", 0) or 0,
+        }
+    )
     return Token(access_token=access_token, token_type="bearer")
 
 
@@ -175,20 +185,32 @@ async def register(
     description="Password grant endpoint used by the website and Swagger UI Authorize dialog.",
 )
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db_session_dependency),
 ):
+    await enforce_login_limits(request, form_data.username)
     result = await db.execute(select(WebAccount).where(WebAccount.username == form_data.username))
     account = result.scalar_one_or_none()
 
-    if not account or not verify_password(form_data.password, account.password_hash):
+    if (
+        not account
+        or not account.password_hash
+        or not await run_in_threadpool(verify_password, form_data.password, account.password_hash)
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token = create_access_token(data={"sub": str(account.id), "role": account.role})
+    access_token = create_access_token(
+        data={
+            "sub": str(account.id),
+            "role": account.role,
+            "auth_version": getattr(account, "auth_version", 0) or 0,
+        }
+    )
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -257,11 +279,22 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     response_model=StatusResponse,
     status_code=status.HTTP_200_OK,
     summary="Logout the current user",
-    description="Stateless JWT logout endpoint for explicit client workflows.",
+    description="Revoke the current session on the server, including its WebSocket access.",
 )
-async def logout(_current_user: dict = Depends(get_current_user)):
-    # JWT auth is stateless: client-side token disposal is sufficient for logout.
-    # Endpoint exists for explicit UX flow and API contract symmetry.
+async def logout(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session_dependency),
+):
+    await revoke_session(db, current_user["id"], current_user["token_claims"])
+    return {"status": "success"}
+
+
+@router.post("/logout-all", response_model=StatusResponse, summary="Revoke sessions on all devices")
+async def logout_all(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session_dependency),
+):
+    await revoke_all_sessions(db, current_user["id"])
     return {"status": "success"}
 
 

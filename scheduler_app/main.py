@@ -76,6 +76,7 @@ async def build_scheduler_health(scheduler_running: bool) -> tuple[dict[str, obj
         scheduler_running
         and not queue_backlogged
         and not outbox_backlogged
+        and not outbox.get("recently_failed", 0)
         and not stale_jobs
         and operations["available"]
     )

@@ -24,7 +24,15 @@ exclude = "(^alembic/versions/)"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+[tool.coverage.run]
+branch = true
+source = ["bot", "fastapi_stats_app", "scheduler_app", "shared_lib"]
+
 [tool.coverage.report]
+# 2026-10-10 measured application-only baseline: 50.30%, including unimported
+# modules. Tests and offline research scripts are outside this product gate.
+fail_under = 50
+precision = 2
 # OpenCV's bootstrap compiles package configuration with basename-only filenames.
 # These two root paths are virtual; keep real app config.py modules in coverage.
 omit = ["./config.py", "./config-3.py"]

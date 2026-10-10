@@ -389,6 +389,7 @@ curl() {
             ):
                 root = Path(directory)
                 (root / ".env").write_text("touch smoke-dotenv-executed\n", encoding="utf-8")
+                (root / "deploy.sh").write_text("[ \"$1\" = --finalize ] && touch smoke-finalized\n", encoding="utf-8")
                 password = "space ' quote $HOME `touch smoke-secret-executed` $(touch smoke-secret-executed)"
                 smoke = root / "smoke.sh"
                 smoke.write_text(fake_commands + script, encoding="utf-8")
@@ -414,44 +415,19 @@ curl() {
                 self.assertFalse((root / "smoke-dotenv-executed").exists())
                 self.assertFalse((root / "smoke-secret-executed").exists())
                 self.assertNotIn(password, result.stdout + result.stderr)
+                self.assertEqual((root / "smoke-finalized").exists(), expected_returncode == 0)
                 if expected_returncode == 0:
                     self.assertIn("127.0.0.1:8080/ws/", ws_calls.read_text(encoding="utf-8"))
                 else:
                     self.assertFalse(ws_calls.exists())
 
-    @unittest.skipUnless(_find_bash(), "bash is required for the isolated deploy test")
-    def test_deployment_provisions_admin_after_startup_and_stops_on_failure(self):
-        fake_docker = r"""
-docker() {
-  printf '%s\n' "$*" >> docker-calls.txt
-  case "$*" in
-    *fastapi_stats_app.bootstrap_admin) return "$FAKE_BOOTSTRAP_STATUS" ;;
-  esac
-  return 0
-}
-"""
-        for status in (0, 1):
-            with self.subTest(status=status), tempfile.TemporaryDirectory() as directory:
-                root = Path(directory)
-                script = root / "deploy-test.sh"
-                script.write_text(
-                    fake_docker + DEPLOY_SCRIPT.read_text(encoding="utf-8"), encoding="utf-8"
-                )
-                result = subprocess.run(
-                    [_find_bash(), _bash_path(script)],
-                    cwd=root,
-                    env={**os.environ, "FAKE_BOOTSTRAP_STATUS": str(status)},
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-                self.assertEqual(result.returncode, status, result.stdout + result.stderr)
-                calls = (root / "docker-calls.txt").read_text(encoding="utf-8")
-                self.assertLess(
-                    calls.index(" up -d "), calls.index("fastapi_stats_app.bootstrap_admin")
-                )
-                self.assertEqual("Deployment successful!" in result.stdout, status == 0)
-                self.assertEqual("restart main-site-frontend caddy" in calls, status == 0)
+    @unittest.skipUnless(_find_bash(), "bash is required for the deploy entrypoint check")
+    def test_deployment_rejects_unbound_tags_and_latest(self):
+        for arguments in ([], ["latest"], ["a" * 40] * 4):
+            result = subprocess.run([_find_bash(), _bash_path(DEPLOY_SCRIPT), *arguments],
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("--manifest", result.stderr)
 
     def test_stats_websocket_uses_runtime_api_origin_and_single_reconnect_timer(self):
         ui_utils = FRONTEND_UI_UTILS.read_text(encoding="utf-8")

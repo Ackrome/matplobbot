@@ -11,7 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import Session
 
-from fastapi_stats_app.auth import create_access_token, get_current_user
+from fastapi_stats_app.auth import create_access_token, decode_access_token, get_current_user
 from fastapi_stats_app.routers import ws_router
 from shared_lib import models
 from shared_lib.services import account_data
@@ -146,7 +146,14 @@ class TestAccountData(unittest.IsolatedAsyncioTestCase):
         context.__aenter__.return_value = self.db
         with patch.object(ws_router, "get_session", return_value=context):
             self.assertFalse(await ws_router.websocket_account_is_active({"id": 1}))
-            self.assertTrue(await ws_router.websocket_account_is_active({"id": 2}))
+            self.assertTrue(
+                await ws_router.websocket_account_is_active(
+                    {
+                        "id": 2,
+                        "token_claims": decode_access_token(create_access_token({"sub": "2"})),
+                    }
+                )
+            )
 
     async def test_telegram_only_keeps_access_to_studio(self):
         self.assertTrue(await account_data.delete_telegram_data(self.db, 100))

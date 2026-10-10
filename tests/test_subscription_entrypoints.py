@@ -33,6 +33,7 @@ class SubscriptionEntrypointTests(unittest.IsolatedAsyncioTestCase):
             gettext=Mock(side_effect=lambda lang, key, **kw: key),
         )
         self.manager = SimpleNamespace(
+            _onboarding_destination_key=lambda message, user_id: "fixture-destination",
             settings_manager=SimpleNamespace(
                 command_subscriptions_private=AsyncMock(), command_settings_private=AsyncMock()
             ),
@@ -49,7 +50,10 @@ class SubscriptionEntrypointTests(unittest.IsolatedAsyncioTestCase):
             "bot/handlers/base.py",
             "BaseManager",
             "command_start_regular",
-            {"translator": self.translator},
+            {
+                "translator": self.translator,
+                "redis_client": SimpleNamespace(client=SimpleNamespace(delete=AsyncMock())),
+            },
         )
 
     async def test_manage_link_opens_subscription_list(self):

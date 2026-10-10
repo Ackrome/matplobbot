@@ -1,4 +1,4 @@
-const CACHE_VERSION = "mpb-site-v49";
+const CACHE_VERSION = "mpb-site-v50";
 const CORE_CACHE = `${CACHE_VERSION}-core`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const OFFLINE_URL = "/offline.html";
@@ -22,7 +22,7 @@ const CORE_ASSETS = [
     "/register.html",
     "/account",
     "/account.html",
-    "/js/account.js?v=20261009-9",
+    "/js/account.js?v=20261010-1",
     OFFLINE_URL,
     "/project",
     "/project.html",
@@ -46,8 +46,8 @@ const CORE_ASSETS = [
     "/css/studio.css?v=2",
     "/js/runtime_config.js?v=20260821-6",
     "/js/ui_utils.js?v=2",
-    "/js/frontend_i18n.js?v=20261009-14",
-    "/js/navbar.js?v=20261009-4",
+    "/js/frontend_i18n.js?v=20261010-1",
+    "/js/navbar.js?v=20261010-1",
     "/js/theme_bootstrap.js?v=20260821-6",
     "/js/telegram_webapp.js?v=20260821-6",
     "/js/schedule_state.js?v=20260821-6",
@@ -59,16 +59,16 @@ const CORE_ASSETS = [
     "/js/schedule_ux.js?v=20260831-10",
     "/js/stats.js?v=20261009-4",
     "/js/stats_ux.js?v=2",
-    "/js/studio.js?v=20261009-4",
+    "/js/studio.js?v=20261010-1",
     "/js/studio_session.js?v=20261009-4",
     "/js/studio_libraries.js?v=1",
     "/js/studio_monaco.js?v=1",
     "/js/schedule_planner.js?v=20261009-4",
     "/js/insights.js?v=20261009-4",
     "/css/feature_panels.css?v=20261009-1",
-    "/js/auth.js?v=20261009-4",
-    "/locales/en.json?v=20261009-14",
-    "/locales/ru.json?v=20261009-14",
+    "/js/auth.js?v=20261010-1",
+    "/locales/en.json?v=20261010-1",
+    "/locales/ru.json?v=20261010-1",
     "/favicon.ico",
     "/favicon-16x16.png",
     "/favicon-32x32.png",

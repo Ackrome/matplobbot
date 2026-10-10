@@ -43,6 +43,9 @@ SCHEDULE_DAILY_CATCHUP_SECONDS = min(
 SCHEDULE_OUTBOX_ALERT_AGE_SECONDS = max(
     60, _read_non_negative_int("SCHEDULE_OUTBOX_ALERT_AGE_SECONDS", 1800)
 )
+SCHEDULE_OUTBOX_RETENTION_DAYS = max(
+    2, _read_non_negative_int("SCHEDULE_OUTBOX_RETENTION_DAYS", 30)
+)
 
 # --- PostgreSQL Database Configuration ---
 # The DATABASE_URL is now the single source of truth, read from the environment.
