@@ -9,8 +9,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect, select, text, update
@@ -18,6 +16,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from fastapi_stats_app.routers import teacher_ratings_router as router
 from shared_lib.models import TeacherRatingCache
 from shared_lib.services import teacher_rating_source as source
