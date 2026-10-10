@@ -9,7 +9,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from sqlalchemy import JSON, Integer, MetaData, create_engine, select
+from sqlalchemy import JSON, Integer, MetaData, UniqueConstraint, create_engine, select
+from sqlalchemy.dialects.postgresql import dialect as pg_dialect
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import dialect as sqlite_dialect
 from sqlalchemy.orm import Session
 
 from scheduler_app.job_health import monitor_job
@@ -26,6 +29,57 @@ from shared_lib.schedule_daily import (
     daily_occurrence,
     deduplicate_daily_recipients,
 )
+
+
+def _sqlite_statement(statement):
+    """Translate named PostgreSQL conflict targets explicitly for this test DB."""
+    conflict = getattr(statement, "_post_values_clause", None)
+    target = getattr(conflict, "constraint_target", None)
+    if target is None:
+        return statement
+    constraints = [
+        constraint
+        for constraint in statement.table.constraints
+        if isinstance(constraint, UniqueConstraint) and constraint.name == target
+    ]
+    if len(constraints) != 1:
+        raise AssertionError(f"Unknown or ambiguous test conflict target: {target}")
+    translated = statement._generate()
+    translated._post_values_clause = copy.copy(conflict)
+    translated._post_values_clause.constraint_target = None
+    translated._post_values_clause.inferred_target_elements = list(constraints[0].columns)
+    return translated
+
+
+class TestSQLiteConflictAdapter(unittest.TestCase):
+    def test_named_targets_preserve_columns_and_original_postgresql_statement(self):
+        statements = [
+            pg_insert(CachedSchedule).on_conflict_do_update(
+                constraint="uq_cached_schedule_entity", set_={"entity_name": "Updated"}
+            ),
+            pg_insert(ScheduleChangeDelivery).on_conflict_do_nothing(
+                constraint="uq_schedule_change_delivery_event_user"
+            ),
+        ]
+        for original in statements:
+            with self.subTest(table=original.table.name):
+                target = original._post_values_clause.constraint_target
+                translated = _sqlite_statement(original)
+                columns = translated._post_values_clause.inferred_target_elements
+                sqlite_sql = str(translated.compile(dialect=sqlite_dialect()))
+                self.assertIn(
+                    "ON CONFLICT (" + ", ".join(column.name for column in columns) + ")",
+                    sqlite_sql,
+                )
+                self.assertIn(
+                    "ON CONFLICT ON CONSTRAINT " + target,
+                    str(original.compile(dialect=pg_dialect())),
+                )
+                self.assertEqual(original._post_values_clause.constraint_target, target)
+        with self.assertRaisesRegex(AssertionError, "Unknown or ambiguous"):
+            _sqlite_statement(
+                pg_insert(CachedSchedule).on_conflict_do_nothing(constraint="missing")
+            )
 
 
 class TestDailyOccurrence(unittest.TestCase):
@@ -122,7 +176,7 @@ class TestOutboxRecovery(unittest.IsolatedAsyncioTestCase):
                             == "schedule_change_deliveries"
                         ):
                             raise RuntimeError("injected write failure")
-                        return session.execute(statement)
+                        return session.execute(_sqlite_statement(statement))
 
                     async def commit(self):
                         session.commit()

@@ -2491,3 +2491,13 @@ only the local migrator shared that namespace, with no bot/API/scheduler startup
 The generated container and anonymous volume were removed. The report contains
 only aggregates and artifact identifiers; private dump/metadata remain outside Git.
 This local-image rehearsal supplements the mandatory final immutable-image RC gate.
+
+### CI dialect-fixture parity (2026-10-10)
+
+The first release CI attempt (`e1080e9`, run `38039351701`) stopped before image
+builds: three outbox tests relied on version-specific compilation of PostgreSQL
+named upsert constraints by SQLite. The delivery fixture now translates those
+targets to the declared unique columns on copied statements, rejects unknown
+targets, and checks that the original PostgreSQL statement remains unchanged.
+The failure was reproduced using the pinned SQLAlchemy 2.0.35; local validation
+had drifted to 2.0.48. The project environment was returned to the repository pin.

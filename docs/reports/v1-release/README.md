@@ -5,7 +5,7 @@ The local RC uses working-tree images and cannot be used as a deployment manifes
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Application regression suite | 650 tests, 8 platform/optional skips; passed | Root project `.venv`, `coverage run --branch -m unittest discover -s tests -v` |
+| Application regression suite | 652 tests, 8 platform/optional skips; passed | Root project `.venv`, `coverage run --branch -m unittest discover -s tests -v` |
 | Application-only coverage | 52.62%, including unimported modules | `bot`, `fastapi_stats_app`, `scheduler_app`, `shared_lib`; floor 50% |
 | CI critical Ruff / mypy | Passed / all 6 configured files passed | Same commands as CI |
 | Locked dependency audit | 46 packages, no known vulnerabilities reported | CI `pip_audit --strict`, existing narrow joblib exception retained |

@@ -23,3 +23,12 @@ subscription pause/delete after claim, overlapping profiles, exact chat
 eligibility, recent failures aging out, bounded retention and migration backfill /
 downgrade. Table copies adapt JSONB and generated bigint IDs to SQLite without
 modifying production model metadata. Network sends remain mocked.
+
+`_sqlite_statement` explicitly translates named PostgreSQL unique constraints to
+SQLite conflict-column targets on copied statement/clause objects. It rejects
+unknown names and preserves the original PostgreSQL statement. This adaptation
+is necessary across SQLAlchemy versions: the pinned 2.0.35 compiler interpreted
+the constraint name as a SQLite column, while 2.0.48 omitted the target. Keep the
+regression for both DO UPDATE and DO NOTHING and test with the repository pin.
+This test-only helper uses SQLAlchemy statement internals; review it when changing
+that dependency. Production PostgreSQL queries remain unchanged.
