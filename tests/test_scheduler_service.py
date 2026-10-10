@@ -1,15 +1,18 @@
+import asyncio
 import hashlib
 import importlib
 import json
 import sys
 import types
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 from zoneinfo import ZoneInfo
 
 import aiohttp
+from apscheduler.events import EVENT_JOB_EXECUTED
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 fake_schedule_service = types.ModuleType("shared_lib.services.schedule_service")
 fake_schedule_service.diff_schedules = lambda *args, **kwargs: ""
@@ -130,6 +133,83 @@ class TestSchedulerHttpClient(unittest.TestCase):
 
 
 class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
+    async def test_startup_dispatches_one_monitored_update_then_keeps_two_hour_interval(self):
+        scheduler_main = importlib.import_module("scheduler_app.main")
+        job_health = importlib.import_module("scheduler_app.job_health")
+        completed = asyncio.Event()
+        calls = []
+
+        async def update_poll(**kwargs):
+            calls.append(kwargs)
+            return {"failed": 0}
+
+        class IsolatedScheduler(AsyncIOScheduler):
+            def start(self, paused=False):
+                # Exercise the real registration and dispatch without running any
+                # unrelated startup, cron, delivery or external-source jobs.
+                for job in self.get_jobs():
+                    if job.id != "schedule_updates":
+                        job.modify(next_run_time=None)
+                super().start(paused=paused)
+
+        scheduler = IsolatedScheduler(timezone="Europe/Moscow")
+        scheduler.add_listener(
+            lambda event: completed.set() if event.job_id == "schedule_updates" else None,
+            EVENT_JOB_EXECUTED,
+        )
+
+        async def delayed_health_setup():
+            # Exceed APScheduler's default one-second misfire grace: readiness
+            # setup must not silently discard the initial monitored poll.
+            await asyncio.sleep(1.1)
+
+        runner = SimpleNamespace(
+            setup=AsyncMock(side_effect=delayed_health_setup), cleanup=AsyncMock()
+        )
+        site = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
+        api_client = object()
+        before_start = datetime.now(UTC)
+        with (
+            patch.object(scheduler_main, "BOT_TOKEN", "synthetic-test-token"),
+            patch.object(scheduler_main, "init_db_pool", AsyncMock()),
+            patch.object(scheduler_main, "close_db_pool", AsyncMock()),
+            patch.object(
+                scheduler_main.aiohttp, "ClientSession", return_value=_AsyncSessionContext()
+            ),
+            patch.object(scheduler_main, "create_ruz_api_client", return_value=api_client),
+            patch.object(scheduler_main, "AsyncIOScheduler", return_value=scheduler),
+            patch.object(scheduler_main, "check_for_schedule_updates", update_poll),
+            patch.object(scheduler_main.aiohttp.web, "AppRunner", return_value=runner),
+            patch.object(scheduler_main.aiohttp.web, "TCPSite", return_value=site),
+            patch.object(job_health, "record_operation", AsyncMock()) as record_operation,
+        ):
+            task = asyncio.create_task(scheduler_main.main())
+            try:
+                await asyncio.wait_for(completed.wait(), timeout=3)
+                job = scheduler.get_job("schedule_updates")
+                self.assertEqual(len(calls), 1)
+                self.assertIs(calls[0]["ruz_api_client"], api_client)
+                self.assertEqual(job.trigger.interval, timedelta(hours=2))
+                self.assertTrue(job.coalesce)
+                self.assertEqual(job.max_instances, 1)
+                self.assertIsNone(job.misfire_grace_time)
+                first_run = job.next_run_time - timedelta(hours=2)
+                self.assertGreaterEqual(first_run, before_start)
+                self.assertLessEqual(first_run, datetime.now(UTC))
+                self.assertEqual(
+                    job.trigger.get_next_fire_time(first_run, first_run), job.next_run_time
+                )
+                record_operation.assert_awaited_once()
+                self.assertEqual(record_operation.await_args.args, ("schedule_updates",))
+                self.assertTrue(record_operation.await_args.kwargs["successful"])
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+                await asyncio.sleep(0)
+        self.assertFalse(scheduler.running)
+        site.stop.assert_awaited_once()
+        runner.cleanup.assert_awaited_once()
+
     async def test_schedule_transition_commits_outbox_cache_and_hash_atomically(self):
         session = AsyncMock()
         session.execute.return_value = SimpleNamespace(rowcount=1)

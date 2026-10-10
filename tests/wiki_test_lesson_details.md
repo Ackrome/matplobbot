@@ -46,3 +46,18 @@ ID модуля. В расписании преподавателя/аудито
 20 секундами; файлы не изменяются. Это проверки поведения модели, не замена
 визуальной проверки DOM. При переносе функций обновить пути/границы загрузки,
 сохранив поведенческие утверждения, а не проверки текста реализации.
+## Teacher rating regressions
+
+The Node VM tests also exercise production normalization of separate teacher
+arrays and compound names, conservative ID pairing, distinct missing and zero
+metrics, wrong-person/source rejection, and independent asynchronous lookups.
+Deferred promises prove per-name deduplication, continued loading when another
+teacher finishes, cancellation on occurrence change/close, late-response rejection
+and retry. The API adapter test verifies encoded names and AbortSignal forwarding.
+These require Node; actual dialog layout, focus and RU/EN dark/mobile rendering
+remain browser checks.
+
+The desktop timetable regression executes `renderDesktopGrid` with actual RU/EN
+dictionaries and switches language between renders. It covers class/day/module
+counts, the loaded date range, empty days and missing-range/module metadata;
+Russian source course names remain outside translation scope.

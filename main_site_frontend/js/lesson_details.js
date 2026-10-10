@@ -20,13 +20,110 @@
             return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url.href : '';
         } catch { return ''; }
     }
+    const teacherKey = value => canonical(text(value).replace(/_/g, ' ')).replace(/ё/g, 'е');
+    function splitTeacherNames(value) {
+        return text(value).replace(/_/g, ' ').split(/[;\r\n]+/).flatMap(part => {
+            const names = part.split(',').map(name => name.trim()).filter(Boolean);
+            const fullName = name => /^[\p{L}'’-]+(?:\s+[\p{L}'’-]+){2,}$/u.test(name);
+            return names.length > 1 && names.every(fullName) ? names : [part.trim()];
+        }).filter(Boolean);
+    }
+    function normalizeTeachers(raw) {
+        const id = value => /^[\p{L}\d-]+$/u.test(text(value)) ? text(value) : '';
+        const array = [raw.lecturers, raw.teachers].find(value => Array.isArray(value) && value.length);
+        const entries = [];
+        if (array) array.forEach(item => {
+            const object = item && typeof item === 'object' ? item : {};
+            const names = splitTeacherNames(typeof item === 'string' ? item : first(object.lecturer_title,
+                object.lecturer_name, object.teacher_name, object.full_name, object.fullName, object.name, object.fio, object.label));
+            names.forEach(name => entries.push({ name, id: names.length === 1 && !name.includes(',')
+                ? id(first(object.lecturer_id, object.lecturerOid, object.person_id, object.personOid, object.id,
+                    /^\d+$/.test(text(object.lecturer)) ? object.lecturer : '')) : '' }));
+        });
+        if (!entries.length) {
+            const fallback = text(raw.lecturer);
+            const name = first(raw.lecturer_title, raw.lecturer_name, raw.teacher_name)
+                || (/^[\p{L}\s._'’-]+$/u.test(fallback) ? fallback : '');
+            const names = splitTeacherNames(name);
+            const knownId = id(first(raw.lecturer_id, raw.lecturerOid, /^\d+$/.test(fallback) ? fallback : ''));
+            names.forEach(name => entries.push({ name, id: names.length === 1 && !name.includes(',') ? knownId : '' }));
+            if (!names.length && knownId) entries.push({ name: '', id: knownId });
+        }
+        const unique = new Map();
+        entries.forEach(item => {
+            const key = item.name ? teacherKey(item.name) : `id:${item.id}`;
+            const previous = unique.get(key);
+            if (!previous) unique.set(key, item);
+            else if (previous.id !== item.id) previous.id = '';
+        });
+        return [...unique.values()];
+    }
+    function normalizeTeacherRating(data, name) {
+        const statuses = ['matched', 'not_found', 'ambiguous', 'unsupported', 'unavailable'];
+        if (!data || !statuses.includes(data.status) || teacherKey(data.query_name) !== teacherKey(name)) return null;
+        const result = { status: data.status, profile: null, stale: data.stale === true,
+            checkedAt: text(data.checked_at) && !Number.isNaN(Date.parse(data.checked_at)) ? data.checked_at : null };
+        if (data.status !== 'matched') return data.profile == null ? result : null;
+        const profile = data.profile;
+        if (!profile || teacherKey(profile.name) !== teacherKey(name)) return null;
+        let url;
+        try {
+            url = new URL(profile.url);
+            if (url.href !== text(profile.url) || url.protocol !== 'https:' || url.host !== 'myprepod.ru' || url.username || url.password
+                || url.search || url.hash || !/^\/fa\/[a-z0-9]+(?:-[a-z0-9]+)*-[1-9]\d*$/.test(url.pathname)) return null;
+        } catch { return null; }
+        const count = value => value == null || (Number.isSafeInteger(value) && value >= 0);
+        if (!count(profile.vote_count) || !count(profile.review_count)
+            || !(profile.rating_percent == null || (typeof profile.rating_percent === 'number'
+                && Number.isFinite(profile.rating_percent) && profile.rating_percent >= 0 && profile.rating_percent <= 100))) return null;
+        result.profile = { name: text(profile.name), url: url.href, department: text(profile.department),
+            ratingPercent: profile.rating_percent ?? null, voteCount: profile.vote_count ?? null,
+            reviewCount: profile.review_count ?? null };
+        return result;
+    }
+    function createTeacherRatings(load, changed) {
+        const entries = new Map();
+        let selected = new Set(), closed = false;
+        function request(name) {
+            const key = teacherKey(name);
+            if (!key || closed || entries.has(key)) return;
+            const controller = new AbortController();
+            const entry = { state: 'loading', data: null, controller };
+            entries.set(key, entry);
+            entry.timer = setTimeout(() => controller.abort(), 25000);
+            Promise.resolve().then(() => load({ name, signal: controller.signal })).then(data => {
+                if (closed || entries.get(key) !== entry || !selected.has(key)) return;
+                if (controller.signal.aborted) throw new Error('Teacher rating request timed out');
+                entry.data = normalizeTeacherRating(data, name);
+                entry.state = entry.data ? 'ready' : 'error';
+            }).catch(() => {
+                if (!closed && entries.get(key) === entry && selected.has(key)) entry.state = 'error';
+            }).finally(() => {
+                clearTimeout(entry.timer);
+                if (!closed && entries.get(key) === entry && selected.has(key)) changed(key);
+            });
+        }
+        return {
+            select(teachers) {
+                selected = new Set(teachers.map(item => teacherKey(item.name)).filter(Boolean));
+                entries.forEach((entry, key) => {
+                    if (entry.state === 'loading' && !selected.has(key)) {
+                        clearTimeout(entry.timer); entry.controller.abort(); entries.delete(key);
+                    }
+                });
+                teachers.forEach(item => request(item.name));
+            },
+            get(name) { return entries.get(teacherKey(name)); },
+            retry(name) { const key = teacherKey(name); if (selected.has(key) && entries.get(key)?.state !== 'loading') { entries.delete(key); request(name); changed(key); } },
+            close() { closed = true; entries.forEach(entry => { clearTimeout(entry.timer); entry.controller.abort(); }); entries.clear(); },
+        };
+    }
     function normalizeLesson(raw, entity = {}) {
         const date = isoDate(raw.date), start = clock(raw.beginLesson), end = clock(raw.endLesson);
         const startAt = date && start ? Date.parse(`${date}T${start}:00+03:00`) : null;
         const endAt = date && end ? Date.parse(`${date}T${end}:00+03:00`) : null;
-        const teacherName = first(raw.lecturer_title, raw.lecturer_name, raw.teacher_name);
-        const teacherFallback = text(raw.lecturer);
-        const teacher = (teacherName || (/^[\p{L}\s._'-]+$/u.test(teacherFallback) ? teacherFallback : '')).replace(/_/g, ' ');
+        const teachers = normalizeTeachers(raw);
+        const teacher = teachers.map(item => item.name).filter(Boolean).join('; ');
         const room = first(raw.auditorium, raw.auditorium_title);
         const building = first(raw.building, raw.buildingAddress, raw.address);
         const emails = [...new Set(first(raw.lecturerEmail, raw.lecturer_email).split(/[;,\s]+/).filter(value => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value)))];
@@ -37,8 +134,8 @@
             duration: startAt !== null && endAt !== null && endAt > startAt ? (endAt - startAt) / 60000 : null,
             title: first(raw.discipline_full, raw.discipline, raw.discipline_short),
             disciplineId: first(raw.disciplineOid, raw.discipline_id),
-            kind: text(raw.kindOfWork), module: text(raw.module), teacher, emails, links,
-            teacherId: first(raw.lecturer_id, raw.lecturerOid, /^\d+$/.test(teacherFallback) ? teacherFallback : ''),
+            kind: text(raw.kindOfWork), module: text(raw.module), teacher, teachers, emails, links,
+            teacherId: teachers.length === 1 ? teachers[0].id : '',
             room, roomId: first(raw.auditorium_id, raw.auditoriumOid),
             building: building && !canonical(room).includes(canonical(building)) ? building : '',
             group,
@@ -51,7 +148,7 @@
         // Different rooms/teachers/subgroups remain distinct even if an upstream ID is reused.
         return JSON.stringify([item.date || text(item.raw.date), item.start, item.end, item.title,
             item.kind, item.module, item.room, item.roomId, item.building, item.teacher, item.teacherId,
-            item.group, item.groupId, item.subgroup, item.emails, item.links, item.notes]);
+            item.group, item.groupId, item.subgroup, item.emails, item.links, item.notes, item.teachers]);
     }
     function curriculumGroup(item, entity = {}) {
         // The caller supplies rows from this entity's server-scoped timetable.
@@ -151,11 +248,13 @@
         const grid = document.querySelector('.schedule-table-viewport');
         const gridScroll = grid ? { left: grid.scrollLeft, top: grid.scrollTop } : null;
         let closed = false;
+        const ratings = createTeacherRatings(args => window.ScheduleApi.loadTeacherRating(args), updateRating);
         function cleanup() {
             if (closed) return;
             closed = true;
             cacheController?.abort();
             curriculumController?.abort();
+            ratings.close();
             document.documentElement.style.overflow = previousOverflow;
             window.removeEventListener('mpb-language-change', languageChanged);
             dialog.remove();
@@ -291,6 +390,76 @@
             details.append(contents);
             return details;
         }
+        function renderRating(teacher) {
+            const panel = node('section', 'ld-teacher-rating');
+            panel.dataset.ratingKey = teacherKey(teacher.name);
+            panel.setAttribute('aria-label', t('ratings.forTeacher', { name: teacher.name || t('teacherMissing') }));
+            const entry = ratings.get(teacher.name);
+            const data = entry?.data;
+            const heading = node('div', 'ld-rating-heading');
+            heading.append(node('span', 'ld-rating-label', t('ratings.loyalty')), node('span', 'ld-rating-source', 'MyPrepod'));
+            panel.append(heading);
+            const status = node('p', 'ld-rating-status'); status.setAttribute('role', 'status');
+            if (!teacher.name) status.textContent = t('ratings.missingName');
+            else if (!entry || entry.state === 'loading') status.textContent = t('ratings.loading');
+            else if (entry.state === 'error') status.textContent = t('ratings.unavailable');
+            else if (data.status !== 'matched') status.textContent = t(`ratings.${data.status}`);
+            else {
+                const profile = data.profile;
+                if (profile.ratingPercent !== null && profile.voteCount !== 0) {
+                    status.append(node('strong', 'ld-rating-value', `${new Intl.NumberFormat(locale(), { maximumFractionDigits: 2 }).format(profile.ratingPercent)}%`));
+                } else status.textContent = t('ratings.noRating');
+                const counts = [];
+                if (profile.voteCount !== null) counts.push(t('ratings.votes', { count: profile.voteCount }));
+                if (profile.reviewCount !== null) counts.push(t('ratings.reviews', { count: profile.reviewCount }));
+                if (counts.length) status.append(node('span', 'ld-rating-counts', counts.join(' · ')));
+                if (profile.department) panel.append(node('p', 'ld-rating-department', profile.department));
+            }
+            panel.append(status);
+            if (data?.profile) {
+                const source = externalLink(t('ratings.sourceLink'), data.profile.url);
+                source.dataset.ratingFocus = 'source'; panel.append(source);
+            }
+            if (data?.checkedAt || data?.profile) panel.append(node('span', 'ld-rating-checked', checkedLabel(data.checkedAt)));
+            if (data?.stale) panel.append(node('p', 'ld-rating-stale', t('ratings.stale')));
+            if (entry?.state === 'error' || data?.status === 'unavailable') {
+                const retry = button(t('retry'), () => ratings.retry(teacher.name), 'ld-rating-retry');
+                retry.dataset.ratingFocus = 'retry'; panel.append(retry);
+            }
+            return panel;
+        }
+        function updateRating(key) {
+            if (closed) return;
+            const teacher = selected.teachers.find(item => teacherKey(item.name) === key);
+            const panel = [...dialog.querySelectorAll('[data-rating-key]')].find(item => item.dataset.ratingKey === key);
+            if (!teacher || !panel) return;
+            const scrollTop = dialog.scrollTop;
+            const hadFocus = panel.contains(document.activeElement);
+            const focus = hadFocus ? document.activeElement.dataset.ratingFocus : null;
+            const replacement = renderRating(teacher);
+            panel.replaceWith(replacement);
+            if (hadFocus) {
+                const target = [...replacement.querySelectorAll('[data-rating-focus]')].find(item => item.dataset.ratingFocus === focus);
+                if (target) target.focus({ preventScroll: true });
+                else { replacement.tabIndex = -1; replacement.focus({ preventScroll: true }); }
+            }
+            dialog.scrollTop = scrollTop;
+        }
+        function renderTeachers() {
+            const list = node('div', 'ld-teachers');
+            const teachers = selected.teachers.length ? selected.teachers : [{ name: '', id: '' }];
+            teachers.forEach(item => {
+                const card = node('div', 'ld-teacher');
+                card.append(node('div', 'ld-teacher-name', item.name || t('teacherMissing')));
+                if (selected.teachers.length === 1) selected.emails.forEach(email => {
+                    const link = node('a', 'ld-email', email); link.href = `mailto:${email}`; card.append(link);
+                });
+                card.append(renderRating(item));
+                if (item.name || item.id) card.append(button(t('teacherSchedule'), () => navigate('person', item.id, item.name), 'ld-teacher-schedule'));
+                list.append(card);
+            });
+            return list;
+        }
         function renderOccurrence() {
             const body = node('div', 'ld-body'); body.id = 'lessonDetailsOccurrence';
             body.setAttribute('role', 'tabpanel'); body.setAttribute('aria-labelledby', 'lessonDetailsLessonTab');
@@ -300,9 +469,12 @@
             body.append(time);
             const dl = node('dl');
             row(dl, t('room'), selected.room || t('roomMissing'), selected.building ? node('span', 'ld-small', selected.building) : null);
-            const teacher = node('div', '', selected.teacher || t('teacherMissing'));
-            selected.emails.forEach(email => { const link = node('a', 'ld-email', email); link.href = `mailto:${email}`; teacher.append(link); });
-            row(dl, t('teacher'), teacher);
+            row(dl, t('teacher'), renderTeachers());
+            if (selected.teachers.length > 1 && selected.emails.length) {
+                const contacts = node('div');
+                selected.emails.forEach(email => { const link = node('a', 'ld-email', email); link.href = `mailto:${email}`; contacts.append(link); });
+                row(dl, t('ratings.lessonContacts'), contacts);
+            }
             if (selected.group) row(dl, t('group'), selected.group);
             if (selected.subgroup) row(dl, t('subgroup'), selected.subgroup);
             if (selected.module) row(dl, t('module'), selected.module);
@@ -319,7 +491,6 @@
                 ...selected.raw, date: selected.date, discipline_short: selected.title,
                 auditorium: [selected.room, selected.building].filter(Boolean).join(', '), lecturer_title: selected.teacher,
             }, 'lesson')));
-            if (selected.teacher || selected.teacherId) items.append(button(t('teacherSchedule'), () => navigate('person', selected.teacherId, selected.teacher)));
             if (selected.room || selected.roomId) items.append(button(t('roomSchedule'), () => navigate('auditorium', selected.roomId, selected.room)));
             if (selected.group || selected.groupId) items.append(button(t('groupSchedule'), () => navigate('group', selected.groupId, selected.group)));
             if (items.children.length) { actions.append(items); body.append(actions); }
@@ -447,6 +618,7 @@
         }
         function render() {
             const position = dialog.scrollTop;
+            ratings.select(selected.teachers);
             dialog.replaceChildren();
             const header = node('header', 'ld-header');
             const heading = node('div', 'ld-heading');
@@ -478,7 +650,18 @@
             dialog.append(header, tabs, renderOccurrence(), renderCourse(), footer, copy);
             showTab(tab); dialog.scrollTop = position;
         }
-        function languageChanged() { const focusedTab = document.activeElement?.dataset.tab; render(); (focusedTab ? dialog.querySelector(`[data-tab="${focusedTab}"]`) : dialog.querySelector('.ld-close')).focus({ preventScroll: true }); }
+        function languageChanged() {
+            const focusedTab = document.activeElement?.dataset.tab;
+            const ratingKey = document.activeElement?.closest('[data-rating-key]')?.dataset.ratingKey;
+            const ratingFocus = document.activeElement?.dataset.ratingFocus;
+            render();
+            const panel = [...dialog.querySelectorAll('[data-rating-key]')].find(item => item.dataset.ratingKey === ratingKey);
+            if (panel) {
+                const target = [...panel.querySelectorAll('[data-rating-focus]')].find(item => item.dataset.ratingFocus === ratingFocus);
+                if (target) target.focus({ preventScroll: true });
+                else { panel.tabIndex = -1; panel.focus({ preventScroll: true }); }
+            } else (focusedTab ? dialog.querySelector(`[data-tab="${focusedTab}"]`) : dialog.querySelector('.ld-close')).focus({ preventScroll: true });
+        }
         dialog.addEventListener('close', cleanup, { once: true });
         dialog.addEventListener('keydown', event => {
             event.stopPropagation();
@@ -503,5 +686,6 @@
         dialog.showModal();
         active = { dialog, cleanup };
     }
-    window.MpbLessonDetails = { open, normalizeLesson, relatedLessons, curriculumGroup, curriculumContext, normalizeCurriculum };
+    window.MpbLessonDetails = { open, normalizeLesson, normalizeTeachers, normalizeTeacherRating, createTeacherRatings,
+        relatedLessons, curriculumGroup, curriculumContext, normalizeCurriculum };
 })();

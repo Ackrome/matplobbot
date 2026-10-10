@@ -132,6 +132,139 @@ class LessonDetailsTests(unittest.TestCase):
             assert.equal(normalize({}).duration, null);
         """)
 
+    def test_each_teacher_is_separate_without_guessing_id_pairs(self):
+        self.run_model("""
+            const names = ['Иванов Иван Иванович', 'Петров Пётр Петрович'];
+            for (const delimiter of ['; ', '\\n', ', ']) {
+                const result = normalize({...base, lecturer_title:names.join(delimiter), lecturer:'123,456'});
+                assert.equal(result.teachers.length, 2);
+                assert.equal(result.teachers[0].name, names[0]);
+                assert.equal(result.teachers[1].name, names[1]);
+                assert.equal(result.teachers.every(item => item.id === ''), true);
+                assert.equal(result.teacherId, '');
+            }
+            const compound = normalize({...base, lecturer_title:'Иванов И.И., Петров П.П.'});
+            assert.equal(compound.teachers.length, 1); // Ambiguous abbreviated syntax stays unsupported.
+            assert.equal(compound.teacherId, '');
+            const array = normalize({...base, lecturers:[{name:names[0], id:123},
+                {lecturer_title:names[1], lecturer:456}, {name:names[0], id:123}]});
+            assert.equal(array.teachers.length, 2);
+            assert.equal(array.teachers[0].id, '123'); assert.equal(array.teachers[1].id, '456');
+            assert.equal(array.teacher, names.join('; '));
+            const conflicts = normalize({teachers:[{name:names[0],id:1},{name:names[0],id:2}]});
+            assert.equal(conflicts.teachers.length, 1); assert.equal(conflicts.teachers[0].id, '');
+            assert.equal(normalize({teachers:[names[0],names[1]]}).teachers.length, 2);
+            assert.equal(normalize({lecturer:'123'}).teachers[0].name, '');
+            assert.equal(normalize({}).teachers.length, 0);
+        """)
+
+    def test_teacher_rating_rejects_wrong_person_and_untrusted_source(self):
+        self.run_model("""
+            const read = sandbox.window.MpbLessonDetails.normalizeTeacherRating;
+            const name = 'Иванов Иван Иванович';
+            const profile = {name, url:'https://myprepod.ru/fa/ivanov-ivan-ivanovich-123',
+                department:'Кафедра', rating_percent:91.5, vote_count:20, review_count:3};
+            const value = {query_name:name,status:'matched',profile,checked_at:'2026-10-10T12:00:00Z',stale:true};
+            assert.equal(read(value,name).profile.ratingPercent,91.5);
+            assert.equal(read(value,name).stale,true);
+            assert.equal(read({...value,profile:{...profile,rating_percent:null,vote_count:null}},name).profile.ratingPercent,null);
+            assert.equal(read({...value,profile:{...profile,rating_percent:0,vote_count:0}},name).profile.ratingPercent,0);
+            assert.equal(read({...value,query_name:'Другой'},name),null);
+            assert.equal(read({...value,profile:{...profile,name:'Другой'}},name),null);
+            for (const url of ['http://myprepod.ru/fa/ivanov-123','https://myprepod.ru.evil.test/fa/ivanov-123',
+                'https://user:pass@myprepod.ru/fa/ivanov-123','https://myprepod.ru/fa/ivanov-123?next=evil',
+                'https://myprepod.ru/fa/ivanov-123#x','https://myprepod.ru/other/ivanov-123',
+                'https://myprepod.ru/fa/../other/ivanov-123','https://myprepod.ru/other/../fa/ivanov-123',
+                'javascript:alert(1)']) {
+                assert.equal(read({...value,profile:{...profile,url}},name),null);
+            }
+            for (const patch of [{rating_percent:101},{rating_percent:'99'},{vote_count:-1},{review_count:1.5}])
+                assert.equal(read({...value,profile:{...profile,...patch}},name),null);
+            for (const status of ['not_found','ambiguous','unsupported','unavailable']) {
+                const absent=read({query_name:name,status,profile:null,checked_at:null,stale:false},name);
+                assert.equal(absent.status,status); assert.equal(absent.profile,null);
+                assert.equal(read({...value,status},name),null);
+            }
+        """)
+
+    def test_teacher_requests_are_independent_deduplicated_and_ignore_old_answers(self):
+        self.run_model("""
+            Object.assign(sandbox, {AbortController,setTimeout,clearTimeout});
+            const pending=[], changes=[];
+            const store=sandbox.window.MpbLessonDetails.createTeacherRatings(
+                ({name,signal})=>new Promise((resolve,reject)=>pending.push({name,signal,resolve,reject})),
+                key=>changes.push(key));
+            const a='Иванов Иван Иванович', b='Петров Пётр Петрович';
+            const response=name=>({query_name:name,status:'not_found',profile:null,checked_at:null,stale:false});
+            const flush=()=>new Promise(resolve=>setImmediate(resolve));
+            (async()=>{
+                try {
+                    store.select([{name:a},{name:b},{name:a}]); await flush();
+                    assert.equal(pending.length,2);
+                    pending[1].resolve(response(b)); await flush();
+                    assert.equal(store.get(b).state,'ready'); assert.equal(store.get(a).state,'loading');
+                    assert.equal(changes.length,1);
+                    // A language rerender selects the same names without another request.
+                    store.select([{name:a},{name:b}]); await flush(); assert.equal(pending.length,2);
+                    store.select([{name:b}]); assert.equal(pending[0].signal.aborted,true);
+                    pending[0].resolve(response(a)); await flush();
+                    assert.equal(store.get(a),undefined); assert.equal(changes.length,1);
+                    store.select([{name:a}]); await flush(); assert.equal(pending.length,3);
+                    pending[2].reject(new Error('offline')); await flush();
+                    assert.equal(store.get(a).state,'error');
+                    store.retry(a); await flush(); assert.equal(pending.length,4);
+                    const before=changes.length; store.close();
+                    assert.equal(pending[3].signal.aborted,true);
+                    pending[3].resolve(response(a)); await flush();
+                    assert.equal(changes.length,before); assert.equal(store.get(a),undefined);
+                } finally { store.close(); }
+            })().catch(error=>{console.error(error);process.exitCode=1;});
+        """)
+
+    def test_teacher_api_encodes_name_and_forwards_cancellation(self):
+        self.run_model("""
+            let captured;
+            const controller=new AbortController();
+            const api={window:{getMpbApiBase:()=>'/custom-api'},URLSearchParams,
+                fetch:async(url,options)=>{captured={url,options};return {ok:true,json:async()=>({status:'unsupported'})};}};
+            vm.createContext(api); vm.runInContext(fs.readFileSync('main_site_frontend/js/schedule_api.js','utf8'),api);
+            api.window.ScheduleApi.loadTeacherRating({name:'Name & Person?',signal:controller.signal}).then(()=>{
+                const url=new URL(captured.url,'https://site.example');
+                assert.equal(url.pathname,'/custom-api/schedule/teacher-ratings');
+                assert.equal(url.searchParams.get('name'),'Name & Person?');
+                assert.equal(captured.options.signal,controller.signal);
+                assert.equal(captured.options.cache,'no-store');
+            }).catch(error=>{console.error(error);process.exitCode=1;});
+        """)
+
+    def test_table_metadata_rerenders_from_locale_after_language_switch(self):
+        self.run_model("""
+            const source=fs.readFileSync('main_site_frontend/js/schedule.js','utf8');
+            const render=source.slice(source.indexOf('function renderDesktopGrid('),source.indexOf('function renderMobileFeed('));
+            const dictionaries=Object.fromEntries(['en','ru'].map(lang=>[lang,JSON.parse(fs.readFileSync('main_site_frontend/locales/'+lang+'.json','utf8'))]));
+            let language='ru'; const container={innerHTML:''};
+            const state={document:{getElementById:()=>container}, currentWeekStart:new Date('2026-10-05T12:00:00Z'),
+                currentEntity:{name:'PM23-1'},loadedBounds:{start:'2026-10-01',end:'2026-10-31'},
+                allAvailableModules:['Module'],selectedModules:new Set(['Module']),FIXED_TIMES:[],
+                TABLE_SLOT_ROW_HEIGHT_PX:156,getTableInitialScrollTop:()=>0,getScheduleTableRenderKey:()=>'',
+                getISODateStr:d=>d.toISOString().slice(0,10),parseDate:d=>new Date(d.replaceAll('.','-')+'T12:00:00Z'),
+                getCurrentWeekEnd:()=>new Date('2026-10-11T12:00:00Z'),buildDayTimelineLayout:()=>[],
+                isSameDay:()=>false,formatUiDate:d=>d.toISOString().slice(0,10),escapeHtml:String,bindLessonDetails(){},
+                formatScheduleDayLessonCount:count=>String(count),
+                t:(key,fallback,params={})=>(dictionaries[language][key]||fallback).replace(/\\{(\\w+)\\}/g,(_,key)=>params[key])};
+            vm.createContext(state);vm.runInContext(render,state);
+            const lessons=[{date:'2026.10.05'}];
+            state.renderDesktopGrid(lessons); assert.ok(container.innerHTML.includes('Занятий: 1'));
+            language='en'; state.renderDesktopGrid(lessons);
+            for(const expected of ['Classes: 1','Days: 1','Modules: 1/1','Loaded:','no classes'])
+                assert.ok(container.innerHTML.includes(expected),expected);
+            assert.equal(/[А-Яа-яЁё]/.test(container.innerHTML),false);
+            state.loadedBounds={};state.allAvailableModules=[];state.renderDesktopGrid([]);
+            assert.ok(container.innerHTML.includes('range not loaded'));
+            assert.ok(container.innerHTML.includes('Modules: none'));
+            language='ru';state.renderDesktopGrid(lessons);assert.ok(container.innerHTML.includes('Занятий: 1'));
+        """)
+
     def test_untrusted_urls_are_filtered(self):
         self.run_model("""
             const item = normalize({...base, url:'javascript:alert(1)', url1:'https://example.edu/course',

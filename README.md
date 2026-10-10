@@ -37,6 +37,7 @@ The website supports English and Russian, light and dark themes, desktop and mob
 
 - Find a group, lecturer or auditorium from Telegram or the website. Use keyboard search, recent entries and favorites, then jump directly to today's classes.
 - Filter by modules and class type, switch between day and week views, and open full lesson details.
+- See a separate MyPrepod loyalty rating for each lecturer in a lesson: votes, review count, source profile and last verification. Only an exact full-name match within Financial University is used; missing or ambiguous profiles are labelled explicitly.
 - Compare up to six schedules across a period of up to 14 days. See overlapping classes and common free windows on a shared timeline. Missing source data is not treated as free time.
 - Keep schedule subscriptions in sync between the website and Telegram. Receive daily notifications and alerts about changed, added or cancelled classes.
 - Subscribe through a private WebCal/iCalendar link, or download a one-time ICS snapshot. Calendar profiles support different selections and filters.

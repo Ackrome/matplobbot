@@ -157,6 +157,12 @@ async def main():
                 monitor_job("schedule_updates", check_for_schedule_updates),
                 trigger="interval",
                 hours=2,
+                id="schedule_updates",
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=None,
+                # A restart must not add two hours to the persisted heartbeat age.
+                next_run_time=datetime.now(UTC),
                 kwargs={
                     "http_session": telegram_session,
                     "telegram_request_kwargs": telegram_request_kwargs,

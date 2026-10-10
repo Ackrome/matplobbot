@@ -56,6 +56,13 @@
         });
     }
 
+    function loadTeacherRating({ name, signal }) {
+        const params = new URLSearchParams({ name });
+        return requestJson(`${getBaseUrl()}/schedule/teacher-ratings?${params}`, {
+            signal, cache: "no-store",
+        });
+    }
+
     function refreshSemesterCache({ type, id, token }) {
         const headers = {};
         if (token) headers.Authorization = `Bearer ${token}`;
@@ -72,6 +79,7 @@
         getCachedSchedules,
         loadCachedScheduleData,
         loadCurriculumData,
+        loadTeacherRating,
         loadScheduleData,
         requestJson,
         refreshSemesterCache,

@@ -41,3 +41,10 @@ and the precache. Advance the service-worker cache version for these changes.
 Run `tests/test_localization_completeness.py` after editing either JSON file or
 cache/loading logic. Browser QA must include an already installed old worker:
 clean contexts with service workers disabled cannot detect stale dictionaries.
+
+Timetable summary counters, loaded-range metadata and empty-day labels use the
+`schedule.table.*` dictionary keys. The schedule/filter toolbar headings also
+need `data-i18n`; an existing Russian fallback otherwise remains visible after
+switching to English. `tests/test_lesson_details.py` renders the actual desktop
+table against both dictionaries to cover this transition. Keep upstream course,
+lecturer and lesson-type text unchanged: it is source data, not interface copy.

@@ -34,3 +34,12 @@ CSS не меняет геометрию таблицы. Блокировка/в
 При изменениях проверять длинный заголовок, почту, адрес, список дисциплины,
 фокус и прокрутку на 320/390/820/1440/1920 px, RU/EN и светлой/тёмной теме.
 Не задавать dialog постоянный display, который покажет закрытое окно.
+## Separate teacher ratings
+
+`.ld-teachers` contains one identity and MyPrepod card per lecturer. The compact
+`.ld-teacher-rating` uses the dialog's existing light/dark variables, wraps long
+names and metadata, and separates percentage, sample counts, provenance and stale
+states. Teacher schedule and retry controls retain visible keyboard focus and
+44-pixel mobile targets. Do not use stars or color thresholds that imply teaching
+quality; the source percentage measures loyalty. Async updates affect only the
+individual rating card and preserve dialog scroll.

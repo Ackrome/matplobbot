@@ -22,6 +22,33 @@ from sqlalchemy.orm import declarative_base
 Base = declarative_base()
 
 
+class TeacherRatingCache(Base):
+    """Public source aggregates keyed by university and normalized full name."""
+
+    __tablename__ = "teacher_rating_cache"
+
+    identity_key = Column(String(64), primary_key=True)
+    university_key = Column(String(32), nullable=False)
+    canonical_name = Column(String(255), nullable=False)
+    status = Column(String(16), nullable=False, server_default="unavailable")
+    profile = Column(JSON, nullable=True)
+    provenance = Column(JSON, nullable=False, default=dict, server_default="{}")
+    checked_at = Column(DateTime(timezone=True), nullable=True)
+    next_check_at = Column(DateTime(timezone=True), nullable=False)
+    last_attempt_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(String(48), nullable=True)
+    refresh_token = Column(String(36), nullable=True)
+    refresh_started_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("university_key", "canonical_name", name="uq_teacher_rating_identity"),
+        CheckConstraint(
+            "status IN ('matched', 'not_found', 'ambiguous', 'unavailable')",
+            name="ck_teacher_rating_status",
+        ),
+    )
+
+
 class CurriculumDocument(Base):
     """Reviewed official curriculum and a separately staged replacement PDF."""
 

@@ -25,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 
 from shared_lib.database import close_db_pool, init_db_pool
 from shared_lib.services.schedule_freshness import shutdown_schedule_refresh_tasks
+from shared_lib.services.teacher_ratings import TeacherRatingsService
 
 from .auth import get_current_user, require_admin  # Import auth dependencies
 from .config import CORS_ALLOWED_ORIGINS, PUBLIC_SITE_URL
@@ -39,6 +40,7 @@ from .routers import (
     stats_router,
     studio_jobs_router,
     studio_router,
+    teacher_ratings_router,
     ux_router,
     ws_router,
 )
@@ -57,14 +59,18 @@ async def lifespan(app: FastAPI):
         timeout=aiohttp.ClientTimeout(total=30),
         trust_env=False,
     )
-    yield
-    # On shutdown
-    shared_http_session = getattr(app.state, "shared_http_session", None)
-    await shutdown_schedule_refresh_tasks()
-    if shared_http_session and not shared_http_session.closed:
-        await shared_http_session.close()
-    logger.info("Application shutdown: Closing database pool...")
-    await close_db_pool()
+    app.state.teacher_ratings_service = TeacherRatingsService(app.state.shared_http_session)
+    try:
+        yield
+    finally:
+        # Refreshes must finish/cancel before their shared resources close.
+        await app.state.teacher_ratings_service.close()
+        await shutdown_schedule_refresh_tasks()
+        shared_http_session = getattr(app.state, "shared_http_session", None)
+        if shared_http_session and not shared_http_session.closed:
+            await shared_http_session.close()
+        logger.info("Application shutdown: Closing database pool...")
+        await close_db_pool()
 
 
 app = FastAPI(
@@ -131,6 +137,7 @@ async def read_user_details_html(user_id: int):
 
 app.include_router(auth_router.router, prefix="/api")
 app.include_router(schedule_router.router, prefix="/api")
+app.include_router(teacher_ratings_router.router, prefix="/api")
 app.include_router(curriculum_router.router, prefix="/api")
 app.include_router(studio_router.router, prefix="/api")
 app.include_router(studio_jobs_router.router, prefix="/api")

@@ -1697,7 +1697,7 @@ Source:
 Configured jobs:
 
 - `send_daily_schedules` (cron, every minute): sends next-day schedules at subscriber-selected times and uses an explicitly timestamped, entity-matched DB cache fallback when RUZ is unavailable.
-- `check_for_schedule_updates` (interval, every 2h): detects diffs, atomically records per-user outbox deliveries with the new cache/hash checkpoint, retries only unsent recipients, and refreshes `cached_schedules.updated_at` after every successful unchanged API poll for subscribed entities.
+- `check_for_schedule_updates` (immediately at scheduler startup, then every 2h): detects diffs, atomically records per-user outbox deliveries with the new cache/hash checkpoint, retries only unsent recipients, and refreshes `cached_schedules.updated_at` after every successful unchanged API poll for subscribed entities. A single coalesced job with one maximum instance avoids a restart extending the persisted heartbeat past its unchanged three-hour freshness limit; durable notification deduplication remains in effect.
 - `deliver_pending_schedule_change_notifications` (interval, every minute): claims ready outbox rows and applies per-recipient retry/backoff without waiting for the next two-hour RUZ poll.
 - `refresh_schedule_entity_ids` (cron Sunday 02:30): searches cached/subscribed schedule entities by name to resolve current semester RUZ ids, moves stale subscription/calendar references, and refreshes current-semester cache.
 - `update_schedule_cache` (cron at 04:00 and 16:00): warm cache refresh.
@@ -2285,11 +2285,55 @@ discover -s tests -v`, ruff, JS syntax, сборка Tailwind, совпаден�
 и модулей одинакова для обоих маршрутов и не изменяет исходный снимок.
 Маршрут доступен гостям, как само расписание, и использует лимит `schedule_data`;
 404 означает отсутствие кэша, 503 — некорректный снимок, 200 с `[]` — пустой кэш.
-Новых хранилищ нет. Описания курса, правила оценивания
+Изначальная карточка не добавляла новых хранилищ. Описания курса, правила оценивания
 и материалы без отдельного достоверного источника не добавляются.
 Контракты данных, URL и времени проверяют `tests/test_lesson_details.py`
 и `tests/test_schedule_search_api.py`;
 интерфейс проверяется локальным браузером со снимками экрана и API-фикстурами.
+
+### MyPrepod в карточке занятия (10 октября 2026)
+
+Вкладка «Занятие» показывает отдельный блок для каждого преподавателя именно
+выбранной пары. Массивы `lecturers`/`teachers` и составные имена с разделителями
+нормализуются в `teachers[]`; один идентификатор не приписывается нескольким
+людям. Каждый блок независимо загружает рейтинг лояльности в исходной шкале
+0–100%, число оценок и отзывов, кафедру, ссылку на профиль и время проверки.
+Это показатель MyPrepod, а не оценка качества преподавания или вероятность сдачи.
+Тексты отзывов не сохраняются и не копируются. Нет оценки — не означает ноль.
+
+`GET /api/schedule/teacher-ratings?name=<полное ФИО>` доступен гостям с лимитом
+`RATE_LIMIT_SCHEDULE_SEARCH`. Ответ содержит `query_name`, `status`, `profile`,
+`checked_at`, `stale`; состояния: `matched`, `not_found`, `ambiguous`,
+`unsupported`, `unavailable`. Проценты и счётчики могут быть `null`.
+Неоднозначность и инициалы не приводят к выбору первого результата.
+
+Сервер читает публичный HTML
+`https://myprepod.ru/universiteti/fa/prepodavateli?q=<ФИО>` и проверенный профиль
+`/fa/<slug>-<id>`. Внутренний `/api/` MyPrepod не используется. Парсер сверяет
+полное ФИО (пробелы, подчёркивания, ё/е), университет, URL и соответствующий
+JSON-LD узел преподавателя; агрегаты кафедры исключаются. Пагинация должна быть
+проверена полностью в пределах бюджета. Поддерживаются три полных кириллических
+компонента ФИО, включая двойные компоненты через дефис.
+
+Миграция `ff5f60718293` создаёт `teacher_rating_cache`: ключ — университет и
+нормализованное ФИО, а не меняющийся между семестрами ID РУЗ. Успешные результаты
+и отсутствие профиля кэшируются на 24 часа. Просроченный снимок возвращается
+сразу с пометкой; обновление запускается по обращению в фоне. При сбое сохраняются
+последние подтверждённые данные и их дата, повтор откладывается на пять минут.
+Блокировка в БД и локальное объединение запросов предотвращают одновременное
+обновление одного имени. HTTP ограничен по времени, частоте, размеру ответа,
+числу страниц и редиректов; разрешён только фиксированный HTTPS-источник.
+
+Карточка остаётся доступной во время загрузки. Запросы преподавателей ограничены
+25 секундами, отменяются при смене пары или закрытии; поздний ответ не заменяет
+данные другого человека. Ошибку можно повторить кнопкой. RU/EN, светлая/тёмная
+темы, мобильный экран и версии локалей/офлайн-ассетов обновлены вместе.
+
+Основные файлы: `shared_lib/services/teacher_rating_source.py`,
+`shared_lib/services/teacher_ratings.py`,
+`fastapi_stats_app/routers/teacher_ratings_router.py`,
+`main_site_frontend/js/lesson_details.js`. Colocated wiki описывают контракты;
+тесты проверяют идентичность, разбор источника, кэш, HTTP-границы и гонки UI.
 
 ### Подписки в аккаунте (9 октября 2026)
 
