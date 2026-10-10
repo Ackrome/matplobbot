@@ -109,6 +109,20 @@ targets the preceding one. It restores that source, private configuration and sa
 image IDs without pulling/building, running migrations or deleting data volumes.
 It refuses a different database head. Only after an explicit old-code/schema
 compatibility review may an operator supply `--compatible-schema <current-head>`.
+For this first rollout, the observed `9fac7e87bc025508397664083a4df75302a61583`
+runtime at `fc2c3d4e5f60` is **not compatible** with a rollback retaining
+`fe4e5f607182`: do not use `--compatible-schema fe4e5f607182` for that legacy
+target. Keep the default schema refusal. Isolated tests using its exact source
+show that legacy auth accepts a JWT revoked by the new API when the signing key
+is restored unchanged. Its notification writer also leaves the new baseline
+stale, allowing a subsequent forward rollout to enqueue an already observed
+change again. See [the synthetic reproduction](reports/v1-release/legacy-compatibility.json).
+The successful same-schema local rollback drill does not certify this transition.
+Use a separately reviewed recovery plan: restoring the pre-migration database
+requires an explicit decision about intervening writes and website-session
+invalidation, while preserving the matching mail-encryption keys. Do not resume
+a forward rollout after legacy operation against the new schema without resolving
+the notification baseline and testing that recovery path.
 The collision-safe admin bootstrap resynchronizes the restored smoke credentials.
 Run the same authenticated post-deploy smoke checks, then `bash deploy.sh --finalize`
 to record a successful rollback. If the restored legacy checkout has no manifest

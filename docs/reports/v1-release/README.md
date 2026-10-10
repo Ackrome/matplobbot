@@ -49,6 +49,16 @@ fixtures. It covers HTTP throttling, active/new WebSocket revocation, account
 isolation/export/delete, calendar feeds, restart persistence, failed delivery retry,
 PostgreSQL concurrent claiming/CAS/cancellation, and isolated backup restoration.
 
+The first legacy rollback has a concrete compatibility restriction. Do not use
+`--compatible-schema fe4e5f607182` to return to the observed `9fac7e87` runtime:
+its API accepts newly revoked JWTs with the unchanged signing key, and its writer
+does not advance notification snapshots, causing duplicate logical transitions
+after a later forward rollout. Both effects were reproduced with exact legacy
+source and synthetic relational data in [legacy-compatibility.json](legacy-compatibility.json).
+The default schema refusal must remain in force; the same-schema rollback drill
+does not certify this path. Recovery requires the separate maintenance/restore
+and session-invalidation decision described in the release runbook.
+
 The production restore and migration used a fresh private snapshot transferred off
 app-vm. No bot, API or scheduler was started with those real data; PostgreSQL had no
 external network. Dumps, row-witness metadata and environment secrets remain outside

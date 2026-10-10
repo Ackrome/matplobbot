@@ -1,0 +1,28 @@
+{
+  "captured_at": "2026-10-10T09:41:56.814856+00:00",
+  "scope": "Isolated synthetic SQLite relational reproductions using exact observed legacy source; no production data, credentials or providers",
+  "legacy_image_source_commit": "9fac7e87bc025508397664083a4df75302a61583",
+  "schema_transition": [
+    "fc2c3d4e5f60",
+    "fe4e5f607182"
+  ],
+  "compatible_schema_override_allowed": false,
+  "legacy_source_sha256": {
+    "auth.py": "4f4bc6769423a6131e143779ae2fa6062d0ce5196d3c982ee51ee461d1d19f46",
+    "schedule_outbox.py": "a9fbcd26a3b17d65df40c0573cdfa1352a6e0abad9c702f69e07ec9498d874c4"
+  },
+  "revoked_session_after_legacy_rollback": {
+    "current_rejects_401": true,
+    "legacy_accepts_same_token": true,
+    "signing_key_changed": false,
+    "durable_revocation_preserved": true
+  },
+  "legacy_notification_then_forward_rollout": {
+    "legacy_transition_outbox_rows": 1,
+    "snapshot_unchanged_by_legacy_writer": true,
+    "outbox_rows_after_current_scanner": 2,
+    "duplicate_logical_transition": true,
+    "telegram_sends": 0
+  },
+  "required_recovery_policy": "Keep default schema refusal. Do not authorize --compatible-schema fe4e5f607182 for observed legacy9fac. A separately planned recovery must address revoked sessions and notification baselines; same-schema drill does not certify this transition."
+}
