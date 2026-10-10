@@ -65,6 +65,7 @@ Drafts and the last 20 build records are stored on the current device. Build res
 ### Account and administration
 
 - Open the account page from your signed-in avatar/name card. Manage language and theme, return to your tools, or jump to Telegram settings.
+- Manage saved schedule subscriptions and Telegram notification settings from the account page. Sign out of the current session or all website sessions; revocation survives service restarts.
 - Export account data as JSON or as a ZIP containing project sources. Account deletion is separated from everyday actions and requires a recent export and confirmation.
 - Administrators have separate views for service health, usage and discipline-to-module mappings, plus user activity pages and CSV export.
 - Operational status covers schedule freshness, rendering and notification delivery. Usage includes aggregate workflow timings without document contents or search text.
@@ -106,6 +107,8 @@ On phones, the same flow uses a full-screen sheet:
 ## Run locally
 
 You need Docker with Docker Compose v2 and a Telegram bot token. The service builds use the project's GHCR base images; Docker must be able to pull them.
+
+Server rendering requires the worker's Linux namespace sandbox. On an AppArmor-enabled Docker host, provision the named worker policy and provide the Compose override described in the [release runbook](docs/release-runbook.md#acceptance-and-deployment) before starting the stack. Docker Desktop daemons without AppArmor omit that policy. Rendering fails closed when isolation is unavailable.
 
 ### 1. Get the repository and configure the environment
 
@@ -244,7 +247,7 @@ npm run build:tailwind
 
 `requirements.in` is the editable dependency source for base images; `requirements.txt` is its lockfile. API, scheduler and validation dependencies have their own files. After changing dependencies, follow the [dependency audit procedure](docs/wiki.md#dependency-audit) and the current [CI workflow](.github/workflows/ci-cd.yml).
 
-GitHub Actions validates changes, publishes the shared package and builds service images. Jenkins performs deployment validation and smoke checks; `deploy.sh` applies migrations and provisions the dedicated administrator. Optional local pre-commit hooks use [.pre-commit-config.yaml](.pre-commit-config.yaml).
+GitHub Actions validates changes, publishes the shared package and accepts the four service image digests through real PostgreSQL, Redis, renderer and restore checks. Jenkins deploys the exact accepted source and digests, retains recovery state, applies migrations and provisions the dedicated administrator. A release is finalized only after authenticated smoke checks pass. See the [release and recovery runbook](docs/release-runbook.md) and [dated verification evidence](docs/reports/v1-release/README.md), including the restriction on rolling back to the first legacy release. Optional local pre-commit hooks use [.pre-commit-config.yaml](.pre-commit-config.yaml).
 
 When contributing, keep RU/EN locale keys synchronized, test the affected workflow, and document new functionality in `docs/wiki.md`. New code files also require a colocated `wiki_<filename>.md`, as described in the project's contribution instructions. Update both README language versions together.
 

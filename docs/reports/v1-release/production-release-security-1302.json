@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "checked_at_utc": "2026-10-10T12:20:48.498586+00:00",
+  "commit": "1302e8b2287b008d9c0cbe1f1fae87ef9780c24f",
+  "result": "passed",
+  "scope": "Read-only published-image disk preflight and strict post-deployment runtime/key continuity verification",
+  "acceptance": {
+    "mode": "automatic Jenkins deployment and smoke finalization",
+    "jenkins_build": 348,
+    "jenkins_result": "SUCCESS",
+    "duration_seconds": 327.351,
+    "exact_commit_completion_marker": true,
+    "smoke_ok_count": 6,
+    "smoke_failed_count": 0,
+    "jenkins_evidence_attribution": "Independently verified by reliability agent and coordinating root before this probe; release state/runtime independently verified by this security probe",
+    "current_status": "successful",
+    "no_pending_markers": true,
+    "schema_heads": [
+      "fe4e5f607182"
+    ]
+  },
+  "images": {
+    "bot": "ghcr.io/ackrome/matplobbot-bot@sha256:9d10b196350ae39e69372e2acee08bb7355538275a69f28b82d3d21a60c1c00c",
+    "api": "ghcr.io/ackrome/matplobbot-api@sha256:2683adf4f98a068500525f5c46040683664db82c4cae68abf81fec39f695de03",
+    "scheduler": "ghcr.io/ackrome/matplobbot-scheduler@sha256:5631a980b2202d1aafd553f707d6d74f32a57935475df2a8edab2e96dbe12f16",
+    "worker": "ghcr.io/ackrome/matplobbot-worker@sha256:eb41bc8fc2e79318abc549a2a6b0060646da6bdf2153e0d7a3867497d8c3fa28"
+  },
+  "preflight": {
+    "checked_at_utc": "2026-10-10T12:09:22.312087+00:00",
+    "all_four_linux_amd64_and_revision_verified": true,
+    "missing_compressed_union_bytes": 359480857,
+    "missing_layer_count": 23,
+    "available_disk_bytes": 11166986240,
+    "capacity_assessment": {
+      "exact_missing_compressed_bytes": 359480857,
+      "estimated_peak_additional_bytes": 1700000000,
+      "planning_allowance_bytes": 2147483648,
+      "free_after_planning_allowance_bytes": 9019502592,
+      "estimate_basis": "Same retained base prefixes and nearly identical missing-layer sizes as the accepted8662 rollout; compressed bytes exact, unpacking and temporary peak estimated.",
+      "sufficient_headroom": true
+    },
+    "metadata_only_no_pull": true
+  },
+  "postdeploy": {
+    "all_four_runtime_images_match": true,
+    "runtime_image_binding": {
+      "bot": {
+        "one_running": true,
+        "expected_image": true
+      },
+      "api": {
+        "one_running": true,
+        "expected_image": true
+      },
+      "scheduler": {
+        "one_running": true,
+        "expected_image": true
+      },
+      "worker": {
+        "one_running": true,
+        "expected_image": true
+      }
+    },
+    "new_api_since_previous_accepted_8662": true,
+    "key_continuity": {
+      "baseline_file_safe": true,
+      "new_since_previous_accepted_8662": true,
+      "new_expected_release_container": true,
+      "JWT_SECRET_KEY": {
+        "baseline_present": true,
+        "current_present": true,
+        "unchanged": true
+      },
+      "MAIL_CREDENTIAL_KEY": {
+        "baseline_present": true,
+        "current_present": true,
+        "unchanged": true
+      }
+    },
+    "available_disk_bytes": 9820495872,
+    "docker_image_count": 64,
+    "release_state_unchanged_during_probe": true,
+    "container_ids_unchanged_during_probe": true
+  },
+  "previous_release": "8662f8120838c1269526ea7163299e1bd03fac0c",
+  "historical_8662_report_preserved": true,
+  "private_key_values_or_fingerprints_emitted": false,
+  "mutation_performed": false,
+  "errors": []
+}

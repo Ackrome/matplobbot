@@ -1,0 +1,42 @@
+{
+  "checked_at_utc": "2026-10-10T11:27:53.519207+00:00",
+  "accepted_commit": "8662f8120838c1269526ea7163299e1bd03fac0c",
+  "acceptance_provenance": "Original Jenkins347 false-green was diagnosed as streamed stdin consumption; root replayed exact8662 smoke from a saved file with stdin closed, then finalized successfully before this independent read-only verification",
+  "accepted_release": true,
+  "all_four_runtime_images_match_accepted": true,
+  "key_continuity": {
+    "baseline_file_safe": true,
+    "new_expected_release_container": true,
+    "JWT_SECRET_KEY": {
+      "baseline_present": true,
+      "current_present": true,
+      "unchanged": true
+    },
+    "MAIL_CREDENTIAL_KEY": {
+      "baseline_present": true,
+      "current_present": true,
+      "unchanged": true
+    }
+  },
+  "available_disk_bytes": 1606729728,
+  "image_cache_proposal": {
+    "candidate_count": 13,
+    "protected_count": 60,
+    "every_container_and_operational_release_reference_protected": true,
+    "protected_release_commits": [
+      "9fac7e87bc025508397664083a4df75302a61583",
+      "c11e0e4c762fc17480626a96a1a384c704fd8774",
+      "0367e431c42e16ffbc3901cea3742bb7de3cb253",
+      "8662f8120838c1269526ea7163299e1bd03fac0c"
+    ],
+    "immutable_registry_refs_rechecked": true,
+    "potential_reclaim_bytes": 9567818241,
+    "cleanup_performed": false,
+    "cleanup_requires_new_authorization": true
+  },
+  "limitations": [
+    "Disk reclamation is a proposal only; potential exclusive bytes are not yet reclaimed.",
+    "Jenkins347 reported success before its smoke body ran; production acceptance was completed with the exact8662 smoke replayed from a saved file, followed by independent accepted-state verification."
+  ],
+  "private_values_or_hashes_exposed": false
+}

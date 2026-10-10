@@ -1,0 +1,60 @@
+{
+  "checked_at_utc": "2026-10-10T11:52:04.173668+00:00",
+  "image_ids_unchanged": true,
+  "image_count": 17,
+  "containers_unchanged": true,
+  "container_count": 2,
+  "volumes_unchanged": true,
+  "service_states": {
+    "actions.runner.Ackrome-matplobbot.github-runner-vm.service": "active",
+    "docker": "active",
+    "containerd": "active"
+  },
+  "processes": {
+    "runner_listener": 1,
+    "runner_worker": 0,
+    "rc_acceptance": 0,
+    "docker_buildx_build": 0
+  },
+  "lvs": {
+    "report": [
+      {
+        "lv": [
+          {
+            "lv_path": "/dev/ubuntu-vg/ubuntu-lv",
+            "lv_size": "63346573312",
+            "lv_attr": "-wi-ao----",
+            "segtype": "linear"
+          }
+        ]
+      }
+    ]
+  },
+  "vgs": {
+    "report": [
+      {
+        "vg": [
+          {
+            "vg_name": "ubuntu-vg",
+            "vg_free": "20401094656"
+          }
+        ]
+      }
+    ]
+  },
+  "root_mount": {
+    "filesystems": [
+      {
+        "source": "/dev/mapper/ubuntu--vg-ubuntu--lv",
+        "fstype": "ext4",
+        "options": "rw,relatime"
+      }
+    ]
+  },
+  "disk": {
+    "available_bytes": 30234263552,
+    "total_filesystem_bytes": 62029570048
+  },
+  "vg_metadata_backup_regular_root_0600": true,
+  "no_mutation": true
+}

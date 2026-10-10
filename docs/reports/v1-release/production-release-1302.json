@@ -1,0 +1,295 @@
+{
+  "report_version": 1,
+  "observed_at_utc": "2026-10-10 12:20:03 UTC",
+  "source_commit": "1302e8b2287b008d9c0cbe1f1fae87ef9780c24f",
+  "acceptance_mode": "automatic_jenkins_348_smoke_and_finalization",
+  "scope": "Read-only independent production verification; no deployment, finalization, rollback or configuration mutation performed by the reporting agent.",
+  "jenkins": {
+    "matched": true,
+    "build_number": 348,
+    "result": "SUCCESS",
+    "completed": true,
+    "latest_stage": "Declarative: Post Actions",
+    "duration_ms": "327351",
+    "milestones": {
+      "destination_compile_passed": true,
+      "source_switched": true,
+      "release_started": true,
+      "authenticated_smoke": true,
+      "release_finalized": true,
+      "exact_automatic_completion_marker": true,
+      "websocket_upgrade_success_count": 2,
+      "anonymous_401": true,
+      "smoke_failure_count": 0,
+      "smoke_success_count": 6,
+      "api_health": true,
+      "scheduler_health": true
+    },
+    "console_log_sha256": "262b020dfde95ef8fa4e0e6fe81e30b670b30096fdebb4af4086e5e44e796bdb",
+    "source_commit": "1302e8b2287b008d9c0cbe1f1fae87ef9780c24f",
+    "source_commit_parameter_verified": true,
+    "required_completion_marker": "Release smoke and finalization completed: 1302e8b2287b008d9c0cbe1f1fae87ef9780c24f"
+  },
+  "checks": {
+    "exact_source_current_accepted_checkout": true,
+    "source_images_and_rc_manifest_verified": true,
+    "jenkins_exact_source_build_completed_successfully": true,
+    "exact_automatic_smoke_completion_marker": true,
+    "six_positive_smoke_checks_zero_failures": true,
+    "automatic_positive_auth_websockets_and_anonymous_guard": true,
+    "automatic_service_health_and_finalization": true,
+    "finalized_successful": true,
+    "no_pending_attempt_or_rollback": true,
+    "actual_schema_matches_accepted_and_current": true,
+    "all_nine_services_running": true,
+    "all_four_application_images_match_accepted": true,
+    "all_five_support_images_preserved": true,
+    "all_nine_runtime_images_match_final_snapshot": true,
+    "snapshot_record_matches_current": true,
+    "snapshot_private_config_matches_live": true,
+    "snapshot_private_config_mode_0600": true,
+    "independent_health_api_and_scheduler_200": true,
+    "worker_snapshot_profile_matches_live": true,
+    "worker_privilege_and_filesystem_controls": true,
+    "worker_memory_and_pid_bounds": true,
+    "previous_is_successful_managed_8662": true,
+    "previous_has_same_schema": true,
+    "previous_source_locally_available": true,
+    "previous_nine_snapshot_images_match_8662_baseline": true,
+    "previous_all_nine_snapshot_images_locally_available": true,
+    "previous_private_config_and_worker_policies_retained": true
+  },
+  "predeploy_baseline": {
+    "based_on_finalized_report": "matplobbot-v1-production-8662.json",
+    "observed_at_utc": "2026-10-10 11:27:16 UTC",
+    "checkout_commit": "8662f8120838c1269526ea7163299e1bd03fac0c",
+    "candidate_exists": false,
+    "attempt_marker_exists": false,
+    "images": {
+      "mpb-telegram-bot": "sha256:9f0fa31ec729164f287ec320c72296bc899e8ff0ab74faca9fc6a68837a70777",
+      "mpb-fastapi-stats": "sha256:22afe8015695dd97e34191639606f77e987d0e377249fa3314bfc6eb0bd35ba6",
+      "mpb-scheduler": "sha256:4a8a76a7de4cf14dcdf9bd8f932936609398c63ff72925e11b704a765344fbdd",
+      "mpb-worker": "sha256:b35fc062e14250226bf00cd28ae8285ea878102e64f2cbdb687644af2c3de779",
+      "postgres": "sha256:09e4f20b14ddb3dfe3a0c825b206032aaf8f28300ba2070c0b60fc1c10c6abc7",
+      "redis": "sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6",
+      "main-site-frontend": "sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de",
+      "caddy": "sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d",
+      "proxy": "sha256:f27bfe2853c1668b82eab85e68cc7c142cc31114904e09a855d5be5f92298e7e"
+    },
+    "running": {
+      "mpb-telegram-bot": true,
+      "mpb-fastapi-stats": true,
+      "mpb-scheduler": true,
+      "mpb-worker": true,
+      "postgres": true,
+      "redis": true,
+      "main-site-frontend": true,
+      "caddy": true,
+      "proxy": true
+    },
+    "schema_heads": [
+      "fe4e5f607182"
+    ],
+    "worker_controls": {
+      "profile": "matplobbot-render-b0baf697e84b0ca11eeedcf5",
+      "user": "appuser",
+      "read_only_root": true,
+      "cap_drop": [
+        "ALL"
+      ],
+      "memory_bytes": 2147483648,
+      "pids_limit": 256,
+      "masked_paths": [],
+      "readonly_paths": [],
+      "no_new_privileges": true,
+      "seccomp_profile_present": true
+    },
+    "status": "successful"
+  },
+  "postdeploy_runtime": {
+    "accepted_commit": "1302e8b2287b008d9c0cbe1f1fae87ef9780c24f",
+    "manifest_verification_passed": true,
+    "accepted_schema_heads": [
+      "fe4e5f607182"
+    ],
+    "services": {
+      "mpb-telegram-bot": {
+        "image_id": "sha256:9d10b196350ae39e69372e2acee08bb7355538275a69f28b82d3d21a60c1c00c",
+        "running": true,
+        "expected_image_id": "sha256:9d10b196350ae39e69372e2acee08bb7355538275a69f28b82d3d21a60c1c00c",
+        "matches_accepted_image": true
+      },
+      "mpb-fastapi-stats": {
+        "image_id": "sha256:2683adf4f98a068500525f5c46040683664db82c4cae68abf81fec39f695de03",
+        "running": true,
+        "expected_image_id": "sha256:2683adf4f98a068500525f5c46040683664db82c4cae68abf81fec39f695de03",
+        "matches_accepted_image": true
+      },
+      "mpb-scheduler": {
+        "image_id": "sha256:5631a980b2202d1aafd553f707d6d74f32a57935475df2a8edab2e96dbe12f16",
+        "running": true,
+        "expected_image_id": "sha256:5631a980b2202d1aafd553f707d6d74f32a57935475df2a8edab2e96dbe12f16",
+        "matches_accepted_image": true
+      },
+      "mpb-worker": {
+        "image_id": "sha256:eb41bc8fc2e79318abc549a2a6b0060646da6bdf2153e0d7a3867497d8c3fa28",
+        "running": true,
+        "expected_image_id": "sha256:eb41bc8fc2e79318abc549a2a6b0060646da6bdf2153e0d7a3867497d8c3fa28",
+        "matches_accepted_image": true
+      },
+      "postgres": {
+        "image_id": "sha256:09e4f20b14ddb3dfe3a0c825b206032aaf8f28300ba2070c0b60fc1c10c6abc7",
+        "running": true
+      },
+      "redis": {
+        "image_id": "sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6",
+        "running": true
+      },
+      "main-site-frontend": {
+        "image_id": "sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de",
+        "running": true
+      },
+      "caddy": {
+        "image_id": "sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d",
+        "running": true
+      },
+      "proxy": {
+        "image_id": "sha256:f27bfe2853c1668b82eab85e68cc7c142cc31114904e09a855d5be5f92298e7e",
+        "running": true
+      }
+    },
+    "health_http": {
+      "api": 200,
+      "scheduler": 200
+    },
+    "worker_controls": {
+      "profile": "matplobbot-render-b0baf697e84b0ca11eeedcf5",
+      "user": "appuser",
+      "read_only_root": true,
+      "cap_drop": [
+        "ALL"
+      ],
+      "memory_bytes": 2147483648,
+      "pids_limit": 256,
+      "nano_cpus": 0,
+      "cpu_quota": 0,
+      "cpu_period": 0,
+      "privileged": false,
+      "masked_paths": [],
+      "readonly_paths": [],
+      "no_new_privileges": true,
+      "seccomp_profile_present": true
+    },
+    "actual_schema_heads": [
+      "fe4e5f607182"
+    ],
+    "support_images_match_baseline": {
+      "postgres": true,
+      "redis": true,
+      "main-site-frontend": true,
+      "caddy": true,
+      "proxy": true
+    }
+  },
+  "finalized_state": {
+    "checkout_commit": "1302e8b2287b008d9c0cbe1f1fae87ef9780c24f",
+    "current_status": "successful",
+    "current_commit": "1302e8b2287b008d9c0cbe1f1fae87ef9780c24f",
+    "current_schema_heads": [
+      "fe4e5f607182"
+    ],
+    "current_manifest_matches_accepted": true,
+    "accepted_manifest_sha256": "ea62c5ea7e9525be115f010d8602ac689b065975826461e7f790eba91c646e71",
+    "pending_marker_exists": false,
+    "attempt_marker_exists": false,
+    "rollback_pending_marker_exists": false,
+    "snapshot_images": {
+      "mpb-telegram-bot": "sha256:9d10b196350ae39e69372e2acee08bb7355538275a69f28b82d3d21a60c1c00c",
+      "mpb-fastapi-stats": "sha256:2683adf4f98a068500525f5c46040683664db82c4cae68abf81fec39f695de03",
+      "mpb-scheduler": "sha256:5631a980b2202d1aafd553f707d6d74f32a57935475df2a8edab2e96dbe12f16",
+      "mpb-worker": "sha256:eb41bc8fc2e79318abc549a2a6b0060646da6bdf2153e0d7a3867497d8c3fa28",
+      "postgres": "sha256:09e4f20b14ddb3dfe3a0c825b206032aaf8f28300ba2070c0b60fc1c10c6abc7",
+      "redis": "sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6",
+      "main-site-frontend": "sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de",
+      "caddy": "sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d",
+      "proxy": "sha256:f27bfe2853c1668b82eab85e68cc7c142cc31114904e09a855d5be5f92298e7e"
+    },
+    "snapshot_worker_security_options": [
+      "apparmor=matplobbot-render-b0baf697e84b0ca11eeedcf5"
+    ],
+    "snapshot_record_matches_current": true,
+    "snapshot_private_configuration_matches_live": {
+      ".env": true
+    },
+    "snapshot_private_configuration_modes": {
+      ".env": "0o600"
+    },
+    "previous_release": {
+      "status": "successful",
+      "commit": "8662f8120838c1269526ea7163299e1bd03fac0c",
+      "legacy": false,
+      "schema_heads": [
+        "fe4e5f607182"
+      ],
+      "same_schema_as_current": true,
+      "source_commit_locally_available": true,
+      "snapshot_images": {
+        "mpb-telegram-bot": "sha256:9f0fa31ec729164f287ec320c72296bc899e8ff0ab74faca9fc6a68837a70777",
+        "mpb-fastapi-stats": "sha256:22afe8015695dd97e34191639606f77e987d0e377249fa3314bfc6eb0bd35ba6",
+        "mpb-scheduler": "sha256:4a8a76a7de4cf14dcdf9bd8f932936609398c63ff72925e11b704a765344fbdd",
+        "mpb-worker": "sha256:b35fc062e14250226bf00cd28ae8285ea878102e64f2cbdb687644af2c3de779",
+        "postgres": "sha256:09e4f20b14ddb3dfe3a0c825b206032aaf8f28300ba2070c0b60fc1c10c6abc7",
+        "redis": "sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6",
+        "main-site-frontend": "sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de",
+        "caddy": "sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d",
+        "proxy": "sha256:f27bfe2853c1668b82eab85e68cc7c142cc31114904e09a855d5be5f92298e7e"
+      },
+      "snapshot_images_locally_available": {
+        "mpb-telegram-bot": true,
+        "mpb-fastapi-stats": true,
+        "mpb-scheduler": true,
+        "mpb-worker": true,
+        "postgres": true,
+        "redis": true,
+        "main-site-frontend": true,
+        "caddy": true,
+        "proxy": true
+      },
+      "private_config_present": true,
+      "private_config_mode": "0o600",
+      "worker_apparmor_policy_retained": true,
+      "worker_seccomp_policy_retained": true
+    },
+    "disk_bytes": {
+      "checkout_filesystem": {
+        "total": 51460472832,
+        "used": 38992695296,
+        "free": 9820545024
+      },
+      "docker_filesystem": {
+        "total": 51460472832,
+        "used": 38992695296,
+        "free": 9820545024
+      }
+    }
+  },
+  "rollback_readiness": {
+    "target_commit": "8662f8120838c1269526ea7163299e1bd03fac0c",
+    "schema_unchanged": true,
+    "saved_source_configuration_policies_and_nine_images_available": true,
+    "production_rollback_executed": false,
+    "operation_requirement": "Before rollback, retain the reviewed current release_smoke.sh in private recovery-tools using its source SHA; 8662 predates that tracked shell file. Follow the guarded release-runbook recipe with the explicitly reviewed target SHA.",
+    "legacy_override": "Known incompatible 9fac to fe4 transition remains forbidden; this report does not authorize it."
+  },
+  "historical_context": {
+    "previous_8662_acceptance_mode": "manual smoke recovery after false-green Jenkins 347",
+    "historical_report_preserved": "matplobbot-v1-production-8662.json",
+    "current_1302_manual_recovery_required": false
+  },
+  "limitations": [
+    "No live rollback was executed; rollback evidence here establishes the successful same-schema target and retained recovery inputs.",
+    "Worker Docker CPU quota is unset (NanoCpus, CpuQuota and CpuPeriod are zero); observed memory/PID bounds are recorded separately.",
+    "Public UI and effective signing/mail key continuity are separately verified and are not claimed by this report."
+  ],
+  "privacy": "Only source/image/schema hashes, selected runtime controls, disk capacity, status codes and fixed validation booleans are retained. No environment values, tokens, passwords, private configuration contents, raw logs, or user identifiers are included."
+}

@@ -1,0 +1,14 @@
+{
+  "commit": "1302e8b2287b008d9c0cbe1f1fae87ef9780c24f",
+  "github_run_id": 38048719980,
+  "build_job_id": 114203746073,
+  "status": "failed-before-rc-and-deploy",
+  "failure_time_utc": "2026-10-10T11:41:19Z",
+  "failure": "System.IO.IOException: No space left on device while writing GitHub runner diagnostic page log",
+  "evidence": "Worker_20261010-113359-utc.log",
+  "runner_available_during_build": "940MiB",
+  "runner_available_after_failure": "9.3GiB",
+  "kernel_oom_evidence": false,
+  "production_mutated_by_this_attempt": false,
+  "cleanup_performed_by_monitor": false
+}

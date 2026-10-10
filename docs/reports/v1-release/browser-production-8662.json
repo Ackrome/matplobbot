@@ -1,0 +1,21 @@
+{
+  "release_commit": "8662f8120838c1269526ea7163299e1bd03fac0c",
+  "checked_on": "2026-10-10",
+  "scope": "Read-only public browser checks after manual smoke recovery; no authenticated user data or real notification sends.",
+  "checks": {
+    "homepage_rendered": true,
+    "schedule_pm23_1_rendered": true,
+    "lesson_details_opened": true,
+    "discipline_assessment_loaded": true,
+    "full_cached_semester_loaded": true,
+    "javascript_errors_observed": 0
+  },
+  "screenshots": [
+    "screenshots/production-lesson-8662.jpg",
+    "screenshots/production-discipline-8662.jpg"
+  ],
+  "limitations": [
+    "Authenticated account and logout-all interactions were checked separately in the local real-service UI flow.",
+    "This browser check predates the subsequent Jenkins-only smoke-script correction."
+  ]
+}

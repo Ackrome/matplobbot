@@ -1,0 +1,206 @@
+{
+  "report_version": 1,
+  "observed_at_utc": "2026-10-10 11:27:16 UTC",
+  "source_commit": "8662f8120838c1269526ea7163299e1bd03fac0c",
+  "acceptance_mode": "manual_authenticated_smoke_recovery_after_false_green_jenkins_347",
+  "scope": "Read-only independent production verification; no deployment, finalization, or configuration mutation performed by the reporting agent.",
+  "jenkins": {
+    "matched": true,
+    "build_number": 347,
+    "result": "SUCCESS",
+    "completed": true,
+    "latest_stage": "Declarative: Post Actions",
+    "duration_ms": "347669",
+    "milestones": {
+      "destination_compile_passed": true,
+      "source_switched": true,
+      "release_started": true,
+      "authenticated_smoke": false,
+      "release_finalized": false
+    },
+    "interpretation": "Jenkins reported SUCCESS after starting the release, but streamed-shell stdin consumption bypassed the smoke and finalize tail. Jenkins SUCCESS alone was not accepted as release proof."
+  },
+  "recovery": {
+    "executed_by": "root coordinating agent using authorized deployment access",
+    "method": "Exact 8662 smoke script extracted from Jenkins Groovy heredoc, decoded to a private script file and run as deploy with stdin redirected from /dev/null.",
+    "script_sha256": "2aa5c783dacff5420ad892c372e062b87f310354cbbe2c5758793d9c9bc811ab",
+    "log_sha256": "597145ed93f5edfd9c4f81d9e397b653f829e6f98877534359ae09f6fa2e046c",
+    "success_marker_count": 6,
+    "failure_marker_count": 0,
+    "api_health_passed": true,
+    "scheduler_health_passed": true,
+    "authenticated_leaderboard_passed": true,
+    "websocket_upgrade_success_count": 2,
+    "anonymous_leaderboard_protected_401": true,
+    "finalization_marker_present": true
+  },
+  "checks": {
+    "exact_source_current_accepted_checkout": true,
+    "source_images_and_rc_manifest_verified": true,
+    "finalized_successful": true,
+    "no_pending_attempt_or_rollback": true,
+    "actual_schema_matches_accepted_and_current": true,
+    "all_nine_services_running": true,
+    "all_four_application_images_match_accepted": true,
+    "all_five_support_images_preserved": true,
+    "all_nine_runtime_images_match_final_snapshot": true,
+    "snapshot_record_matches_current": true,
+    "snapshot_private_config_matches_live": true,
+    "snapshot_private_config_mode_0600": true,
+    "health_api_and_scheduler_200": true,
+    "recovered_smoke_positive_checks": true,
+    "recovered_finalization_marker": true,
+    "worker_snapshot_profile_matches_live": true
+  },
+  "predeploy_baseline": {
+    "checkout_commit": "a76bdf98cfd71f8af9c87a121a88e5f06629d677",
+    "candidate_exists": false,
+    "attempt_marker_exists": false,
+    "images": {
+      "mpb-telegram-bot": "sha256:79cb7480a7245b9e6572d9e1dc74ef468aefcad6b656110ae8369ae3e1fdd9c4",
+      "mpb-fastapi-stats": "sha256:d02e6f7fe19e70b3a7890da10e7a00e5df1a99c42f9fcec2101ff5c8a2d280fa",
+      "mpb-scheduler": "sha256:fcd5d30f636e5364c5e9cab2a1b93f964815cbfc62e92b0d3a1e2762174f71c3",
+      "mpb-worker": "sha256:f3498c55f3bd89970fab3f51068f50cb7e4a7f05f6acf993e30d55b5fca03b4c",
+      "postgres": "sha256:09e4f20b14ddb3dfe3a0c825b206032aaf8f28300ba2070c0b60fc1c10c6abc7",
+      "redis": "sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6",
+      "main-site-frontend": "sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de",
+      "caddy": "sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d",
+      "proxy": "sha256:f27bfe2853c1668b82eab85e68cc7c142cc31114904e09a855d5be5f92298e7e"
+    },
+    "running": {
+      "mpb-telegram-bot": true,
+      "mpb-fastapi-stats": true,
+      "mpb-scheduler": true,
+      "mpb-worker": true,
+      "postgres": true,
+      "redis": true,
+      "main-site-frontend": true,
+      "caddy": true,
+      "proxy": true
+    },
+    "schema_heads": [
+      "fc2c3d4e5f60"
+    ]
+  },
+  "postdeploy_runtime": {
+    "accepted_commit": "8662f8120838c1269526ea7163299e1bd03fac0c",
+    "manifest_verification_passed": true,
+    "accepted_schema_heads": [
+      "fe4e5f607182"
+    ],
+    "services": {
+      "mpb-telegram-bot": {
+        "image_id": "sha256:9f0fa31ec729164f287ec320c72296bc899e8ff0ab74faca9fc6a68837a70777",
+        "running": true,
+        "expected_image_id": "sha256:9f0fa31ec729164f287ec320c72296bc899e8ff0ab74faca9fc6a68837a70777",
+        "matches_accepted_image": true
+      },
+      "mpb-fastapi-stats": {
+        "image_id": "sha256:22afe8015695dd97e34191639606f77e987d0e377249fa3314bfc6eb0bd35ba6",
+        "running": true,
+        "expected_image_id": "sha256:22afe8015695dd97e34191639606f77e987d0e377249fa3314bfc6eb0bd35ba6",
+        "matches_accepted_image": true
+      },
+      "mpb-scheduler": {
+        "image_id": "sha256:4a8a76a7de4cf14dcdf9bd8f932936609398c63ff72925e11b704a765344fbdd",
+        "running": true,
+        "expected_image_id": "sha256:4a8a76a7de4cf14dcdf9bd8f932936609398c63ff72925e11b704a765344fbdd",
+        "matches_accepted_image": true
+      },
+      "mpb-worker": {
+        "image_id": "sha256:b35fc062e14250226bf00cd28ae8285ea878102e64f2cbdb687644af2c3de779",
+        "running": true,
+        "expected_image_id": "sha256:b35fc062e14250226bf00cd28ae8285ea878102e64f2cbdb687644af2c3de779",
+        "matches_accepted_image": true
+      },
+      "postgres": {
+        "image_id": "sha256:09e4f20b14ddb3dfe3a0c825b206032aaf8f28300ba2070c0b60fc1c10c6abc7",
+        "running": true
+      },
+      "redis": {
+        "image_id": "sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6",
+        "running": true
+      },
+      "main-site-frontend": {
+        "image_id": "sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de",
+        "running": true
+      },
+      "caddy": {
+        "image_id": "sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d",
+        "running": true
+      },
+      "proxy": {
+        "image_id": "sha256:f27bfe2853c1668b82eab85e68cc7c142cc31114904e09a855d5be5f92298e7e",
+        "running": true
+      }
+    },
+    "health_http": {
+      "api": 200,
+      "scheduler": 200
+    },
+    "worker_controls": {
+      "profile": "matplobbot-render-b0baf697e84b0ca11eeedcf5",
+      "user": "appuser",
+      "read_only_root": true,
+      "cap_drop": [
+        "ALL"
+      ],
+      "memory_bytes": 2147483648,
+      "pids_limit": 256,
+      "masked_paths": [],
+      "readonly_paths": [],
+      "no_new_privileges": true,
+      "seccomp_profile_present": true
+    },
+    "actual_schema_heads": [
+      "fe4e5f607182"
+    ],
+    "support_images_match_baseline": {
+      "postgres": true,
+      "redis": true,
+      "main-site-frontend": true,
+      "caddy": true,
+      "proxy": true
+    }
+  },
+  "finalized_state": {
+    "checkout_commit": "8662f8120838c1269526ea7163299e1bd03fac0c",
+    "current_status": "successful",
+    "current_commit": "8662f8120838c1269526ea7163299e1bd03fac0c",
+    "current_schema_heads": [
+      "fe4e5f607182"
+    ],
+    "current_manifest_matches_accepted": true,
+    "accepted_manifest_sha256": "bfd83c8c398ad018b37ee9a907adb2d7293652e12a05513d4ed494b9016cb95e",
+    "pending_marker_exists": false,
+    "attempt_marker_exists": false,
+    "rollback_pending_marker_exists": false,
+    "snapshot_images": {
+      "mpb-telegram-bot": "sha256:9f0fa31ec729164f287ec320c72296bc899e8ff0ab74faca9fc6a68837a70777",
+      "mpb-fastapi-stats": "sha256:22afe8015695dd97e34191639606f77e987d0e377249fa3314bfc6eb0bd35ba6",
+      "mpb-scheduler": "sha256:4a8a76a7de4cf14dcdf9bd8f932936609398c63ff72925e11b704a765344fbdd",
+      "mpb-worker": "sha256:b35fc062e14250226bf00cd28ae8285ea878102e64f2cbdb687644af2c3de779",
+      "postgres": "sha256:09e4f20b14ddb3dfe3a0c825b206032aaf8f28300ba2070c0b60fc1c10c6abc7",
+      "redis": "sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6",
+      "main-site-frontend": "sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de",
+      "caddy": "sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d",
+      "proxy": "sha256:f27bfe2853c1668b82eab85e68cc7c142cc31114904e09a855d5be5f92298e7e"
+    },
+    "snapshot_worker_security_options": [
+      "apparmor=matplobbot-render-b0baf697e84b0ca11eeedcf5"
+    ],
+    "snapshot_record_matches_current": true,
+    "snapshot_private_configuration_matches_live": {
+      ".env": true
+    },
+    "snapshot_private_configuration_modes": {
+      ".env": "0o600"
+    }
+  },
+  "limitations": [
+    "This evidence does not certify the original Jenkins smoke orchestration; its completion signal was false green and required manual recovery.",
+    "No legacy-schema rollback compatibility is implied. The known old-runtime rollback across the schema transition remains disallowed.",
+    "Public UI and key-guard validation are separately owned and are not claimed by this report."
+  ],
+  "privacy": "Only source/image/schema hashes, selected runtime controls, status codes and fixed validation booleans are retained. No environment values, tokens, passwords, private configuration contents, raw logs, or user identifiers are included."
+}

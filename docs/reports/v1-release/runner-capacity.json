@@ -1,0 +1,21 @@
+{
+  "status": "passed",
+  "observed_at": "2026-10-10T11:50:41.458450+00:00",
+  "host": "github-runner-vm",
+  "operation": "Online ext4 growth inside already allocated LVM capacity",
+  "lv": "/dev/ubuntu-vg/ubuntu-lv",
+  "lv_before_bytes": 41871736832,
+  "lv_after_bytes": 63346573312,
+  "vg_free_before_bytes": 41875931136,
+  "vg_free_after_bytes": 20401094656,
+  "filesystem_before_bytes": 40895807488,
+  "filesystem_after_bytes": 62029570048,
+  "available_before_bytes": 9959337984,
+  "available_after_bytes": 30234300416,
+  "private_metadata_backup": "/root/matplobbot-runner-maintenance-20261010/ubuntu-vg-before-20g-growth.conf",
+  "backup_mode": "0600",
+  "proxmox_disk_changed": false,
+  "images_or_volumes_deleted": false,
+  "resize_output": "  Size of logical volume ubuntu-vg/ubuntu-lv changed from <39.00 GiB (9983 extents) to <59.00 GiB (15103 extents).\n  Logical volume ubuntu-vg/ubuntu-lv successfully resized.\nFilesystem at /dev/mapper/ubuntu--vg-ubuntu--lv is mounted on /; on-line resizing required\nold_desc_blocks = 5, new_desc_blocks = 8\nThe filesystem on /dev/mapper/ubuntu--vg-ubuntu--lv is now 15465472 (4k) blocks long.\n\n",
+  "resize_stderr": "resize2fs 1.47.0 (5-Feb-2023)\n"
+}

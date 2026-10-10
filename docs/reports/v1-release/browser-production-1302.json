@@ -1,0 +1,18 @@
+{
+  "release_commit": "1302e8b2287b008d9c0cbe1f1fae87ef9780c24f",
+  "checked_on": "2026-10-10",
+  "scope": "Read-only public browser reload after automatic Jenkins 348 acceptance; no authenticated user data or real notification sends.",
+  "checks": {
+    "schedule_pm23_1_rendered": true,
+    "russian_labels_loaded": true,
+    "dark_theme_rendered": true,
+    "captured_javascript_errors_or_warnings": 0
+  },
+  "screenshots": [
+    "screenshots/production-schedule-1302.jpg"
+  ],
+  "limitations": [
+    "This final check is a public-page reload and visual/console inspection, not a repeat of all authenticated workflows.",
+    "Authenticated account and logout-all interactions were checked separately in the local real-service UI flow."
+  ]
+}

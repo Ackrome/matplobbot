@@ -19,7 +19,7 @@ markers to be absent. The completion line contains that verified commit. Jenkins
 requires the exact line independently of SSH's exit status.
 
 Dependencies: Bash, Docker Compose, curl, Python 3, sed, grep, mktemp and the deployed
-application. Side effects: synthetic administrator login, authenticated health
+application. Side effects: deployment-administrator login, authenticated health
 requests and finalizing the release pointer after positive checks. It does not
 deploy images or migrate schemas. Run only for the authorized candidate release.
 

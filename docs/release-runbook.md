@@ -87,6 +87,11 @@ smoke checks and invokes `bash deploy.sh --finalize`. Only finalize advances
 successful pointer intact. Previous source, configuration and runtime image IDs are
 retained. Production deployment does not prune images.
 
+The first deployment of durable session revocation rejects older JWTs that lack
+the required token ID and account-version claims. Existing website users must
+sign in again once; their accounts, projects and subscriptions remain stored.
+Preserving the signing key does not exempt legacy tokens from the new checks.
+
 Preparation requires five healthy existing support services: PostgreSQL, Redis,
 Caddy, frontend nginx and proxy. Their observed runtime image IDs are frozen into
 the deployment override. Deployment uses `--no-build --pull never`; no mutable
@@ -129,9 +134,9 @@ it does not start delivery services or send user notifications.
 
 ## Rollback
 
-Run `bash deploy.sh --rollback` after reviewing the recorded state. After a failed
-deployment it targets the last successful release; after a completed release it
-targets the preceding one. It restores that source, private configuration and saved
+Review the recorded state and preserve the smoke helper below before invoking
+rollback. After a failed deployment it targets the last successful release; after
+a completed release it targets the preceding one. It restores that source, private configuration and saved
 image IDs without pulling/building, running migrations or deleting data volumes.
 It refuses a different database head. Only after an explicit old-code/schema
 compatibility review may an operator supply `--compatible-schema <current-head>`.
@@ -150,9 +155,65 @@ invalidation, while preserving the matching mail-encryption keys. Do not resume
 a forward rollout after legacy operation against the new schema without resolving
 the notification baseline and testing that recovery path.
 The collision-safe admin bootstrap resynchronizes the restored smoke credentials.
-Run the same authenticated post-deploy smoke checks, then `bash deploy.sh --finalize`
-to record a successful rollback. If the restored legacy checkout has no manifest
-tools, invoke the retained helper instead:
+For a successful managed target, retain the reviewed current `release_smoke.sh`
+**before** rollback changes the checkout. Accepted `8662f8120838c1269526ea7163299e1bd03fac0c`
+predates that tracked shell file, but its `deploy.sh --finalize` and four Python
+recovery helpers support this procedure. Review the target selected from
+`current.json` when `attempt.json` exists, otherwise `previous.json`; never derive
+the rollback target from `accepted.json`, which may still describe the newer candidate.
+Run the following as `deploy` from the application checkout. Set `TARGET_SHA`
+explicitly to the reviewed successful target; the commented `8662` value is an
+example, not a command to select whichever release happens to be available.
+
+```bash
+set -euo pipefail
+umask 077
+# Example only, after reviewing the recorded rollback target:
+# export TARGET_SHA=8662f8120838c1269526ea7163299e1bd03fac0c
+: "${TARGET_SHA:?Set TARGET_SHA to the reviewed full accepted rollback commit}"
+printf '%s' "$TARGET_SHA" | grep -Eq '^[0-9a-f]{40}$'
+
+TARGET_SHA="$TARGET_SHA" python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+state = Path(".release-state")
+name = "current.json" if (state / "attempt.json").exists() else "previous.json"
+target = json.loads((state / name).read_text(encoding="utf-8"))
+if (
+    target.get("legacy")
+    or target.get("status") != "successful"
+    or target.get("manifest", {}).get("commit") != os.environ["TARGET_SHA"]
+):
+    raise SystemExit("Recorded rollback target is not the expected accepted release")
+PY
+
+git diff --quiet HEAD -- scripts/release_smoke.sh
+REVIEWED_SOURCE_SHA="$(git rev-parse --verify HEAD)"
+printf '%s' "$REVIEWED_SOURCE_SHA" | grep -Eq '^[0-9a-f]{40}$'
+install -d -m 700 .release-state/recovery-tools
+SMOKE_COPY=".release-state/recovery-tools/release_smoke-${REVIEWED_SOURCE_SHA}.sh"
+cp -- scripts/release_smoke.sh "$SMOKE_COPY"
+chmod 600 "$SMOKE_COPY"
+cmp -s scripts/release_smoke.sh "$SMOKE_COPY"
+bash -n "$SMOKE_COPY"
+
+python3 .release-state/recovery-tools/release_deploy.py rollback </dev/null
+SMOKE_LOG="$(mktemp .release-state/rollback-smoke.XXXXXX.log)"
+bash "$SMOKE_COPY" "$TARGET_SHA" </dev/null | tee "$SMOKE_LOG"
+grep -Fxq "Release smoke and finalization completed: $TARGET_SHA" "$SMOKE_LOG"
+```
+
+The retained script runs positive health, administrator login, authenticated REST
+and WebSocket, and anonymous-access checks. It then finalizes and verifies the
+successful target pointer and absence of pending markers. Do not finalize again.
+Keep `pipefail`, closed stdin and the exact completion-marker check. This recipe
+does not accept `observed-legacy` records or override schema compatibility.
+
+If a separately reviewed compatible legacy recovery has no manifest tools in its
+restored checkout, the four retained Python helpers remain available. Run its
+reviewed authenticated smoke procedure before finalizing with the retained helper:
 
 ```bash
 python3 .release-state/recovery-tools/release_deploy.py rollback

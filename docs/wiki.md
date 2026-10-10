@@ -2589,3 +2589,49 @@ the script verifies the successful release pointer matches the accepted commit
 and no pending state remains. Jenkins independently requires the exact completion
 line. Runtime regressions reproduce stdin drain and reject missing completion,
 wrong commit and pending-state scenarios; the same tests pass as the Jenkins user.
+
+### Release evidence and host capacity (2026-10-10)
+
+The dated evidence index is `docs/reports/v1-release/README.md`. It separates
+local development checks, exact-image CI acceptance, production-snapshot restore,
+synthetic delivery load and actual production verification. The final source
+`1302e8b2287b008d9c0cbe1f1fae87ef9780c24f` passed 679 regression tests with 9
+platform/optional skips and 52.45% application coverage in GitHub Actions. The
+real Ubuntu image gate separately exercises the Linux-only sandbox behavior.
+Both README languages link to the release/recovery runbook and dated evidence.
+
+The first CI build of that source exhausted the runner filesystem before RC or
+deployment. Its existing 80 GiB virtual disk had unused LVM extents; the root LV
+and mounted ext4 filesystem were expanded from 39 to 59 GiB after exact-size
+checks and a private LVM metadata backup. Available space became 28.16 GiB,
+with 19 GiB left in the volume group. Images, builder containers and volumes
+were preserved; the same source's failed jobs were retried. The metadata backup
+does not replace a filesystem-data backup. See the runner capacity reports.
+
+Production image-cache maintenance removed thirteen exact obsolete worker
+images with verified immutable registry recovery references, retaining all
+container/release references and data volumes. Actual free space increased by
+8.91 GiB to 10.40 GiB. The final Docker client timed out during garbage collection;
+subsequent read-only checks confirmed all selected images/snapshots were removed
+and all protected objects remained. This was a completed cache operation with
+a client timeout, not an unqualified error-free command run.
+
+The final application source `1302e8b2287b008d9c0cbe1f1fae87ef9780c24f` was
+accepted by GitHub Actions run `38048719980`, attempt 2: all twelve real-image
+check groups passed, including restoration and fingerprint checks for 23 tables
+in 15.92 seconds. Jenkins 348 then automatically completed all six production
+smoke checks, including authenticated requests, emitted the expected completion marker, and
+finalized that source. Independent verification passed 27 runtime/release-state
+checks. All four application images matched the accepted digests, all five support
+images were preserved, and the actual database head was `fe4e5f607182`.
+
+The new API container retained both original signing and mail-encryption keys;
+only presence/equality booleans are recorded in the repository. No attempt,
+pending or rollback marker remained. The previous successful managed `8662`
+release has the same schema, with source, private configuration, security policy
+and all nine image IDs retained for recovery. Before returning to it, preserve
+the current smoke shell as described in `docs/release-runbook.md`, because that
+older checkout predates the tracked shell file. No live rollback was performed.
+The final production filesystem had about 9.15 GiB available; public schedule
+rendering and browser-console checks passed after reload. The dated reports
+retain the earlier Jenkins 347 false-green/manual recovery as historical evidence.

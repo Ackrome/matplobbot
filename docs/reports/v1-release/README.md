@@ -3,11 +3,35 @@
 These reports distinguish development checks from accepted immutable release evidence.
 The local RC uses working-tree images and cannot be used as a deployment manifest.
 
+The final application release is `1302e8b2287b008d9c0cbe1f1fae87ef9780c24f`.
+[GitHub Actions attempt 2](https://github.com/Ackrome/matplobbot/actions/runs/38048719980)
+passed, and [Jenkins 348](http://jenkins-vm.panthera-banjo.ts.net:8080/job/matplobbot-deploy/348/)
+automatically ran all six production smoke checks and finalized that exact commit.
+Independent verification passed all 27 release-state/runtime checks; both signing
+and mail-encryption keys remained present and unchanged. Production had 9.15 GiB
+free after deployment. Later documentation-only commits do not change this accepted
+application identity.
+
+Existing website users need to sign in again once: tokens issued before the new
+durable session-revocation contract lack its required claims. Accounts, projects
+and subscriptions remain stored.
+
 The self-hosted CI runner's inactive September 4 Buildx cache was removed after
 fresh checks found no container, process mount or open-file references. Free space
 increased by 11,774,816,256 bytes to 12,786,122,752 bytes; all nine images and the
 running builder were preserved. This was CI cache maintenance, not release
 acceptance: [runner-cache-reclaim.json](runner-cache-reclaim.json).
+
+The later `1302e8b` worker build exhausted the runner's filesystem before RC or
+deployment; the runner could not write its diagnostic log. The existing 80 GiB
+virtual disk had a 39 GiB root LV and about 39 GiB unallocated inside its volume
+group. After a metadata backup and exact-size checks, the mounted ext4 filesystem
+and LV were grown by 20 GiB to 59 GiB, retaining 19 GiB of VG reserve. Available
+space became 28.16 GiB; all images, builder containers and volumes were preserved.
+See the [failed attempt](runner-disk-failure-1302.json),
+[capacity change](runner-capacity.json) and
+[independent verification](runner-capacity-verification.json). LVM metadata is
+not a filesystem-data backup. The failed jobs were retried for the same source.
 
 The agreed ten release-readiness items are implemented as follows:
 
@@ -37,11 +61,16 @@ The agreed ten release-readiness items are implemented as follows:
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Application regression suite | 677 tests, 9 platform/optional skips; passed | Root project `.venv`, `coverage run --branch -m unittest discover -s tests -v` |
+| Application regression suite | 679 tests, 9 platform/optional skips; passed | Root project `.venv`, `coverage run --branch -m unittest discover -s tests -v` |
 | Application-only coverage | 52.62%, including unimported modules | `bot`, `fastapi_stats_app`, `scheduler_app`, `shared_lib`; floor 50% |
+| Final-source GitHub validation | 679 tests, 9 skips; 52.45% coverage; types and dependency audit passed | [CI run 38048719980](https://github.com/Ackrome/matplobbot/actions/runs/38048719980), source `1302e8b2287b008d9c0cbe1f1fae87ef9780c24f`; successful validation from attempt 1 is retained in attempt 2 |
 | Actual Jenkins-user quality replay | 677 tests, 9 skips; 52.52% coverage; pinned Node 24.21.0 verified | [jenkins-node-gate.json](jenkins-node-gate.json); isolated source diagnostic, not a deployment |
 | CI critical Ruff / mypy | Passed / all 6 configured files passed | Same commands as CI |
 | Locked dependency audit | 46 packages, no known vulnerabilities reported | CI `pip_audit --strict`, existing narrow joblib exception retained |
+| Immutable final-image RC | All 12 check groups passed; all 23 tables restored in 15.92 seconds | [Accepted manifest](release-manifest-accepted.json), [RC report](rc-acceptance-ci.json); exact source `1302e8b2287b008d9c0cbe1f1fae87ef9780c24f` |
+| Automatic production acceptance | Jenkins 348: six smoke checks, exact completion marker, successful finalization; 27 independent checks passed | [Production release report](production-release-1302.json) |
+| Production key continuity | New accepted API container; signing and mail-encryption keys present and unchanged | [Security report](production-release-security-1302.json); private values and fingerprints stay on the server |
+| Retained managed rollback target | Successful `8662`, same schema, saved source/configuration/policies and all nine images available | [Production release report](production-release-1302.json); no live rollback was performed |
 | Real local service RC | Passed | [rc-acceptance-local.json](rc-acceptance-local.json) |
 | Ubuntu runner service RC diagnostic | Passed, including 23-table restore and cleanup | [rc-ubuntu-diagnostic-40b.json](rc-ubuntu-diagnostic-40b.json) |
 | Ubuntu runner sandbox compatibility | 11 distinct tests passed, including all six render formats and outer/inner kernel-access restrictions | [worker-host-sandbox.json](worker-host-sandbox.json); published `40b1606` worker with updated host policy, not final release acceptance |
@@ -49,8 +78,11 @@ The agreed ten release-readiness items are implemented as follows:
 | Migration of restored production data | Passed; all original rows preserved | [production-migration.json](production-migration.json) |
 | Isolated real rollback | Source, private configuration, all 9 runtime image IDs, old admin login and schema verified | [rollback-local.json](rollback-local.json) |
 | Read-only live preflight | No pending/processing rows; 19 historical terminal failures | [production-preflight.json](production-preflight.json) |
+| Production worker cache maintenance | 13 obsolete images removed; 9,569,153,024 bytes reclaimed; 10.40 GiB available afterward | [Exact targets and preservation checks](production-worker-cache-reclaim.json) |
 | Offline delivery grouping/load | 1,000 recipients, no duplicate sends | [normal](delivery-load-normal.json), [degraded](delivery-load-degraded.json) |
 | Account UI | Desktop/mobile RU; mobile EN/dark; actual logout-all confirmed | [screenshots](screenshots/) |
+| Public production UI at bootstrap | Schedule, lesson details, discipline assessment and complete cached semester rendered without observed JavaScript errors | [Browser report](browser-production-8662.json); accepted `8662` before the later Jenkins-only correction |
+| Public UI after final deployment | Reloaded schedule rendered; no captured JavaScript warnings or errors | [Browser report](browser-production-1302.json) |
 
 The local RC uses real PostgreSQL, Redis, HTTP API, Celery, renderer executables and
 scheduler delivery code. Only external Telegram and RUZ boundaries use synthetic
@@ -79,10 +111,27 @@ app-vm. No bot, API or scheduler was started with those real data; PostgreSQL ha
 external network. Dumps, row-witness metadata and environment secrets remain outside
 this repository. The migration report contains aggregate verification only.
 
+Jenkins 347 exposed a false green in its streamed smoke shell: the first Docker
+exec command consumed the remaining script from stdin. The application was
+running, but the successful-release pointer correctly remained unchanged. The
+exact smoke body was executed from a saved file with closed stdin; all six smoke
+checks and finalization passed. This manual recovery is recorded explicitly in
+[production-bootstrap-8662.json](production-bootstrap-8662.json); key continuity
+is recorded as booleans in [production-bootstrap-keys.json](production-bootstrap-keys.json).
+The durable fix uses a tracked script, verifies successful state for the expected
+SHA, and makes Jenkins require its explicit completion marker. The old failure
+and repaired path are covered by [smoke-stdin-regression.json](smoke-stdin-regression.json).
+
 The synthetic load runs continuously drain batches: their elapsed times are not
 production latency or maximum supported audience. They exclude the minute scheduler
-cadence, upstream rate limits and production host contention. The live preflight's
-2.8 GiB free disk is a rollout headroom concern, not evidence of a current outage.
+cadence, upstream rate limits and production host contention. The initial live
+preflight had only 2.8 GiB free disk. After the first accepted rollout, thirteen
+unreferenced worker image cache entries were removed using exact IDs with verified
+immutable registry recovery references. All sixty other images, ten containers
+and all volumes were preserved. The last Docker client timed out during garbage
+collection; no deletion was retried, and subsequent read-only checks verified all
+thirteen targets and their exclusive snapshots were gone. Actual free space grew
+by 8.91 GiB to 10.40 GiB; see the cache report for the measured byte counts.
 
 Final release acceptance belongs to the CI-generated manifest for the exact commit
 and four image digests. Deployment freezes the existing observed support-container
