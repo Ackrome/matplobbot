@@ -353,6 +353,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Set up RC Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
       - name: Maintenance Cleanup
         run: |
           docker image prune -af --filter "until=168h"

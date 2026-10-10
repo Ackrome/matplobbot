@@ -2501,3 +2501,11 @@ targets to the declared unique columns on copied statements, rejects unknown
 targets, and checks that the original PostgreSQL statement remains unchanged.
 The failure was reproduced using the pinned SQLAlchemy 2.0.35; local validation
 had drifted to 2.0.48. The project environment was returned to the repository pin.
+
+The next CI attempt (`76fe377`, run `38039862764`) built all four images but
+stopped before RC tests because the self-hosted runner's system Python lacked
+`ensurepip`. The image-build job now selects Python 3.11 using
+`actions/setup-python@v6` before creating the RC virtual environment. This matches
+the validation runtime and removes the implicit host `python3-venv` dependency;
+the runner's system packages are unchanged. An image build alone is not release
+acceptance, so this failed attempt did not trigger Jenkins.
