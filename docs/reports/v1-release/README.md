@@ -37,8 +37,9 @@ The agreed ten release-readiness items are implemented as follows:
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Application regression suite | 671 tests, 9 platform/optional skips; passed | Root project `.venv`, `coverage run --branch -m unittest discover -s tests -v` |
+| Application regression suite | 677 tests, 9 platform/optional skips; passed | Root project `.venv`, `coverage run --branch -m unittest discover -s tests -v` |
 | Application-only coverage | 52.62%, including unimported modules | `bot`, `fastapi_stats_app`, `scheduler_app`, `shared_lib`; floor 50% |
+| Actual Jenkins-user quality replay | 677 tests, 9 skips; 52.52% coverage; pinned Node 24.21.0 verified | [jenkins-node-gate.json](jenkins-node-gate.json); isolated source diagnostic, not a deployment |
 | CI critical Ruff / mypy | Passed / all 6 configured files passed | Same commands as CI |
 | Locked dependency audit | 46 packages, no known vulnerabilities reported | CI `pip_audit --strict`, existing narrow joblib exception retained |
 | Real local service RC | Passed | [rc-acceptance-local.json](rc-acceptance-local.json) |

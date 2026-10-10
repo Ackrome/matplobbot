@@ -1,0 +1,36 @@
+{
+  "status": "passed",
+  "observed_at": "2026-10-10T10:49:46Z",
+  "scope": "Exact pre-deploy quality shell replay in an isolated checkout as the real Jenkins user; no Jenkins build or production deployment triggered.",
+  "source_base_commit": "8576072160eacaecc2768291c27f6edf7314452a",
+  "modified_source_diagnostic": true,
+  "host": "jenkins-vm",
+  "account": "jenkins",
+  "python": "3.12.3",
+  "node": "v24.21.0",
+  "os_arch": "linux-x64",
+  "node_archive_sha256": "fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6",
+  "bootstrap_cold_download_verified": true,
+  "bootstrap_cache_hit_verified": true,
+  "fresh_virtualenv": true,
+  "quality_gate_exit_code": 0,
+  "tests": 677,
+  "skipped": 9,
+  "test_seconds": 23.075,
+  "application_coverage_percent": 52.52,
+  "critical_ruff": "passed",
+  "dependency_audit_packages": 46,
+  "dependency_audit": "no known vulnerabilities",
+  "source_sha256": {
+    "scripts/jenkins_node.py": "5eae52d46de9763b3ffad9d0f8d13867168eda255e223c512eea25f6ade2b758",
+    "scripts/node_runtime.json": "b5b8a3c0e544056e74b6ba793b174d3c0f23d69ba7f5d257ab5d8e09850d95a7",
+    "Jenkinsfile.groovy": "07e09a38fbe35cbfbbbddf7a09fb8aeff56288a2a99ad8c8626326dc777c3662",
+    ".github/workflows/ci-cd.yml": "1a346abdc11ca3122cdb5a1f476c57cc5ccd568ac581d21ae0d2f72b38e91131",
+    "tests/test_jenkins_node.py": "d863a2d92dc664e52c7d384541c7af73ed37172202678a32c3aa22be1291f713"
+  },
+  "evidence_log": "Jenkins host /tmp/matplobbot-node-quality-stdout.log; contains synthetic tests only",
+  "limits": [
+    "Diagnostic source is not a release attestation; final committed SHA must pass GitHub CI and Jenkins.",
+    "Only Node binary is provisioned; npm is not part of this validation runtime."
+  ]
+}

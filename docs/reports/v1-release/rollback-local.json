@@ -1,8 +1,8 @@
 {
   "status": "passed",
   "scope": "isolated local working-tree rollback proof; not production release attestation",
-  "started_at": "2026-10-10T10:15:10.987241+00:00",
-  "project": "mpb-rollback-drill-31343ce8a4eb",
+  "started_at": "2026-10-10T10:52:33.723149+00:00",
+  "project": "mpb-rollback-drill-fb0ab47be70e",
   "external_provider_requests": 0,
   "limitations": [
     "Same current schema for baseline/candidate; no schema downgrade or backup restoration",
@@ -12,13 +12,13 @@
     "release_deploy.py": "7e7058031c35848376c383583c6d58cef3bc840fd64dcab1b2fbc8222131772f",
     "release_manifest.py": "5865bd349541bd7ceee5e3a9c0c9cb775a21e1070cc4f6af4d9edb0088c754b1",
     "release_backup.py": "93ce257c33ecf8f853f10f7ce7fba9fd42fc7013ed419daf9fada80d027d4d35",
-    "worker_security.py": "5ec19889cf628f0d14beff4b7de95b79bd63c982f3db8d3a32264e3131a7d17e"
+    "worker_security.py": "c666d30e0ec79c6c63145d8720a769662fdfeabdfea3c18690952b90fb421d66"
   },
   "schema_heads": [
     "fe4e5f607182"
   ],
-  "baseline_fixture_commit": "de045cd62fab1e91f9f6163d55c775287d58c10c",
-  "candidate_fixture_commit": "328178f3f0316ddd46d8e2a994e34525c4aa8019",
+  "baseline_fixture_commit": "812b7434757adcef028e8e829291c1a65ec16c2a",
+  "candidate_fixture_commit": "1b6df61324ebacb74c6dc0d8af2bf0c15f9da64a",
   "baseline_runtime_images": {
     "caddy": "sha256:529d2d94802393d71fae00320f336a1328731d2f5fc88f3cbca52fc6477eae38",
     "main-site-frontend": "sha256:529d2d94802393d71fae00320f336a1328731d2f5fc88f3cbca52fc6477eae38",
@@ -30,7 +30,7 @@
     "proxy": "sha256:529d2d94802393d71fae00320f336a1328731d2f5fc88f3cbca52fc6477eae38",
     "redis": "sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99"
   },
-  "candidate_api_image": "sha256:03e424b5288c43dbfe1991a8ba03886d38f1e03ac2610e113c1193906994db85",
+  "candidate_api_image": "sha256:beacad58058c16bff567a3cd10871be44d2811f8fe287a728ceb9902c894e21e",
   "checks": {
     "internal_network": true,
     "no_host_ports": true,
@@ -47,5 +47,5 @@
     "finalize_advances_after_smoke": true
   },
   "cleanup_verified": true,
-  "finished_at": "2026-10-10T10:15:50.433250+00:00"
+  "finished_at": "2026-10-10T10:53:10.866813+00:00"
 }

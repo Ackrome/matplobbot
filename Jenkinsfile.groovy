@@ -116,8 +116,11 @@ PY
                         export BOT_TOKEN="123456:test-token"
                         export ADMIN_USER_IDS=""
 
+                        NODE_BIN_DIR="$(python scripts/jenkins_node.py)"
+                        export PATH="$NODE_BIN_DIR:$PATH"
+                        unset NODE_OPTIONS NODE_PATH
+                        node --version
                         set +e
-                        command -v node >/dev/null || { echo "ERROR: Node 20+ is required for frontend regressions."; exit 1; }
                         coverage run --branch -m unittest discover -s tests -v 2>&1 | tee unittest_output.log
                         test_status="${PIPESTATUS[0]}"
                         set -e

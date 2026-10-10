@@ -2566,3 +2566,14 @@ Restore and RC now require a successful `SELECT 1` over TCP loopback; the regula
 Compose and rollback-drill healthchecks also use TCP, which the temporary setup
 server does not expose. Delayed database initialization is covered by a regression
 that prevents loading the dump before the target query succeeds.
+
+### Reproducible Node runtime for Jenkins
+
+Jenkins build 346 correctly stopped before production because its host lacked
+Node. The quality gate now uses `scripts/jenkins_node.py` and the checked-in
+`scripts/node_runtime.json` pin for official Node 24.21.0 LTS. GitHub Actions uses
+the same exact version. The Jenkins user downloads a SHA-256-verified archive into
+a private cache outside the checkout, extracts only the regular Node executable,
+verifies its version/platform, then prepends its bin directory only within the
+quality shell. There is no global host package installation. Tests cover checksum,
+cache corruption, archive symlink, host/runtime mismatch and gate-pin consistency.
