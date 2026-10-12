@@ -86,6 +86,8 @@ required_modules = [
     "fastapi",
     "fastapi.testclient",
     "passlib",
+    "pip_audit",
+    "requests",
     "sqlalchemy",
     "yaml",
 ]
@@ -106,11 +108,7 @@ PY
                         ruff check . --select E9,F63,F7,F82
 
                         python scripts/build_audit_requirements.py
-                        # PYSEC-2024-277 is a disputed joblib deserialization advisory with no fixed
-                        # release as of 2026-05-20. It is pulled transitively by matplobblib via
-                        # scikit-learn, and this project does not load untrusted joblib pickle files.
-                        python -m pip_audit --strict -r audit-requirements.txt \
-                          --ignore-vuln PYSEC-2024-277
+                        timeout --kill-after=10s 20m python scripts/run_dependency_audit.py
 
                         export JWT_SECRET_KEY="jenkins-test-secret"
                         export BOT_TOKEN="123456:test-token"

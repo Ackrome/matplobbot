@@ -1872,6 +1872,7 @@ Source:
 - `.github/workflows/dependency-audit.yml`
 - `Jenkinsfile.groovy`
 - `scripts/build_audit_requirements.py`
+- `scripts/run_dependency_audit.py`
 - `setup.py`
 
 What it does:
@@ -1886,15 +1887,16 @@ What it does:
 - Pins `python-multipart` to `0.0.31` for multipart parser DoS fixes.
 - Pins `setuptools` to `83.0.0`, `cryptography` to `50.0.0` and `weasyprint` to `70.0` in the root requirements lock for the current audit gate. The cryptography minimum is also enforced in `setup.py`; do not restore the vulnerable 46.x upper bound. Security fixes must pass the unchanged strict audit before deployment.
 - Uses `scripts/build_audit_requirements.py` to build the same filtered `audit-requirements.txt` in GitHub Actions, Jenkins, and local checks. The builder excludes editable installs and the local `matplobbot-shared` package, deduplicates matching pins, and fails on conflicting pins.
-- Keeps GitHub Actions and Jenkins `python -m pip_audit --strict` green with a documented ignore for `PYSEC-2024-277` only. That finding is a disputed, no-fixed-version `joblib` advisory pulled transitively by `matplobblib` via scikit-learn; this project does not load untrusted joblib pickle files.
+- Uses `scripts/run_dependency_audit.py` in all three gates. It runs `pip-audit --strict` with a 60-second socket timeout and up to three attempts (5/10-second waits) only for typed transient network failures, including HTTP 429/500/502/503/504. TLS failures, findings, strict collection failures and unknown errors still fail immediately; exhausted network retries also fail. GitHub steps and the Jenkins audit command have a 20-minute overall deadline.
+- Retains the sole documented ignore for `PYSEC-2024-277` in the shared runner. That finding is a disputed, no-fixed-version `joblib` advisory pulled transitively by `matplobblib` via scikit-learn; this project does not load untrusted joblib pickle files.
 - Runs a separate scheduled Dependency Audit workflow every day at `03:17 UTC`, so new advisories that appear after the last dependency change still fail CI.
 
 How to use:
 
 1. If CI reports a new dependency advisory, update the minimum safe version in `requirements.in`.
 2. Refresh the lock in `requirements.txt` and update service-specific pins such as `fastapi_stats_app/requirements.txt`.
-3. Run `python scripts/build_audit_requirements.py` and then `python -m pip_audit --strict -r audit-requirements.txt --ignore-vuln PYSEC-2024-277` locally before merging dependency changes.
-4. Use `--ignore-vuln` only for advisories with no fixed release or a verified non-applicable code path, and document the reason next to every CI/Jenkins command that carries the ignore.
+3. Run `python scripts/build_audit_requirements.py` and then `python scripts/run_dependency_audit.py` locally before merging dependency changes.
+4. Use `--ignore-vuln` only for advisories with no fixed release or a verified non-applicable code path, and document the reason in the shared runner. A Requests/PyPI traceback is not a vulnerability finding; do not change dependency versions or ignores merely to hide a network failure.
 5. Keep `setup.py` aligned for editable/local installs so dev and CI environments do not drift.
 
 ### Production Frontend Proxy Startup
