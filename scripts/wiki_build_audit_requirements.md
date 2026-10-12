@@ -18,6 +18,9 @@ python scripts/build_audit_requirements.py -o audit-requirements.txt
 python scripts/build_audit_requirements.py -r requirements.txt -r scheduler_app/requirements.txt
 ```
 
+Run the resulting file through `python scripts/run_dependency_audit.py`, the shared
+strict gate with bounded network retries used by GitHub Actions and Jenkins.
+
 ## Dependencies
 
 Only Python standard library modules are used: `argparse`, `pathlib`, and `sys`.

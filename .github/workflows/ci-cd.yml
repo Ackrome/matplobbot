@@ -225,13 +225,10 @@ jobs:
             --allow-untyped-defs \
             --allow-incomplete-defs
       - name: Dependency security audit
+        timeout-minutes: 20
         run: |
           python scripts/build_audit_requirements.py
-          # PYSEC-2024-277 is a disputed joblib deserialization advisory with no fixed
-          # release as of 2026-05-20. It is pulled transitively by matplobblib via
-          # scikit-learn, and this project does not load untrusted joblib pickle files.
-          python -m pip_audit --strict -r audit-requirements.txt \
-            --ignore-vuln PYSEC-2024-277
+          python scripts/run_dependency_audit.py
 
   # 3. Auto-Versioning
   auto-version-patch:
