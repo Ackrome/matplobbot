@@ -1,0 +1,25 @@
+name: RSI Jenkins job bootstrap
+on:
+  push:
+    branches: [codex/rsi-cd-bootstrap2-20261027]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  create-job:
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Create isolated RSI Jenkins job
+        env:
+          JENKINS_USER: ${{ secrets.JENKINS_USER }}
+          JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' 'PD94bWwgdmVyc2lvbj0iMS4xIiBlbmNvZGluZz0iVVRGLTgiPz4KPGZsb3ctZGVmaW5pdGlvbiBwbHVnaW49IndvcmtmbG93LWpvYkAxNDAwLnY3ZmQxMTFiX2VjODJmMCI+PGFjdGlvbnMvPjxkZXNjcmlwdGlvbj5SU0lfdGdib3QgaW1tdXRhYmxlIGRlcGxveTsgc2VwYXJhdGUgZnJvbSBtYXRwbG9iYm90LWRlcGxveS48L2Rlc2NyaXB0aW9uPjxrZWVwRGVwZW5kZW5jaWVzPmZhbHNlPC9rZWVwRGVwZW5kZW5jaWVzPjxwcm9wZXJ0aWVzPjxodWRzb24ubW9kZWwuUGFyYW1ldGVyc0RlZmluaXRpb25Qcm9wZXJ0eT48cGFyYW1ldGVyRGVmaW5pdGlvbnM+PGh1ZHNvbi5tb2RlbC5TdHJpbmdQYXJhbWV0ZXJEZWZpbml0aW9uPjxuYW1lPlNPVVJDRV9DT01NSVQ8L25hbWU+PGRlc2NyaXB0aW9uPkZ1bGwgYWNjZXB0ZWQgR2l0IFNIQS48L2Rlc2NyaXB0aW9uPjxkZWZhdWx0VmFsdWU+PC9kZWZhdWx0VmFsdWU+PHRyaW0+dHJ1ZTwvdHJpbT48L2h1ZHNvbi5tb2RlbC5TdHJpbmdQYXJhbWV0ZXJEZWZpbml0aW9uPjxodWRzb24ubW9kZWwuVGV4dFBhcmFtZXRlckRlZmluaXRpb24+PG5hbWU+UkVMRUFTRV9NQU5JRkVTVF9CNjQ8L25hbWU+PGRlc2NyaXB0aW9uPkJhc2U2NCBhY2NlcHRlZCBtYW5pZmVzdC48L2Rlc2NyaXB0aW9uPjxkZWZhdWx0VmFsdWU+PC9kZWZhdWx0VmFsdWU+PC9odWRzb24ubW9kZWwuVGV4dFBhcmFtZXRlckRlZmluaXRpb24+PC9wYXJhbWV0ZXJEZWZpbml0aW9ucz48L2h1ZHNvbi5tb2RlbC5QYXJhbWV0ZXJzRGVmaW5pdGlvblByb3BlcnR5PjwvcHJvcGVydGllcz48ZGVmaW5pdGlvbiBjbGFzcz0ib3JnLmplbmtpbnNjaS5wbHVnaW5zLndvcmtmbG93LmNwcy5DcHNTY21GbG93RGVmaW5pdGlvbiIgcGx1Z2luPSJ3b3JrZmxvdy1jcHNANDM3MC52NDlhXzY5Mzc1NjZiXzYiPjxzY20gY2xhc3M9Imh1ZHNvbi5wbHVnaW5zLmdpdC5HaXRTQ00iIHBsdWdpbj0iZ2l0QDUuMTAuMSI+PGNvbmZpZ1ZlcnNpb24+MjwvY29uZmlnVmVyc2lvbj48dXNlclJlbW90ZUNvbmZpZ3M+PGh1ZHNvbi5wbHVnaW5zLmdpdC5Vc2VyUmVtb3RlQ29uZmlnPjx1cmw+aHR0cHM6Ly9naXRodWIuY29tL0Fja3JvbWUvUlNJX3RnYm90LmdpdDwvdXJsPjxjcmVkZW50aWFsc0lkPmdpdGh1Yi1zY20tdG9rZW48L2NyZWRlbnRpYWxzSWQ+PC9odWRzb24ucGx1Z2lucy5naXQuVXNlclJlbW90ZUNvbmZpZz48L3VzZXJSZW1vdGVDb25maWdzPjxicmFuY2hlcz48aHVkc29uLnBsdWdpbnMuZ2l0LkJyYW5jaFNwZWM+PG5hbWU+JHtTT1VSQ0VfQ09NTUlUfTwvbmFtZT48L2h1ZHNvbi5wbHVnaW5zLmdpdC5CcmFuY2hTcGVjPjwvYnJhbmNoZXM+PGRvR2VuZXJhdGVTdWJtb2R1bGVDb25maWd1cmF0aW9ucz5mYWxzZTwvZG9HZW5lcmF0ZVN1Ym1vZHVsZUNvbmZpZ3VyYXRpb25zPjxzdWJtb2R1bGVDZmcgY2xhc3M9ImVtcHR5LWxpc3QiLz48ZXh0ZW5zaW9ucy8+PC9zY20+PHNjcmlwdFBhdGg+SmVua2luc2ZpbGUuZ3Jvb3Z5PC9zY3JpcHRQYXRoPjxsaWdodHdlaWdodD5mYWxzZTwvbGlnaHR3ZWlnaHQ+PC9kZWZpbml0aW9uPjx0cmlnZ2Vycy8+PGRpc2FibGVkPmZhbHNlPC9kaXNhYmxlZD48L2Zsb3ctZGVmaW5pdGlvbj4=' | base64 -d > job.xml
+          auth="$JENKINS_USER:$JENKINS_TOKEN"
+          status=$(curl --noproxy '*' -sS -o /dev/null -w '%{http_code}' --user "$auth" http://192.168.1.130:8080/job/rsi-tgbot-deploy/api/json || true)
+          if [ "$status" = 200 ]; then echo 'rsi-tgbot-deploy already exists; refusing to replace it'; exit 0; fi
+          test "$status" = 404
+          curl --noproxy '*' --fail-with-body -sS --user "$auth" -H 'Content-Type: application/xml' --data-binary @job.xml 'http://192.168.1.130:8080/createItem?name=rsi-tgbot-deploy'
+          echo 'RSI Jenkins job created; no deployment was queued'
