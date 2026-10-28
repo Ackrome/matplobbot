@@ -242,6 +242,18 @@ class TestAuditProviderParity(unittest.TestCase):
         self.assertEqual(pipeline.count(command), 1)
         self.assertNotIn("-m pip_audit", pipeline)
 
+    def test_jenkins_skips_duplicate_audit_only_for_code_only_release(self) -> None:
+        pipeline = (ROOT / "Jenkinsfile.groovy").read_text(encoding="utf-8")
+        self.assertIn('SOURCE_PARENT="$(git rev-parse "${SOURCE_COMMIT}^1")"', pipeline)
+        self.assertIn("DEPENDENCY_PATHS=", pipeline)
+        self.assertIn("git diff --quiet \"$SOURCE_PARENT\" \"$SOURCE_COMMIT\"", pipeline)
+        self.assertIn(
+            "Dependency inputs unchanged in accepted source; skipping duplicate Jenkins audit.",
+            pipeline,
+        )
+        self.assertIn("python scripts/build_audit_requirements.py", pipeline)
+        self.assertIn("timeout --kill-after=10s 20m python scripts/run_dependency_audit.py", pipeline)
+
 
 if __name__ == "__main__":
     unittest.main()

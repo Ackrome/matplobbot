@@ -87,6 +87,13 @@ smoke checks and invokes `bash deploy.sh --finalize`. Only finalize advances
 successful pointer intact. Previous source, configuration and runtime image IDs are
 retained. Production deployment does not prune images.
 
+The Jenkins quality gate repeats `pip-audit` when the accepted commit changes
+dependency, packaging, Dockerfile, or audit-builder inputs. For an application-only
+commit it records that the duplicate scan was skipped; GitHub Actions has already
+audited that exact accepted source, while the scheduled dependency workflow continues
+to scan the full dependency graph independently. This keeps a new advisory from
+blocking an unrelated release without weakening the dependency-change gate.
+
 The first deployment of durable session revocation rejects older JWTs that lack
 the required token ID and account-version claims. Existing website users must
 sign in again once; their accounts, projects and subscriptions remain stored.
