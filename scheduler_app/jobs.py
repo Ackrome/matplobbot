@@ -29,6 +29,7 @@ from shared_lib.request_context import generate_correlation_id, set_correlation_
 from shared_lib.schedule_daily import daily_event_key, deduplicate_daily_recipients
 from shared_lib.schedule_outbox import (
     build_schedule_change_event_key,
+    cancel_schedule_change_delivery,
     claim_schedule_change_deliveries,
     commit_schedule_change_transition,
     enqueue_daily_schedule_delivery,
@@ -66,6 +67,15 @@ logger = logging.getLogger(__name__)
 TELEGRAM_MESSAGE_LIMIT = 4096
 
 
+class TelegramPermanentDeliveryError(RuntimeError):
+    """A recipient-specific Telegram error that must not be retried."""
+
+    def __init__(self, code: str, *, status: int):
+        self.code = code
+        self.status = status
+        super().__init__(code)
+
+
 def _filter_schedule_for_subscription(schedule: list[dict], subscription: dict) -> list[dict]:
     """Apply canonical Web/Telegram lesson and module settings before a diff."""
     lesson_mode = subscription.get("lesson_mode", "all")
@@ -97,6 +107,7 @@ async def send_telegram_message(
     request_kwargs: dict | None = None,
     retry_attempts: int | None = None,
     retry_delay_seconds: float | None = None,
+    raise_permanent_error: bool = False,
 ) -> dict | None:
     """
     Sends a message using a direct Telegram API call.
@@ -148,6 +159,11 @@ async def send_telegram_message(
                         response.status,
                         response_text,
                     )
+                    if response.status == 403 and raise_permanent_error:
+                        raise TelegramPermanentDeliveryError(
+                            "telegram_forbidden",
+                            status=response.status,
+                        )
                     return None
             except (TimeoutError, aiohttp.ClientError, OSError) as exc:
                 if attempt < retries:
@@ -239,6 +255,7 @@ async def deliver_pending_schedule_change_notifications(
                 summary["cancelled"] = summary.get("cancelled", 0) + 1
                 continue
             error_message = "Telegram API did not accept the message"
+            permanent_failure = False
             try:
                 async with asyncio.timeout(840):
                     result = await send_telegram_message(
@@ -247,6 +264,7 @@ async def deliver_pending_schedule_change_notifications(
                         str(delivery["payload"]),
                         delivery.get("message_thread_id"),
                         request_kwargs=telegram_request_kwargs,
+                        raise_permanent_error=True,
                     )
                 if result is not None:
                     await mark_schedule_change_delivery_sent(
@@ -254,6 +272,9 @@ async def deliver_pending_schedule_change_notifications(
                     )
                     summary["sent"] += 1
                     continue
+            except TelegramPermanentDeliveryError as exc:
+                error_message = exc.code
+                permanent_failure = True
             except Exception as exc:
                 error_message = f"{type(exc).__name__}: {exc}"
                 logger.error(
@@ -262,6 +283,15 @@ async def deliver_pending_schedule_change_notifications(
                     exc,
                     exc_info=True,
                 )
+
+            if permanent_failure:
+                await cancel_schedule_change_delivery(
+                    delivery_id,
+                    error=error_message,
+                    expected_attempt_count=attempt_count,
+                )
+                summary["cancelled"] = summary.get("cancelled", 0) + 1
+                continue
 
             terminal = attempt_count >= SCHEDULE_OUTBOX_MAX_ATTEMPTS
             delay_seconds = min(

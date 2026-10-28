@@ -2470,6 +2470,13 @@ Cancellation is separate from failure. Daily maintenance deletes terminal
 history in bounded batches after `SCHEDULE_OUTBOX_RETENTION_DAYS` (default 30,
 minimum 2), retaining live work and every valid daily catch-up deduplication key.
 
+Telegram 403 responses caused by a blocked or otherwise forbidden recipient are
+classified as permanent for that outbox row. The scheduler cancels the row
+terminally, retains the reason for audit, and does not count it as a recent
+scheduler failure. The subscription remains available for manual re-enabling
+after the user unblocks the bot. Transport failures and rate limits remain
+retryable.
+
 Migration `fe4e5f607182`, following auth migration `fd3d4e5f6071`, seeds baselines
 from valid cached schedules and leaves historical failure timestamps unknown.
 Stop the old scheduler before migration/backfill and start the new scheduler

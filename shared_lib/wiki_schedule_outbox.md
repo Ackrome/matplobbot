@@ -16,6 +16,14 @@ reserving a large batch whose leases can expire while waiting. A pass stops
 claiming after 45 seconds or 100 recipients; an individual send is bounded to
 840 seconds, shorter than the 900-second recovery lease.
 
+Telegram HTTP 403 responses are recipient-specific permanent failures (for
+example, the user blocked the bot). The scheduler records such a delivery as
+cancelled terminally instead of retrying it through exponential backoff. The
+reason is retained without counting as a recent scheduler failure. The
+subscription remains available for the user to re-enable after unblocking the
+bot; this prevents one unreachable recipient from keeping the scheduler health
+endpoint degraded while preserving the delivery history.
+
 ## Purpose
 
 Provides the durable PostgreSQL outbox used by the scheduler for Telegram notifications about
@@ -44,6 +52,8 @@ does not make a detected change disappear.
 - `mark_schedule_change_delivery_sent(...)` finalizes a successful delivery.
 - `reschedule_schedule_change_delivery(...)` returns a failed attempt to the queue with backoff,
   or marks it terminally failed.
+- `cancel_schedule_change_delivery(...)` terminally cancels a recipient-specific permanent
+  delivery failure, retaining its reason while excluding it from recent-failure health signals.
 - `prune_schedule_delivery_history(...)` deletes only terminal rows older than the configured
   retention (30 days by default, minimum 2), in bounded batches. The independent baseline remains.
   The two-day minimum exceeds every valid daily catch-up window and preserves daily event dedupe.
