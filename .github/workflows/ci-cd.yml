@@ -38,10 +38,26 @@ jobs:
               - 'requirements.txt'
               - 'Dockerfile.base-python'
               - 'Dockerfile.base-worker'
+            dependencies:
+              - 'requirements.in'
+              - 'requirements.txt'
+              - 'requirements-validation.txt'
+              - '**/requirements.in'
+              - '**/requirements.txt'
+              - '**/pyproject.toml'
+              - '**/setup.py'
+              - 'setup.py'
+              - 'pyproject.toml'
+              - 'setup.cfg'
+              - 'poetry.lock'
+              - 'uv.lock'
+              - 'scripts/build_audit_requirements.py'
+              - 'scripts/run_dependency_audit.py'
 
   # 2. Validation Quality Gates
   validate:
     name: Validate (Lint, Tests, Types)
+    needs: [check-changes]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -225,6 +241,7 @@ jobs:
             --allow-untyped-defs \
             --allow-incomplete-defs
       - name: Dependency security audit
+        if: needs.check-changes.outputs.dependencies == 'true'
         timeout-minutes: 20
         run: |
           python scripts/build_audit_requirements.py

@@ -296,6 +296,25 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, {"message_id": 8})
         sleep.assert_awaited_once_with(3.0)
 
+    async def test_send_telegram_message_marks_forbidden_as_permanent_when_requested(self):
+        session = Mock()
+        session.post.return_value = _FakeTelegramResponse(
+            403,
+            {"ok": False, "error_code": 403, "description": "Forbidden"},
+            text="Forbidden",
+        )
+
+        with self.assertRaises(jobs.TelegramPermanentDeliveryError) as error:
+            await jobs.send_telegram_message(
+                session,
+                42,
+                "hello",
+                raise_permanent_error=True,
+            )
+
+        self.assertEqual(error.exception.code, "telegram_forbidden")
+        self.assertEqual(error.exception.status, 403)
+
     @staticmethod
     def _daily_subscription(entity_id="123", user_id=10):
         return {
@@ -483,6 +502,45 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([call.args[0] for call in mark_sent.await_args_list], [1, 2])
         reschedule.assert_awaited_once()
         self.assertEqual(reschedule.await_args.args[0], 2)
+
+    async def test_outbox_terminalizes_permanent_forbidden_without_retry(self):
+        batch = [
+            {
+                "id": 17,
+                "chat_id": 117,
+                "message_thread_id": None,
+                "payload": "blocked",
+                "attempt_count": 1,
+            }
+        ]
+
+        with (
+            patch.object(
+                jobs,
+                "claim_schedule_change_deliveries",
+                AsyncMock(side_effect=[batch, []]),
+            ),
+            patch.object(
+                jobs,
+                "send_telegram_message",
+                AsyncMock(
+                    side_effect=jobs.TelegramPermanentDeliveryError(
+                        "telegram_forbidden", status=403
+                    )
+                ),
+            ),
+            patch.object(jobs, "is_schedule_delivery_current", AsyncMock(return_value=True)),
+            patch.object(jobs, "cancel_schedule_change_delivery", AsyncMock()) as cancel,
+            patch.object(jobs, "reschedule_schedule_change_delivery", AsyncMock()) as reschedule,
+        ):
+            summary = await jobs.deliver_pending_schedule_change_notifications(object())
+
+        self.assertEqual(
+            summary, {"claimed": 1, "sent": 0, "rescheduled": 0, "failed": 0, "cancelled": 1}
+        )
+        cancel.assert_awaited_once()
+        self.assertEqual(cancel.await_args.kwargs["error"], "telegram_forbidden")
+        reschedule.assert_not_awaited()
 
     async def test_send_admin_summary_raises_when_matching_admin_delivery_fails(self):
         now_in_moscow = datetime.now(ZoneInfo("Europe/Moscow"))

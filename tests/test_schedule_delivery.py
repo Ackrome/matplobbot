@@ -269,6 +269,23 @@ class TestOutboxRecovery(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(self.rows()[1][0], "sent")
 
+    async def test_permanent_delivery_cancel_clears_payload_without_recent_failure(self):
+        self.insert(1, status="pending", attempt_count=0)
+        claimed = await schedule_outbox.claim_schedule_change_deliveries(now_utc=self.now)
+        self.assertEqual(claimed[0]["attempt_count"], 1)
+
+        await schedule_outbox.cancel_schedule_change_delivery(
+            1,
+            expected_attempt_count=1,
+            error="telegram_forbidden",
+            now_utc=self.now,
+        )
+
+        self.assertEqual(self.rows()[1], ("cancelled", 1, "telegram_forbidden"))
+        health = await schedule_outbox.get_schedule_outbox_health(self.now)
+        self.assertEqual(health["oldest_pending_age_seconds"], 0)
+        self.assertEqual(health["recently_failed"], 0)
+
     async def test_health_counts_oldest_pending_without_message_data(self):
         self.insert(1, status="pending", attempt_count=0)
         self.insert(2, status="failed", attempt_count=8)
@@ -279,6 +296,7 @@ class TestOutboxRecovery(unittest.IsolatedAsyncioTestCase):
                 "pending": 1,
                 "processing": 0,
                 "failed": 1,
+                "cancelled": 0,
                 "oldest_pending_age_seconds": 3600,
                 "recently_failed": 0,
                 "recent_failure_window_seconds": 3600,
@@ -672,3 +690,29 @@ class TestJobHealth(unittest.IsolatedAsyncioTestCase):
         ):
             _, code = await main.build_scheduler_health(True)
             self.assertEqual(code, 503)
+
+        with (
+            patch.object(main, "get_session", database),
+            patch.object(main.redis_client.client, "llen", AsyncMock(return_value=0)),
+            patch.object(
+                main,
+                "get_operational_snapshot",
+                AsyncMock(return_value={"available": True, "operations": []}),
+            ),
+            patch.object(
+                main,
+                "get_schedule_outbox_health",
+                AsyncMock(
+                    return_value={
+                        "pending": 0,
+                        "processing": 0,
+                        "failed": 0,
+                        "cancelled": 1,
+                        "oldest_pending_age_seconds": 0,
+                        "recently_failed": 0,
+                    }
+                ),
+            ),
+        ):
+            _, code = await main.build_scheduler_health(True)
+            self.assertEqual(code, 200)

@@ -480,6 +480,36 @@ async def reschedule_schedule_change_delivery(
         await session.commit()
 
 
+async def cancel_schedule_change_delivery(
+    delivery_id: int,
+    *,
+    error: str,
+    now_utc: datetime | None = None,
+    expected_attempt_count: int | None = None,
+) -> None:
+    """Cancel one permanently undeliverable row without marking scheduler health failed."""
+    now = now_utc or datetime.now(UTC)
+    async with get_session() as session:
+        statement = update(ScheduleChangeDelivery).where(ScheduleChangeDelivery.id == delivery_id)
+        if expected_attempt_count is not None:
+            statement = statement.where(
+                ScheduleChangeDelivery.status == OUTBOX_PROCESSING,
+                ScheduleChangeDelivery.attempt_count == expected_attempt_count,
+            )
+        await session.execute(
+            statement.values(
+                status=OUTBOX_CANCELLED,
+                next_attempt_at=now,
+                locked_at=None,
+                payload="",
+                last_error=str(error)[:2000],
+                updated_at=now,
+                failed_at=None,
+            )
+        )
+        await session.commit()
+
+
 async def get_schedule_outbox_health(
     now_utc: datetime | None = None, *, recent_failure_seconds: int = 3600
 ) -> dict:
@@ -495,10 +525,16 @@ async def get_schedule_outbox_health(
             .where(ScheduleChangeDelivery.status != OUTBOX_SENT)
             .group_by(ScheduleChangeDelivery.status)
         )
-        counts = {OUTBOX_PENDING: 0, OUTBOX_PROCESSING: 0, OUTBOX_FAILED: 0}
+        counts = {
+            OUTBOX_PENDING: 0,
+            OUTBOX_PROCESSING: 0,
+            OUTBOX_FAILED: 0,
+            OUTBOX_CANCELLED: 0,
+        }
         oldest = None
         for status, count, created_at in result.all():
-            counts[status] = int(count)
+            if status in counts:
+                counts[status] = int(count)
             if status in {OUTBOX_PENDING, OUTBOX_PROCESSING} and created_at is not None:
                 aware = created_at.replace(tzinfo=UTC) if created_at.tzinfo is None else created_at
                 oldest = min(oldest, aware) if oldest is not None else aware
