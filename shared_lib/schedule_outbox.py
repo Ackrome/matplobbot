@@ -525,10 +525,16 @@ async def get_schedule_outbox_health(
             .where(ScheduleChangeDelivery.status != OUTBOX_SENT)
             .group_by(ScheduleChangeDelivery.status)
         )
-        counts = {OUTBOX_PENDING: 0, OUTBOX_PROCESSING: 0, OUTBOX_FAILED: 0}
+        counts = {
+            OUTBOX_PENDING: 0,
+            OUTBOX_PROCESSING: 0,
+            OUTBOX_FAILED: 0,
+            OUTBOX_CANCELLED: 0,
+        }
         oldest = None
         for status, count, created_at in result.all():
-            counts[status] = int(count)
+            if status in counts:
+                counts[status] = int(count)
             if status in {OUTBOX_PENDING, OUTBOX_PROCESSING} and created_at is not None:
                 aware = created_at.replace(tzinfo=UTC) if created_at.tzinfo is None else created_at
                 oldest = min(oldest, aware) if oldest is not None else aware

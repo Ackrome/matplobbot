@@ -296,6 +296,7 @@ class TestOutboxRecovery(unittest.IsolatedAsyncioTestCase):
                 "pending": 1,
                 "processing": 0,
                 "failed": 1,
+                "cancelled": 0,
                 "oldest_pending_age_seconds": 3600,
                 "recently_failed": 0,
                 "recent_failure_window_seconds": 3600,
@@ -689,3 +690,29 @@ class TestJobHealth(unittest.IsolatedAsyncioTestCase):
         ):
             _, code = await main.build_scheduler_health(True)
             self.assertEqual(code, 503)
+
+        with (
+            patch.object(main, "get_session", database),
+            patch.object(main.redis_client.client, "llen", AsyncMock(return_value=0)),
+            patch.object(
+                main,
+                "get_operational_snapshot",
+                AsyncMock(return_value={"available": True, "operations": []}),
+            ),
+            patch.object(
+                main,
+                "get_schedule_outbox_health",
+                AsyncMock(
+                    return_value={
+                        "pending": 0,
+                        "processing": 0,
+                        "failed": 0,
+                        "cancelled": 1,
+                        "oldest_pending_age_seconds": 0,
+                        "recently_failed": 0,
+                    }
+                ),
+            ),
+        ):
+            _, code = await main.build_scheduler_health(True)
+            self.assertEqual(code, 200)
