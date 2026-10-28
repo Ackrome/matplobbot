@@ -535,7 +535,9 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
         ):
             summary = await jobs.deliver_pending_schedule_change_notifications(object())
 
-        self.assertEqual(summary, {"claimed": 1, "sent": 0, "rescheduled": 0, "failed": 0, "cancelled": 1})
+        self.assertEqual(
+            summary, {"claimed": 1, "sent": 0, "rescheduled": 0, "failed": 0, "cancelled": 1}
+        )
         cancel.assert_awaited_once()
         self.assertEqual(cancel.await_args.kwargs["error"], "telegram_forbidden")
         reschedule.assert_not_awaited()
