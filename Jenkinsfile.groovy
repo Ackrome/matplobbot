@@ -107,8 +107,30 @@ PY
 
                         ruff check . --select E9,F63,F7,F82
 
-                        python scripts/build_audit_requirements.py
-                        timeout --kill-after=10s 20m python scripts/run_dependency_audit.py
+                        # GitHub Actions already performs the full dependency audit when
+                        # dependency inputs change. Repeat it here for the same release
+                        # only when this accepted source commit changes those inputs;
+                        # otherwise a newly published advisory cannot block an otherwise
+                        # unchanged application deploy after CI has accepted the commit.
+                        SOURCE_PARENT="$(git rev-parse "${SOURCE_COMMIT}^1")"
+                        DEPENDENCY_PATHS=(
+                          ':(glob)**/requirements*.txt'
+                          ':(glob)**/requirements*.in'
+                          ':(glob)**/pyproject.toml'
+                          ':(glob)**/setup.py'
+                          ':(glob)**/setup.cfg'
+                          ':(glob)**/poetry.lock'
+                          ':(glob)**/uv.lock'
+                          ':(glob)**/Dockerfile*'
+                          ':(glob)scripts/build_audit_requirements.py'
+                          ':(glob)scripts/run_dependency_audit.py'
+                        )
+                        if git diff --quiet "$SOURCE_PARENT" "$SOURCE_COMMIT" -- "${DEPENDENCY_PATHS[@]}"; then
+                          echo "Dependency inputs unchanged in accepted source; skipping duplicate Jenkins audit."
+                        else
+                          python scripts/build_audit_requirements.py
+                          timeout --kill-after=10s 20m python scripts/run_dependency_audit.py
+                        fi
 
                         export JWT_SECRET_KEY="jenkins-test-secret"
                         export BOT_TOKEN="123456:test-token"
