@@ -1877,16 +1877,17 @@ Source:
 
 What it does:
 
-- Pins `Pillow` to a non-vulnerable release range (`>=12.3.0,<13`) and locks `requirements.txt` to `12.3.0`.
+- Pins `Pillow` to the non-vulnerable `13.0.0` release range and locks `requirements.txt` to `13.0.0`.
 - Pins `python-dotenv` to a non-vulnerable release range (`>=1.2.2,<2`) and locks `requirements.txt` to `1.2.2`.
 - Pins `aiogram` to `3.29.1` so the bot and scheduler can use the current `aiohttp 3.14.x` release line without the old `<3.14` resolver cap.
-- Pins `aiohttp` to the non-vulnerable `3.14.3` release across bot, scheduler, and shared package metadata. This is the minimum version that clears `PYSEC-2026-3545`; `PYSEC-2026-3546` and `PYSEC-2026-3547` are fixed by `3.14.2`, but the lock must stay at least `3.14.3`.
+- Pins `aiohttp` to the non-vulnerable `3.14.4` release across bot, scheduler, and shared package metadata.
 - Pins FastAPI to `0.136.3` and Starlette to `1.3.1` in `fastapi_stats_app/requirements.txt` so the stats service stays on a Starlette release line with the current multipart and request parsing fixes.
 - Pins PyJWT to `2.15.0` for FastAPI access tokens and restricts decoding to HS256 with required issuer, audience, subject, issued-at, not-before, and expiry claims.
 - Removes unused `markdown` from the bot/worker requirements; Markdown rendering uses `markdown-it-py`.
 - Pins `python-multipart` to `0.0.31` for multipart parser DoS fixes.
-- Pins `setuptools` to `83.0.0`, `cryptography` to `50.0.0` and `weasyprint` to `70.0` in the root requirements lock for the current audit gate. The cryptography minimum is also enforced in `setup.py`; do not restore the vulnerable 46.x upper bound. Security fixes must pass the unchanged strict audit before deployment.
+- Pins `setuptools` to `84.1.0`, `certifi` to `2026.10.18`, the OpenTelemetry 1.45.1/0.66b1 family, `cryptography` to `50.0.0` and `weasyprint` to `70.0` in the root requirements lock for the current audit gate. The cryptography minimum is also enforced in `setup.py`; do not restore the vulnerable 46.x upper bound. Security fixes must pass the unchanged strict audit before deployment.
 - Uses `scripts/build_audit_requirements.py` to build the same filtered `audit-requirements.txt` in GitHub Actions, Jenkins, and local checks. The builder excludes editable installs and the local `matplobbot-shared` package, deduplicates matching pins, and fails on conflicting pins.
+- Publishes the `dependencies` path-filter output from the CI change-detection job so requirement changes actually run the dependency audit instead of silently skipping it.
 - Uses `scripts/run_dependency_audit.py` in all three gates. It runs `pip-audit --strict` with a 60-second socket timeout and up to three attempts (5/10-second waits) only for typed transient network failures, including HTTP 429/500/502/503/504. TLS failures, findings, strict collection failures and unknown errors still fail immediately; exhausted network retries also fail. GitHub steps and the Jenkins audit command have a 20-minute overall deadline.
 - The Jenkins pre-deploy gate compares the accepted commit with its first parent. It repeats the strict dependency audit when requirement, packaging, Dockerfile, or audit-builder inputs changed; for code-only releases it skips that duplicate scan because GitHub Actions already audited the accepted commit. The scheduled GitHub dependency audit remains the independent full-graph check, so this optimization does not turn off vulnerability monitoring.
 - The pull-request and push validation gate runs this strict audit when dependency inputs or the audit builder change. Code-only changes keep the dependency graph unchanged and do not repeat a known baseline scan; the scheduled daily Dependency Audit workflow still scans the full graph and fails on newly introduced or newly published advisories.
