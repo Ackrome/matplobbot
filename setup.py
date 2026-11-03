@@ -12,7 +12,7 @@ setup(
         "aiohttp>=3.14.4,<3.15",
         "certifi",
         "cryptography>=50.0.0,<51",
-        "redis",
+        "redis>=6.1.0,<7",
         "cachetools",
         "celery",
         "Pillow>=13.0.0",
