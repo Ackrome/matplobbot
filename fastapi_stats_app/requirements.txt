@@ -9,4 +9,4 @@ passlib[bcrypt]==1.7.4
 PyJWT==2.15.0
 python-multipart==0.0.31
 aiohttp-socks==0.10.1
-opentelemetry-instrumentation-fastapi==0.62b0
+opentelemetry-instrumentation-fastapi==0.66b1
