@@ -219,6 +219,13 @@ class TestRealAuditEntrypoint(unittest.TestCase):
 
 
 class TestAuditProviderParity(unittest.TestCase):
+    def test_ci_publishes_dependency_path_filter_to_validate_job(self) -> None:
+        document = yaml.safe_load(
+            (ROOT / ".github" / "workflows" / "ci-cd.yml").read_text(encoding="utf-8")
+        )
+        outputs = document["jobs"]["check-changes"]["outputs"]
+        self.assertEqual(outputs["dependencies"], "${{ steps.filter.outputs.dependencies }}")
+
     def test_github_audits_use_shared_runner_with_wall_clock_limit(self) -> None:
         for workflow in ("ci-cd.yml", "dependency-audit.yml"):
             with self.subTest(workflow=workflow):
