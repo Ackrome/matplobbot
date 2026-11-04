@@ -1,0 +1,80 @@
+{
+  "status": "passed",
+  "observed_at_utc": "2026-11-04T22:24:56Z",
+  "host": "app-vm",
+  "jenkins_failed_build": {
+    "build": 353,
+    "result": "FAILURE",
+    "cause": "No space left on device while pulling the immutable Worker image into containerd ingest storage",
+    "production_deploy_started": false
+  },
+  "capacity_changes": [
+    {
+      "scope": "Existing guest VG reserve",
+      "lv_bytes_before": 52609155072,
+      "growth_bytes": 32212254720,
+      "lv_bytes_after": 84821409792,
+      "filesystem_bytes_after": 83163217920,
+      "free_bytes_after": 28400840704,
+      "vg_free_bytes_after": 20401094656
+    },
+    {
+      "scope": "Existing guest VG reserve",
+      "lv_bytes_before": 84821409792,
+      "growth_bytes": 16106127360,
+      "lv_bytes_after": 100927537152,
+      "filesystem_bytes_after": 99012476928,
+      "free_bytes_after": 33077669888,
+      "vg_free_bytes_after": 4294967296
+    },
+    {
+      "scope": "Proxmox virtual disk and guest partition",
+      "proxmox_disk_before": "100G",
+      "proxmox_disk_after": "200G",
+      "partition": "/dev/sda3",
+      "pv_bytes_after": 212596686848,
+      "lv_growth_bytes": 85899345920,
+      "lv_bytes_after": 186826883072,
+      "filesystem_bytes_after": 183564402688,
+      "free_bytes_after": 114216701952,
+      "vg_free_bytes_after": 25769803776
+    }
+  ],
+  "proxmox_storage": {
+    "storage": "local-hdd",
+    "available_kib_before_resize": 727669804,
+    "virtual_disk_changed": true,
+    "vm_rebooted": false
+  },
+  "jenkins_successful_build": {
+    "build": 354,
+    "result": "SUCCESS",
+    "duration_ms": 640707,
+    "source_commit": "67e7b83e8bff1083fbc80dc1d68c9f5796a60910",
+    "smoke_checks": [
+      "API health",
+      "scheduler health",
+      "authenticated leaderboard",
+      "WebSocket upgrade through local proxy",
+      "WebSocket upgrade through public proxy",
+      "leaderboard protection with HTTP 401"
+    ]
+  },
+  "production_verification": {
+    "containers_healthy": [
+      "matplobbot-postgres-1",
+      "matplobbot-redis-1",
+      "matplobbot-mpb-fastapi-stats-1",
+      "matplobbot-mpb-worker-1",
+      "matplobbot-mpb-scheduler-1",
+      "matplobbot-proxy-1"
+    ],
+    "services_active": ["docker", "containerd", "tailscaled"]
+  },
+  "backups": [
+    "/root/matplobbot-app-vm-maintenance-20261105/ubuntu-vg-before-30g-growth.conf",
+    "/root/matplobbot-app-vm-maintenance-20261105/ubuntu-vg-before-15g-growth.conf",
+    "/root/matplobbot-app-vm-maintenance-20261105/ubuntu-vg-before-partition-growth.conf",
+    "/root/matplobbot-app-vm-maintenance-20261105/qm-config-before-100g-growth.conf"
+  ]
+}
