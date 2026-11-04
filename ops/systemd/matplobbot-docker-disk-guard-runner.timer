@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the runner Docker and containerd disk guard every 15 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Persistent=true
+Unit=matplobbot-docker-disk-guard-runner.service
+
+[Install]
+WantedBy=timers.target

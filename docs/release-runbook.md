@@ -87,6 +87,18 @@ smoke checks and invokes `bash deploy.sh --finalize`. Only finalize advances
 successful pointer intact. Previous source, configuration and runtime image IDs are
 retained. Production deployment does not prune images.
 
+Before `release_deploy.py prepare` Jenkins runs
+`scripts/docker_disk_guard.py monitor --profile production`. The guard checks both
+the root filesystem and Docker's data root, including the containerd content store,
+and fails before the image pull when critical headroom is unavailable. On warning it
+removes only old BuildKit cache, stopped containers and dangling images. It never
+removes volumes or tagged current/previous release images.
+
+For continuous production monitoring, install the reviewed systemd service and timer
+from `ops/systemd/README.md` on the Docker host. The timer runs every 15 minutes and
+writes one JSON status record to the systemd journal. The self-hosted runner uses the
+`runner` profile before and after image builds from `.github/workflows/ci-cd.yml`.
+
 The Jenkins quality gate repeats `pip-audit` when the accepted commit changes
 dependency, packaging, Dockerfile, or audit-builder inputs. For an application-only
 commit it records that the duplicate scan was skipped; GitHub Actions has already
