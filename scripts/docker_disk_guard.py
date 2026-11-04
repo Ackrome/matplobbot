@@ -52,7 +52,9 @@ class GuardSnapshot:
     docker_root: str
     docker_df: str
 
-    def status(self, warn_percent: float, critical_percent: float, warn_gib: float, critical_gib: float) -> str:
+    def status(
+        self, warn_percent: float, critical_percent: float, warn_gib: float, critical_gib: float
+    ) -> str:
         if (
             self.root.used_percent >= 100 - critical_percent
             or self.docker.used_percent >= 100 - critical_percent
@@ -137,14 +139,18 @@ def _cleanup(profile: str, image_age: str, container_age: str) -> list[dict[str,
         ["docker", "container", "prune", "--force", "--filter", f"until={container_age}"],
     ]
     if profile == "runner":
-        commands.append(["docker", "image", "prune", "--all", "--force", "--filter", f"until={image_age}"])
+        commands.append(
+            ["docker", "image", "prune", "--all", "--force", "--filter", f"until={image_age}"]
+        )
     else:
         commands.append(["docker", "image", "prune", "--force", "--filter", f"until={image_age}"])
 
     for command in commands:
         completed = _run(command, check=False)
         output = " ".join((completed.stdout or completed.stderr).split())
-        results.append({"command": command[:3], "returncode": completed.returncode, "output": output[:1000]})
+        results.append(
+            {"command": command[:3], "returncode": completed.returncode, "output": output[:1000]}
+        )
         if completed.returncode != 0:
             raise RuntimeError(f"Docker cleanup command failed: {' '.join(command[:3])}")
     return results
@@ -163,7 +169,13 @@ def _remove_stale_builders(image_age: str) -> list[dict[str, Any]]:
 
     listing = _run(["docker", "buildx", "ls", "--format", "{{json .}}"], check=False)
     if listing.returncode != 0:
-        return [{"command": ["docker", "buildx", "ls"], "returncode": listing.returncode, "output": " ".join(listing.stderr.split())[:1000]}]
+        return [
+            {
+                "command": ["docker", "buildx", "ls"],
+                "returncode": listing.returncode,
+                "output": " ".join(listing.stderr.split())[:1000],
+            }
+        ]
 
     cutoff = datetime.now(UTC) - timedelta(hours=age_hours)
     names: set[str] = set()
@@ -196,11 +208,13 @@ def _remove_stale_builders(image_age: str) -> list[dict[str, Any]]:
     for name in sorted(names):
         completed = _run(["docker", "buildx", "rm", name], check=False)
         output = " ".join((completed.stdout or completed.stderr).split())
-        results.append({
-            "command": ["docker", "buildx", "rm", name],
-            "returncode": completed.returncode,
-            "output": output[:1000],
-        })
+        results.append(
+            {
+                "command": ["docker", "buildx", "rm", name],
+                "returncode": completed.returncode,
+                "output": output[:1000],
+            }
+        )
     return results
 
 
@@ -232,7 +246,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("command", choices=("check", "cleanup", "monitor"))
     parser.add_argument("--profile", choices=("runner", "production"), default="production")
     parser.add_argument("--warn-percent", type=_positive_float, default=DEFAULT_WARN_PERCENT)
-    parser.add_argument("--critical-percent", type=_positive_float, default=DEFAULT_CRITICAL_PERCENT)
+    parser.add_argument(
+        "--critical-percent", type=_positive_float, default=DEFAULT_CRITICAL_PERCENT
+    )
     parser.add_argument("--warn-gib", type=_positive_float, default=DEFAULT_WARN_GIB)
     parser.add_argument("--critical-gib", type=_positive_float, default=DEFAULT_CRITICAL_GIB)
     parser.add_argument("--image-age", default=DEFAULT_IMAGE_AGE)
@@ -248,7 +264,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     with _guard_lock(args.lock_file):
         before = snapshot()
-        status = before.status(args.warn_percent, args.critical_percent, args.warn_gib, args.critical_gib)
+        status = before.status(
+            args.warn_percent, args.critical_percent, args.warn_gib, args.critical_gib
+        )
         payload: dict[str, Any] = _format_snapshot(before, status, args.command)
 
         if args.command == "check" or status == "ok":
@@ -257,7 +275,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         payload["cleanup"] = _cleanup(args.profile, args.image_age, args.container_age)
         after = snapshot()
-        after_status = after.status(args.warn_percent, args.critical_percent, args.warn_gib, args.critical_gib)
+        after_status = after.status(
+            args.warn_percent, args.critical_percent, args.warn_gib, args.critical_gib
+        )
         payload["after"] = _format_snapshot(after, after_status, "after-cleanup")
         payload["status"] = after_status
         print(json.dumps(payload, ensure_ascii=False))
@@ -268,5 +288,8 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
-        print(json.dumps({"status": "error", "error": str(exc)[:500]}, ensure_ascii=False), file=sys.stderr)
+        print(
+            json.dumps({"status": "error", "error": str(exc)[:500]}, ensure_ascii=False),
+            file=sys.stderr,
+        )
         raise SystemExit(1)
