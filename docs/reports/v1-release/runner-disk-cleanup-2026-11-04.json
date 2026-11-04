@@ -1,0 +1,161 @@
+{
+  "status": "passed",
+  "observed_at_utc": "2026-11-04T18:53:06Z",
+  "host": "github-runner-vm",
+  "scope": "Four exact OCI images produced by failed workflow run for revision 67e7b83",
+  "cause": "The runner root filesystem was at 100% with 0 bytes available. The failed Build Service Images job had left its four candidate images on the runner.",
+  "preflight": {
+    "runner_worker_busy": false,
+    "candidate_revision": "67e7b83e8bff1083fbc80dc1d68c9f5796a60910",
+    "candidate_images_have_container_refs": false,
+    "release_state_refs_under_runner_home": false,
+    "protected_builder": "builder-f46490f6-f851-4bfb-8db3-d82b23015f73",
+    "protected_builder_status": "running",
+    "protected_containers": [
+      "5a4bbf4f3f2a9216ce71b9324f1ae6fc7006e8c2a204df5b9fb921d09624cc5f",
+      "caca25d70e45765995f5b93a9699023773426cf89304dc8571efc12f6f1eaa85",
+      "9a37f30cfb00c05efb35d79380e628badd846b829de8a06171924d175b767ab7"
+    ]
+  },
+  "targets": [
+    {
+      "image": "ghcr.io/ackrome/matplobbot-scheduler",
+      "id": "sha256:c917030ea264abd43471e97ba786ff8ec24bf374227bee03798b2979b57e5633",
+      "size_bytes": 3083002498
+    },
+    {
+      "image": "ghcr.io/ackrome/matplobbot-api",
+      "id": "sha256:ca1a675ba539b07077a2ce908a9c4638d7f24f795a81e85affe73422a92fc3eb",
+      "size_bytes": 2587381239
+    },
+    {
+      "image": "ghcr.io/ackrome/matplobbot-bot",
+      "id": "sha256:4f4bd9ea5b1f10f5a122112dd10fa441c8db891f4fdf9291c65c9df155d02692",
+      "size_bytes": 2574092142
+    },
+    {
+      "image": "ghcr.io/ackrome/matplobbot-worker",
+      "id": "sha256:82d5756802528e7cb1183955553b14be32e9db2eede545c2ff8386173ff6b4c7",
+      "size_bytes": 10527989566
+    }
+  ],
+  "operation": "docker image rm <exact-id> for each target, serially, without force",
+  "before": {
+    "root_available_bytes": 0,
+    "root_use_percent": 100,
+    "image_count": 21,
+    "container_ids_preserved": true
+  },
+  "after": {
+    "root_available_bytes": 12230352896,
+    "root_use_percent": 80,
+    "image_count": 17,
+    "target_images_absent": true,
+    "container_ids_preserved": true,
+    "protected_builder_preserved": true,
+    "docker_service_active": true,
+    "containerd_service_active": true,
+    "runner_service_active": true
+  },
+  "free_bytes_increase": 12230352896,
+  "retained": {
+    "historical_image_sets": [
+      "683d1494381eb70649704587dd0309a7efe6eafb",
+      "890c0d430fac11fde77d8f67a6f91f11e341bb52"
+    ],
+    "builder_state_volumes": [
+      "buildx_buildkit_builder-6a4904df-a9cd-40d1-bedc-453e21a655dc0_state",
+      "buildx_buildkit_builder-8529d834-ed90-4503-8db8-9af75272d78d0_state",
+      "buildx_buildkit_builder-f46490f6-f851-4bfb-8db3-d82b23015f730_state"
+    ]
+  },
+  "limitations": "GHCR manifest inspection for historical images returned 403 on this runner, so historical image sets and running builder caches were retained. This records runner maintenance only and does not establish RC acceptance.",
+  "follow_up_workflow": {
+    "run_id": 41844787558,
+    "run_number": 465,
+    "job_id": 126802292970,
+    "job_result": "failure",
+    "build_steps": "worker, bot, api and scheduler completed successfully",
+    "rc_step": "GitHub reports in_progress while the job itself is completed with failure",
+    "release_manifest_created": true,
+    "rc_acceptance_report_present": false,
+    "manifest_worker_digest": "sha256:88c8219965834156c604bfb30a5625a954ad7d32875a7f079187774a90a4eef2",
+    "pulls_observed_before_failure": [
+      "sha256:e04954c9eb225cb762fb33802be4d607f4f96b8a16a629108faba62199276880",
+      "sha256:136aae09fd7af84d91bd6f64c33a8227525b038631d8863eb4cf67f4bc8d9165",
+      "sha256:8bd31d4b4e60a2af374d33998182f818ab8b8a4ac2aac1a7712efbb1d620d59a"
+    ],
+    "worker_digest_present_after_job": false,
+    "runner_free_before_orphan_cleanup": 5840273408,
+    "orphan_builder": "builder-48c864ec-5a8f-4af1-8f64-623d954fe658",
+    "orphan_state_volume": "buildx_buildkit_builder-48c864ec-5a8f-4af1-8f64-623d954fe6580_state",
+    "orphan_volume_size_display": "3.269GB",
+    "orphan_cleanup": "docker buildx rm removed the builder and Docker removed its linked volume automatically",
+    "runner_free_after_orphan_cleanup": 9290530816,
+    "root_cause_assessment": "Likely insufficient headroom while pulling the missing Worker image after the other three immutable images. The exact pull error is absent from the retained GitHub log, so this remains an evidence-backed assessment rather than a direct error-line confirmation."
+  },
+  "lvm_expansion": {
+    "status": "passed",
+    "observed_at_utc": "2026-11-04T20:35:00Z",
+    "method": "Existing runner Docker-group access with a bounded privileged helper and host chroot",
+    "proxmox_virtual_disk_changed": false,
+    "reboot_performed": false,
+    "lv_path": "/dev/ubuntu-vg/ubuntu-lv",
+    "lv_bytes_before": 63346573312,
+    "growth_bytes": 16106127360,
+    "lv_bytes_after": 79452700672,
+    "vg_free_bytes_before": 20401094656,
+    "vg_free_bytes_after": 4294967296,
+    "filesystem": "ext4",
+    "filesystem_bytes_before": 62029570048,
+    "filesystem_bytes_after": 77883056128,
+    "free_bytes_after": 24499613696,
+    "filesystem_resize": "Completed online with resize2fs after the lvextend wrapper detached after LV growth",
+    "preflight_backup": "/root/matplobbot-runner-maintenance-20261104/ubuntu-vg-before-15g-growth.conf",
+    "preflight_backup_mode": "0600",
+    "runner_idle_after": true,
+    "protected_containers_preserved": true,
+    "protected_images_preserved": true,
+    "protected_builder_preserved": true,
+    "services_active_after": [
+      "docker",
+      "containerd",
+      "actions.runner.Ackrome-matplobbot.github-runner-vm.service"
+    ]
+  },
+  "rerun_attempt": {
+    "run_id": 41844787558,
+    "run_number": 465,
+    "run_attempt": 3,
+    "job_id": 126866436454,
+    "head_sha": "67e7b83e8bff1083fbc80dc1d68c9f5796a60910",
+    "workflow_result": "success",
+    "rc_acceptance": "success",
+    "release_evidence_upload": "success",
+    "soft_cleanup": "success",
+    "trigger_jenkins_deployment": "success",
+    "completed_at": "2026-11-04T21:34:06Z",
+    "runner_final_free_bytes": 13949857792,
+    "runner_final_use_percent": 82,
+    "runner_idle": true,
+    "protected_containers_preserved": true,
+    "services_active": [
+      "docker",
+      "containerd",
+      "actions.runner.Ackrome-matplobbot.github-runner-vm.service"
+    ]
+  },
+  "final_recheck": {
+    "observed_at_utc": "2026-11-04T21:34:30Z",
+    "root_available_bytes": 13949857792,
+    "root_use_percent": 82,
+    "runner_worker_busy": false,
+    "services_active": [
+      "docker",
+      "containerd",
+      "actions.runner.Ackrome-matplobbot.github-runner-vm.service"
+    ],
+    "containers_preserved": true,
+    "current_builder_preserved": true
+  }
+}

@@ -318,7 +318,16 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v5
-      
+      - name: Set up disk guard Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Disk guard preflight
+        run: |
+          python scripts/docker_disk_guard.py monitor --profile runner \
+            --warn-gib 20 --critical-gib 8 --warn-percent 20 --critical-percent 10 --image-age 72h
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -351,6 +360,12 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Disk guard postflight
+        if: always()
+        run: |
+          python scripts/docker_disk_guard.py monitor --profile runner \
+            --warn-gib 20 --critical-gib 8 --warn-percent 20 --critical-percent 10 --image-age 72h
+
   # 6. Build Service Images (Dependent on Validation + Base Image Logic)
   build-services:
     name: Build Service Images
@@ -373,10 +388,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Maintenance Cleanup
+      - name: Disk guard preflight
         run: |
-          docker image prune -af --filter "until=168h"
-          docker container prune -f --filter "until=24h"
+          python scripts/docker_disk_guard.py monitor --profile runner \
+            --warn-gib 20 --critical-gib 8 --warn-percent 20 --critical-percent 10 --image-age 72h
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -474,8 +489,8 @@ jobs:
       - name: Soft Cleanup
         if: always()
         run: |
-          docker image prune -af --filter "until=168h"
-          docker container prune -f --filter "until=24h"
+          python scripts/docker_disk_guard.py monitor --profile runner \
+            --warn-gib 20 --critical-gib 8 --warn-percent 20 --critical-percent 10 --image-age 72h
 
   # 7. Deploy
   trigger-deployment:

@@ -17,6 +17,7 @@ GITHUB_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "ci-cd.yml"
 JENKINSFILE = PROJECT_ROOT / "Jenkinsfile.groovy"
 RELEASE_SMOKE = PROJECT_ROOT / "scripts" / "release_smoke.sh"
 DEPLOY_SCRIPT = PROJECT_ROOT / "deploy.sh"
+DISK_GUARD_SCRIPT = PROJECT_ROOT / "scripts" / "docker_disk_guard.py"
 PRIVATE_IPV4_RESOLVER = PROJECT_ROOT / "scripts" / "resolve_private_ipv4.sh"
 VALIDATION_REQUIREMENTS = PROJECT_ROOT / "requirements-validation.txt"
 FRONTEND_NGINX = PROJECT_ROOT / "main_site_frontend" / "default.conf"
@@ -174,6 +175,27 @@ class TestComposeConfiguration(unittest.TestCase):
         self.assertIn(f"python -m {install_command}", jenkinsfile)
         self.assertIn("PyYAML==6.0.3", validation_requirements)
         self.assertIn('"yaml",', jenkinsfile)
+
+    def test_disk_guard_is_wired_before_and_after_self_hosted_builds(self):
+        github_workflow = GITHUB_WORKFLOW.read_text(encoding="utf-8")
+        self.assertTrue(DISK_GUARD_SCRIPT.is_file())
+        self.assertGreaterEqual(
+            github_workflow.count("python scripts/docker_disk_guard.py monitor --profile runner"),
+            4,
+        )
+        self.assertIn("--warn-gib 20 --critical-gib 8", github_workflow)
+
+    def test_jenkins_runs_production_disk_guard_before_prepare(self):
+        jenkinsfile = JENKINSFILE.read_text(encoding="utf-8")
+        guard = "scripts/docker_disk_guard.py monitor --profile production"
+        self.assertIn(guard, jenkinsfile)
+        self.assertLess(jenkinsfile.index(guard), jenkinsfile.index("release_deploy.py prepare"))
+
+    def test_disk_guard_does_not_prune_volumes(self):
+        guard = DISK_GUARD_SCRIPT.read_text(encoding="utf-8")
+        self.assertNotIn("volume prune", guard)
+        self.assertNotIn("system prune", guard)
+        self.assertIn('"docker", "buildx", "rm"', guard)
 
     def test_deployment_uses_proxmox_lan_without_tailscale_auth_gate(self):
         github_workflow = GITHUB_WORKFLOW.read_text(encoding="utf-8")

@@ -244,6 +244,7 @@ REMOTE_EOF
                                 # the legacy/current runtime first and stops all bind-mounted
                                 # services before switching source in a bounded maintenance window.
                                 printf '%s' "$RELEASE_MANIFEST_B64" | ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && python3 .release-state/candidates/$SOURCE_COMMIT/scripts/release_manifest.py decode --stdin --commit $SOURCE_COMMIT --output .release-state/accepted.json"
+                                ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && python3 .release-state/candidates/$SOURCE_COMMIT/scripts/docker_disk_guard.py monitor --profile production --warn-gib 30 --critical-gib 15 --warn-percent 20 --critical-percent 10"
                                 ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && python3 .release-state/candidates/$SOURCE_COMMIT/scripts/release_deploy.py prepare .release-state/accepted.json --candidate .release-state/candidates/$SOURCE_COMMIT"
 
                                 # Build the complete payload locally, then atomically replace the

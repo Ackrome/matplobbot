@@ -1,0 +1,13 @@
+[Unit]
+Description=Matplobbot Docker and containerd disk guard
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/bin/python3 /usr/local/libexec/matplobbot-docker-disk-guard.py monitor --profile production --warn-gib 30 --critical-gib 15 --warn-percent 20 --critical-percent 10
+TimeoutStartSec=15min
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true

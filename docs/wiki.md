@@ -546,6 +546,7 @@ may run the API first, but schedule-change polling must not use the new code unt
 | --- | --- | --- |
 | [Scheduler jobs](#scheduler-jobs) | `scheduler_app/main.py` | Notifications, cache refresh, diffs, cleanup, summaries |
 | [Container logging and disk limits](#container-logging-and-disk-limits) | `docker-compose*.yml` | Console-only app logs with Docker log rotation |
+| [Docker disk guard](#docker-disk-guard) | `scripts/docker_disk_guard.py`, `ops/systemd/` | Headroom checks and bounded Docker/containerd cleanup |
 | [Celery worker tasks](#celery-worker-tasks) | `shared_lib/tasks.py` | Rendering and compile pipelines |
 | [Cache and fallback model](#cache-and-fallback-model) | Redis + `cached_schedules` | Keep schedule UX available during upstream outages |
 | [CI, deploy, and wiki sync](#ci-deploy-and-wiki-sync) | GitHub Actions + Jenkins + `deploy.sh` | Validation, publish/build, production deploy, docs sync |
@@ -1737,6 +1738,9 @@ What it does:
 - Per-container Docker logs are capped at roughly 30 MB for the application, database, frontend, Caddy, and production proxy services.
 - `docker-compose.yml` is the standalone local stack and `docker-compose.prod.yml` is the standalone production stack used by `deploy.sh`; a separate `compose.dev` file is intentionally not maintained.
 - The production credentials-backed `proxy` is the only intentional topology difference. Automated tests enforce shared-service, nginx/Caddy mount, and retention parity.
+- `scripts/docker_disk_guard.py` checks both the root filesystem and Docker's data root, which includes the containerd content store used by pulls and BuildKit.
+- GitHub Actions runs the guard before and after self-hosted image builds. The runner profile can remove old unused images, BuildKit cache, and stopped containers without touching volumes.
+- The production profile runs before Jenkins prepares a deployment and from the optional systemd timer. It removes only dangling images, BuildKit cache, and stopped containers, preserving tagged rollback images.
 - The `/ws/bot_log` endpoint no longer tails a file and returns an informational message instead.
 
 How to use:
@@ -1746,6 +1750,33 @@ How to use:
 3. Set `LOG_LEVEL=DEBUG` temporarily for diagnosis; set `LOG_FORMAT=json` explicitly when a non-production environment is connected to a structured log collector.
 4. After deploying this change, remove the old named log volume only after confirming no previous stack still needs it, for example `docker volume rm matplobbot_bot_logs`.
 5. Keep the `logging` block on every long-running service that writes useful stdout/stderr output.
+
+### Docker Disk Guard
+
+Source:
+
+- `scripts/docker_disk_guard.py`
+- `ops/systemd/matplobbot-docker-disk-guard.service`
+- `ops/systemd/matplobbot-docker-disk-guard.timer`
+- `ops/systemd/matplobbot-docker-disk-guard-runner.service`
+- `ops/systemd/matplobbot-docker-disk-guard-runner.timer`
+
+The guard emits one JSON status record containing available space, usage percentage,
+Docker data root and a compact `docker system df` result. It returns a critical exit
+code after cleanup cannot restore the configured headroom. Warning and critical
+thresholds are supplied by the caller so the self-hosted runner and production host
+can reserve different pull/build space.
+
+The runner profile is used only by the self-hosted image jobs. It cleans old unused
+images, inactive Buildx builders, BuildKit cache and stopped containers. The production
+profile keeps tagged release images and cleans only dangling images, BuildKit cache and
+stopped containers.
+Neither profile removes Docker volumes or deletes containerd snapshots directly.
+
+Install the production timer from a reviewed checkout as root with the commands in
+`ops/systemd/README.md`. It runs every 15 minutes and records failures in the systemd
+journal. A deployment still performs its own pre-pull guard before `release_deploy.py
+prepare`, so a nearly full host fails before image download starts.
 
 ### Bot Startup Reliability
 
