@@ -69,7 +69,7 @@
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   }
 
-  function drawPath(points, scale, dashed) {
+  function drawPath(points, scale, dashed, closed) {
     if (!points.length) return;
     ctx.save();
     ctx.beginPath();
@@ -78,7 +78,7 @@
       const y = cssHeight / 2 - point.y * scale;
       if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     });
-    ctx.closePath();
+    if (closed) ctx.closePath();
     if (dashed) {
       ctx.setLineDash([5, 7]);
       ctx.strokeStyle = "rgba(29,117,133,.35)";
@@ -106,7 +106,7 @@
     for (let x = 0; x < cssWidth; x += 28) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, cssHeight); ctx.stroke(); }
     for (let y = 0; y < cssHeight; y += 28) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cssWidth, y); ctx.stroke(); }
 
-    drawPath(samples, scale, true);
+    drawPath(samples, scale, true, true);
     const count = Number(harmonicsInput.value);
     let cursor = { x: 0, y: 0 };
     ctx.save();
@@ -133,7 +133,7 @@
 
     trace.push(cursor);
     if (trace.length > 260) trace.shift();
-    drawPath(trace, scale, false);
+    drawPath(trace, scale, false, false);
     ctx.beginPath();
     ctx.arc(cssWidth / 2 + cursor.x * scale, cssHeight / 2 - cursor.y * scale, 4, 0, Math.PI * 2);
     ctx.fillStyle = "#c86b4a";

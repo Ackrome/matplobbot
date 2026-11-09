@@ -2718,6 +2718,9 @@ LA57, huge pages and detailed permission flags are outside its scope.
 
 The visualizations are static files served by the existing Nginx frontend. No
 navbar, locale or service-worker change is required for the QR-only rollout.
+The visual regression workflow pins Node 24.21.0 and Playwright 1.65.0 and
+invokes the installed local CLI so the test package and browser binaries stay
+on the same version.
 If offline access is added later, update `service-worker.js` and its cache
 version together. Keep each visualization's colocated `wiki_*.md` file in sync
 with its public controls, dependencies and maintenance constraints.

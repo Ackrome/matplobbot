@@ -13,7 +13,9 @@
   const NS = "http://www.w3.org/2000/svg";
   const MASK_9 = 0x1ffn;
   const MASK_12 = 0xfffn;
-  const MAX_48 = (1n << 48n) - 1n;
+  const LOWER_MAX = (1n << 47n) - 1n;
+  const UPPER_MIN = (1n << 64n) - (1n << 47n);
+  const MAX_64 = (1n << 64n) - 1n;
 
   const state = { address: 0n, parts: null, step: 0, tlb: false };
   const levels = ["CR3", "PML4", "PDPT", "PD", "PT", "Фрейм"];
@@ -31,7 +33,9 @@
     const raw = input.value.trim().replace(/_/g, "");
     if (!/^0x[0-9a-f]+$/i.test(raw)) throw new Error("Введите адрес в шестнадцатеричном виде, например 0x7FFF_CAFE_B000.");
     const address = BigInt(raw);
-    if (address > MAX_48) throw new Error("Демо принимает 48-битные канонические адреса (не больше 0x0000FFFFFFFFFFFF).");
+    if (address > MAX_64 || (address > LOWER_MAX && address < UPPER_MIN)) {
+      throw new Error("Демо принимает канонические 64-битные адреса x86-64: нижняя половина до 0x00007FFFFFFFFFFF или верхняя от 0xFFFF800000000000.");
+    }
     const parts = {
       sign: Number((address >> 47n) & 1n),
       pml4: Number((address >> 39n) & MASK_9),
@@ -44,7 +48,7 @@
     state.parts = parts;
     state.step = 0;
     state.tlb = false;
-    addressDisplay.textContent = `0x${address.toString(16).toUpperCase().padStart(12, "0")}`;
+    addressDisplay.textContent = `0x${address.toString(16).toUpperCase().padStart(address > LOWER_MAX ? 16 : 12, "0")}`;
     clearError();
     setMessage("Шаг 0: адрес разобран. Нажмите «Следующий шаг». ", "success");
     draw();
@@ -58,7 +62,11 @@
   }
 
   function draw() {
+    const title = makeSvg("title", { id: "paging-diagram-title" }, "Четыре уровня таблицы страниц");
+    const description = makeSvg("desc", { id: "paging-diagram-desc" }, "Схема перехода от виртуального адреса через PML4, PDPT, PD и PT к физическому фрейму.");
     diagram.replaceChildren(
+      title,
+      description,
       makeSvg("text", { x: 40, y: 40, fill: "currentColor", "font-size": 14, "font-weight": 700 }, state.tlb ? "TLB hit: таблицы не читаются" : "Пошаговый обход таблиц страниц")
     );
     const xPositions = [36, 205, 374, 543, 712, 850];
