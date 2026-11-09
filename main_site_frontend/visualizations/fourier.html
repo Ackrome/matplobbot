@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Эпициклы Фурье: гармоники постепенно собирают замкнутую кривую.">
+  <title>Эпициклы Фурье</title>
+  <script src="/js/theme_bootstrap.js?v=20260821-6"></script>
+  <link rel="stylesheet" href="/visualizations/visualizations.css">
+</head>
+<body class="lab-page">
+  <main class="lab-shell">
+    <header class="lab-masthead">
+      <div>
+        <p class="lab-kicker">Лаборатория анализа · Fourier</p>
+        <h1 class="lab-title">Кривая из вращающихся гармоник</h1>
+        <p class="lab-intro">Каждый круг добавляет одну частоту. При увеличении числа гармоник конец последнего вектора всё точнее обходит заданный замкнутый контур.</p>
+      </div>
+      <div class="lab-mark" aria-hidden="true">∿</div>
+    </header>
+
+    <section class="lab-card lab-card--stage" aria-labelledby="fourier-stage-title">
+      <h2 id="fourier-stage-title" class="lab-sr-only">Анимация эпициклов</h2>
+      <div class="lab-stage lab-stage--flat">
+        <canvas id="fourier-canvas" width="1000" height="520" role="img" aria-label="Анимация эпициклов Фурье"></canvas>
+      </div>
+      <div class="lab-controls">
+        <label class="lab-control">
+          <span class="lab-label"><span>Гармоники</span><output id="harmonics-value" class="lab-value">8</output></span>
+          <input id="harmonics" type="range" min="1" max="24" step="1" value="8" aria-label="Количество гармоник">
+        </label>
+        <label class="lab-control">
+          <span class="lab-label"><span>Скорость</span><output id="speed-value" class="lab-value">1.0×</output></span>
+          <input id="speed" type="range" min="0.25" max="2" step="0.05" value="1" aria-label="Скорость анимации">
+        </label>
+        <div class="lab-control lab-control--wide">
+          <div class="lab-button-row">
+            <button id="toggle-animation" type="button" class="lab-button lab-button--primary" aria-pressed="true">Пауза</button>
+            <button id="clear-trace" type="button" class="lab-button">Очистить след</button>
+          </div>
+          <p id="fourier-status" class="lab-status" role="status" aria-live="polite">8 гармоник собирают кривую.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="lab-info-grid">
+      <section class="lab-card lab-info">
+        <h2>Почему это работает</h2>
+        <p>Периодическую кривую можно представить суммой вращающихся векторов. Низкие частоты задают крупную форму, высокие уточняют детали.</p>
+      </section>
+      <section class="lab-card lab-info">
+        <h2>Режим спокойного чтения</h2>
+        <p>При включённом reduced motion анимация стартует на паузе. Кнопки и ползунки остаются полностью доступны с клавиатуры.</p>
+      </section>
+    </div>
+  </main>
+  <script src="/visualizations/js/fourier.js"></script>
+</body>
+</html>

@@ -18,13 +18,12 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24.21.0"
 
       - name: Install Playwright
         run: |
-          npm init -y
-          npm install --no-save playwright
-          npx playwright install --with-deps chromium
+          npm ci
+          ./node_modules/.bin/playwright install --with-deps chromium
 
       - name: Capture Desktop and Mobile Baselines
         run: node tests/visual/stats_baseline_capture.mjs

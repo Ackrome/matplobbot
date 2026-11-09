@@ -64,6 +64,14 @@ async function createStaticServer() {
 }
 
 async function attachApiMocks(page) {
+    await page.route("**/api/**", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ ok: true }),
+        });
+    });
+
     await page.route("**/api/auth/me", async (route) => {
         await route.fulfill({
             status: 200,
@@ -88,13 +96,6 @@ async function attachApiMocks(page) {
         });
     });
 
-    await page.route("**/api/**", async (route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: JSON.stringify({ ok: true }),
-        });
-    });
 }
 
 async function captureDesktop(browser) {
@@ -103,6 +104,7 @@ async function captureDesktop(browser) {
     const page = await context.newPage();
     await attachApiMocks(page);
     await page.goto(`http://127.0.0.1:${PORT}/stats.html`, { waitUntil: "networkidle" });
+    await page.locator('button[data-mode="usage"]').click();
     await page.waitForSelector("#leaderboardBody tr");
     await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(ARTIFACTS_DIR, "stats-desktop.png"), fullPage: true });
@@ -115,6 +117,7 @@ async function captureMobile(browser) {
     const page = await context.newPage();
     await attachApiMocks(page);
     await page.goto(`http://127.0.0.1:${PORT}/stats.html`, { waitUntil: "networkidle" });
+    await page.locator('button[data-mode="usage"]').click();
     await page.waitForSelector("#leaderboardBody tr");
     await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(ARTIFACTS_DIR, "stats-mobile.png"), fullPage: true });

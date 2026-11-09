@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Интерактивная геометрия сингулярного разложения: сфера превращается в эллипсоид.">
+  <title>SVD: сфера → эллипсоид</title>
+  <script src="/js/theme_bootstrap.js?v=20260821-6"></script>
+  <link rel="stylesheet" href="/visualizations/visualizations.css">
+  <script src="https://unpkg.com/three@0.128.0/build/three.min.js" integrity="sha384-CI3ELBVUz9XQO+97x6nwMDPosPR5XvsxW2ua7N1Xeygeh1IxtgqtCkGfQY9WWdHu" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js" integrity="sha384-wagZhIFgY4hD+7awjQjR4e2E294y6J2HSnd8eTNc15ZubTeQeVRZwhQJ+W6hnBsf" crossorigin="anonymous"></script>
+</head>
+<body class="lab-page">
+  <main class="lab-shell">
+    <header class="lab-masthead">
+      <div>
+        <p class="lab-kicker">Лаборатория линейной алгебры · SVD</p>
+        <h1 class="lab-title">Сфера становится эллипсоидом</h1>
+        <p class="lab-intro">Разложение <span class="lab-code">A = UΣVᵀ</span> показывает действие матрицы по шагам: поворот, растяжение вдоль главных осей и ещё один поворот.</p>
+      </div>
+      <div class="lab-mark" aria-hidden="true">Σ</div>
+    </header>
+
+    <section class="lab-card lab-card--stage" aria-labelledby="svd-stage-title">
+      <h2 id="svd-stage-title" class="lab-sr-only">3D-сцена преобразования</h2>
+      <div id="svd-stage" class="lab-stage">
+        <p class="lab-stage-note">Перетаскивайте сцену мышью или пальцем. Сетка остаётся неподвижной, поэтому изменение формы видно сразу.</p>
+      </div>
+      <div class="lab-controls">
+        <label class="lab-control lab-control--wide">
+          <span class="lab-label"><span>Фаза преобразования</span><output id="phase-value" class="lab-value">0%</span></output></span>
+          <input id="phase" type="range" min="0" max="3" step="0.01" value="0" aria-label="Фаза преобразования">
+        </label>
+        <label class="lab-control">
+          <span class="lab-label"><span>σ₃, третья ось</span><output id="sigma-value" class="lab-value">0.80</output></span>
+          <input id="sigma3" type="range" min="0.08" max="1.6" step="0.01" value="0.8" aria-label="Третье сингулярное число">
+        </label>
+        <div class="lab-control">
+          <span class="lab-label">Сейчас</span>
+          <p id="phase-label" class="lab-status" aria-live="polite">Исходная сфера</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="lab-info-grid">
+      <section class="lab-card lab-info">
+        <h2>Что наблюдать</h2>
+        <ul>
+          <li>На первой фазе меняется ориентация базиса, но длины осей ещё равны.</li>
+          <li>На второй фазе сфера получает полуоси σ₁, σ₂ и σ₃.</li>
+          <li>При σ₃ → 0 объём схлопывается в почти плоский диск: ранг падает.</li>
+        </ul>
+      </section>
+      <section class="lab-card lab-info">
+        <h2>Формула</h2>
+        <p>Для точки <span class="lab-code">x</span> матрица действует как последовательность простых операций.</p>
+        <span class="lab-equation">Ax = Σᵢ σᵢuᵢ(vᵢᵀx)</span>
+        <p id="svd-status" class="lab-status" role="status"></p>
+      </section>
+    </div>
+  </main>
+  <script src="/visualizations/js/svd.js"></script>
+</body>
+</html>

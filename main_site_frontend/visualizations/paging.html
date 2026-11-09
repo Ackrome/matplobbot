@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Пошаговая визуализация 4-уровневой трансляции виртуального адреса x86-64.">
+  <title>x86-64 paging walk</title>
+  <script src="/js/theme_bootstrap.js?v=20260821-6"></script>
+  <link rel="stylesheet" href="/visualizations/visualizations.css">
+</head>
+<body class="lab-page">
+  <main class="lab-shell">
+    <header class="lab-masthead">
+      <div>
+        <p class="lab-kicker">Лаборатория архитектуры · paging walk</p>
+        <h1 class="lab-title">Адрес раскладывается по уровням</h1>
+        <p class="lab-intro">Введите канонический 48-битный виртуальный адрес и пройдите путь от CR3 до физического фрейма. Каждый индекс показывает, какую запись таблицы выбирает процессор.</p>
+      </div>
+      <div class="lab-mark" aria-hidden="true">↦</div>
+    </header>
+
+    <section class="lab-card lab-card--stage" aria-labelledby="paging-stage-title">
+      <h2 id="paging-stage-title" class="lab-sr-only">Схема обхода таблиц страниц</h2>
+      <div class="lab-stage lab-stage--flat">
+        <svg id="paging-diagram" viewBox="0 0 1000 430" role="img" aria-labelledby="paging-diagram-title paging-diagram-desc">
+          <title id="paging-diagram-title">Четыре уровня таблицы страниц</title>
+          <desc id="paging-diagram-desc">Схема перехода от виртуального адреса через PML4, PDPT, PD и PT к физическому фрейму.</desc>
+        </svg>
+      </div>
+      <div class="lab-controls">
+        <label class="lab-control lab-control--wide">
+          <span class="lab-label"><span>Виртуальный адрес</span><output id="address-display" class="lab-value">0x7FFFCAFEB000</output></span>
+          <input id="virtual-address" type="text" value="0x7FFF_CAFE_B000" inputmode="text" spellcheck="false" aria-describedby="paging-status">
+        </label>
+        <div class="lab-control lab-control--wide">
+          <div class="lab-button-row">
+            <button id="parse-address" type="button" class="lab-button lab-button--primary">Разобрать адрес</button>
+            <button id="next-step" type="button" class="lab-button">Следующий шаг</button>
+            <button id="reset-walk" type="button" class="lab-button">Сбросить</button>
+            <button id="tlb-hit" type="button" class="lab-button lab-button--warm">Сымитировать TLB hit</button>
+          </div>
+          <p id="paging-status" class="lab-status" role="status" aria-live="polite">Шаг 0: адрес готов к разбору.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="lab-info-grid">
+      <section class="lab-card lab-info">
+        <h2>Разметка 48-битного адреса</h2>
+        <p class="lab-equation">[sign extension 16] [PML4 9] [PDPT 9] [PD 9] [PT 9] [offset 12]</p>
+        <p>Демо фиксирует обычные 4 KiB страницы и 4 уровня. LA57, huge pages и отдельные флаги записи оставлены за пределами этой схемы.</p>
+      </section>
+      <section class="lab-card lab-info">
+        <h2>Проверка</h2>
+        <p>Если запись отсутствует, обход останавливается на page fault. Если перевод уже есть в TLB, уровни таблиц не читаются.</p>
+        <p id="paging-error" class="lab-status" data-state="error" role="alert"></p>
+      </section>
+    </div>
+  </main>
+  <script src="/visualizations/js/paging.js"></script>
+</body>
+</html>
