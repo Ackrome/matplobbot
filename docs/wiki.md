@@ -2692,3 +2692,32 @@ older checkout predates the tracked shell file. No live rollback was performed.
 The final production filesystem had about 9.15 GiB available; public schedule
 rendering and browser-console checks passed after reload. The dated reports
 retain the earlier Jenkins 347 false-green/manual recovery as historical evidence.
+
+## QR-only interactive visualization laboratory
+
+The static frontend now contains three direct-URL educational pages for the
+mathematics preparation book. They are deliberately outside the global navbar,
+locale dictionaries and service-worker core cache: distribution happens through
+the book's QR links and direct URLs.
+
+Pages:
+
+- `/visualizations/svd` (`main_site_frontend/visualizations/svd.html`) — a
+  pinned Three.js r128 scene showing the phases of `A = UΣVᵀ`.
+- `/visualizations/paging` (`main_site_frontend/visualizations/paging.html`) —
+  a vanilla SVG walk through 48-bit, four-level x86-64 paging.
+- `/visualizations/fourier` (`main_site_frontend/visualizations/fourier.html`) —
+  a Canvas 2D epicycle reconstruction with controllable harmonics.
+
+All three pages use the shared `lab-*` style in
+`main_site_frontend/visualizations/visualizations.css`. The pages have visible
+keyboard focus, responsive layouts, reduced-motion handling and live status
+messages. They do not call the API, require authentication or persist user
+state. The paging lesson intentionally models 4 KiB pages and four levels;
+LA57, huge pages and detailed permission flags are outside its scope.
+
+The visualizations are static files served by the existing Nginx frontend. No
+navbar, locale or service-worker change is required for the QR-only rollout.
+If offline access is added later, update `service-worker.js` and its cache
+version together. Keep each visualization's colocated `wiki_*.md` file in sync
+with its public controls, dependencies and maintenance constraints.

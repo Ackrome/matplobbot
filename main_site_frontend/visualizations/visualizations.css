@@ -1,0 +1,297 @@
+:root {
+  --ui-bg: #f7f9fc;
+  --ui-surface: #ffffff;
+  --ui-text: #17243b;
+  --ui-muted: #52647d;
+  --ui-line: #dbe3ee;
+  --ui-accent: #245bea;
+  --lab-ink: #17243b;
+  --lab-paper: #fbfaf6;
+  --lab-panel: #ffffff;
+  --lab-wash: #eef5f3;
+  --lab-warm: #c86b4a;
+  --lab-teal: #1d7585;
+  --lab-grid: rgba(29, 117, 133, 0.09);
+  --lab-shadow: 0 22px 60px rgba(23, 36, 59, 0.12);
+}
+
+.dark {
+  --ui-bg: #0b1220;
+  --ui-surface: #111d30;
+  --ui-text: #e5edf9;
+  --ui-muted: #a4b4cb;
+  --ui-line: #2c3d55;
+  --ui-accent: #8bb1ff;
+  --lab-ink: #e5edf9;
+  --lab-paper: #0d1827;
+  --lab-panel: #111d30;
+  --lab-wash: #122b31;
+  --lab-warm: #f0a182;
+  --lab-teal: #72c4cf;
+  --lab-grid: rgba(114, 196, 207, 0.1);
+  --lab-shadow: 0 22px 60px rgba(0, 0, 0, 0.28);
+}
+
+* { box-sizing: border-box; }
+
+html { min-height: 100%; background: var(--ui-bg); }
+
+body.lab-page {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--lab-ink);
+  background:
+    linear-gradient(var(--lab-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--lab-grid) 1px, transparent 1px),
+    var(--lab-paper);
+  background-size: 28px 28px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+button, input { font: inherit; }
+button { cursor: pointer; }
+
+.lab-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 42px 0 56px;
+}
+
+.lab-masthead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: end;
+  margin-bottom: 28px;
+}
+
+.lab-kicker {
+  margin: 0 0 10px;
+  color: var(--lab-teal);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.lab-title {
+  max-width: 760px;
+  margin: 0;
+  font-size: clamp(32px, 6vw, 64px);
+  font-weight: 780;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+}
+
+.lab-intro {
+  max-width: 680px;
+  margin: 16px 0 0;
+  color: var(--ui-muted);
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+.lab-mark {
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  border: 1px solid var(--ui-line);
+  border-radius: 50%;
+  color: var(--lab-warm);
+  background: var(--lab-panel);
+  box-shadow: var(--lab-shadow);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 32px;
+  font-style: italic;
+}
+
+.lab-card {
+  border: 1px solid var(--ui-line);
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--lab-panel) 92%, transparent);
+  box-shadow: var(--lab-shadow);
+}
+
+.lab-card--stage { overflow: hidden; }
+
+.lab-stage {
+  position: relative;
+  min-height: 480px;
+  background: var(--lab-wash);
+}
+
+.lab-stage canvas {
+  display: block;
+  width: 100%;
+  min-height: 480px;
+}
+
+.lab-stage--flat {
+  padding: 18px;
+}
+
+.lab-stage svg,
+.lab-stage--flat canvas {
+  display: block;
+  width: 100%;
+  min-height: 430px;
+  border: 1px solid var(--ui-line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--lab-panel) 78%, var(--lab-wash));
+}
+
+.lab-stage-note {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  max-width: 270px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-line);
+  border-radius: 12px;
+  color: var(--ui-muted);
+  background: color-mix(in srgb, var(--lab-panel) 88%, transparent);
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+}
+
+.lab-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  padding: 22px;
+  border-top: 1px solid var(--ui-line);
+  background: var(--lab-panel);
+}
+
+.lab-control { display: grid; gap: 8px; }
+.lab-control--wide { grid-column: 1 / -1; }
+
+.lab-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--lab-ink);
+  font-size: 14px;
+  font-weight: 720;
+}
+
+.lab-value {
+  color: var(--lab-teal);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--lab-warm);
+}
+
+input[type="text"],
+input[type="number"] {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  color: var(--ui-text);
+  background: var(--lab-panel);
+}
+
+.lab-button {
+  min-height: 44px;
+  padding: 10px 15px;
+  border: 1px solid var(--ui-line);
+  border-radius: 12px;
+  color: var(--ui-text);
+  background: var(--lab-panel);
+  font-weight: 720;
+}
+
+.lab-button:hover { border-color: var(--lab-teal); color: var(--lab-teal); }
+.lab-button--primary { border-color: var(--lab-teal); color: #fff; background: var(--lab-teal); }
+.lab-button--warm { border-color: var(--lab-warm); color: #fff; background: var(--lab-warm); }
+.lab-button:disabled { cursor: not-allowed; opacity: .5; }
+
+.lab-button-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+.lab-info-grid {
+  display: grid;
+  grid-template-columns: 1.2fr .8fr;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.lab-info {
+  padding: 22px;
+}
+
+.lab-info h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.lab-info p, .lab-info li {
+  color: var(--ui-muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.lab-info ul { margin: 10px 0 0; padding-left: 20px; }
+
+.lab-equation {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--lab-teal);
+  background: var(--lab-wash);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+.lab-status {
+  min-height: 24px;
+  margin: 0;
+  color: var(--ui-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.lab-status[data-state="error"] { color: #b4233c; }
+.lab-status[data-state="success"] { color: #1d704b; }
+
+.lab-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.lab-code {
+  color: var(--lab-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .lab-shell { width: min(100% - 20px, 680px); padding-top: 24px; }
+  .lab-masthead { grid-template-columns: 1fr; }
+  .lab-mark { width: 64px; height: 64px; font-size: 24px; }
+  .lab-stage, .lab-stage canvas { min-height: 360px; }
+  .lab-stage--flat canvas, .lab-stage svg { min-height: 340px; }
+  .lab-controls, .lab-info-grid { grid-template-columns: 1fr; }
+  .lab-control--wide { grid-column: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .001ms !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
+}
