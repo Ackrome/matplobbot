@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Интерактивная демонстрация kernel trick: концентрические классы становятся разделимыми плоскостью в признаковом пространстве.">
+  <title>Kernel Trick: круги → плоскость</title>
+  <script src="/js/theme_bootstrap.js?v=20260821-6"></script>
+  <link rel="stylesheet" href="/visualizations/visualizations.css">
+  <script src="https://unpkg.com/three@0.128.0/build/three.min.js" integrity="sha384-CI3ELBVUz9XQO+97x6nwMDPosPR5XvsxW2ua7N1Xeygeh1IxtgqtCkGfQY9WWdHu" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js" integrity="sha384-wagZhIFgY4hD+7awjQjR4e2E294y6J2HSnd8eTNc15ZubTeQeVRZwhQJ+W6hnBsf" crossorigin="anonymous"></script>
+</head>
+<body class="lab-page">
+  <main class="lab-shell">
+    <header class="lab-masthead">
+      <div>
+        <p class="lab-kicker">Лаборатория ML · Kernel Trick</p>
+        <h1 class="lab-title">Круги становятся плоскостью</h1>
+        <p class="lab-intro">В исходной плоскости красный диск и синее кольцо нельзя разделить прямой. Признаковое отображение <span class="lab-code">φ(x, y) = (x, y, x² + y²)</span> поднимает кольцо выше, и между классами появляется горизонтальная плоскость.</p>
+      </div>
+      <div class="lab-mark" aria-hidden="true">φ</div>
+    </header>
+
+    <section class="lab-card lab-card--stage" aria-labelledby="kernel-stage-title">
+      <h2 id="kernel-stage-title" class="lab-sr-only">3D-сцена ядерного трюка</h2>
+      <div id="kernel-stage" class="lab-stage">
+        <p class="lab-stage-note">Переключите вид 2D/3D и вращайте сцену мышью или пальцем.</p>
+      </div>
+      <div class="lab-controls">
+        <div class="lab-control">
+          <span class="lab-label"><span>Пространство</span><output id="space-value" class="lab-value">3D</output></span>
+          <div class="lab-button-row">
+            <button id="space-2d" class="lab-button" type="button" aria-pressed="false">2D: исходные точки</button>
+            <button id="space-3d" class="lab-button lab-button--primary" type="button" aria-pressed="true">3D: признаки φ</button>
+          </div>
+        </div>
+        <label class="lab-control">
+          <span class="lab-label"><span>Высота плоскости c</span><output id="plane-value" class="lab-value">0.60</output></span>
+          <input id="plane-height" type="range" min="0.35" max="1.10" step="0.01" value="0.60" aria-label="Высота разделяющей плоскости">
+        </label>
+        <div class="lab-control">
+          <span class="lab-label">Сейчас</span>
+          <p id="kernel-status" class="lab-status" role="status" aria-live="polite">3D: классы разделены плоскостью z = 0.60.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="lab-info-grid">
+      <section class="lab-card lab-info">
+        <h2>Что наблюдать</h2>
+        <ul>
+          <li>Красный диск имеет <span class="lab-code">r² ≤ 0.30</span>, синее кольцо — <span class="lab-code">r² ≥ 0.90</span>: между ними оставлен зазор.</li>
+          <li>В 2D граница — окружность, поэтому одной прямой разделить классы нельзя.</li>
+          <li>В 3D координата <span class="lab-code">z = x² + y²</span> превращает окружность в сечение плоскости <span class="lab-code">z = c</span>.</li>
+        </ul>
+      </section>
+      <section class="lab-card lab-info">
+        <h2>Граница применимости</h2>
+        <p>Это фиксированная демонстрация отображения признаков и разделимости заданного набора точек. Здесь не решается задача обучения SVM и не вычисляется оптимальная max-margin гиперплоскость.</p>
+        <span class="lab-equation">φ(x, y) = (x, y, x² + y²),&nbsp; z = c</span>
+        <p id="kernel-detail" class="lab-status">Плоскость c выбрана внутри зазора между классами.</p>
+      </section>
+    </div>
+  </main>
+  <script src="/visualizations/js/kernel-trick.js"></script>
+</body>
+</html>

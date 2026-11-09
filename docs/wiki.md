@@ -2739,6 +2739,9 @@ Pages:
   a vanilla SVG walk through 48-bit, four-level x86-64 paging.
 - `/visualizations/fourier` (`main_site_frontend/visualizations/fourier.html`) —
   a Canvas 2D epicycle reconstruction with controllable harmonics.
+- `/visualizations/kernel-trick` (`main_site_frontend/visualizations/kernel-trick.html`) —
+  a pinned Three.js view of the fixed mapping `φ(x,y)=(x,y,x²+y²)` for a red
+  disk and blue annulus.
 
 All three pages use the shared `lab-*` style in
 `main_site_frontend/visualizations/visualizations.css`. The pages have visible
@@ -2752,6 +2755,8 @@ navbar, locale or service-worker change is required for the QR-only rollout.
 The visual regression workflow uses Node 24.21.0 and `npm ci` from the frontend
 lockfile, then invokes the installed local Playwright CLI so the test package
 and browser binaries stay on the same version.
+The Kernel Trick page is a separability demonstration for a fixed feature map;
+it does not train a max-margin SVM or solve the SVM quadratic program.
 If offline access is added later, update `service-worker.js` and its cache
 version together. Keep each visualization's colocated `wiki_*.md` file in sync
 with its public controls, dependencies and maintenance constraints.
