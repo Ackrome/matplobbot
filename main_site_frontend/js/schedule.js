@@ -1,6 +1,5 @@
 const API_BASE = window.getMpbApiBase ? window.getMpbApiBase() : "/api";
 const STORAGE_KEY = "mpb_user_preferences";
-const SCHEDULE_SNAPSHOTS_KEY = "mpb_schedule_snapshots";
 const SCHEDULE_DAY_EXPANSION_STORAGE_KEY = "mpb_schedule_day_expansion";
 const SCHEDULE_ENTITY_TYPES = new Set(['group', 'person', 'auditorium']);
 const SCHEDULE_VIEW_MODES = new Set(['auto', 'table', 'cards', 'compact', 'exams']);
@@ -46,7 +45,7 @@ let searchCategory = 'all';
 let searchRequestSeq = 0;
 let moduleFilterQuery = '';
 let modulePresets = [];
-let scheduleChangeSummary = null;
+let scheduleHistoryEvent = '';
 let lessonActionMap = new Map();
 const lessonActionIds = new WeakMap();
 let nextLessonActionId = 0;
@@ -300,6 +299,9 @@ function parseScheduleStateFromUrl() {
         offline: params.get('offline') === '1',
         calendarProfileId: params.get('profile') || null,
         showChanges: params.get('changes') === '1',
+        changeEvent: /^[0-9a-f]{64}$/.test(params.get('change_event') || '') ? params.get('change_event') : '',
+        lesson: params.get('lesson')?.slice(0, 128) || '',
+        lessonDate: normalizeScheduleDate(params.get('lesson_date')),
         hasEntity: Boolean(entity.id),
         hasModules: Boolean(modulesParam && modulesParam !== 'all'),
         hasEmptyModules: modulesParam === 'none'
@@ -321,6 +323,7 @@ function buildScheduleStateFromPreferences(prefs = {}) {
 }
 
 const initialUrlScheduleState = parseScheduleStateFromUrl();
+scheduleHistoryEvent = initialUrlScheduleState.changeEvent;
 setSchedulePageState(initialUrlScheduleState);
 
 function syncScheduleUrl(mode = 'replace') {
@@ -350,6 +353,8 @@ function syncScheduleUrl(mode = 'replace') {
     else params.delete('profile');
     if (schedulePageState.showChanges) params.set('changes', '1');
     else params.delete('changes');
+    if (schedulePageState.showChanges && scheduleHistoryEvent) params.set('change_event', scheduleHistoryEvent);
+    else params.delete('change_event');
     params.delete('offline');
     const nextUrl = `${url.pathname}${params.toString() ? `?${params.toString()}` : ''}${url.hash}`;
     const method = mode === 'push' ? 'pushState' : 'replaceState';
@@ -404,10 +409,12 @@ window.setScheduleCalendarProfile = function(profileId, { updateUrl = true } = {
 
 window.toggleScheduleChanges = function(forceOpen = null) {
     const nextValue = typeof forceOpen === 'boolean' ? forceOpen : !schedulePageState.showChanges;
+    if (!nextValue) scheduleHistoryEvent = '';
     setSchedulePageState({ showChanges: nextValue });
     syncScheduleUrl('replace');
     renderScheduleHome();
     renderScheduleChangesPanel();
+    if (!nextValue) document.getElementById('scheduleChangesToggleBtn')?.focus();
     savePreferences();
 }
 
@@ -512,6 +519,7 @@ window.addEventListener('mpb-auth-ready', (event) => {
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
+    await window.mpbI18n?.ready;
     await initOfflineHistory();
     await loadInitialPreferences();
     window.mpbI18n?.registerTranslator?.(() => {
@@ -863,156 +871,6 @@ window.deleteModulePreset = function(presetId) {
     renderModuleFilters();
 }
 
-function getSnapshotEntityKey(entity = currentEntity) {
-    return entity?.type && entity?.id ? `${entity.type}:${entity.id}` : '';
-}
-
-function loadScheduleSnapshots() {
-    try {
-        const payload = JSON.parse(localStorage.getItem(SCHEDULE_SNAPSHOTS_KEY) || '{}');
-        return payload && typeof payload === 'object' ? payload : {};
-    } catch {
-        return {};
-    }
-}
-
-function persistScheduleSnapshot(entityKey, schedule, updatedAt) {
-    if (!entityKey) return;
-    const snapshots = loadScheduleSnapshots();
-    snapshots[entityKey] = {
-        captured_at: new Date().toISOString(),
-        source_updated_at: updatedAt || null,
-        lessons: (Array.isArray(schedule) ? schedule : []).map(normalizeLessonForSnapshot)
-    };
-    const recentSnapshots = Object.fromEntries(
-        Object.entries(snapshots)
-            .sort(([, left], [, right]) => String(left?.captured_at || '').localeCompare(String(right?.captured_at || '')))
-            .slice(-3)
-    );
-    try {
-        localStorage.setItem(SCHEDULE_SNAPSHOTS_KEY, JSON.stringify(recentSnapshots));
-    } catch (error) {
-        // Quota limits and disabled storage must not break schedule rendering.
-        console.warn('Unable to persist schedule snapshot:', error);
-        try {
-            localStorage.removeItem(SCHEDULE_SNAPSHOTS_KEY);
-            localStorage.setItem(
-                SCHEDULE_SNAPSHOTS_KEY,
-                JSON.stringify({ [entityKey]: snapshots[entityKey] })
-            );
-        } catch {
-            // Storage is optional; the in-memory schedule remains usable.
-        }
-    }
-}
-
-function normalizeLessonForSnapshot(lesson) {
-    return {
-        identity: getLessonIdentity(lesson),
-        date: String(lesson.date || ''),
-        beginLesson: String(lesson.beginLesson || ''),
-        endLesson: String(lesson.endLesson || ''),
-        discipline: String(lesson.discipline_full || lesson.discipline || lesson.discipline_short || ''),
-        kindOfWork: String(lesson.kindOfWork || ''),
-        module: String(lesson.module || ''),
-        auditorium: String(lesson.auditorium || ''),
-        lecturer_title: String(lesson.lecturer_title || '')
-    };
-}
-
-function normalizeSnapshotText(value) {
-    return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function getLessonIdentity(lesson) {
-    return [
-        normalizeSnapshotText(lesson.discipline_full || lesson.discipline || lesson.discipline_short),
-        normalizeSnapshotText(lesson.kindOfWork),
-        normalizeSnapshotText(lesson.module)
-    ].join('|');
-}
-
-function buildLessonChangeLabel(lesson) {
-    return [
-        lesson.discipline || '-',
-        lesson.module,
-        lesson.date,
-        lesson.beginLesson
-    ].filter(Boolean).join(' · ');
-}
-
-function buildScheduleChangeSummary(previousSnapshot, currentSchedule, updatedAt) {
-    const currentLessons = (Array.isArray(currentSchedule) ? currentSchedule : []).map(normalizeLessonForSnapshot);
-    const baseSummary = {
-        hasPrevious: Boolean(previousSnapshot?.lessons?.length),
-        previousCapturedAt: previousSnapshot?.captured_at || null,
-        previousSourceUpdatedAt: previousSnapshot?.source_updated_at || null,
-        sourceUpdatedAt: updatedAt || null,
-        newLessons: [],
-        removedLessons: [],
-        movedLessons: [],
-        roomChanges: [],
-        teacherChanges: []
-    };
-    if (!baseSummary.hasPrevious) return baseSummary;
-
-    const previousByIdentity = new Map();
-    previousSnapshot.lessons.forEach((lesson) => {
-        if (!previousByIdentity.has(lesson.identity)) previousByIdentity.set(lesson.identity, []);
-        previousByIdentity.get(lesson.identity).push(lesson);
-    });
-    const currentByIdentity = new Map();
-    currentLessons.forEach((lesson) => {
-        if (!currentByIdentity.has(lesson.identity)) currentByIdentity.set(lesson.identity, []);
-        currentByIdentity.get(lesson.identity).push(lesson);
-    });
-
-    currentByIdentity.forEach((currentItems, identity) => {
-        const previousItems = previousByIdentity.get(identity) || [];
-        if (!previousItems.length) {
-            baseSummary.newLessons.push(...currentItems.map((lesson) => ({ lesson, label: buildLessonChangeLabel(lesson) })));
-            return;
-        }
-        currentItems.forEach((lesson, index) => {
-            const previous = previousItems[Math.min(index, previousItems.length - 1)];
-            if (!previous) return;
-            if (lesson.date !== previous.date || lesson.beginLesson !== previous.beginLesson || lesson.endLesson !== previous.endLesson) {
-                baseSummary.movedLessons.push({
-                    lesson,
-                    previous,
-                    label: buildLessonChangeLabel(lesson),
-                    from: `${previous.date} ${previous.beginLesson}-${previous.endLesson}`.trim(),
-                    to: `${lesson.date} ${lesson.beginLesson}-${lesson.endLesson}`.trim()
-                });
-            }
-            if (lesson.auditorium !== previous.auditorium) {
-                baseSummary.roomChanges.push({
-                    lesson,
-                    previous,
-                    label: buildLessonChangeLabel(lesson),
-                    from: previous.auditorium || '-',
-                    to: lesson.auditorium || '-'
-                });
-            }
-            if (lesson.lecturer_title !== previous.lecturer_title) {
-                baseSummary.teacherChanges.push({
-                    lesson,
-                    previous,
-                    label: buildLessonChangeLabel(lesson),
-                    from: previous.lecturer_title || '-',
-                    to: lesson.lecturer_title || '-'
-                });
-            }
-        });
-    });
-    previousByIdentity.forEach((previousItems, identity) => {
-        if (!currentByIdentity.has(identity)) {
-            baseSummary.removedLessons.push(...previousItems.map((lesson) => ({ lesson, label: buildLessonChangeLabel(lesson) })));
-        }
-    });
-    return baseSummary;
-}
-
 function getLessonDateTime(lesson) {
     const datePart = getISODateStr(parseDate(lesson.date || ''));
     const timePart = String(lesson.beginLesson || '00:00').padStart(5, '0');
@@ -1203,6 +1061,7 @@ function syncScheduleToolbarActions({ hasEntity, isFavorite, changeCount }) {
         changesBtn.classList.toggle('opacity-50', !hasEntity);
         changesBtn.setAttribute('title', changesText);
         changesBtn.setAttribute('aria-label', changesText);
+        changesBtn.setAttribute('aria-expanded', String(schedulePageState.showChanges));
         if (changesLabel) changesLabel.textContent = changesText;
         if (changesBadge) {
             changesBadge.textContent = changeCount > 99 ? '99+' : String(changeCount || '');
@@ -1265,62 +1124,9 @@ window.openCalendarSyncFromScheduleHome = function() {
     }
 }
 
-function formatScheduleSnapshotDate(value) {
-    if (!value) return t('schedule.changes.never', 'No previous snapshot');
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime())
-        ? value
-        : formatUiDate(parsed, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-}
-
-function isScheduleChangeVisible(item) {
-    return isLessonInCurrentDisplayedScope(item?.lesson, { includeModuleFilter: true })
-        || isLessonInCurrentDisplayedScope(item?.previous, { includeModuleFilter: true });
-}
-
-function getFilteredScheduleChangeSummary(summary = scheduleChangeSummary) {
-    if (!summary) return null;
-    return {
-        ...summary,
-        newLessons: (summary.newLessons || []).filter(isScheduleChangeVisible),
-        removedLessons: (summary.removedLessons || []).filter(isScheduleChangeVisible),
-        movedLessons: (summary.movedLessons || []).filter(isScheduleChangeVisible),
-        roomChanges: (summary.roomChanges || []).filter(isScheduleChangeVisible),
-        teacherChanges: (summary.teacherChanges || []).filter(isScheduleChangeVisible)
-    };
-}
-
-function getScheduleChangeCount(summary = getFilteredScheduleChangeSummary()) {
-    if (!summary) return 0;
-    return [
-        summary.newLessons,
-        summary.removedLessons,
-        summary.movedLessons,
-        summary.roomChanges,
-        summary.teacherChanges
-    ].reduce((total, items) => total + (Array.isArray(items) ? items.length : 0), 0);
-}
-
-function renderScheduleChangeList(titleKey, fallback, items, toneClass, formatter = null) {
-    const normalized = Array.isArray(items) ? items : [];
-    return `
-        <section class="rounded-2xl border ${toneClass} p-3">
-            <div class="flex items-center justify-between gap-3">
-                <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 dark:text-slate-300">${escapeHtml(t(titleKey, fallback))}</div>
-                <span class="rounded-full bg-white px-2 py-0.5 text-[10px] font-black text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700">${normalized.length}</span>
-            </div>
-            <div class="mt-3 space-y-2">
-                ${normalized.length
-                    ? normalized.slice(0, 6).map((item) => `
-                        <div class="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 dark:bg-slate-900/70 dark:text-slate-200 dark:ring-slate-700">
-                            <div class="line-clamp-2">${escapeHtml(item.label)}</div>
-                            ${formatter ? `<div class="mt-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">${escapeHtml(formatter(item))}</div>` : ''}
-                        </div>
-                    `).join('')
-                    : `<div class="text-xs font-medium text-slate-400">${escapeHtml(t('schedule.changes.noneInGroup', 'No items'))}</div>`}
-            </div>
-        </section>
-    `;
+function getScheduleChangeCount() {
+    const entity = { ...currentEntity, id: scheduleCacheEntityId || currentEntity.id };
+    return window.MpbScheduleHistory?.count(entity, scheduleHistoryEvent) || 0;
 }
 
 function renderScheduleChangesPanel() {
@@ -1328,63 +1134,19 @@ function renderScheduleChangesPanel() {
     if (!container) return;
     if (!currentEntity?.id || !schedulePageState.showChanges) {
         container.classList.add('hidden');
-        container.innerHTML = '';
+        container.replaceChildren();
+        window.MpbScheduleHistory?.reset();
         return;
     }
-    const rawSummary = scheduleChangeSummary;
-    const summary = getFilteredScheduleChangeSummary(rawSummary);
-    const total = getScheduleChangeCount(summary);
-    const parsedLabel = sourceUpdatedAt
-        ? formatScheduleSnapshotDate(sourceUpdatedAt)
-        : t('schedule.context.parsedUnknown', 'Parsed time unknown');
-    const previousLabel = formatScheduleSnapshotDate(rawSummary?.previousSourceUpdatedAt || rawSummary?.previousCapturedAt);
-    container.classList.remove('hidden');
-    container.innerHTML = `
-        <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 md:p-5">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div class="min-w-0">
-                    <div class="text-xs font-black uppercase tracking-[0.2em] text-blue-500 dark:text-blue-300">${escapeHtml(t('schedule.changes.eyebrow', 'Changes'))}</div>
-                    <h2 class="mt-1 text-xl font-black text-slate-900 dark:text-slate-100">${escapeHtml(t('schedule.changes.title', 'Schedule changes'))}</h2>
-                    <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">
-                        ${escapeHtml(t('schedule.changes.subtitle', 'Compared with the previous local snapshot and current filters.'))}
-                    </p>
-                </div>
-                <div class="grid gap-2 sm:flex sm:flex-wrap sm:justify-end">
-                    <span class="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600 dark:bg-slate-900 dark:text-slate-300">${escapeHtml(t('schedule.changes.total', 'Changes: {count}', { count: total }))}</span>
-                    <button type="button" onclick="toggleScheduleChanges(false)" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">${escapeHtml(t('schedule.changes.hide', 'Hide'))}</button>
-                </div>
-            </div>
-            <div class="mt-4 grid gap-2 sm:grid-cols-2">
-                <div class="rounded-2xl bg-slate-50 p-3 text-xs font-semibold text-slate-600 dark:bg-slate-900/60 dark:text-slate-300">
-                    <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(t('schedule.changes.sourceUpdated', 'Parsed'))}</div>
-                    <div class="mt-1">${escapeHtml(parsedLabel)}</div>
-                </div>
-                <div class="rounded-2xl bg-slate-50 p-3 text-xs font-semibold text-slate-600 dark:bg-slate-900/60 dark:text-slate-300">
-                    <div class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">${escapeHtml(t('schedule.changes.previous', 'Previous snapshot'))}</div>
-                    <div class="mt-1">${escapeHtml(previousLabel)}</div>
-                </div>
-            </div>
-            ${summary?.hasPrevious ? `
-                ${total === 0 ? `
-                    <div class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
-                        ${escapeHtml(t('schedule.changes.none', 'No schedule changes since the previous snapshot.'))}
-                    </div>
-                ` : `
-                    <div class="mt-4 grid gap-3 xl:grid-cols-5">
-                        ${renderScheduleChangeList('schedule.changes.new', 'New', summary.newLessons, 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/20')}
-                        ${renderScheduleChangeList('schedule.changes.removed', 'Cancelled', summary.removedLessons, 'border-rose-200 bg-rose-50/70 dark:border-rose-900/60 dark:bg-rose-950/20')}
-                        ${renderScheduleChangeList('schedule.changes.moved', 'Moved', summary.movedLessons, 'border-amber-200 bg-amber-50/70 dark:border-amber-900/60 dark:bg-amber-950/20', (item) => `${item.from} -> ${item.to}`)}
-                        ${renderScheduleChangeList('schedule.changes.rooms', 'Room', summary.roomChanges, 'border-blue-200 bg-blue-50/70 dark:border-blue-900/60 dark:bg-blue-950/20', (item) => `${item.from} -> ${item.to}`)}
-                        ${renderScheduleChangeList('schedule.changes.teachers', 'Lecturer', summary.teacherChanges, 'border-violet-200 bg-violet-50/70 dark:border-violet-900/60 dark:bg-violet-950/20', (item) => `${item.from} -> ${item.to}`)}
-                    </div>
-                `}
-            ` : `
-                <div class="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300">
-                    ${escapeHtml(t('schedule.changes.firstSnapshot', 'Snapshot saved. Future loads of this schedule will show changes here.'))}
-                </div>
-            `}
-        </div>
-    `;
+    window.MpbScheduleHistory?.render(container, {
+        entity: { ...currentEntity, id: scheduleCacheEntityId || currentEntity.id },
+        eventKey: scheduleHistoryEvent,
+        onClose: () => window.toggleScheduleChanges(false),
+        onChange: () => {
+            renderScheduleHome();
+            renderScheduleChangesPanel();
+        },
+    });
 }
 
 async function initOfflineHistory() {
@@ -1469,7 +1231,11 @@ async function loadInitialPreferences() {
             initialState.entity.id,
             initialState.entity.name,
             initialState.date,
-            { urlMode: 'replace', preserveModules: initialState.selectedModules.length > 0 || urlState.hasEmptyModules, keepEmptyModules: urlState.hasEmptyModules }
+            {
+                urlMode: 'replace', preserveModules: initialState.selectedModules.length > 0 || urlState.hasEmptyModules,
+                keepEmptyModules: urlState.hasEmptyModules, lesson: urlState.lesson,
+                lessonDate: urlState.lessonDate, changeEvent: urlState.changeEvent,
+            }
         );
     } else {
         syncScheduleUrl('replace');
@@ -1967,8 +1733,14 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         sourceUpdatedAt = null;
         scheduleFreshness = 'fresh_cache';
         scheduleRefreshInProgress = false;
-        scheduleChangeSummary = null;
         isOfflineMode = false;
+        scheduleHistoryEvent = options.changeEvent || '';
+        window.MpbScheduleHistory?.reset();
+        if (!options.lesson && window.location?.search) {
+            const url = new URL(window.location.href);
+            ['lesson', 'lesson_date'].forEach(key => url.searchParams.delete(key));
+            window.history.replaceState(window.history.state, '', url);
+        }
     }
     currentEntity = nextEntity;
     const requestedDate = normalizeScheduleDate(targetDate) || getISODateStr(new Date());
@@ -1988,6 +1760,7 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         scheduleRefreshInProgress = false;
     }
     renderScheduleHome();
+    if (entityChanged) renderScheduleChangesPanel();
     try {
         const data = await (window.ScheduleApi?.loadScheduleData?.({
             type: nextEntity.type,
@@ -2013,10 +1786,6 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         scheduleFreshness = data.freshness || (data.is_offline ? 'stale_fallback' : 'fresh_cache');
         scheduleRefreshInProgress = Boolean(data.refresh_in_progress);
         window.ScheduleState?.addRecent?.(currentEntity);
-        const snapshotKey = getSnapshotEntityKey(nextEntity);
-        const previousSnapshot = loadScheduleSnapshots()[snapshotKey];
-        scheduleChangeSummary = buildScheduleChangeSummary(previousSnapshot, fullSchedule, sourceUpdatedAt);
-        persistScheduleSnapshot(snapshotKey, fullSchedule, sourceUpdatedAt);
         selectedModules = new Set(Array.from(selectedModules).map(canonicalizeSpecialModuleName).filter(Boolean));
         if (selectedModules.size > 0) {
             const availableSet = new Set(allAvailableModules);
@@ -2030,6 +1799,10 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         filterAndRender();
         savePreferences();
         syncScheduleUrl(options.urlMode || (entityChanged ? 'push' : 'replace'));
+        if (options.lesson && options.lessonDate) {
+            const matches = fullSchedule.filter(lesson => lesson.date === options.lessonDate && String(lesson.lessonOid) === options.lesson);
+            if (matches.length === 1) window.showLessonDetails(matches[0], document.getElementById('scheduleChangesToggleBtn'));
+        }
         // Вызываем обновление календаря, так как сменилась сущность
         if (window._renderCalendarSubscriptionImpl) window._renderCalendarSubscriptionImpl();
         const pollAttempt = Number(options.pollAttempt) || 0;
@@ -2073,6 +1846,7 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
 
 async function applyScheduleStateFromUrl() {
     const urlState = parseScheduleStateFromUrl();
+    scheduleHistoryEvent = urlState.changeEvent;
     setSchedulePageState(urlState);
     window.calendarCurrentViewMode = schedulePageState.lessonMode === 'exams_only' ? 'exams_only' : 'all';
     selectedModules = new Set(urlState.selectedModules || []);
@@ -2082,7 +1856,10 @@ async function applyScheduleStateFromUrl() {
             urlState.entity.id,
             urlState.entity.name,
             urlState.date,
-            { urlMode: 'replace', preserveModules: urlState.hasModules, keepEmptyModules: urlState.hasEmptyModules }
+            {
+                urlMode: 'replace', preserveModules: urlState.hasModules, keepEmptyModules: urlState.hasEmptyModules,
+                lesson: urlState.lesson, lessonDate: urlState.lessonDate, changeEvent: urlState.changeEvent,
+            }
         );
         return;
     }
@@ -2090,7 +1867,6 @@ async function applyScheduleStateFromUrl() {
     fullSchedule = [];
     allAvailableModules = [];
     selectedModules.clear();
-    scheduleChangeSummary = null;
     isOfflineMode = false;
     scheduleFreshness = 'fresh_cache';
     scheduleRefreshInProgress = false;

@@ -3,7 +3,6 @@ import logging
 import re
 import uuid
 from datetime import UTC, date, datetime, time
-from email.utils import format_datetime, parsedate_to_datetime
 from typing import Any
 from urllib.parse import quote
 
@@ -605,16 +604,15 @@ def _attach_source_updated_at(
 def _build_profile_health(
     profile: dict,
     filtered_schedule: list[dict],
+    calendar_sources: list[dict],
     source_update_map: dict[tuple[str, str], datetime],
     sync_state: dict,
 ) -> dict:
     included_sources = {
-        (lesson.get("source_entity_type"), str(lesson.get("source_entity_id")))
-        for lesson in filtered_schedule
-        if lesson.get("source_entity_type") and lesson.get("source_entity_id") is not None
+        (source["entity_type"], str(source["entity_id"])) for source in calendar_sources
     }
     updated_sources = [
-        source_update_map[source_key]
+        source_update_map[source_key].replace(tzinfo=source_update_map[source_key].tzinfo or UTC)
         for source_key in included_sources
         if source_key in source_update_map
     ]
@@ -631,8 +629,8 @@ def _build_profile_health(
         cache_status = "partial-cache"
 
     source_updated_at = None
-    if updated_sources:
-        source_updated_at = max(updated_sources).astimezone(UTC).isoformat()
+    if cache_status == "cached":
+        source_updated_at = min(updated_sources).astimezone(UTC).isoformat()
 
     return {
         "event_count": len(filtered_schedule),
@@ -736,7 +734,11 @@ async def _build_calendar_subscription_response(
                 "scope_label": _profile_scope_label(profile),
                 "links": links,
                 "health": _build_profile_health(
-                    profile, filtered_schedule, source_update_map, sync_state
+                    profile,
+                    filtered_schedule,
+                    _get_sources_for_profile(active_subs, sync_state, profile),
+                    source_update_map,
+                    sync_state,
                 ),
             }
         )
@@ -1261,62 +1263,36 @@ async def _render_public_calendar_feed(
         _filter_schedule_for_profile(base_schedule, profile),
         source_update_map,
     )
-    health = _build_profile_health(profile, filtered_schedule, source_update_map, sync_state)
-
     ical_bytes = generate_profile_ical_from_aggregated_schedule(
         filtered_schedule,
         calendar_name=_build_calendar_name(profile),
         calendar_description=_build_calendar_description(profile),
         timezone_name=_normalize_timezone(profile.get("timezone")),
     )
-    etag = f'"{hashlib.sha256(ical_bytes).hexdigest()}"'
-
-    source_updated_at = health.get("source_updated_at")
-    last_modified_dt = (
-        datetime.fromisoformat(source_updated_at) if source_updated_at else datetime.now(UTC)
-    )
-    last_modified_dt = last_modified_dt.astimezone(UTC).replace(microsecond=0)
-
-    if request.headers.get("if-none-match") == etag:
-        return Response(
-            status_code=304,
-            headers={
-                "ETag": etag,
-                "Last-Modified": format_datetime(last_modified_dt, usegmt=True),
-                "Cache-Control": "private, max-age=0, must-revalidate",
-            },
-        )
-
-    if_modified_since = request.headers.get("if-modified-since")
-    if if_modified_since:
-        try:
-            parsed_if_modified_since = parsedate_to_datetime(if_modified_since).astimezone(UTC)
-            if parsed_if_modified_since >= last_modified_dt:
-                return Response(
-                    status_code=304,
-                    headers={
-                        "ETag": etag,
-                        "Last-Modified": format_datetime(last_modified_dt, usegmt=True),
-                        "Cache-Control": "private, max-age=0, must-revalidate",
-                    },
-                )
-        except (TypeError, ValueError):
-            pass
-
-    if account:
+    response = _calendar_feed_response(request, ical_bytes, _sanitize_filename(profile), download)
+    if account and response.status_code == 200:
         next_state = _update_profile_access(sync_state, profile["id"])
         await _save_calendar_sync_state(account, db, next_state)
+    return response
 
-    filename = _sanitize_filename(profile)
+
+def _calendar_feed_response(
+    request: Request, payload: bytes, filename: str, download: bool
+) -> Response:
+    # Source timestamps cannot validate profile edits or removed sources.
+    etag = f'"{hashlib.sha256(payload).hexdigest()}"'
+    headers = {"ETag": etag, "Cache-Control": "private, max-age=0, must-revalidate"}
+    condition = request.headers.get("if-none-match", "").strip()
+    if condition == "*" or etag in re.findall(r'"[^"]*"', condition):
+        return Response(status_code=304, headers=headers)
     disposition = "attachment" if download else "inline"
     return Response(
-        content=b"" if request.method == "HEAD" else ical_bytes,
+        content=b"" if request.method == "HEAD" else payload,
         media_type="text/calendar; charset=utf-8",
         headers={
+            **headers,
+            "Content-Length": str(len(payload)),
             "Content-Disposition": f"{disposition}; filename={filename}",
-            "Cache-Control": "private, max-age=0, must-revalidate",
-            "ETag": etag,
-            "Last-Modified": format_datetime(last_modified_dt, usegmt=True),
         },
     )
 
@@ -1360,15 +1336,8 @@ async def _render_telegram_filtered_feed(
             active_subs[0].get("timezone") if active_subs else CALENDAR_TIMEZONE
         ),
     )
-    disposition = "attachment" if download else "inline"
-    return Response(
-        content=b"" if request.method == "HEAD" else ical_bytes,
-        media_type="text/calendar; charset=utf-8",
-        headers={
-            "Content-Disposition": f'{disposition}; filename="matplobbot-telegram-filtered.ics"',
-            "Cache-Control": "private, max-age=0, must-revalidate",
-            "Pragma": "no-cache",
-        },
+    return _calendar_feed_response(
+        request, ical_bytes, '"matplobbot-telegram-filtered.ics"', download
     )
 
 

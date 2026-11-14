@@ -8,13 +8,17 @@ authorize requests. `create({storage, scope, save, onStorageError})` injects sto
 Call `open({projectId, fileId, type, content})` after flushing the previous document, `edit(text)`
 on input, and `await flush()` before a transition, build, Telegram send, or ZIP export.
 `snapshot()` and `dirty()` expose status. A recovered draft whose base differs from the server
-requires `resolveConflict(useDraft)` before saving. Quick snippets remain local drafts.
+or a `FileConflict` from saving requires `resolveConflict(useDraft)` before continuing. It
+changes the base revision to the version shown in the dialog. Keep the revision returned by
+each successful save, including when another edit arrives while saving. Quick snippets remain
+local drafts.
 
 Example: `const session = MpbStudioSession.create({storage: localStorage, scope: '42', save});`
 `session.edit('new text'); await session.flush();`
 
 Dependencies are browser storage, JSON, and a promise-returning save callback. Writes to local
-storage contain document contents, never auth tokens. Successful saves remove matching drafts;
+storage contain document contents, never auth tokens. Successful saves remove only the exact
+journal entry owned by that editor, preserving a newer draft from another tab;
 edits made during an in-flight save survive. Storage failure reports through the callback and
 does not disable editing. Job metadata can use the same account-scoped value helpers.
 

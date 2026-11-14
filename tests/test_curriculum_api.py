@@ -52,6 +52,7 @@ class TestCurriculumAPI(unittest.TestCase):
             ("put", "/curricula/1/document"),
             ("get", "/curricula/1/document"),
             ("post", "/curricula/1/publish"),
+            ("post", "/curricula/1/extend"),
             ("put", "/curricula/1/groups"),
             ("delete", "/curricula/1"),
             ("post", "/curricula/1/reprocess"),
@@ -341,6 +342,43 @@ class TestCurriculumAPI(unittest.TestCase):
             self.assertEqual({row["kind"] for row in lookup["assessments"]}, {"exam", "coursework"})
             snapshot = lookup["assessments"][0]["snapshot_url"]
             self.assertEqual(self.client.get(snapshot).content, original)
+            spring_query = {
+                **query,
+                "lesson_date": "2027-02-02",
+                "discipline": "Reviewed practice",
+            }
+            extension = {
+                "expected_hash": published.json()["published_hash"],
+                "assessments": [
+                    {
+                        "discipline_code": "B.2.1.1",
+                        "discipline_name": "Reviewed practice",
+                        "semester": 8,
+                        "kind": "graded_pass",
+                        "page": 1,
+                        "evidence": "Control cell reviewed",
+                    }
+                ],
+                "groups": [
+                    {
+                        "group_id": "test-group",
+                        "group_name": "Test group",
+                        "terms": [
+                            {"semester": 8, "start_date": "2027-02-02", "end_date": "2027-07-05"}
+                        ],
+                    }
+                ],
+            }
+            self.assertEqual(
+                self.client.get("/api/schedule/curriculum", params=spring_query).json()["reason"],
+                "semester_unmapped",
+            )
+            extended = self.client.post(prefix + "/extend", json=extension)
+            self.assertEqual(extended.status_code, 200, extended.text)
+            spring = self.client.get("/api/schedule/curriculum", params=spring_query).json()
+            self.assertEqual((spring["status"], spring["semester"]), ("confirmed", 8))
+            self.assertEqual(spring["assessments"][0]["kind"], "graded_pass")
+            self.assertEqual(spring["assessments"][0]["snapshot_url"], snapshot)
             updated = self.client.put(
                 prefix + "/document",
                 content=replacement,
@@ -359,6 +397,7 @@ class TestCurriculumAPI(unittest.TestCase):
                 },
             )
             self.assertEqual(obsolete.status_code, 409)
+            self.assertEqual(self.client.post(prefix + "/extend", json=extension).status_code, 409)
             self.assertEqual(self.client.delete(prefix).status_code, 204)
             self.assertEqual(
                 self.client.get("/api/schedule/curriculum", params=query).json()["status"],
@@ -472,6 +511,23 @@ class TestCurriculumAPI(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 422)
         publish.assert_not_awaited()
+
+    def test_extension_accepts_group_only_update_and_serializes_term_dates(self):
+        groups = [
+            {
+                "group_id": "162426",
+                "group_name": "ПМ23-1",
+                "terms": [{"semester": 8, "start_date": "2027-02-02", "end_date": "2027-07-05"}],
+            }
+        ]
+        with patch.object(
+            api.service, "extend_curriculum", AsyncMock(return_value={"id": 1})
+        ) as extend:
+            body = {"expected_hash": "a" * 64, "groups": groups, "assessments": []}
+            self.assertEqual(
+                self.client.post("/api/curricula/1/extend", json=body).status_code, 200
+            )
+        extend.assert_awaited_once_with(1, "a" * 64, [], groups)
 
     def test_admin_delete_returns_empty_response(self):
         with patch.object(api.service, "delete_curriculum", AsyncMock()) as remove:

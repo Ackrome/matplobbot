@@ -127,6 +127,25 @@ class TestCalendarAPI(unittest.TestCase):
         self.assertEqual(payload["profiles"][0]["health"]["event_count"], 1)
         get_secret.assert_awaited_once_with(12345)
 
+    def test_profile_health_counts_configured_sources_even_with_no_events(self):
+        profile = dict(calendar_router.BUILT_IN_PROFILES[0])
+        sources = [
+            {"entity_type": "group", "entity_id": "1"},
+            {"entity_type": "group", "entity_id": "2"},
+        ]
+        old_check = datetime(2026, 4, 6, tzinfo=UTC)
+        source_dates = {("group", "1"): old_check}
+        state = calendar_router._default_calendar_sync_state()
+        partial = calendar_router._build_profile_health(profile, [], sources, source_dates, state)
+        self.assertEqual(partial["cache_status"], "partial-cache")
+        self.assertEqual((partial["used_cached_sources"], partial["total_sources"]), (1, 2))
+        self.assertIsNone(partial["source_updated_at"])
+        source_dates[("group", "2")] = datetime(2026, 4, 7, tzinfo=UTC)
+        complete = calendar_router._build_profile_health(profile, [], sources, source_dates, state)
+        self.assertEqual(complete["cache_status"], "cached")
+        self.assertEqual(complete["source_updated_at"], old_check.isoformat())
+        self.assertEqual(complete["event_count"], 0)
+
     def test_calendar_feeds_use_the_full_semester_window(self):
         with patch.object(
             calendar_router,
@@ -378,7 +397,31 @@ class TestCalendarAPI(unittest.TestCase):
                 lambda *args, **kwargs: b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n",
             ),
         ):
-            response = self.client.get("/api/cal/secret123.ics")
+            feed = "/api/cal/secret123.ics"
+            response = self.client.get(feed)
+            unchanged = self.client.get(
+                feed, headers={"If-None-Match": f'W/{response.headers["ETag"]}, "old"'}
+            )
+            self.assertEqual(unchanged.status_code, 304)
+            self.assertEqual(unchanged.content, b"")
+            self.assertEqual(unchanged.headers["ETag"], response.headers["ETag"])
+            self.assertEqual(
+                self.client.head(feed).headers["Content-Length"], str(len(response.content))
+            )
+            with patch.object(
+                calendar_router,
+                "generate_profile_ical_from_aggregated_schedule",
+                return_value=b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nX-WR-CALNAME:New\r\nEND:VCALENDAR\r\n",
+            ):
+                changed = self.client.get(
+                    feed,
+                    headers={
+                        "If-None-Match": response.headers["ETag"],
+                        "If-Modified-Since": "Tue, 01 Jan 2030 00:00:00 GMT",
+                    },
+                )
+            self.assertEqual(changed.status_code, 200)
+            self.assertNotEqual(changed.headers["ETag"], response.headers["ETag"])
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("ETag", response.headers)

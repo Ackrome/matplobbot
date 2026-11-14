@@ -3,8 +3,12 @@ import collections
 import hashlib
 import json
 import logging
+import os
 import time
 from datetime import UTC, datetime
+from html import escape
+from itertools import chain
+from urllib.parse import urlencode, urlsplit
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -27,6 +31,7 @@ from shared_lib.i18n import translator
 from shared_lib.redis_client import redis_client
 from shared_lib.request_context import generate_correlation_id, set_correlation_id
 from shared_lib.schedule_daily import daily_event_key, deduplicate_daily_recipients
+from shared_lib.schedule_history import build_schedule_history, prune_schedule_history
 from shared_lib.schedule_outbox import (
     build_schedule_change_event_key,
     cancel_schedule_change_delivery,
@@ -65,6 +70,38 @@ from .config import (
 logger = logging.getLogger(__name__)
 
 TELEGRAM_MESSAGE_LIMIT = 4096
+
+
+def _schedule_history_link(entity: dict, change: dict, event_key: str, lang: str) -> str:
+    """Link to the affected week and, when identifiable, the surviving lesson."""
+    origin = os.getenv("PUBLIC_SITE_URL", "").rstrip("/")
+    try:
+        parts = urlsplit(origin)
+        if (
+            parts.scheme != "https"
+            or not parts.hostname
+            or parts.username
+            or parts.path
+            or parts.query
+            or parts.fragment
+        ):
+            return ""
+    except ValueError:
+        return ""
+    lesson = change["after"] or change["before"]
+    params = {
+        "type": entity["entity_type"],
+        "id": entity["entity_id"],
+        "name": entity["entity_name"],
+        "date": lesson["date"],
+        "changes": "1",
+        "change_event": event_key,
+    }
+    if change["after"] and lesson["oid"]:
+        params.update(lesson=lesson["oid"], lesson_date=lesson["date"])
+    url = f"{origin}/schedule?{urlencode(params)}"
+    label = escape(translator.gettext(lang, "schedule_change_open_web"))
+    return f'\n\n<a href="{escape(url, quote=True)}">{label}</a>'
 
 
 class TelegramPermanentDeliveryError(RuntimeError):
@@ -438,15 +475,18 @@ async def check_for_schedule_updates(
             )
 
         all_subscriptions = await get_all_active_subscriptions()
-        if not all_subscriptions:
+        configured_entities = await get_unique_active_subscription_entities()
+        sources = {
+            (item["entity_type"], str(item["entity_id"])): item
+            for item in chain(configured_entities, all_subscriptions)
+        }
+        if not sources:
             return {"failed": failures}
-
-        # Группируем подписки по сущностям (Group/Teacher/Auditorium)
         grouped_subscriptions = collections.defaultdict(list)
         for sub in all_subscriptions:
+            entity_key = (sub["entity_type"], str(sub["entity_id"]))
             if sub.get("delivery_mode", "telegram") != "telegram":
                 continue
-            entity_key = (sub["entity_type"], sub["entity_id"])
             grouped_subscriptions[entity_key].append(sub)
 
         for entity_key, entity_subscriptions in list(grouped_subscriptions.items()):
@@ -458,11 +498,12 @@ async def check_for_schedule_updates(
                     recipients[user_id] = sub
             grouped_subscriptions[entity_key] = list(recipients.values())
 
-        short_names_map = await get_all_short_names()
+        short_names_map = await get_all_short_names() if grouped_subscriptions else {}
 
-        for entity_key, subs_for_entity in grouped_subscriptions.items():
+        for entity_key, entity in sources.items():
             entity_type, entity_id = entity_key
-            entity_name = subs_for_entity[0]["entity_name"]
+            entity_name = entity["entity_name"]
+            subs_for_entity = grouped_subscriptions.get(entity_key, [])
 
             try:
                 # Capture the revision before awaiting the source. A slower poll
@@ -473,7 +514,9 @@ async def check_for_schedule_updates(
                     entity_type, entity_id, start=start_date_str, finish=end_date_str
                 )
 
-                if not isinstance(new_schedule_data, list):
+                if not isinstance(new_schedule_data, list) or any(
+                    not isinstance(row, dict) for row in new_schedule_data
+                ):
                     raise ValueError("Unexpected schedule response")
                 new_schedule_data = normalize_schedule_snapshot(new_schedule_data)
                 new_hash = schedule_snapshot_hash(new_schedule_data)
@@ -491,6 +534,20 @@ async def check_for_schedule_updates(
 
                     deliveries = []
                     if old_schedule_data is not None:
+                        event_key = build_schedule_change_event_key(
+                            entity_type,
+                            entity_id,
+                            reference_hash,
+                            new_hash,
+                            source_checked_at,
+                            source_revision=baseline["revision"],
+                        )
+                        history = build_schedule_history(
+                            old_schedule_data,
+                            new_schedule_data,
+                            semester_start=start_date_str,
+                            semester_end=end_date_str,
+                        )
                         diffs_by_profile = {}
                         for sub in subs_for_entity:
                             lang = await translator.get_language(sub["user_id"], sub["chat_id"])
@@ -500,38 +557,51 @@ async def check_for_schedule_updates(
                                 tuple(sorted(sub.get("selected_modules") or [])),
                             )
                             if profile_key not in diffs_by_profile:
-                                diffs_by_profile[profile_key] = diff_schedules(
-                                    _filter_schedule_for_subscription(old_schedule_data, sub),
-                                    _filter_schedule_for_subscription(new_schedule_data, sub),
+                                old_filtered = _filter_schedule_for_subscription(
+                                    old_schedule_data, sub
+                                )
+                                new_filtered = _filter_schedule_for_subscription(
+                                    new_schedule_data, sub
+                                )
+                                diff_text = diff_schedules(
+                                    old_filtered,
+                                    new_filtered,
                                     lang,
                                     use_short_names=True,
                                     short_names_map=short_names_map,
                                 )
+                                linked_change = None
+                                if diff_text and history:
+                                    visible = build_schedule_history(
+                                        old_filtered,
+                                        new_filtered,
+                                        semester_start=start_date_str,
+                                        semester_end=end_date_str,
+                                    )
+                                    if visible:
+                                        linked_change = visible[0]
+                                diffs_by_profile[profile_key] = diff_text, linked_change
 
-                            diff_text = diffs_by_profile[profile_key]
+                            diff_text, linked_change = diffs_by_profile[profile_key]
                             if diff_text:
                                 header = translator.gettext(
                                     lang,
                                     "schedule_change_notification",
                                     entity_name=sub["entity_name"],
                                 )
+                                link = (
+                                    _schedule_history_link(sub, linked_change, event_key, lang)
+                                    if linked_change
+                                    else ""
+                                )
                                 deliveries.append(
                                     {
                                         "user_id": sub["user_id"],
                                         "chat_id": sub["chat_id"],
                                         "message_thread_id": sub.get("message_thread_id"),
-                                        "payload": f"{header}\n\n{diff_text}",
+                                        "payload": f"{header}\n\n{diff_text}{link}",
                                     }
                                 )
-
-                        event_key = build_schedule_change_event_key(
-                            entity_type,
-                            entity_id,
-                            reference_hash,
-                            new_hash,
-                            source_checked_at,
-                            source_revision=baseline["revision"],
-                        )
                     else:
                         raise ValueError("Invalid notification baseline payload")
 
@@ -546,6 +616,7 @@ async def check_for_schedule_updates(
                         new_hash=new_hash,
                         deliveries=deliveries,
                         expected_revision=baseline["revision"],
+                        history=history,
                     )
 
                 elif not reference_hash:
@@ -702,6 +773,7 @@ async def prune_inactive_subscriptions():
             if count < 5000:
                 break
         logger.info("Pruned terminal schedule deliveries: %s", pruned)
+        logger.info("Pruned public schedule history: %s", await prune_schedule_history())
     except Exception as e:
         logger.error(f"Critical error in prune_inactive_subscriptions job: {e}", exc_info=True)
 

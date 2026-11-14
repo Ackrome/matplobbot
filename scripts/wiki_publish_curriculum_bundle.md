@@ -14,6 +14,17 @@ python publish_curriculum_bundle.py --bundle /tmp/reviewed/bundle.json \
   --output /tmp/reviewed/result.json --apply
 ```
 
+For additions to a previously reviewed plan, use `--extension` instead of
+`--bundle`. The version 1 JSON contains an `extensions` array. Entries contain
+`source_url`, `source_sha256`, `assessments` and `groups` in the format below.
+New observations use the existing published PDF, so no PDF path or upload is
+required. A document must be a published root with the specified SHA and no
+pending replacement. New periods can extend only existing groups. The server
+checks for conflicting rows and dates and commits each document atomically.
+Dry runs display whether each document needs an extension. Apply saves a
+pre-write backup, verifies each document again after mutation and is idempotent.
+See the [spring 2027 example](../docs/reports/curriculum-numeric-pipeline/spring-2027-extension.md).
+
 Default API origin: `http://127.0.0.1:9583`. `--base-url` accepts loopback HTTP or
 HTTPS with normal certificate verification; remote plaintext HTTP, URL credentials
 and redirects are rejected. System proxies are disabled. Credentials are accepted
@@ -52,7 +63,8 @@ conflicts are preflighted before the first batch mutation.
 
 `load_bundle()` validates local input; `AdminClient` implements bounded HTTP;
 `read_registry()` and `preflight()` inspect current ownership and publication;
-`publish_bundle()` performs the idempotent workflow. `wait_ready()` polls every
+`publish_bundle()` performs the idempotent workflow for new plans;
+`load_extension()` and `publish_extensions()` handle addenda. `wait_ready()` polls every
 five seconds up to `--wait-seconds` (maximum/default 420), printing only changed
 processing states. It fails on parser errors or a timeout.
 

@@ -214,6 +214,50 @@ class TestStudioRouterAPI(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json().get("detail"), "Project not found")
 
+    def test_save_reports_version_conflict_without_writing(self):
+        path = "/api/studio/projects/9/files/10"
+        project = _mock_scalar_result(SimpleNamespace(id=9, owner_id=1))
+        locked_file = Mock()
+        locked_file.one_or_none.return_value = ("server edit", False)
+        self.db.execute.side_effect = [project, locked_file]
+
+        response = self.client.put(
+            path, json={"content": "local edit", "revision": studio_router._file_revision("base")}
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["detail"],
+            {
+                "code": "file_revision_conflict",
+                "content": "server edit",
+                "revision": studio_router._file_revision("server edit"),
+            },
+        )
+        self.assertEqual(self.db.execute.await_count, 2)
+        self.db.commit.assert_not_awaited()
+
+    def test_save_requires_revision_and_identical_retry_does_not_write(self):
+        path = "/api/studio/projects/9/files/10"
+        project = _mock_scalar_result(SimpleNamespace(id=9, owner_id=1))
+        self.db.execute.return_value = project
+        response = self.client.put(path, json={"content": "legacy write"})
+        self.assertEqual(response.status_code, 428)
+        self.assertEqual(self.db.execute.await_count, 1)
+
+        self.db.execute.reset_mock()
+        locked_file = Mock()
+        locked_file.one_or_none.return_value = ("already saved", False)
+        self.db.execute.side_effect = [project, locked_file]
+        response = self.client.put(
+            path,
+            json={"content": "already saved", "revision": studio_router._file_revision("base")},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["revision"], studio_router._file_revision("already saved"))
+        self.assertEqual(self.db.execute.await_count, 2)
+        self.db.commit.assert_not_awaited()
+
     def test_rename_file_returns_400_on_conflict(self):
         project = SimpleNamespace(id=9, owner_id=1)
         self.db.execute.side_effect = [_mock_scalar_result(project), Exception("duplicate key")]

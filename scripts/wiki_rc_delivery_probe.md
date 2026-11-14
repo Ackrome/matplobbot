@@ -15,7 +15,9 @@ network. SQLite unit tests cannot establish `FOR UPDATE SKIP LOCKED` behavior.
 The probe holds one real row lock while a second connection claims another row;
 races two snapshot updates at one revision; forces a foreign-key enqueue failure
 after a snapshot update; and deletes/pauses overlapping subscription profiles
-before checking delivery eligibility. Each PostgreSQL lock/race wait is bounded.
+before checking delivery eligibility. The public schedule-history route returns
+only the winning transition, including when addressed by its event key. Each
+PostgreSQL lock/race wait is bounded.
 
 ## Dependencies and side effects
 

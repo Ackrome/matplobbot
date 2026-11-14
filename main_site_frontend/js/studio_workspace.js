@@ -28,10 +28,47 @@ window.MpbStudioUX = (() => {
         const render=()=>{list.replaceChildren();const matches=projectsList.filter(p=>p.name.toLocaleLowerCase().includes(search.value.toLocaleLowerCase()));if(!matches.length){const p=document.createElement('p');p.className='ui-muted';p.textContent=tr('noProjects');list.append(p);}for(const project of matches){const row=document.createElement('section');row.className='project-manager-row';const open=button(project.name,async()=>{await openProject(project.id);updateModeUi();document.querySelector('dialog[open]')?.close();});open.classList.add('project-open');const meta=document.createElement('p');meta.className='ui-muted';meta.textContent=project.type;const actions=document.createElement('div');actions.className='ui-row';
             actions.append(button({key:'rename'},async()=>{const name=await MpbUI.prompt(tr('renameProject'),project.name);if(!name)return;await api(`/studio/projects/${project.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});await loadProjects();render();}),button({key:'duplicate'},async()=>{const name=await MpbUI.prompt(tr('duplicateProject'),`${project.name} — ${tr('copyName')}`);if(!name)return;await transition(async()=>{await api(`/studio/projects/${project.id}/duplicate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});await loadProjects();});render();}),button({key:'delete'},async()=>{if(!await MpbUI.confirm(tr('deleteProject'),tr('deleteProjectMessage',{name:project.name})))return;await transition(async()=>{await api(`/studio/projects/${project.id}`,{method:'DELETE'});await loadProjects();if(String(currentProjectId)===String(project.id)){currentProjectId=currentFileId=null;projectFiles=[];session.open({type:'empty',content:''});setEditorContent('',true);resetPreview();renderFileList();}});render();},'danger'));row.append(open,meta,actions);list.append(row);}};search.addEventListener('input',render);render();await MpbUI.dialog({title:tr('manageProjects'),content,actions:[{label:tr('close'),value:'close'}]});
     }
-    async function conflict(record){
-        const content=document.createElement('div');content.className='ui-stack';const time=document.createElement('p');time.className='ui-muted';time.textContent=tr('conflictHint')+(record.draftUpdatedAt?' '+new Date(record.draftUpdatedAt).toLocaleString(window.mpbI18n.getLanguage()):'');content.append(time);
-        const grid=document.createElement('div');grid.className='conflict-grid';const a=record.draftContent.split('\n'),b=record.content.split('\n');for(const [label,lines,other] of [[tr('localVersion'),a,b],[tr('serverVersion'),b,a]]){const section=document.createElement('section'),title=document.createElement('h3'),pre=document.createElement('pre');title.textContent=label;lines.forEach((text,i)=>{const line=document.createElement('span');line.className='diff-line'+(text!==other[i]?' diff-changed':'');line.textContent=`${i+1}  ${text}\n`;pre.append(line);});section.append(title,pre);grid.append(section);}content.append(grid,button({key:'downloadBoth'},()=>MpbArchive.download(MpbArchive.zip([{name:'local.txt',text:record.draftContent},{name:'server.txt',text:record.content}]),'document-versions.zip')));
-        const choice=await MpbUI.dialog({title:tr('conflictTitle'),content,actions:[{label:tr('useServer'),value:'server'},{label:tr('useLocal'),value:'local',primary:true}]});if(!choice)throw new Error(tr('resolveConflict'));return choice==='local';
+    async function conflict(record) {
+        const content = document.createElement('div');
+        content.className = 'ui-stack';
+        const hint = document.createElement('p');
+        hint.className = 'ui-muted';
+        hint.textContent = tr('conflictHint') + (record.draftUpdatedAt
+            ? ' ' + new Date(record.draftUpdatedAt).toLocaleString(window.mpbI18n.getLanguage()) : '');
+        content.append(hint);
+        const grid = document.createElement('div');
+        grid.className = 'conflict-grid';
+        const localLines = record.draftContent.split('\n');
+        const serverLines = record.serverContent.split('\n');
+        for (const [label, lines, other] of [
+            [tr('localVersion'), localLines, serverLines],
+            [tr('serverVersion'), serverLines, localLines],
+        ]) {
+            const section = document.createElement('section');
+            const title = document.createElement('h3');
+            const pre = document.createElement('pre');
+            title.textContent = label;
+            pre.tabIndex = 0;
+            pre.setAttribute('aria-label', label);
+            for (const [i, text] of lines.entries()) {
+                const line = document.createElement('span');
+                line.className = 'diff-line' + (text !== other[i] ? ' diff-changed' : '');
+                line.textContent = `${i + 1}  ${text}`;
+                pre.append(line);
+            }
+            section.append(title, pre);
+            grid.append(section);
+        }
+        content.append(grid, button({key:'downloadBoth'}, () => MpbArchive.download(MpbArchive.zip([
+            {name:'local.txt', text:record.draftContent}, {name:'server.txt', text:record.serverContent},
+        ]), 'document-versions.zip')));
+        const choice = await MpbUI.dialog({title:tr('conflictTitle'), content, actions:[
+            {label:tr('decideLater'), value:'later'},
+            {label:tr('useServer'), value:'server'},
+            {label:tr('useLocal'), value:'local', primary:true},
+        ]});
+        if (choice !== 'server' && choice !== 'local') throw new Error(tr('resolveConflict'));
+        return choice === 'local';
     }
     async function hash(content){const value=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(content));return Array.from(new Uint8Array(value),b=>b.toString(16).padStart(2,'0')).join('');}
     function remember(job){const entries=session.readValue('job-history')||[];const item={job_id:job.job_id,status:job.status,created_at:job.created_at||new Date().toISOString(),expires_at:job.expires_at,projectId:job.projectId,name:job.name||filename(),fingerprint:job.fingerprint||job.source_fingerprint};const next=[item,...entries.filter(i=>i.job_id!==job.job_id&&Date.parse(i.expires_at)>Date.now())].slice(0,20);session.storeValue('job-history',next);}

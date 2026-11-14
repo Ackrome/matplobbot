@@ -10,8 +10,9 @@ on-demand previews, and asynchronous build jobs. It uses `studio_session.js` for
   before changing IDs. `saveCurrentFile()` rejects failed requests; build/export/send stop when
   saving fails. Every input is journaled locally; storage failure is reported without losing RAM
   contents. Quick snippets have independent drafts for each format.
-- `activateDocument()` restores matching drafts and asks before replacing a newer server version
-  with an older local draft. This is local recovery, not server revision history.
+- `activateDocument()` restores matching drafts. A remote save conflict also opens the
+  comparison dialog, which displays both texts and can download them together. Dismissal keeps
+  the draft and blocks save-required actions; Retry opens the comparison again.
 - `upgradeEditor()` retains an editable textarea until the same-origin Monaco frame is ready.
   The frame isolates AMD globals from lazy UMD preview libraries. CDN failure offers Retry.
 - `compileCurrent()` submits `POST /api/studio/jobs` with `{type, content}` or
@@ -43,6 +44,12 @@ Exports create short-lived blob URLs. The controller never sends a Telegram mess
 the explicit send button. All UI copy lives in the shared RU/EN locale JSON.
 
 ## Maintenance
+
+The project endpoint supplies each text file's `revision`. Save with that revision and replace
+it after success. A structured HTTP 409 supplies the latest saved text and revision; send another
+write only after the user explicitly chooses the local version. A 428 asks outdated clients to
+reload; their unsaved text remains in local storage where available. There is no archive of prior
+server versions.
 
 Preserve reject-on-save-failure, account isolation, filename `textContent`, sanitizer/SRI/CSP,
 and manual asset version bumps. Keep job response shapes aligned with `studio_jobs_router.py`.

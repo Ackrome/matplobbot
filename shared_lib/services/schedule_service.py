@@ -414,20 +414,23 @@ def _get_simple_lesson_type(kind: str) -> str:
     return "Other"
 
 
-def _format_source_parse_time(value: Any, timezone_name: str = "Europe/Moscow") -> str:
+def _source_timestamp(value: Any) -> datetime | None:
     if isinstance(value, datetime):
         parsed_at = value
     elif isinstance(value, str) and value.strip():
         try:
             parsed_at = datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError:
-            return "неизвестно"
+            return None
     else:
+        return None
+    return parsed_at if parsed_at.tzinfo else parsed_at.replace(tzinfo=UTC)
+
+
+def _format_source_parse_time(value: Any, timezone_name: str = "Europe/Moscow") -> str:
+    parsed_at = _source_timestamp(value)
+    if parsed_at is None:
         return "неизвестно"
-
-    if parsed_at.tzinfo is None:
-        parsed_at = parsed_at.replace(tzinfo=UTC)
-
     return parsed_at.astimezone(ZoneInfo(timezone_name)).strftime("%H:%M %d.%m.%Y")
 
 
@@ -818,7 +821,7 @@ def generate_ical_from_schedule(schedule_data: list[dict[str, Any]], entity_name
     return cal.serialize()
 
 
-def _enforce_rfc5545_folding(ical_content: str) -> bytes:
+def _enforce_rfc5545_folding(ical_content: str, *, preserve_dtstamp: bool = False) -> bytes:
     """
     1. Разворачивает строки (Unfolding).
     2. Вставляет обязательное поле DTSTAMP, если библиотека его пропустила.
@@ -851,14 +854,14 @@ def _enforce_rfc5545_folding(ical_content: str) -> bytes:
 
     for line in unfolded_lines:
         # Если встретили начало события, добавляем его, а следом принудительно DTSTAMP
-        if line.strip() == "BEGIN:VEVENT":
+        if not preserve_dtstamp and line.strip() == "BEGIN:VEVENT":
             final_lines.append(b"BEGIN:VEVENT")
             final_lines.append(dtstamp_line.encode("utf-8"))
             continue
 
         # Если библиотека вдруг сама добавила DTSTAMP, пропускаем его (чтобы не было дублей),
         # так как мы уже добавили свой "свежий" сразу после BEGIN:VEVENT.
-        if line.startswith("DTSTAMP:"):
+        if not preserve_dtstamp and line.startswith("DTSTAMP:"):
             continue
 
         # Логика сворачивания строк (Refolding) с учетом UTF-8
@@ -987,12 +990,14 @@ def generate_profile_ical_from_aggregated_schedule(
     from ics import Calendar, Event
 
     cal = Calendar()
+    moscow_tz = ZoneInfo("Europe/Moscow")
     calendar_tz = ZoneInfo(timezone_name)
 
     if schedule_data:
         for lesson in schedule_data:
             try:
-                event = Event()
+                stamp = _source_timestamp(lesson.get("source_updated_at"))
+                event = Event(created=stamp or datetime(1970, 1, 1, tzinfo=UTC))
                 emoji, type_name = _get_lesson_visuals(lesson["kindOfWork"])
 
                 source = lesson.get("source_entity", "")
@@ -1003,8 +1008,10 @@ def generate_profile_ical_from_aggregated_schedule(
                 start_time = time.fromisoformat(lesson["beginLesson"])
                 end_time = time.fromisoformat(lesson["endLesson"])
 
-                event.begin = datetime.combine(lesson_date, start_time, tzinfo=calendar_tz)
-                event.end = datetime.combine(lesson_date, end_time, tzinfo=calendar_tz)
+                start = datetime.combine(lesson_date, start_time, tzinfo=moscow_tz)
+                end = datetime.combine(lesson_date, end_time, tzinfo=moscow_tz)
+                event.begin = start
+                event.end = end
 
                 location_parts = [
                     str(lesson.get("auditorium", "")).strip(),
@@ -1055,7 +1062,8 @@ def generate_profile_ical_from_aggregated_schedule(
                     )
 
                 desc_lines.append(
-                    f"Время: {lesson.get('date', '')} {lesson.get('beginLesson', '')}-{lesson.get('endLesson', '')}"
+                    f"Время: {start.astimezone(calendar_tz):%Y-%m-%d %H:%M}-"
+                    f"{end.astimezone(calendar_tz):%H:%M}"
                 )
                 _append_source_parse_time(desc_lines, lesson, timezone_name)
                 event.description = "\n".join(desc_lines)
@@ -1068,6 +1076,12 @@ def generate_profile_ical_from_aggregated_schedule(
                 logging.warning(f"Profile iCal Gen Error: {e}")
                 continue
 
+    # The library stores events in a set. Sort the serialized components so
+    # representation bytes survive input reordering and process hash seeds.
+    cal.events = sorted(  # type: ignore[assignment]
+        cal.events,
+        key=lambda event: (event.begin, event.uid, event.serialize()),
+    )
     raw_ics_str = cal.serialize()
     headers_to_inject = [
         f"X-WR-CALNAME:{calendar_name}",
@@ -1086,7 +1100,7 @@ def generate_profile_ical_from_aggregated_schedule(
             injection_point, f"{injection_point}\n" + "\n".join(headers_to_inject)
         )
 
-    final_bytes = _enforce_rfc5545_folding(raw_ics_str)
+    final_bytes = _enforce_rfc5545_folding(raw_ics_str, preserve_dtstamp=True)
     return final_bytes
 
 

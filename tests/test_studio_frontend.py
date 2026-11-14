@@ -13,7 +13,7 @@ class TestStudioFrontend(unittest.TestCase):
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const {create, accountScope} = require('./main_site_frontend/js/studio_session.js');
+const {create, accountScope, FileConflict} = require('./main_site_frontend/js/studio_session.js');
 function memory() {
     const values = new Map();
     return {getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};
@@ -44,8 +44,35 @@ function memory() {
     const conflictStore=memory();const conflict=create({storage:conflictStore,scope:'conflict',save:async()=>{throw Error('must not save unresolved conflict');}});
     conflict.open({projectId:1,fileId:1,content:'old server'});conflict.edit('local work');
     const next=conflict.open({projectId:1,fileId:1,content:'new server'});
-    assert.equal(next.conflict,true);assert.equal(next.content,'new server');await conflict.flush();
+    assert.equal(next.conflict,true);assert.equal(next.content,'new server');await assert.rejects(conflict.flush(), FileConflict);
     assert.equal(conflict.resolveConflict(true).content,'local work');
+
+    const shared=memory();let server={content:'base',revision:'r0'};
+    const save=async record=>{
+        if(record.revision!==server.revision)throw new FileConflict(server.content,server.revision);
+        server={content:record.content,revision:'r'+(Number(server.revision.slice(1))+1)};
+        return server;
+    };
+    const left=create({storage:shared,scope:'two-tabs',save});
+    const right=create({storage:shared,scope:'two-tabs',save});
+    const record={projectId:7,fileId:8,...server};
+    left.open(record);right.open(record);
+    left.edit('left');
+    right.edit('right');
+    await left.flush();
+    const reopened=create({storage:shared,scope:'two-tabs',save});
+    assert.equal(reopened.open({...record,...server}).draftContent,'right');
+    await assert.rejects(right.flush(), FileConflict);
+    assert.equal(right.snapshot().draftContent,'right');
+    assert.equal(right.snapshot().serverContent,'left');
+    assert.equal(server.content,'left');
+    assert.equal(right.resolveConflict(true).content,'right');
+    await right.flush();
+    assert.deepEqual(server,{content:'right',revision:'r2'});
+    left.edit('stale left');
+    await assert.rejects(left.flush(), FileConflict);
+    assert.equal(left.resolveConflict(false).content,'right');
+    assert.equal(left.dirty(),false);
     const quick=create({storage,scope:'quick',save:async()=>{throw Error('quick must remain local');}});
     quick.open({type:'latex',content:'template'});quick.edit('my formula');await quick.flush();
     quick.open({type:'markdown',content:'md'});assert.equal(quick.open({type:'latex',content:'template'}).content,'my formula');

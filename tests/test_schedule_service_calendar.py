@@ -1,40 +1,9 @@
 import hashlib
 import json
-import sys
 import types
 import unittest
 from datetime import date
 from unittest.mock import AsyncMock, call, patch
-
-
-class _FakeEvent:
-    pass
-
-
-class _FakeCalendar:
-    def __init__(self):
-        self.events = []
-
-    def serialize(self):
-        lines = ["BEGIN:VCALENDAR", "VERSION:2.0"]
-        for event in self.events:
-            description = getattr(event, "description", "").replace("\n", "\\n")
-            lines.extend(
-                [
-                    "BEGIN:VEVENT",
-                    f"SUMMARY:{getattr(event, 'name', '')}",
-                    f"DESCRIPTION:{description}",
-                    "END:VEVENT",
-                ]
-            )
-        lines.append("END:VCALENDAR")
-        return "\n".join(lines)
-
-
-fake_ics = types.ModuleType("ics")
-fake_ics.Calendar = _FakeCalendar
-fake_ics.Event = _FakeEvent
-sys.modules["ics"] = fake_ics
 
 from shared_lib.services import schedule_service
 from shared_lib.services.schedule_service import (
@@ -48,6 +17,29 @@ def _unfold_ics(payload: bytes) -> str:
 
 
 class TestScheduleServiceCalendar(unittest.TestCase):
+    def test_profile_ical_keeps_moscow_lesson_instant_and_stable_bytes(self):
+        lesson = {
+            "date": "2026-11-16",
+            "beginLesson": "00:10",
+            "endLesson": "01:40",
+            "discipline": "Physics",
+            "kindOfWork": "Lecture",
+            "lessonOid": 1,
+            "source_updated_at": "2026-11-14T19:12:00+00:00",
+        }
+        second = {**lesson, "lessonOid": 2, "source_updated_at": None}
+        moscow = generate_profile_ical_from_aggregated_schedule([lesson])
+        local = generate_profile_ical_from_aggregated_schedule([lesson], timezone_name="Etc/GMT+3")
+        for payload in (moscow, local):
+            self.assertIn(b"DTSTART:20261115T211000Z", payload)
+            self.assertIn(b"DTEND:20261115T224000Z", payload)
+            self.assertIn(b"DTSTAMP:20261114T191200Z", payload)
+        self.assertIn("Время: 2026-11-15 18:10-19:40", _unfold_ics(local))
+        self.assertEqual(
+            generate_profile_ical_from_aggregated_schedule([second, lesson]),
+            generate_profile_ical_from_aggregated_schedule([lesson, second]),
+        )
+
     def test_semester_bounds_keep_early_july_in_spring_semester(self):
         class _EarlyJulyDate(date):
             @classmethod

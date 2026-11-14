@@ -629,6 +629,70 @@ async def bind_curriculum_groups(document_id: int, groups: list[dict]) -> dict:
     return await get_curriculum(document_id)
 
 
+async def extend_curriculum(
+    document_id: int, expected_hash: str, assessments: list[dict], groups: list[dict]
+) -> dict:
+    """Append reviewed facts and date ranges to one unchanged publication."""
+    if not assessments and not groups:
+        raise ValueError("Specify at least one reviewed assessment or group date range")
+    cleaned = validate_groups(groups)
+    async with get_session() as db, db.begin():
+        document = await db.scalar(
+            select(CurriculumDocument).where(CurriculumDocument.id == document_id).with_for_update()
+        )
+        if document is None:
+            raise CurriculumNotFoundError("Curriculum not found")
+        if (
+            document.published_hash != expected_hash
+            or document.pending_hash
+            or document.processing_state != "ready"
+        ):
+            raise CurriculumConflictError("The published source changed or review is pending")
+        if document.parent_document_id is not None:
+            raise ValueError("Extend the group bindings of the root curriculum")
+
+        records = {
+            (row["discipline_code"], row["semester"], row["kind"]): row
+            for row in document.published_assessments
+        }
+        additions = (
+            validate_assessments(assessments, document.source_page_count or 0)
+            if assessments
+            else []
+        )
+        for row in additions:
+            identity = row["discipline_code"], row["semester"], row["kind"]
+            if identity in records and records[identity] != row:
+                raise CurriculumConflictError("Extension conflicts with an existing assessment")
+            records[identity] = row
+        updated = validate_assessments(list(records.values()), document.source_page_count or 0)
+        if updated != document.published_assessments:
+            document.published_assessments = updated
+            document.published_at = datetime.now(UTC)
+
+        # Extensions cannot claim or move a group. Its current binding is authoritative.
+        for row in cleaned:
+            existing = await db.get(CurriculumGroup, row["group_id"])
+            if (
+                existing is None
+                or existing.document_id != document_id
+                or existing.group_name != row["group_name"]
+            ):
+                raise CurriculumConflictError("Extension requires an unchanged group binding")
+            terms = {term["semester"]: term for term in existing.terms}
+            for term in row["terms"]:
+                semester = term["semester"]
+                if semester in terms and terms[semester] != term:
+                    raise CurriculumConflictError(
+                        "Extension conflicts with existing semester dates"
+                    )
+                terms[semester] = term
+            merged = validate_groups([{**row, "terms": list(terms.values())}])[0]["terms"]
+            if merged != existing.terms:
+                existing.terms = merged
+    return await get_curriculum(document_id)
+
+
 async def get_curriculum_pdf(document_id: int, published_hash: str | None = None) -> bytes:
     async with get_session() as db:
         document = await db.get(CurriculumDocument, document_id)

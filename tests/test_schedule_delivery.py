@@ -2,12 +2,15 @@
 
 import copy
 import importlib.util
+import os
 import unittest
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, time, timedelta
+from html import unescape
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+from urllib.parse import parse_qs, urlsplit
 
 from sqlalchemy import JSON, Integer, MetaData, UniqueConstraint, create_engine, select
 from sqlalchemy.dialects.postgresql import dialect as pg_dialect
@@ -16,10 +19,11 @@ from sqlalchemy.dialects.sqlite import dialect as sqlite_dialect
 from sqlalchemy.orm import Session
 
 from scheduler_app.job_health import monitor_job
-from shared_lib import database, schedule_outbox
+from shared_lib import database, schedule_history, schedule_outbox
 from shared_lib.models import (
     CachedSchedule,
     ScheduleChangeDelivery,
+    ScheduleHistoryEntry,
     ScheduleNotificationSnapshot,
     User,
     UserScheduleSubscription,
@@ -29,6 +33,79 @@ from shared_lib.schedule_daily import (
     daily_occurrence,
     deduplicate_daily_recipients,
 )
+
+
+def _history_lesson(oid, date_value, **fields):
+    return {
+        "lessonOid": oid,
+        "date": date_value,
+        "beginLesson": "09:00",
+        "endLesson": "10:30",
+        "discipline": "Math",
+        "kindOfWork": "Lecture",
+        "group": "Test group",
+        "auditorium": "A",
+        "lecturer_title": "Teacher",
+        **fields,
+    }
+
+
+class TestScheduleHistoryDiff(unittest.TestCase):
+    def test_material_changes_are_stable_and_exclude_private_upstream_fields(self):
+        before = [
+            _history_lesson(1, "2026-11-20", lecturerEmail="not-public@example.test"),
+            _history_lesson(2, "2026-11-21"),
+            _history_lesson(3, "2026-11-22"),
+            _history_lesson(4, "2026-11-23"),
+        ]
+        after = [
+            _history_lesson(1, "2026-11-24", auditorium="B"),
+            _history_lesson(8, "2026-11-21", discipline="Physics", lecturer_title="Other"),
+            _history_lesson(5, "2026-11-26"),
+            _history_lesson(4, "2026-11-23", unrelatedProviderValue="ignored"),
+        ]
+        scope = {
+            "semester_start": "2026-09-01",
+            "semester_end": "2027-01-31",
+            "today": date(2026, 11, 14),
+        }
+        changes = schedule_history.build_schedule_history(before, after, **scope)
+        self.assertEqual(
+            [change["kind"] for change in changes], ["replaced", "cancelled", "moved", "added"]
+        )
+        self.assertEqual(changes[0]["fields"], ["discipline", "teacher"])
+        self.assertEqual(changes[2]["fields"], ["date", "room"])
+        self.assertNotIn("lecturerEmail", changes[2]["before"])
+        self.assertEqual(
+            changes,
+            schedule_history.build_schedule_history(before[::-1], after[::-1], **scope),
+        )
+        self.assertEqual(
+            schedule_history.build_schedule_history(before, after + [{"date": "invalid"}], **scope),
+            [],
+        )
+        self.assertEqual(
+            schedule_history.build_schedule_history(
+                [
+                    _history_lesson(1, "2026-11-20"),
+                    _history_lesson(2, "2026-11-20", discipline="Parallel"),
+                ],
+                [
+                    _history_lesson(3, "2026-11-20"),
+                    _history_lesson(4, "2026-11-20", discipline="Parallel"),
+                ],
+                **scope,
+            ),
+            [],
+        )
+        self.assertEqual(
+            schedule_history.build_schedule_history(
+                before,
+                [_history_lesson(10, "2027-02-03")],
+                **{**scope, "semester_start": "2027-02-01", "semester_end": "2027-07-15"},
+            ),
+            [],
+        )
 
 
 def _sqlite_statement(statement):
@@ -147,6 +224,7 @@ class TestOutboxRecovery(unittest.IsolatedAsyncioTestCase):
         cache_table.c.schedule_data.type = JSON()
         cache_table.create(self.engine)
         ScheduleNotificationSnapshot.__table__.create(self.engine)
+        ScheduleHistoryEntry.__table__.create(self.engine)
         with Session(self.engine) as session:
             session.add(User(user_id=10, full_name="Test"))
             session.add(
@@ -169,14 +247,20 @@ class TestOutboxRecovery(unittest.IsolatedAsyncioTestCase):
             with Session(self.engine) as session:
 
                 class Adapter:
-                    async def execute(self, statement):
+                    async def execute(self, statement, parameters=None):
                         if (
                             getattr(self_test, "fail_outbox", False)
                             and getattr(getattr(statement, "table", None), "name", None)
                             == "schedule_change_deliveries"
                         ):
                             raise RuntimeError("injected write failure")
-                        return session.execute(_sqlite_statement(statement))
+                        return session.execute(_sqlite_statement(statement), parameters)
+
+                    async def scalars(self, statement):
+                        return session.scalars(statement)
+
+                    async def scalar(self, statement):
+                        return session.scalar(statement)
 
                     async def commit(self):
                         session.commit()
@@ -473,6 +557,11 @@ class TestOutboxRecovery(unittest.IsolatedAsyncioTestCase):
             await database.upsert_cached_schedule("group", "1", new)
         with (
             patch.object(database, "get_session", self.sessions),
+            patch.object(
+                jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[])
+            ),
+            patch.object(jobs, "get_semester_bounds", return_value=("2099-09-01", "2100-01-31")),
+            patch.dict(os.environ, {"PUBLIC_SITE_URL": "https://schedule.example"}),
             patch.object(jobs, "get_all_short_names", AsyncMock(return_value={})),
             patch.object(jobs.translator, "get_language", AsyncMock(return_value="en")),
             patch.object(jobs, "diff_schedules", diff_schedules),
@@ -491,6 +580,18 @@ class TestOutboxRecovery(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(rows), 1)
             self.assertIn("A", rows[0].payload)
             self.assertIn("B", rows[0].payload)
+            history = list(session.scalars(select(ScheduleHistoryEntry)))
+            self.assertEqual(len(history), 1)
+            self.assertEqual(history[0].event_key, rows[0].event_key)
+            self.assertEqual(history[0].before_lesson["room"], "A")
+            self.assertEqual(history[0].after_lesson["room"], "B")
+            href = unescape(rows[0].payload.split('href="', 1)[1].split('"', 1)[0])
+            link = urlsplit(href)
+            self.assertEqual((link.hostname, link.path), ("schedule.example", "/schedule"))
+            params = parse_qs(link.query)
+            self.assertEqual(params["change_event"], [rows[0].event_key])
+            self.assertEqual(params["lesson"], ["1"])
+            self.assertEqual(params["lesson_date"], ["2099-10-10"])
         snapshot = await schedule_outbox.get_schedule_notification_snapshot("group", "1")
         self.assertEqual(snapshot["revision"], 2)
         self.assertNotIn("date_obj", snapshot["schedule_data"][0])
@@ -506,23 +607,39 @@ class TestOutboxRecovery(unittest.IsolatedAsyncioTestCase):
             deliveries=[],
         )
         await schedule_outbox.commit_schedule_change_transition(**kwargs)
+        history = [{"kind": "added", "before": None, "after": {"date": "2099-10-10"}, "fields": []}]
         self.fail_outbox = True
         with self.assertRaisesRegex(RuntimeError, "injected"):
             await schedule_outbox.commit_schedule_change_transition(
                 **{**kwargs, "deliveries": [{"user_id": 10, "chat_id": 10, "payload": "Changed"}]},
                 expected_revision=1,
+                history=history,
             )
         self.fail_outbox = False
         self.assertEqual(
             (await schedule_outbox.get_schedule_notification_snapshot("group", "1"))["revision"], 1
         )
         self.assertEqual(self.rows(), {})
-        await schedule_outbox.commit_schedule_change_transition(**kwargs, expected_revision=1)
+        with Session(self.engine) as session:
+            self.assertEqual(list(session.scalars(select(ScheduleHistoryEntry))), [])
+        await schedule_outbox.commit_schedule_change_transition(
+            **kwargs, expected_revision=1, history=history
+        )
         with self.assertRaises(schedule_outbox.ScheduleBaselineConflict):
-            await schedule_outbox.commit_schedule_change_transition(**kwargs, expected_revision=1)
+            await schedule_outbox.commit_schedule_change_transition(
+                **kwargs, expected_revision=1, history=history
+            )
         self.assertEqual(
             (await schedule_outbox.get_schedule_notification_snapshot("group", "1"))["revision"], 2
         )
+        with patch.object(schedule_history, "get_session", self.sessions):
+            self.assertEqual(
+                len((await schedule_history.read_schedule_history("group", "1", "event"))["items"]),
+                1,
+            )
+            self.assertEqual(
+                (await schedule_history.read_schedule_history("group", "2", "event"))["items"], []
+            )
 
     async def test_slow_source_cannot_reverse_a_concurrent_scanner_transition(self):
         from scheduler_app import jobs
@@ -561,6 +678,9 @@ class TestOutboxRecovery(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch.object(database, "get_session", self.sessions),
+            patch.object(
+                jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[])
+            ),
             patch.object(jobs, "get_all_short_names", AsyncMock(return_value={})),
             patch.object(jobs.translator, "get_language", AsyncMock(return_value="en")),
             patch.object(jobs, "diff_schedules", diff_schedules),
@@ -577,6 +697,36 @@ class TestOutboxRecovery(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(baseline["revision"], 2)
         self.assertEqual(baseline["schedule_data"], winner)
         self.assertEqual(self.rows(), {})
+
+    async def test_web_only_source_records_history_without_enqueuing_telegram(self):
+        from scheduler_app import jobs
+
+        entity = {"entity_type": "group", "entity_id": "12", "entity_name": "Test"}
+        original = _history_lesson(1, "2099-10-10")
+        await schedule_outbox.commit_schedule_change_transition(
+            event_key="baseline",
+            **entity,
+            schedule_data=[original],
+            new_hash=schedule_outbox.schedule_snapshot_hash([original]),
+            deliveries=[],
+        )
+        with (
+            patch.object(jobs, "get_all_active_subscriptions", AsyncMock(return_value=[])),
+            patch.object(
+                jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[entity])
+            ),
+            patch.object(jobs, "get_semester_bounds", return_value=("2099-09-01", "2100-01-31")),
+            patch.object(
+                jobs, "deliver_pending_schedule_change_notifications", AsyncMock(return_value={})
+            ),
+            patch.object(jobs.asyncio, "sleep", AsyncMock()),
+            patch.object(schedule_history, "get_session", self.sessions),
+        ):
+            api = SimpleNamespace(get_schedule=AsyncMock(return_value=[]))
+            self.assertEqual(await jobs.check_for_schedule_updates(None, api), {"failed": 0})
+            items = (await schedule_history.read_schedule_history("group", "12"))["items"]
+        self.assertEqual([item["kind"] for item in items], ["cancelled"])
+        self.assertFalse(self.rows())
 
     async def test_migration_backfill_and_downgrade(self):
         from alembic.migration import MigrationContext

@@ -65,11 +65,11 @@ class LessonDetailsTests(unittest.TestCase):
                 currentWeekStart:new Date('2026-10-05T12:00:00Z'), schedulePageState:{},
                 scheduleFreshness:'fresh_cache', sourceUpdatedAt:'2026-10-09',
                 scheduleRefreshInProgress:false, isOfflineMode:false,
-                scheduleChangeSummary:{added:[oldLesson]}, lessonActionMap:new Map(),
+                scheduleHistoryEvent:'', lessonActionMap:new Map(),
                 lessonActionIds:new WeakMap(), nextLessonActionId:0,
                 getScheduleEntityKey:e=>e.type+':'+e.id, normalizeScheduleEntity:e=>e,
                 normalizeScheduleDate:d=>d, getISODateStr:()=> '2026-10-09', getMonday:d=>d,
-                parseDate:d=>new Date(d), setSchedulePageState(){}, renderScheduleHome(){},
+                parseDate:d=>new Date(d), setSchedulePageState(){}, renderScheduleHome(){}, renderScheduleChangesPanel(){},
                 getCurrentWeekEnd:()=>new Date('2026-10-11'), formatUiDate:()=>'',
                 isLessonInCurrentDisplayedScope:()=>true,
                 renderDesktopGrid:rows=>{state.rendered=rows; rows.forEach(row=>state.getLessonActionId(row));},
@@ -77,9 +77,7 @@ class LessonDetailsTests(unittest.TestCase):
                 normalizeScheduleLesson:x=>x, canonicalizeSpecialModuleName:x=>x,
                 escapeHtml:x=>x, t:(_key,fallback)=>fallback,
                 initOfflineHistory:async()=>{}, loadInitialPreferences:async()=>{}, renderOfflineHistory(){},
-                buildAvailableModules:modules=>modules, getSnapshotEntityKey:e=>e.id,
-                loadScheduleSnapshots:()=>({}), buildScheduleChangeSummary:()=>null,
-                persistScheduleSnapshot(){}, savePreferences(){}, syncScheduleUrl(){},
+                buildAvailableModules:modules=>modules, savePreferences(){}, syncScheduleUrl(){},
                 MAX_SCHEDULE_REFRESH_POLLS:4,
             };
             vm.createContext(state);
@@ -389,7 +387,7 @@ class LessonDetailsTests(unittest.TestCase):
             assert.equal(state.allAvailableModules.length, 0);
             assert.equal(state.loadedBounds.start, null);
             assert.equal(state.sourceUpdatedAt, null);
-            assert.equal(state.scheduleChangeSummary, null);
+            assert.equal(state.scheduleHistoryEvent, '');
             state.filterAndRender();
             state.translate();
             assert.equal(state.rendered.length, 0);

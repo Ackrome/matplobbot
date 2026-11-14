@@ -1,11 +1,14 @@
 """PostgreSQL delivery concurrency checks for the disposable RC harness only."""
 
 import asyncio
+import hashlib
 import os
-from datetime import time
+from datetime import date, time, timedelta
+from types import SimpleNamespace
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
+from starlette.requests import Request
 
 from shared_lib.database import (
     get_session,
@@ -13,6 +16,7 @@ from shared_lib.database import (
     toggle_subscription_status,
 )
 from shared_lib.models import ScheduleChangeDelivery, User, UserScheduleSubscription
+from shared_lib.schedule_history import build_schedule_history
 from shared_lib.schedule_outbox import (
     ScheduleBaselineConflict,
     claim_schedule_change_deliveries,
@@ -74,25 +78,43 @@ async def verify_delivery_concurrency() -> dict:
             == 1
         )
     async with get_session() as locked:
+        # The queue timestamps come from PostgreSQL; use the same clock in the
+        # probe so a fractional-second host/container skew cannot mask locking.
+        eligible_time = await locked.scalar(select(func.now())) + timedelta(seconds=1)
         first_id = await locked.scalar(
             select(ScheduleChangeDelivery.id)
             .where(ScheduleChangeDelivery.event_key == "rc-delivery-lock-first")
             .with_for_update()
         )
-        claimed = await asyncio.wait_for(claim_schedule_change_deliveries(limit=1), timeout=5)
+        claimed = await asyncio.wait_for(
+            claim_schedule_change_deliveries(limit=1, now_utc=eligible_time), timeout=5
+        )
         assert len(claimed) == 1 and claimed[0]["event_key"] == "rc-delivery-lock-second"
         assert claimed[0]["id"] != first_id and claimed[0]["attempt_count"] == 1
         await locked.rollback()
     await mark_schedule_change_delivery_sent(claimed[0]["id"], expected_attempt_count=1)
-    first_claim = await claim_schedule_change_deliveries(limit=1)
+    first_claim = await claim_schedule_change_deliveries(limit=1, now_utc=eligible_time)
     assert len(first_claim) == 1 and first_claim[0]["id"] == first_id
     await mark_schedule_change_delivery_sent(first_id, expected_attempt_count=1)
 
     entity = entities[1]
 
+    def lesson(room):
+        return {
+            "lessonOid": 1,
+            "date": "2099-11-01",
+            "beginLesson": "10:10",
+            "endLesson": "11:40",
+            "discipline": "RC fixture",
+            "kindOfWork": "Lecture",
+            "auditorium": room,
+        }
+
+    previous = [lesson("RC old")]
+
     async def transition(event, data, revision, deliveries):
         return await commit_schedule_change_transition(
-            event_key=event,
+            event_key=hashlib.sha256(event.encode()).hexdigest(),
             entity_type="group",
             entity_id=entity,
             entity_name=entity,
@@ -100,13 +122,22 @@ async def verify_delivery_concurrency() -> dict:
             new_hash=schedule_snapshot_hash(data),
             expected_revision=revision,
             deliveries=deliveries,
+            history=build_schedule_history(
+                previous,
+                data,
+                semester_start="2099-08-01",
+                semester_end="2100-01-31",
+                today=date(2099, 10, 10),
+            )
+            if revision
+            else [],
         )
 
-    assert await transition("rc-delivery-initial", [], None, []) == 0
+    assert await transition("rc-delivery-initial", previous, None, []) == 0
     outcomes = await asyncio.wait_for(
         asyncio.gather(
-            transition("rc-delivery-cas-a", [{"discipline": "RC A"}], 1, recipient),
-            transition("rc-delivery-cas-b", [{"discipline": "RC B"}], 1, recipient),
+            transition("rc-delivery-cas-a", [lesson("RC A")], 1, recipient),
+            transition("rc-delivery-cas-b", [lesson("RC B")], 1, recipient),
             return_exceptions=True,
         ),
         timeout=5,
@@ -127,12 +158,13 @@ async def verify_delivery_concurrency() -> dict:
         )
         assert len(pending) == 1, "The losing scanner must not enqueue its transition"
         winner_id = pending[0].id
+        winner_event = pending[0].event_key
     # PostgreSQL enforces the recipient FK after the baseline UPDATE: all writes
     # must roll back when enqueue fails, including the baseline revision/hash.
     try:
         await transition(
             "rc-delivery-rollback",
-            [{"discipline": "RC invalid recipient"}],
+            [lesson("RC invalid recipient")],
             2,
             [{"user_id": -910000002, "chat_id": FIXTURE_USER, "payload": "RC invalid"}],
         )
@@ -143,6 +175,23 @@ async def verify_delivery_concurrency() -> dict:
     assert await get_schedule_notification_snapshot("group", entity) == baseline
     await mark_schedule_change_delivery_sent(winner_id)
 
+    from fastapi_stats_app.routers.schedule_router import get_schedule_history
+
+    request = Request(
+        {
+            "type": "http",
+            "headers": [],
+            "client": ("127.0.0.1", 12345),
+            "app": SimpleNamespace(state=SimpleNamespace()),
+        }
+    )
+    history = await get_schedule_history(request, "group", entity, None)
+    assert len(history["items"]) == 1, "Only the winning transition can appear in public history"
+    change = history["items"][0]
+    assert change["before"]["room"] == "RC old"
+    assert change["after"]["room"] == baseline["schedule_data"][0]["auditorium"]
+    assert await get_schedule_history(request, "group", entity, winner_event) == history
+
     entity = entities[2]
     assert (
         await enqueue_schedule_change_deliveries("rc-delivery-overlap", "group", entity, recipient)
@@ -150,7 +199,9 @@ async def verify_delivery_concurrency() -> dict:
     )
     first_profile, second_profile = profiles[entity]
     assert await remove_schedule_subscription(first_profile, FIXTURE_USER) == entity
-    claimed = await claim_schedule_change_deliveries(limit=1)
+    async with get_session() as db:
+        eligible_time = await db.scalar(select(func.now())) + timedelta(seconds=1)
+    claimed = await claim_schedule_change_deliveries(limit=1, now_utc=eligible_time)
     assert len(claimed) == 1 and claimed[0]["event_key"] == "rc-delivery-overlap"
     assert await is_schedule_delivery_current(claimed[0]["id"], 1)
     assert await toggle_subscription_status(second_profile, FIXTURE_USER) == (False, entity)
@@ -163,6 +214,7 @@ async def verify_delivery_concurrency() -> dict:
         "skip_locked": True,
         "baseline_single_winner": True,
         "failed_enqueue_rolls_back_baseline": True,
+        "public_history_single_winner": True,
         "overlapping_profile_preserves_delivery": True,
         "pause_after_claim_cancels": True,
         "external_sends": 0,

@@ -16,12 +16,14 @@ from shared_lib.database import (
     search_cached_entities,
     upsert_cached_schedule,
 )
+from shared_lib.schedule_history import read_schedule_history
 from shared_lib.schemas import (
     CachedScheduleEntitySchema,
     ScheduleCacheBulkRefreshResponse,
     ScheduleCacheResponse,
     ScheduleDataResponse,
     ScheduleFallbackCountersResponse,
+    ScheduleHistoryResponse,
     ScheduleSearchResultSchema,
     ScheduleSemesterRefreshResponse,
 )
@@ -489,6 +491,24 @@ async def get_schedule_cache(request: Request, type: str, id: str):
         "schedule": await _enrich_schedule_lessons(schedule),
         "source_checked_at": checked_at.isoformat() if checked_at else None,
     }
+
+
+@router.get(
+    "/history/{type}/{id}",
+    response_model=ScheduleHistoryResponse,
+    summary="Read recent verified changes for a public schedule entity",
+)
+async def get_schedule_history(
+    request: Request,
+    type: str,
+    id: str,
+    event: str | None = Query(default=None, pattern=r"^[0-9a-f]{64}$"),
+):
+    await enforce_rate_limit(request, scope="schedule_data", settings=RATE_LIMIT_SCHEDULE_DATA)
+    entity_type = _normalize_schedule_entity_type(type)
+    if not 1 <= len(id) <= 255:
+        raise HTTPException(status_code=400, detail="Invalid schedule entity ID.")
+    return await read_schedule_history(entity_type, id, event)
 
 
 @router.get(
