@@ -217,9 +217,9 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             patch.object(
                 scheduler_main,
                 "get_operational_snapshot",
-                AsyncMock(return_value={
-                    "operations": [{"name": "schedule_refresh", "status": "stale"}]
-                }),
+                AsyncMock(
+                    return_value={"operations": [{"name": "schedule_refresh", "status": "stale"}]}
+                ),
             ),
             patch.object(
                 scheduler_main.aiohttp, "ClientSession", return_value=_AsyncSessionContext()
@@ -257,9 +257,11 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
                     [attempt.args for attempt in record_operation.await_args_list],
                     [("schedule_updates",), ("schedule_refresh",)],
                 )
-                self.assertTrue(all(
-                    attempt.kwargs["successful"] for attempt in record_operation.await_args_list
-                ))
+                self.assertTrue(
+                    all(
+                        attempt.kwargs["successful"] for attempt in record_operation.await_args_list
+                    )
+                )
             finally:
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
@@ -648,7 +650,9 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
                 AsyncMock(return_value={"rescheduled": 1, "failed": 1}),
             ),
             patch.object(jobs, "get_all_active_subscriptions", AsyncMock(return_value=[])),
-            patch.object(jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[])),
+            patch.object(
+                jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[])
+            ),
         ):
             result = await jobs.check_for_schedule_updates(object(), object())
         self.assertEqual(result, {"failed": 2})
@@ -681,7 +685,9 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             patch.object(
                 jobs, "get_all_active_subscriptions", AsyncMock(return_value=subscriptions)
             ),
-            patch.object(jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[])),
+            patch.object(
+                jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[])
+            ),
             patch.object(jobs, "get_all_short_names", AsyncMock(return_value={})),
             patch.object(jobs, "batch_update_subscription_hashes", AsyncMock()) as update_hashes,
             patch.object(jobs, "upsert_cached_schedule", AsyncMock()) as upsert_cache,
@@ -734,7 +740,9 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             patch.object(
                 jobs, "get_all_active_subscriptions", AsyncMock(return_value=subscriptions)
             ),
-            patch.object(jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[])),
+            patch.object(
+                jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[])
+            ),
             patch.object(jobs, "get_all_short_names", AsyncMock(return_value={})),
             patch.object(
                 jobs,
@@ -803,7 +811,9 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             patch.object(
                 jobs, "get_all_active_subscriptions", AsyncMock(return_value=subscriptions)
             ),
-            patch.object(jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[])),
+            patch.object(
+                jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[])
+            ),
             patch.object(jobs, "get_all_short_names", AsyncMock(return_value={})),
             patch.object(
                 jobs, "commit_schedule_change_transition", AsyncMock()
@@ -849,7 +859,9 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             patch.object(
                 jobs, "get_all_active_subscriptions", AsyncMock(return_value=subscriptions)
             ),
-            patch.object(jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[])),
+            patch.object(
+                jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[])
+            ),
             patch.object(jobs, "get_all_short_names", AsyncMock(return_value={})),
             patch.object(
                 jobs,

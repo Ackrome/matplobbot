@@ -10,11 +10,11 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
 from sqlalchemy import create_engine, delete, event, inspect
 from sqlalchemy.orm import Session
 
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from shared_lib.models import CurriculumDocument, CurriculumGroup
 from shared_lib.services import curriculum_service as service
 from shared_lib.services.curriculum_documents import MAX_DOCUMENT_BYTES, MAX_DOCUMENT_PAGES

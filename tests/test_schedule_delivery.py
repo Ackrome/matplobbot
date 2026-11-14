@@ -86,8 +86,14 @@ class TestScheduleHistoryDiff(unittest.TestCase):
         )
         self.assertEqual(
             schedule_history.build_schedule_history(
-                [_history_lesson(1, "2026-11-20"), _history_lesson(2, "2026-11-20", discipline="Parallel")],
-                [_history_lesson(3, "2026-11-20"), _history_lesson(4, "2026-11-20", discipline="Parallel")],
+                [
+                    _history_lesson(1, "2026-11-20"),
+                    _history_lesson(2, "2026-11-20", discipline="Parallel"),
+                ],
+                [
+                    _history_lesson(3, "2026-11-20"),
+                    _history_lesson(4, "2026-11-20", discipline="Parallel"),
+                ],
                 **scope,
             ),
             [],
