@@ -412,7 +412,10 @@ async def outbox():
             assert len(calls) == 2 and calls[1]["chat_id"] == 910000002
         from rc_delivery_probe import verify_delivery_concurrency
 
-        print("PostgreSQL concurrency:", await verify_delivery_concurrency())
+        print(
+            "PostgreSQL concurrency:",
+            await verify_delivery_concurrency(lambda path: request("GET", path)),
+        )
     finally:
         await runner.cleanup()
         await close_db_pool()

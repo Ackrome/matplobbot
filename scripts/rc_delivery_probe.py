@@ -4,11 +4,9 @@ import asyncio
 import hashlib
 import os
 from datetime import date, time, timedelta
-from types import SimpleNamespace
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
-from starlette.requests import Request
 
 from shared_lib.database import (
     get_session,
@@ -31,7 +29,7 @@ from shared_lib.schedule_outbox import (
 FIXTURE_USER = 910000002
 
 
-async def verify_delivery_concurrency() -> dict:
+async def verify_delivery_concurrency(read_history) -> dict:
     """Use real transactions/locks; caller initializes its disposable PostgreSQL pool.
 
     No network transport is constructed. Synthetic successful claims are acknowledged
@@ -175,22 +173,13 @@ async def verify_delivery_concurrency() -> dict:
     assert await get_schedule_notification_snapshot("group", entity) == baseline
     await mark_schedule_change_delivery_sent(winner_id)
 
-    from fastapi_stats_app.routers.schedule_router import get_schedule_history
-
-    request = Request(
-        {
-            "type": "http",
-            "headers": [],
-            "client": ("127.0.0.1", 12345),
-            "app": SimpleNamespace(state=SimpleNamespace()),
-        }
-    )
-    history = await get_schedule_history(request, "group", entity, None)
+    history_path = f"/schedule/history/group/{entity}"
+    history = await asyncio.to_thread(read_history, history_path)
     assert len(history["items"]) == 1, "Only the winning transition can appear in public history"
     change = history["items"][0]
     assert change["before"]["room"] == "RC old"
     assert change["after"]["room"] == baseline["schedule_data"][0]["auditorium"]
-    assert await get_schedule_history(request, "group", entity, winner_event) == history
+    assert await asyncio.to_thread(read_history, f"{history_path}?event={winner_event}") == history
 
     entity = entities[2]
     assert (

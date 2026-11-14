@@ -2560,6 +2560,9 @@ afterward. Previously overwritten historical schedules cannot be reconstructed.
 cache/scanner interference, failure accounting and retention. The disposable
 PostgreSQL acceptance harness additionally uses `scripts/rc_delivery_probe.py`
 to verify concurrent claims, competing baseline updates and recipient-FK rollback.
+The scheduler probe checks the recorded history over HTTP against the disposable
+API container. The CI job releases its own temporary Buildx storage after image
+publication, ahead of RC acceptance and the final runner disk check.
 `scripts/benchmark_schedule_delivery.py` measures safe offline SQL/grouping work
 with synthetic delays/outages and zero network requests. Its continuous local
 drain excludes the minute scheduler cadence and provider rate limits; it is not

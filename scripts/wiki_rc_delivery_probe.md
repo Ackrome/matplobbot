@@ -7,7 +7,8 @@ network. SQLite unit tests cannot establish `FOR UPDATE SKIP LOCKED` behavior.
 
 ## Public function and usage
 
-`await verify_delivery_concurrency()` returns compact pass flags. Invoke it from
+`await verify_delivery_concurrency(read_history)` returns compact pass flags. Pass
+a synchronous HTTP reader for the disposable API and invoke the probe from
 `rc_probe.py` after `init_db_pool()` and the ordinary outbox retry journey, before
 `close_db_pool()`. It requires `MPB_ISOLATED_RC=1`, the harness's synthetic user
 910000002, and unused `rc-delivery-*` entity IDs. It has no standalone CLI.
@@ -15,8 +16,9 @@ network. SQLite unit tests cannot establish `FOR UPDATE SKIP LOCKED` behavior.
 The probe holds one real row lock while a second connection claims another row;
 races two snapshot updates at one revision; forces a foreign-key enqueue failure
 after a snapshot update; and deletes/pauses overlapping subscription profiles
-before checking delivery eligibility. The public schedule-history route returns
-only the winning transition, including when addressed by its event key. Each
+before checking delivery eligibility. The probe reads the winning transition
+through the disposable API's public schedule-history route, including when
+addressed by its event key. The scheduler image needs only its own dependencies. Each
 PostgreSQL lock/race wait is bounded.
 
 ## Dependencies and side effects
