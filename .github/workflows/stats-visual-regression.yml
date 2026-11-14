@@ -10,7 +10,8 @@ on:
 
 jobs:
   capture-stats-baseline:
-    runs-on: ubuntu-latest
+    # Keep the runner on an OS supported by the Playwright lockfile.
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
