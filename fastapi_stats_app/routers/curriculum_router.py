@@ -76,6 +76,11 @@ class CurriculumGroups(BaseModel):
     groups: list[CurriculumGroupInput] = Field(max_length=100)
 
 
+class CurriculumExtension(CurriculumGroups):
+    expected_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    assessments: list[ReviewedAssessment] = Field(max_length=5000)
+
+
 class CurriculumScanLayout(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -199,5 +204,17 @@ async def curricula_groups(document_id: int, body: CurriculumGroups):
     return await _result(
         service.bind_curriculum_groups(
             document_id, [group.model_dump(mode="json") for group in body.groups]
+        )
+    )
+
+
+@router.post("/curricula/{document_id}/extend", dependencies=[Depends(require_admin)])
+async def curricula_extend(document_id: int, body: CurriculumExtension):
+    return await _result(
+        service.extend_curriculum(
+            document_id,
+            body.expected_hash,
+            [row.model_dump() for row in body.assessments],
+            [group.model_dump(mode="json") for group in body.groups],
         )
     )

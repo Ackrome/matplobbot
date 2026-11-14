@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import aiohttp
 import aiohttp.web
@@ -12,13 +12,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from scheduler_app.config import (
+    ADMIN_USER_IDS,
     BOT_TOKEN,
     CELERY_QUEUE_ALERT_THRESHOLD,
     SCHEDULE_OUTBOX_ALERT_AGE_SECONDS,
     TELEGRAM_PROXY_URL,
 )
 from scheduler_app.http_client import build_telegram_http_client_config
-from scheduler_app.job_health import monitor_job
+from scheduler_app.job_health import monitor_job, retry_schedule_job
 from scheduler_app.jobs import (
     check_for_schedule_updates,
     deliver_pending_schedule_change_notifications,
@@ -26,6 +27,7 @@ from scheduler_app.jobs import (
     refresh_schedule_entity_ids,
     send_admin_summary,
     send_daily_schedules,
+    send_telegram_message,
     update_schedule_cache,
 )
 from shared_lib.database import close_db_pool, get_session, init_db_pool
@@ -121,6 +123,55 @@ async def main():
         ):
             ruz_api_client_instance = create_ruz_api_client(ruz_session)
             scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
+
+            async def alert_schedule_job(operation):
+                # A long outage must not leave the warm cache waiting for the
+                # next 12-hour slot. Keep the original trigger and move only
+                # its next invocation, unless it already runs sooner.
+                retry_at = datetime.now(UTC) + timedelta(hours=1)
+                job = scheduler.get_job(operation)
+                if (
+                    job is not None
+                    and job.next_run_time is not None
+                    and job.next_run_time > retry_at
+                ):
+                    job.modify(next_run_time=retry_at)
+                if not ADMIN_USER_IDS:
+                    return
+                try:
+                    async with asyncio.timeout(2):
+                        already_alerted = not await redis_client.client.set(
+                            f"mpb:operations:alert:{operation}", "1", ex=21600, nx=True
+                        )
+                    if already_alerted:
+                        return
+                except Exception:
+                    logger.warning("Schedule alert deduplication unavailable")
+                message = (
+                    f"⚠️ Matplobbot: {operation} не восстановилась после повторов. "
+                    "Проверьте /health планировщика и доступность РУЗ."
+                )
+
+                async def notify_admin(admin_id):
+                    try:
+                        async with asyncio.timeout(8):
+                            return await send_telegram_message(
+                                telegram_session,
+                                admin_id,
+                                message,
+                                request_kwargs=telegram_request_kwargs,
+                                retry_attempts=0,
+                            )
+                    except TimeoutError:
+                        return None
+
+                replies = await asyncio.gather(
+                    *(notify_admin(admin_id) for admin_id in set(ADMIN_USER_IDS)),
+                    return_exceptions=True,
+                )
+                if not any(isinstance(reply, dict) for reply in replies):
+                    logger.warning("No configured administrator received the schedule job alert")
+
             # The hourly tick consults persisted due dates; documents are fetched weekly
             # (or every 14 days), surviving restarts without resetting their cadence.
             scheduler.add_job(
@@ -154,7 +205,9 @@ async def main():
                 },
             )
             scheduler.add_job(
-                monitor_job("schedule_updates", check_for_schedule_updates),
+                retry_schedule_job(
+                    "schedule_updates", check_for_schedule_updates, alert_schedule_job
+                ),
                 trigger="interval",
                 hours=2,
                 id="schedule_updates",
@@ -188,11 +241,15 @@ async def main():
                     "ruz_api_client": ruz_api_client_instance,
                 },
             )
-            scheduler.add_job(
-                monitor_job("schedule_refresh", update_schedule_cache),
+            refresh_job = scheduler.add_job(
+                retry_schedule_job("schedule_refresh", update_schedule_cache, alert_schedule_job),
                 trigger="cron",
                 hour="4,16",
                 minute=0,
+                id="schedule_refresh",
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=None,
                 kwargs={
                     "http_session": telegram_session,
                     "ruz_api_client": ruz_api_client_instance,
@@ -242,6 +299,14 @@ async def main():
                 site = aiohttp.web.TCPSite(runner, "0.0.0.0", 9584)
                 await site.start()
                 logger.info("Health check endpoint started at http://0.0.0.0:9584/health")
+
+                operations = await get_operational_snapshot()
+                if any(
+                    row.get("name") == "schedule_refresh"
+                    and row.get("status") in {"error", "stale"}
+                    for row in operations.get("operations", [])
+                ):
+                    refresh_job.modify(next_run_time=datetime.now(UTC))
 
                 scheduler.start()
                 logger.info("Scheduler started. Waiting for jobs...")

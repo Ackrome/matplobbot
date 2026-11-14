@@ -26,6 +26,15 @@ below describe earlier contracts; the refinements in this section take precedenc
 
 ### Official curriculum assessments
 
+The [spring 2027 addendum](reports/curriculum-numeric-pipeline/spring-2027-extension.md)
+extends the 11 reviewed Moscow ПМ23/ПМ25 group bindings to terms 8 and 4.
+It adds three graded practice assessments from the ПМ23 plan and reuses the
+13 reviewed term-4 assessments from the ПМ25 plan. The admin extension and
+publisher append to the exact published PDF revision without replacing prior
+terms. The import supports dry-run and rejects conflicts and pending reviews.
+Spring timetables were empty in RUZ during the check. The addendum records
+planned forms of control, and additional cohorts still need verified PDF bytes.
+
 The lesson dialog's **Discipline** tab now shows reviewed curriculum assessment
 requirements for the selected group and semester: exam, pass/fail, graded pass,
 coursework and course project. Other semesters are separate. Each result links
@@ -311,6 +320,12 @@ screenshots. GT/CSV counts, original PDF hash and recomputed metrics agree.
 
 ### Studio durability and rendering
 
+- Studio text files carry a content revision. Saves compare and update under
+  one database row lock. When a different editor saves first, Studio displays
+  both versions and retains the local draft until the user chooses which text
+  to keep. Build, export and send wait for resolution. Clients with cached code
+  that omits the revision must reload before saving.
+
 - A serialized session layer captures file identity with each save. Switching
   documents, building, exporting or sending waits for the pending save. A failed
   save preserves the current editor and blocks the transition; retry is explicit.
@@ -361,6 +376,17 @@ screenshots. GT/CSV counts, original PDF hash and recomputed metrics agree.
   suppresses free-window claims. Known conflicts are still shown with the warning.
   `/plan`, `/conflicts` and `/free` expose the comparison for the private-chat
   user's own active subscriptions over seven days.
+
+### Shared schedule change history
+
+The scheduler records verified additions, cancellations, moves and
+replacements for active schedule subscriptions, including calendar-only
+profiles, in the same transaction as the baseline and delivery outbox.
+GET /api/schedule/history/{type}/{id} returns at most 50 public timetable
+entries from the last 30 days. The website shows the same before and after
+values on different devices. Telegram notifications link to the recorded
+change and lesson, or to its week after a cancellation. The first successful
+observation establishes the baseline for future history.
 
 ### Operational and product outcomes
 
@@ -1655,7 +1681,13 @@ Public feed endpoints:
 Feature details:
 
 - Profile-based feeds with health metadata.
-- `ETag` and `Last-Modified` for cache-aware calendar clients.
+- Stable `ETag` and `If-None-Match` revalidation for web and Telegram calendar
+  feeds. A cache timestamp cannot validate profile changes, so a date-only
+  conditional request receives the current feed. `HEAD` reports GET metadata
+  without a body. RUZ lesson times are Moscow wall times; the profile timezone
+  changes the display text while preserving each lesson's absolute time.
+  The calendar panel reports the oldest check across its configured sources
+  and identifies a partial cache when any source has never been verified.
 - `download=1` forces attachment content disposition.
 
 How to use:
@@ -1701,7 +1733,14 @@ Configured jobs:
 - `check_for_schedule_updates` (immediately at scheduler startup, then every 2h): detects diffs, atomically records per-user outbox deliveries with the new cache/hash checkpoint, retries only unsent recipients, and refreshes `cached_schedules.updated_at` after every successful unchanged API poll for subscribed entities. A single coalesced job with one maximum instance avoids a restart extending the persisted heartbeat past its unchanged three-hour freshness limit; durable notification deduplication remains in effect.
 - `deliver_pending_schedule_change_notifications` (interval, every minute): claims ready outbox rows and applies per-recipient retry/backoff without waiting for the next two-hour RUZ poll.
 - `refresh_schedule_entity_ids` (cron Sunday 02:30): searches cached/subscribed schedule entities by name to resolve current semester RUZ ids, moves stale subscription/calendar references, and refreshes current-semester cache.
-- `update_schedule_cache` (cron at 04:00 and 16:00): warm cache refresh.
+- `update_schedule_cache` (cron at 04:00 and 16:00 Moscow time): warm cache
+  refresh. Both this job and change detection retry partial failures and
+  exceptions after 1, 5 and 15 minutes within one scheduler invocation. After
+  exhaustion the next check runs within an hour and configured administrators
+  receive a Telegram alert, rate-limited per job to once every six hours when
+  Redis is available. Startup immediately resumes a failed or stale warm
+  refresh. Health still reports unsuccessful attempts and recent outbox
+  failures until real recovery.
 - `prune_inactive_subscriptions` (cron at 03:00): cleanup inactive subscriptions.
 - `send_admin_summary` (cron, every minute): checks summary schedule and sends due summaries.
 

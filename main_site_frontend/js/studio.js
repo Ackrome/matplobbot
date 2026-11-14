@@ -5,7 +5,7 @@ const t = (key, params = {}) => window.mpbI18n?.t(`studio.${key}`, key, params) 
 let token, editor, session, sessionScope, splitInstance, currentBlobUrl, activeJob;
 let currentMode = 'quick', currentProjectId = null, currentFileId = null, currentProjectType = 'latex';
 let projectsList = [], projectFiles = [], previewGeneration = 0, editorGeneration = 0;
-let changingEditor = false, transitionBusy = false, saveTimer, transitionQueue = Promise.resolve();
+let changingEditor = false, transitionBusy = false, saveTimer, activeSave, transitionQueue = Promise.resolve();
 let currentStatus = 'ready', statusParams = {}, lastFocus, selectedMobilePane = 'editor-pane';
 let markdownConfigured = false, jobPolling = false, jobStarting = false, storageWarningShown = false;
 const previewAssetUrls = new Set();
@@ -56,8 +56,14 @@ async function api(path, options = {}) {
             headers: {Authorization: `Bearer ${token}`, ...requestOptions.headers}});
         if (!response.ok) {
             let detail;
-            try { const body = await response.json(); detail = typeof body.detail === 'string' ? body.detail : null; } catch (_) { /* non-JSON proxy errors */ }
-            const error = new Error(detail || t(response.status === 401 ? 'authExpired' : 'requestFailed', {status: response.status}));
+            try { detail = (await response.json()).detail; } catch (_) { /* non-JSON proxy errors */ }
+            if (response.status === 409 && detail?.code === 'file_revision_conflict' &&
+                typeof detail.content === 'string' && typeof detail.revision === 'string') {
+                throw new MpbStudioSession.FileConflict(detail.content, detail.revision);
+            }
+            const message = response.status === 428 ? t('reloadToSave')
+                : typeof detail === 'string' ? detail : t(response.status === 401 ? 'authExpired' : 'requestFailed', {status: response.status});
+            const error = new Error(message);
             error.status = response.status;
             throw error;
         }
@@ -75,11 +81,14 @@ function setStatus(key, params = {}) {
 }
 function showError(error) {
     window.MpbUI?.start('error_recovered');
+    const hasConflict = Boolean(session?.snapshot()?.conflict);
     $('error-text').textContent = error.message || String(error);
     $('error-panel').classList.remove('hidden');
-    $('retry-studio-button').classList.remove('hidden');
-    setStatus('error');
+    const retry = $('retry-studio-button');
+    retry.classList.remove('hidden');
+    setStatus(hasConflict ? 'conflict' : 'error');
     if (editor && window.innerWidth<768) switchMobileTab('editor-pane');
+    if (hasConflict) retry.focus();
 }
 function run(action) { return Promise.resolve().then(action).catch(showError); }
 function setEditorContent(value, readOnly = false) {
@@ -141,7 +150,7 @@ async function upgradeEditor() {
         frame.hidden=false;
         const enhanced = monaco.editor.create(frame.contentDocument.getElementById('monaco-container'), {value:content,language:editorLanguage(),
             theme:document.documentElement.classList.contains('dark')?'vs-dark':'vs-light',
-            automaticLayout:true,wordWrap:'on',minimap:{enabled:false},fontSize:14,readOnly:transitionBusy||Boolean(currentFile()?.is_binary),ariaLabel:t('editor')});
+            automaticLayout:true,wordWrap:'on',minimap:{enabled:false},fontSize:14,readOnly:editorReadOnly(),ariaLabel:t('editor')});
         previousEditor.dispose();editor=enhanced;
         monaco.languages.registerCompletionItemProvider('latex',{provideCompletionItems(){return {suggestions:[
             {label:'\\begin',kind:monaco.languages.CompletionItemKind.Snippet,insertText:'\\begin{${1:environment}}\n\t$0\n\\end{${1:environment}}',insertTextRules:monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet},
@@ -160,32 +169,70 @@ async function upgradeEditor() {
     }
 }
 function currentFile() { return projectFiles.find(file=>file.id===currentFileId); }
+function editorReadOnly() {
+    return transitionBusy || Boolean(session?.snapshot()?.conflict ||
+        currentMode === 'project' && (!currentProjectId || !currentFile() || currentFile().is_binary));
+}
 function editorLanguage() { return currentMode==='quick' ? ($('doc-type').value==='mermaid'?'plaintext':$('doc-type').value) : ({tex:'latex',sty:'latex',md:'markdown'}[currentFile()?.path.split('.').pop()]||'plaintext'); }
 function setModelLanguage() { if (window.monaco && editor.getModel()) monaco.editor.setModelLanguage(editor.getModel(),editorLanguage()); }
-async function saveCurrentFile() {
-    clearTimeout(saveTimer);
+async function resolveEditorConflict() {
+    const conflict = session.snapshot();
+    editor.updateOptions({readOnly:true});
+    setStatus('conflict');
+    const useDraft = await MpbStudioUX.conflict(conflict);
+    const resolved = session.resolveConflict(useDraft);
+    $('error-panel').classList.add('hidden');
+    const file = currentFile();
+    if (file) {
+        file.content = resolved.saved;
+        file.revision = resolved.revision;
+    }
+    setEditorContent(resolved.content, editorReadOnly());
+    $('pdf-stale').classList.toggle('hidden', !currentBlobUrl);
+    run(updateLivePreview);
+    return resolved;
+}
+async function flushCurrentFile() {
     if (!session?.dirty()) {if(currentMode==='quick')setStatus('localDraft');return;}
-    setStatus('saving');
-    await session.flush();
+    while (session.dirty()) {
+        if (session.snapshot().conflict) {
+            await resolveEditorConflict();
+            continue;
+        }
+        setStatus('saving');
+        try { await session.flush(); }
+        catch (error) {
+            if (!(error instanceof MpbStudioSession.FileConflict)) throw error;
+            clearTimeout(saveTimer);
+        }
+    }
     setStatus('saved');
     window.MpbUI?.finish('error_recovered');
     $('retry-studio-button').classList.add('hidden');
+}
+function saveCurrentFile() {
+    clearTimeout(saveTimer);
+    if (!activeSave) activeSave = flushCurrentFile().finally(() => { activeSave = null; });
+    return activeSave;
 }
 function transition(action) {
     const next = transitionQueue.catch(()=>{}).then(async()=>{
         transitionBusy=true;
         editor.updateOptions({readOnly:true});
         try { await saveCurrentFile(); await action(); }
-        finally { transitionBusy=false; editor.updateOptions({readOnly:Boolean(session.snapshot()?.conflict||currentMode==='project'&&(!currentProjectId||currentFile()?.is_binary))});renderProjectList(); }
+        finally { transitionBusy=false; editor.updateOptions({readOnly:editorReadOnly()});renderProjectList(); }
     });
     transitionQueue=next;
     return next;
 }
 async function activateDocument(record) {
     let restored = session.open(record);
-    if (restored.conflict) restored=session.resolveConflict(await MpbStudioUX.conflict(restored));
-    setEditorContent(restored.content);
+    setEditorContent(restored.conflict ? restored.draftContent : restored.content, editorReadOnly());
     setModelLanguage();
+    if (restored.conflict) {
+        try { restored = await resolveEditorConflict(); }
+        catch (error) { showError(error); return; }
+    }
     setStatus(restored.recovered?'recovered':record.projectId?'saved':'ready');
     if (restored.recovered && record.projectId) saveTimer=setTimeout(()=>run(saveCurrentFile),900);
     run(updateLivePreview);
@@ -194,12 +241,16 @@ async function activateFile(id) {
     const file=projectFiles.find(item=>item.id===id);
     if (!file) return;
     currentFileId=id;
-    if (file.is_binary) {
-        session.open({type:'binary',content:'',projectId:null});
-        setEditorContent(t('binaryFile',{name:file.path}),true);
-        setModelLanguage();
-    } else await activateDocument({projectId:currentProjectId,fileId:id,type:currentProjectType,content:file.content||''});
-    renderFileList();
+    try {
+        if (file.is_binary) {
+            session.open({type:'binary',content:'',projectId:null});
+            setEditorContent(t('binaryFile',{name:file.path}),true);
+            setModelLanguage();
+        } else {
+            await activateDocument({projectId:currentProjectId,fileId:id,type:currentProjectType,
+                content:file.content||'',revision:file.revision});
+        }
+    } finally { renderFileList(); }
 }
 async function activateProject(id) {
     const files=await (await api(`/studio/projects/${id}`)).json();
@@ -527,8 +578,16 @@ async function initStudio() {
     await ensureStudioAuth();
     sessionScope=MpbStudioSession.accountScope(token);
     session=MpbStudioSession.create({storage:storage(),scope:sessionScope,
-        save:async record=>{await api(`/studio/projects/${record.projectId}/files/${record.fileId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:record.content})});
-            const file=projectFiles.find(item=>item.id===record.fileId);if(file)file.content=record.content;},
+        save:async record=>{
+            const saved = await (await api(`/studio/projects/${record.projectId}/files/${record.fileId}`,{
+                method:'PUT',headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({content:record.content,revision:record.revision}),
+            })).json();
+            if (typeof saved.revision !== 'string') throw new Error(t('invalidResponse'));
+            const file = projectFiles.find(item => item.id === record.fileId);
+            if (file) { file.content = record.content; file.revision = saved.revision; }
+            return saved;
+        },
         onStorageError:()=>{if(!storageWarningShown){storageWarningShown=true;window.mpbPopup?.(t('storageUnavailable'),{type:'warning'});}}});
     editor=createFallbackEditor();MpbStudioUX.init();bind();await activateDocument({type:'latex',content:TEMPLATES.latex});updateModeUi();
     const params=new URLSearchParams(location.search);if(params.has('project')){await loadProjects();if(projectsList.some(p=>String(p.id)===params.get('project'))){await openProject(params.get('project'));updateModeUi();}}else if(params.has('projects'))await MpbStudioUX.manageProjects();

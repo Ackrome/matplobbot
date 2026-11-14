@@ -56,6 +56,14 @@ class FakeClient:
             )
         elif action == "groups":
             document["groups"] = copy.deepcopy(body["groups"])
+        elif action == "extend":
+            assert body["expected_hash"] == document["published_hash"]
+            document["published_assessments"].extend(copy.deepcopy(body["assessments"]))
+            for group in body["groups"]:
+                existing = next(
+                    item for item in document["groups"] if item["group_id"] == group["group_id"]
+                )
+                existing["terms"].extend(copy.deepcopy(group["terms"]))
         else:
             raise AssertionError("Unexpected API mutation")
         return copy.deepcopy(document)
@@ -230,6 +238,84 @@ class PublicationBundleTests(unittest.TestCase):
         client = FakeClient([existing])
         with self.assertRaisesRegex(bundle.BundleError, "published assessments"):
             bundle.publish_bundle(self.load(), client, self.output, apply=True)
+        self.assertTrue(all(method == "GET" for method, _ in client.calls))
+
+    def test_extension_dry_run_and_apply_preserve_publication_and_other_terms(self):
+        old = self.published(groups=[self.group])
+        spring = {
+            **self.group,
+            "terms": [{"semester": 8, "start_date": "2027-02-02", "end_date": "2027-07-05"}],
+        }
+        new_assessment = {**self.row, "semester": 8}
+        self.bundle_file.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "extensions": [
+                        {
+                            "source_url": self.metadata["source_url"],
+                            "source_sha256": old["published_hash"],
+                            "assessments": [new_assessment],
+                            "groups": [spring],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        entries = bundle.load_extension(self.bundle_file)
+        client = FakeClient([old])
+        dry_run = bundle.publish_extensions(entries, client, self.output)
+        self.assertEqual(dry_run["documents"][0]["action"], "extend")
+        self.assertTrue(all(method == "GET" for method, _ in client.calls))
+        applied = bundle.publish_extensions(entries, client, self.output, apply=True)
+        self.assertEqual(applied["status"], "complete")
+        self.assertEqual(client.documents[1]["published_assessments"], [self.row, new_assessment])
+        self.assertEqual(
+            client.documents[1]["groups"][0]["terms"],
+            [
+                *self.group["terms"],
+                *spring["terms"],
+            ],
+        )
+        self.assertEqual(client.documents[1]["published_hash"], old["published_hash"])
+        self.assertEqual(len(list(self.root.glob("*.before-*.json"))), 1)
+        client.calls.clear()
+        repeated = bundle.publish_extensions(entries, client, self.output, apply=True)
+        self.assertEqual(repeated["documents"][0]["action"], "unchanged")
+        self.assertTrue(all(method == "GET" for method, _ in client.calls))
+
+    def test_extension_conflict_stops_before_mutation(self):
+        old = self.published(groups=[self.group])
+        target = {
+            "source_url": self.metadata["source_url"],
+            "source_sha256": old["published_hash"],
+            "assessments": [{**self.row, "evidence": "Contradictory claim"}],
+            "groups": [],
+        }
+        client = FakeClient([old])
+        with self.assertRaisesRegex(bundle.BundleError, "existing assessment"):
+            bundle.publish_extensions([target], client, self.output, apply=True)
+        self.assertTrue(all(method == "GET" for method, _ in client.calls))
+
+    def test_extension_dry_run_checks_combined_dates_even_with_new_assessments(self):
+        old = self.published(groups=[self.group])
+        target = {
+            "source_url": self.metadata["source_url"],
+            "source_sha256": old["published_hash"],
+            "assessments": [{**self.row, "semester": 8}],
+            "groups": [
+                {
+                    **self.group,
+                    "terms": [
+                        {"semester": 8, "start_date": "2027-01-31", "end_date": "2027-07-05"}
+                    ],
+                }
+            ],
+        }
+        client = FakeClient([old])
+        with self.assertRaisesRegex(bundle.BundleError, "Overlapping semester ranges"):
+            bundle.publish_extensions([target], client, self.output)
         self.assertTrue(all(method == "GET" for method, _ in client.calls))
 
     def supplement(self):

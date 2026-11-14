@@ -4,6 +4,8 @@
 and extracts the actual safe-login return-path function. `TestStudioFrontend` verifies rejecting
 saves retain drafts, retry saves the original document, concurrent edits are serialized, accounts
 are isolated, quick snippets survive reopen, changed server content needs a conflict decision,
+two open sessions preserve a later draft in shared storage and advance the revision after resolving
+a conflict,
 storage failures do not destroy editing, and login targets reject cross-origin and loop URLs.
 
 Run `.venv/Scripts/python -m unittest tests.test_studio_frontend -v` from the project root.

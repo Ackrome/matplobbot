@@ -7,7 +7,7 @@ import types
 import unittest
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -133,11 +133,48 @@ class TestSchedulerHttpClient(unittest.TestCase):
 
 
 class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
+    async def test_schedule_retry_recovers_partial_failure_and_exhaustion_alerts_once(self):
+        job_health = importlib.import_module("scheduler_app.job_health")
+        cases = (
+            (
+                [OSError("offline"), {"failed": 1}, {"failed": 0}],
+                [False, False, True],
+                False,
+            ),
+            (
+                [{"failed": 1}, {"failed": 1}, {"failed": 1}],
+                [False, False, False],
+                True,
+            ),
+        )
+        for attempts, successful, exhausted in cases:
+            with (
+                self.subTest(exhausted=exhausted),
+                patch.object(job_health, "record_operation", AsyncMock()) as record,
+                patch.object(job_health.asyncio, "sleep", AsyncMock()) as delay,
+            ):
+                task, alert = AsyncMock(side_effect=attempts), AsyncMock()
+                job = job_health.retry_schedule_job(
+                    "schedule_refresh", task, alert, delays=(60, 300)
+                )
+                self.assertEqual(await job(entity="group"), attempts[-1])
+                self.assertEqual(task.await_args_list, [call(entity="group")] * 3)
+                self.assertEqual(delay.await_args_list, [call(60), call(300)])
+                self.assertEqual(
+                    [attempt.kwargs["successful"] for attempt in record.await_args_list],
+                    successful,
+                )
+                if exhausted:
+                    alert.assert_awaited_once_with("schedule_refresh")
+                else:
+                    alert.assert_not_awaited()
+
     async def test_startup_dispatches_one_monitored_update_then_keeps_two_hour_interval(self):
         scheduler_main = importlib.import_module("scheduler_app.main")
         job_health = importlib.import_module("scheduler_app.job_health")
         completed = asyncio.Event()
         calls = []
+        completed_operations = set()
 
         async def update_poll(**kwargs):
             calls.append(kwargs)
@@ -148,15 +185,18 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
                 # Exercise the real registration and dispatch without running any
                 # unrelated startup, cron, delivery or external-source jobs.
                 for job in self.get_jobs():
-                    if job.id != "schedule_updates":
+                    if job.id not in {"schedule_updates", "schedule_refresh"}:
                         job.modify(next_run_time=None)
                 super().start(paused=paused)
 
         scheduler = IsolatedScheduler(timezone="Europe/Moscow")
-        scheduler.add_listener(
-            lambda event: completed.set() if event.job_id == "schedule_updates" else None,
-            EVENT_JOB_EXECUTED,
-        )
+
+        def job_completed(event):
+            completed_operations.add(event.job_id)
+            if {"schedule_updates", "schedule_refresh"} <= completed_operations:
+                completed.set()
+
+        scheduler.add_listener(job_completed, EVENT_JOB_EXECUTED)
 
         async def delayed_health_setup():
             # Exceed APScheduler's default one-second misfire grace: readiness
@@ -168,17 +208,26 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
         )
         site = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
         api_client = object()
+        refresh = AsyncMock(return_value={"failed": 0})
         before_start = datetime.now(UTC)
         with (
             patch.object(scheduler_main, "BOT_TOKEN", "synthetic-test-token"),
             patch.object(scheduler_main, "init_db_pool", AsyncMock()),
             patch.object(scheduler_main, "close_db_pool", AsyncMock()),
             patch.object(
+                scheduler_main,
+                "get_operational_snapshot",
+                AsyncMock(return_value={
+                    "operations": [{"name": "schedule_refresh", "status": "stale"}]
+                }),
+            ),
+            patch.object(
                 scheduler_main.aiohttp, "ClientSession", return_value=_AsyncSessionContext()
             ),
             patch.object(scheduler_main, "create_ruz_api_client", return_value=api_client),
             patch.object(scheduler_main, "AsyncIOScheduler", return_value=scheduler),
             patch.object(scheduler_main, "check_for_schedule_updates", update_poll),
+            patch.object(scheduler_main, "update_schedule_cache", refresh),
             patch.object(scheduler_main.aiohttp.web, "AppRunner", return_value=runner),
             patch.object(scheduler_main.aiohttp.web, "TCPSite", return_value=site),
             patch.object(job_health, "record_operation", AsyncMock()) as record_operation,
@@ -199,9 +248,18 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(
                     job.trigger.get_next_fire_time(first_run, first_run), job.next_run_time
                 )
-                record_operation.assert_awaited_once()
-                self.assertEqual(record_operation.await_args.args, ("schedule_updates",))
-                self.assertTrue(record_operation.await_args.kwargs["successful"])
+                self.assertEqual(refresh.await_count, 1)
+                self.assertIs(refresh.await_args.kwargs["ruz_api_client"], api_client)
+                next_refresh = scheduler.get_job("schedule_refresh").next_run_time
+                self.assertIn(next_refresh.astimezone(ZoneInfo("Europe/Moscow")).hour, (4, 16))
+                self.assertEqual(next_refresh.minute, 0)
+                self.assertCountEqual(
+                    [attempt.args for attempt in record_operation.await_args_list],
+                    [("schedule_updates",), ("schedule_refresh",)],
+                )
+                self.assertTrue(all(
+                    attempt.kwargs["successful"] for attempt in record_operation.await_args_list
+                ))
             finally:
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
@@ -590,6 +648,7 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
                 AsyncMock(return_value={"rescheduled": 1, "failed": 1}),
             ),
             patch.object(jobs, "get_all_active_subscriptions", AsyncMock(return_value=[])),
+            patch.object(jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[])),
         ):
             result = await jobs.check_for_schedule_updates(object(), object())
         self.assertEqual(result, {"failed": 2})
@@ -622,6 +681,7 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             patch.object(
                 jobs, "get_all_active_subscriptions", AsyncMock(return_value=subscriptions)
             ),
+            patch.object(jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[])),
             patch.object(jobs, "get_all_short_names", AsyncMock(return_value={})),
             patch.object(jobs, "batch_update_subscription_hashes", AsyncMock()) as update_hashes,
             patch.object(jobs, "upsert_cached_schedule", AsyncMock()) as upsert_cache,
@@ -674,6 +734,7 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             patch.object(
                 jobs, "get_all_active_subscriptions", AsyncMock(return_value=subscriptions)
             ),
+            patch.object(jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[])),
             patch.object(jobs, "get_all_short_names", AsyncMock(return_value={})),
             patch.object(
                 jobs,
@@ -742,6 +803,7 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             patch.object(
                 jobs, "get_all_active_subscriptions", AsyncMock(return_value=subscriptions)
             ),
+            patch.object(jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[])),
             patch.object(jobs, "get_all_short_names", AsyncMock(return_value={})),
             patch.object(
                 jobs, "commit_schedule_change_transition", AsyncMock()
@@ -787,6 +849,7 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
             patch.object(
                 jobs, "get_all_active_subscriptions", AsyncMock(return_value=subscriptions)
             ),
+            patch.object(jobs, "get_unique_active_subscription_entities", AsyncMock(return_value=[])),
             patch.object(jobs, "get_all_short_names", AsyncMock(return_value={})),
             patch.object(
                 jobs,

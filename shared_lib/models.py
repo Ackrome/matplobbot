@@ -227,6 +227,29 @@ class ScheduleNotificationSnapshot(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
+class ScheduleHistoryEntry(Base):
+    """One public lesson change from an atomically accepted source transition."""
+
+    __tablename__ = "schedule_history_entries"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    event_key = Column(String(64), nullable=False)
+    position = Column(Integer, nullable=False)
+    entity_type = Column(String(32), nullable=False)
+    entity_id = Column(String, nullable=False)
+    observed_at = Column(DateTime(timezone=True), nullable=False)
+    kind = Column(String(16), nullable=False)
+    before_lesson = Column(JSON, nullable=True)
+    after_lesson = Column(JSON, nullable=True)
+    fields = Column(JSON, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("event_key", "position", name="uq_schedule_history_event_position"),
+        Index("ix_schedule_history_entity_time", "entity_type", "entity_id", "observed_at"),
+        Index("ix_schedule_history_time", "observed_at"),
+    )
+
+
 class ScheduleChangeDelivery(Base):
     """Durable Telegram outbox item for one schedule change and application user."""
 

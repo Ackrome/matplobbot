@@ -315,6 +315,47 @@ def load_bundle(path):
     return sorted(documents, key=lambda document: document["parent_source_url"] is not None)
 
 
+def load_extension(path):
+    """Validate versioned additions to already published sources."""
+    path = Path(path).resolve()
+    _require(path.stat().st_size <= MAX_JSON_BYTES, "Bundle JSON exceeds the limit")
+    try:
+        bundle = json.loads(path.read_text(encoding="utf-8"))
+    except (UnicodeError, ValueError) as exc:
+        raise BundleError("Invalid bundle JSON") from exc
+    _keys(bundle, ("version", "extensions"))
+    _require(type(bundle["version"]) is int and bundle["version"] == 1, "Unsupported version")
+    entries = bundle["extensions"]
+    _require(isinstance(entries, list) and 1 <= len(entries) <= 25, "Expected 1 to 25 extensions")
+    extensions, sources, group_ids = [], set(), set()
+    for entry in entries:
+        _keys(entry, ("source_url", "source_sha256", "assessments", "groups"))
+        url = official_url(entry["source_url"])
+        digest = entry["source_sha256"]
+        _require(url not in sources, "Duplicate extension source URL")
+        _require(
+            isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest),
+            "Invalid source SHA256",
+        )
+        rows = entry["assessments"]
+        _require(isinstance(rows, list), "Expected an assessment array")
+        groups = validate_groups(entry["groups"])
+        _require(bool(rows or groups), "Extension has no additions")
+        for group in groups:
+            _require(group["group_id"] not in group_ids, "Group appears in multiple extensions")
+            group_ids.add(group["group_id"])
+        sources.add(url)
+        extensions.append(
+            {
+                "source_url": url,
+                "source_sha256": digest,
+                "assessments": validate_assessments(rows) if rows else [],
+                "groups": groups,
+            }
+        )
+    return extensions
+
+
 class _NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         raise BundleError("API redirects are forbidden")
@@ -520,6 +561,100 @@ def _backup_detail(detail):
     return result
 
 
+def _extension_plan(entry, details):
+    matches = [row for row in details if row.get("source_url") == entry["source_url"]]
+    _require(len(matches) == 1, "Expected one registered extension source")
+    current = matches[0]
+    _require(
+        current.get("published_hash") == entry["source_sha256"]
+        and not current.get("pending_hash")
+        and current.get("processing_state") == "ready"
+        and current.get("parent_document_id") is None,
+        "The published source changed or review is pending",
+    )
+    old_rows = validate_assessments(current["published_assessments"])
+    records = {(row["discipline_code"], row["semester"], row["kind"]): row for row in old_rows}
+    for row in entry["assessments"]:
+        identity = row["discipline_code"], row["semester"], row["kind"]
+        _require(records.get(identity, row) == row, "Conflicting existing assessment")
+        _require(
+            type(current.get("page_count")) is int and row["page"] <= current["page_count"],
+            "An assessment page is outside the published PDF",
+        )
+        records[identity] = row
+    old_groups = validate_groups(current["groups"])
+    groups = {group["group_id"]: group for group in old_groups}
+    for group in entry["groups"]:
+        previous = groups.get(group["group_id"])
+        _require(
+            previous and previous["group_name"] == group["group_name"],
+            "Extension requires an unchanged group binding",
+        )
+        terms = {term["semester"]: term for term in previous["terms"]}
+        for term in group["terms"]:
+            _require(
+                terms.get(term["semester"], term) == term, "Conflicting existing semester dates"
+            )
+            terms[term["semester"]] = term
+        groups[group["group_id"]] = {**group, "terms": list(terms.values())}
+    final_rows = validate_assessments(list(records.values()))
+    final_groups = validate_groups(list(groups.values()))
+    return current, old_rows != final_rows or old_groups != final_groups
+
+
+def publish_extensions(entries, client, output, *, apply=False):
+    """Preflight every source before calling the atomic extension endpoint."""
+    details = read_registry(client)
+    plans = [_extension_plan(entry, details) for entry in entries]
+    report = {
+        "version": 1,
+        "mode": "apply" if apply else "dry_run",
+        "status": "validated",
+        "documents": [],
+    }
+    if apply and any(changed for _, changed in plans):
+        backup = Path(str(output) + f".before-{datetime.now(UTC):%Y%m%dT%H%M%S%fZ}.json")
+        _write_json(
+            backup,
+            {"version": 1, "documents": [_backup_detail(current) for current, _ in plans]},
+        )
+        report.update(status="applying", backup_file=str(backup))
+        _write_json(output, report)
+    try:
+        for entry, (current, changed) in zip(entries, plans, strict=True):
+            identifier = current["id"]
+            path = f"/api/curricula/{identifier}"
+            if apply and changed:
+                client.request(
+                    "POST",
+                    path + "/extend",
+                    body={
+                        "expected_hash": entry["source_sha256"],
+                        "assessments": entry["assessments"],
+                        "groups": entry["groups"],
+                    },
+                )
+                _, remaining = _extension_plan(entry, [client.request("GET", path)])
+                _require(not remaining, "Persisted extension verification failed")
+            report["documents"].append(
+                {
+                    "id": identifier,
+                    "source_sha256": entry["source_sha256"],
+                    "group_ids": [group["group_id"] for group in entry["groups"]],
+                    "action": "extend" if changed else "unchanged",
+                }
+            )
+            if apply:
+                _write_json(output, report)
+        report["status"] = "complete" if apply else "validated"
+        _write_json(output, report)
+        return report
+    except Exception:
+        report["status"] = "failed"
+        _write_json(output, report)
+        raise
+
+
 def wait_ready(
     client, identifier, *, wait_seconds=420, progress=print, clock=time.monotonic, sleep=time.sleep
 ):
@@ -665,32 +800,42 @@ def publish_bundle(documents, client, output, *, apply=False, wait_seconds=420, 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--bundle", type=Path, required=True)
+    inputs = parser.add_mutually_exclusive_group(required=True)
+    inputs.add_argument("--bundle", type=Path)
+    inputs.add_argument("--extension", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--base-url", default="http://127.0.0.1:9583")
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="Explicitly create, upload, publish and bind; default is read-only",
+        help="Apply a reviewed publication or extension; default is read-only",
     )
     parser.add_argument("--wait-seconds", type=int, default=420)
     args = parser.parse_args(argv)
     try:
-        documents = load_bundle(args.bundle)
+        source = args.bundle or args.extension
+        documents = load_bundle(source) if args.bundle else load_extension(source)
         base_url = validate_base_url(args.base_url)
         _require(
-            args.output.resolve() != args.bundle.resolve()
+            args.output.resolve() != source.resolve()
             and all(
-                args.output.resolve() != document["pdf_path"].resolve() for document in documents
+                args.output.resolve() != document["pdf_path"].resolve()
+                for document in documents
+                if "pdf_path" in document
             ),
             "Output must not replace a bundle input",
         )
         client = AdminClient(base_url, os.getenv("STATS_USER"), os.getenv("STATS_PASS"))
-        result = publish_bundle(
-            documents, client, args.output, apply=args.apply, wait_seconds=args.wait_seconds
+        result = (
+            publish_bundle(
+                documents, client, args.output, apply=args.apply, wait_seconds=args.wait_seconds
+            )
+            if args.bundle
+            else publish_extensions(documents, client, args.output, apply=args.apply)
         )
         print(
-            f"Curriculum bundle {result['status']}: {len(result['documents'])} documents; mode={result['mode']}"
+            f"Curriculum bundle {result['status']}: "
+            f"{len(result['documents'])} documents; mode={result['mode']}"
         )
         return 0
     except BundleError as exc:

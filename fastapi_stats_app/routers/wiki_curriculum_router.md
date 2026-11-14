@@ -42,6 +42,13 @@ the selected `scan_layout`.
 4. `PUT /{id}/groups` accepts `{groups:[{group_id,group_name,terms:[{semester,start_date,end_date}]}]}`. Empty groups remove this plan's bindings.
 5. `DELETE /{id}` removes an erroneous/obsolete document and bindings, returning an empty 204 response.
 
+`POST /api/curricula/{id}/extend` accepts `{expected_hash, assessments, groups}`
+for an already published root. It adds reviewed assessment rows and additional
+non-overlapping semesters to existing bindings in one transaction. Use either
+array empty when extending only the other. Pending replacement, mismatched hash,
+changed dates, or conflicts with existing rows reject the request. Repeating the
+same extension is safe. No document bytes or metadata are accepted by this route.
+
 List/detail data include `pending_hash`, `published_hash`, `candidates`, `warnings`, `published_assessments`, `page_count`, `document_url`, `groups`, timestamps and sanitized `last_error`. An import failure returns the retained detail with `last_error=import_failed`; clients must check it. A successful publication clears candidates and changes `status` to `published`.
 
 ## Dependencies, side effects and maintenance

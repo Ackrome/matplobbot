@@ -8,8 +8,10 @@ import hmac
 import json
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import Barrier
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -99,12 +101,34 @@ def prepare():
         other,
     )
     files = request("GET", f"/studio/projects/{project['id']}", token=first)
-    request(
-        "PUT",
-        f"/studio/projects/{project['id']}/files/{files[0]['id']}",
-        {"content": content + "\n% persisted"},
-        first,
-    )
+    path = f"/studio/projects/{project['id']}/files/{files[0]['id']}"
+    saved_text = content + "\n% persisted"
+    start = Barrier(2, timeout=5)
+
+    def edit(index):
+        edited = f"{content}\n% tab {index}"
+        body = {"content": edited, "revision": files[0]["revision"]}
+        headers = {"Content-Type": "application/json", "Authorization": "Bearer " + first}
+        start.wait()
+        try:
+            with urlopen(
+                Request(API + path, data=json.dumps(body).encode(), headers=headers, method="PUT"),
+                timeout=15,
+            ) as response:
+                return (response.status, json.load(response), edited)
+        except HTTPError as error:
+            return (error.code, json.load(error), edited)
+
+    with ThreadPoolExecutor(max_workers=2) as threads:
+        outcomes = sorted(threads.map(edit, (1, 2)))
+    assert [result[0] for result in outcomes] == [200, 409]
+    _, winner, winner_text = outcomes[0]
+    assert outcomes[1][1]["detail"] == {
+        "code": "file_revision_conflict",
+        "content": winner_text,
+        "revision": winner["revision"],
+    }
+    request("PUT", path, {"content": saved_text, "revision": winner["revision"]}, first)
     request("GET", f"/studio/projects/{project['id']}", token=other, expected=404)
     job = request("POST", f"/studio/projects/{project['id']}/jobs", token=first, expected=202)
     profile = request(

@@ -388,7 +388,7 @@ function renderCalendarSubscription() {
         ${profile ? `<section><h4>${calendarEscape(calendarTranslate('schedule.calendar.dialog.sourceStatus', 'Schedule source'))}</h4><dl class="calendar-health">
             <div><dt>${calendarEscape(calendarTranslate('schedule.calendar.health.events', 'Events'))}</dt><dd>${calendarEscape(String(health.event_count ?? 0))}</dd></div>
             <div><dt>${calendarEscape(calendarTranslate('schedule.calendar.health.next', 'Next class'))}</dt><dd>${health.next_event_at ? formatCalendarDateTime(health.next_event_at, '') : calendarEscape(calendarTranslate('schedule.calendar.noNextEvent', 'No upcoming class'))}</dd></div>
-            <div><dt>${calendarEscape(calendarTranslate('schedule.calendar.dialog.checked', 'Schedule checked'))}</dt><dd>${health.source_updated_at ? formatCalendarDateTime(health.source_updated_at, '') : calendarEscape(calendarTranslate('schedule.calendar.notUpdatedYet', 'Not checked yet'))}</dd></div>
+            <div><dt>${calendarEscape(calendarTranslate('schedule.calendar.dialog.checked', 'Schedule checked'))}</dt><dd>${health.cache_status === 'partial-cache' ? calendarEscape(calendarTranslate('schedule.calendar.health.partial', 'Partial cache')) : health.source_updated_at ? formatCalendarDateTime(health.source_updated_at, '') : calendarEscape(calendarTranslate('schedule.calendar.notUpdatedYet', 'Not checked yet'))}</dd></div>
         </dl></section>` : ''}
         ${renderCalendarBotLink('calendar-button calendar-link')}
         ${profile ? `<section class="calendar-danger"><h4>${calendarEscape(calendarTranslate('schedule.calendar.dialog.manage', 'Manage subscription'))}</h4>

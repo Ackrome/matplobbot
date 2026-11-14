@@ -12,6 +12,14 @@
         return 'anonymous';
     }
 
+    class FileConflict extends Error {
+        constructor(content, revision) {
+            super('Studio file revision conflict');
+            this.content = content;
+            this.revision = revision;
+        }
+    }
+
     function create({ storage, scope, save, onStorageError = () => {} }) {
         const prefix = `mpb-studio-v1:${scope}:`;
         let current = null;
@@ -23,14 +31,21 @@
         }
         function write(record) {
             try {
-                storage.setItem(prefix + key(record), JSON.stringify({
+                const entry = JSON.stringify({
                     content: record.content, baseContent: record.saved, updatedAt: Date.now(),
-                }));
+                    editId: globalThis.crypto?.randomUUID?.() || String(Math.random()),
+                });
+                storage.setItem(prefix + key(record), entry);
+                record.draftEntry = entry;
                 return true;
             } catch (error) { onStorageError(error); return false; }
         }
         function remove(record) {
-            try { storage.removeItem(prefix + key(record)); } catch (error) { onStorageError(error); }
+            try {
+                const name = prefix + key(record);
+                if (record.draftEntry && storage.getItem(name) === record.draftEntry) storage.removeItem(name);
+                delete record.draftEntry;
+            } catch (error) { onStorageError(error); }
         }
         function open(record, { restore = true } = {}) {
             const draft = read(key(record));
@@ -39,29 +54,58 @@
                 current.conflict = Boolean(record.projectId && draft.baseContent !== record.content);
                 current.draftContent = draft.content;
                 current.draftUpdatedAt = draft.updatedAt;
-                if (!current.conflict) { current.content = draft.content; current.recovered = true; }
+                current.draftEntry = JSON.stringify(draft);
+                if (current.conflict) {
+                    current.serverContent = record.content;
+                    current.serverRevision = record.revision;
+                } else {
+                    current.content = draft.content;
+                    current.recovered = true;
+                }
             }
             return { ...current };
         }
         function resolveConflict(useDraft) {
             if (!current?.conflict) return;
-            if (useDraft) { current.content = current.draftContent; current.recovered = true; write(current); }
-            else remove(current);
+            current.saved = current.serverContent;
+            current.revision = current.serverRevision;
+            current.content = useDraft ? current.draftContent : current.serverContent;
+            current.recovered = useDraft;
             current.conflict = false;
+            delete current.draftContent;
+            delete current.draftUpdatedAt;
+            delete current.serverContent;
+            delete current.serverRevision;
+            if (current.content !== current.saved) write(current);
+            else remove(current);
             return { ...current };
         }
         function edit(content) {
-            if (!current) return;
+            if (!current || current.conflict) return;
             current.content = content;
             write(current);
         }
         function flush() {
             const record = current;
             const operation = pending.catch(() => {}).then(async () => {
-                if (!record || !record.projectId || record.conflict) return;
+                if (!record || !record.projectId) return;
+                if (record.conflict) throw new FileConflict(record.serverContent, record.serverRevision);
                 while (record.content !== record.saved) {
                     const content = record.content;
-                    await save({ ...record, content });
+                    try {
+                        const saved = await save({ ...record, content });
+                        record.revision = saved?.revision ?? record.revision;
+                    } catch (error) {
+                        if (error instanceof FileConflict) {
+                            record.conflict = true;
+                            record.draftContent = record.content;
+                            record.draftUpdatedAt = Date.now();
+                            record.serverContent = error.content;
+                            record.serverRevision = error.revision;
+                            write(record);
+                        }
+                        throw error;
+                    }
                     record.saved = content;
                     // Do not discard a newer edit made while the request was in flight.
                     if (record.content === content) remove(record);
@@ -72,7 +116,7 @@
             return operation;
         }
         return { open, edit, flush, resolveConflict, snapshot: () => current && { ...current },
-            dirty: () => Boolean(current?.projectId && current.content !== current.saved),
+            dirty: () => Boolean(current?.projectId && (current.conflict || current.content !== current.saved)),
             readValue: name => read(name),
             storeValue(name, value) {
                 try { storage.setItem(prefix + name, JSON.stringify(value)); }
@@ -81,5 +125,5 @@
             removeValue(name) { try { storage.removeItem(prefix + name); } catch (_) { /* best effort */ } },
         };
     }
-    return { create, accountScope };
+    return { create, accountScope, FileConflict };
 });

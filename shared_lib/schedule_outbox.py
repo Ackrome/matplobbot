@@ -7,13 +7,14 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy import and_, delete, func, insert, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from .database import get_session
 from .models import (
     CachedSchedule,
     ScheduleChangeDelivery,
+    ScheduleHistoryEntry,
     ScheduleNotificationSnapshot,
     UserScheduleSubscription,
 )
@@ -235,8 +236,9 @@ async def commit_schedule_change_transition(
     new_hash: str,
     deliveries: list[dict[str, Any]],
     expected_revision: int | None = None,
+    history: list[dict] | None = None,
 ) -> int:
-    """CAS the baseline and atomically persist outbox/cache/subscription checkpoints."""
+    """CAS the baseline and atomically persist public history and delivery checkpoints."""
     normalized_entity_id = str(entity_id)
     normalized_schedule = json.loads(json.dumps(normalize_schedule_snapshot(schedule_data)))
     rows = [
@@ -285,6 +287,24 @@ async def commit_schedule_change_transition(
             )
         if baseline.rowcount != 1:
             raise ScheduleBaselineConflict("Schedule notification baseline changed during scan")
+        if expected_revision is not None and history:
+            await session.execute(
+                insert(ScheduleHistoryEntry),
+                [
+                    {
+                        "event_key": event_key,
+                        "position": position,
+                        "entity_type": entity_type,
+                        "entity_id": normalized_entity_id,
+                        "observed_at": now,
+                        "kind": change["kind"],
+                        "before_lesson": change["before"],
+                        "after_lesson": change["after"],
+                        "fields": change["fields"],
+                    }
+                    for position, change in enumerate(history)
+                ],
+            )
         inserted = 0
         if rows:
             result = await session.execute(

@@ -1,0 +1,165 @@
+{
+  "version": 1,
+  "extensions": [
+    {
+      "source_url": "https://www.fa.ru/upload/constructor/773/o1glti47zsriv5zhc7qc6agt7g6gou7x/UP.pdf",
+      "source_sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3",
+      "assessments": [
+        {
+          "discipline_code": "Б.2.1.1",
+          "discipline_name": "Учебная практика: технологическая (проектно-технологическая) практика",
+          "semester": 8,
+          "kind": "graded_pass",
+          "page": 2,
+          "evidence": "Б.2.1.1 | Учебная практика: технологическая (проектно-технологическая) практика | План, с. 2: промежуточная аттестация по видам практик — зачёт с оценкой; график 2023–2027, 4 курс, учебная практика, недели 23–26."
+        },
+        {
+          "discipline_code": "Б.2.2.1",
+          "discipline_name": "Производственная практика: технологическая (проектно-технологическая) практика",
+          "semester": 8,
+          "kind": "graded_pass",
+          "page": 2,
+          "evidence": "Б.2.2.1 | Производственная практика: технологическая (проектно-технологическая) практика | План, с. 2: промежуточная аттестация по видам практик — зачёт с оценкой; график 2023–2027, 4 курс, производственная практика, недели 27–37."
+        },
+        {
+          "discipline_code": "Б.2.2.2",
+          "discipline_name": "Производственная практика: преддипломная практика",
+          "semester": 8,
+          "kind": "graded_pass",
+          "page": 2,
+          "evidence": "Б.2.2.2 | Производственная практика: преддипломная практика | План, с. 2: промежуточная аттестация по видам практик — зачёт с оценкой; график 2023–2027, 4 курс, производственная практика, недели 27–37."
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "162426",
+          "group_name": "ПМ23-1",
+          "terms": [
+            {
+              "semester": 8,
+              "start_date": "2027-02-02",
+              "end_date": "2027-07-05"
+            }
+          ]
+        },
+        {
+          "group_id": "162428",
+          "group_name": "ПМ23-2",
+          "terms": [
+            {
+              "semester": 8,
+              "start_date": "2027-02-02",
+              "end_date": "2027-07-05"
+            }
+          ]
+        },
+        {
+          "group_id": "162430",
+          "group_name": "ПМ23-3",
+          "terms": [
+            {
+              "semester": 8,
+              "start_date": "2027-02-02",
+              "end_date": "2027-07-05"
+            }
+          ]
+        },
+        {
+          "group_id": "162432",
+          "group_name": "ПМ23-4",
+          "terms": [
+            {
+              "semester": 8,
+              "start_date": "2027-02-02",
+              "end_date": "2027-07-05"
+            }
+          ]
+        },
+        {
+          "group_id": "162434",
+          "group_name": "ПМ23-5",
+          "terms": [
+            {
+              "semester": 8,
+              "start_date": "2027-02-02",
+              "end_date": "2027-07-05"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "source_url": "https://www.fa.ru/upload/constructor/e13/mm7ghxp0y1dumv3ons4kyeey1qy0haj1/uchebnyy-plan-PMO_2025-new.pdf",
+      "source_sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86",
+      "assessments": [],
+      "groups": [
+        {
+          "group_id": "164554",
+          "group_name": "ПМ25-1",
+          "terms": [
+            {
+              "semester": 4,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        },
+        {
+          "group_id": "164555",
+          "group_name": "ПМ25-2",
+          "terms": [
+            {
+              "semester": 4,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        },
+        {
+          "group_id": "164556",
+          "group_name": "ПМ25-3",
+          "terms": [
+            {
+              "semester": 4,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        },
+        {
+          "group_id": "164557",
+          "group_name": "ПМ25-4",
+          "terms": [
+            {
+              "semester": 4,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        },
+        {
+          "group_id": "164558",
+          "group_name": "ПМ25-5",
+          "terms": [
+            {
+              "semester": 4,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        },
+        {
+          "group_id": "164559",
+          "group_name": "ПМ25-6",
+          "terms": [
+            {
+              "semester": 4,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

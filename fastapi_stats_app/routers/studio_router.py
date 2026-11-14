@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import hashlib
 import html
 import io
 import logging
@@ -27,6 +28,7 @@ from shared_lib.render_assets import MAX_ASSET_BYTES, allowed_project_path, rast
 from shared_lib.schemas import (
     StatusResponse,
     StudioCompileResponse,
+    StudioFileSaveResponse,
     StudioProjectFileSchema,
     StudioProjectSummary,
     StudioTelegramSendResponse,
@@ -104,6 +106,11 @@ class ProjectRename(BaseModel):
 
 class FileSave(BaseModel):
     content: str
+    revision: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
+def _file_revision(content: str | None) -> str:
+    return hashlib.sha256((content or "").encode("utf-8")).hexdigest()
 
 
 class FileRename(BaseModel):
@@ -363,6 +370,7 @@ async def get_project_files(
             "is_main": f.is_main,
             "is_binary": f.content_binary is not None,
             "content": f.content_text,
+            "revision": _file_revision(f.content_text) if f.content_binary is None else None,
         }
         for f in files
     ]
@@ -370,8 +378,12 @@ async def get_project_files(
 
 @router.put(
     "/projects/{project_id}/files/{file_id}",
-    response_model=StatusResponse,
+    response_model=StudioFileSaveResponse,
     summary="Save a text file in a Studio project",
+    responses={
+        409: {"description": "Another editor changed the file revision."},
+        428: {"description": "The save must include the revision of the loaded file."},
+    },
 )
 async def save_file(
     project_id: int,
@@ -381,18 +393,48 @@ async def save_file(
     current_user: dict = Depends(get_current_user),
 ):
     await get_owned_project_or_404(db, project_id, current_user["id"])
+    if data.revision is None:
+        raise HTTPException(
+            status_code=428, detail="Reload Studio to get the current file revision before saving."
+        )
+
+    # Keep the check and write in one transaction. A concurrent writer waits for
+    # this row and then reads the newly committed text before checking its revision.
     result = await db.execute(
+        select(ProjectFile.content_text, ProjectFile.content_binary.is_not(None))
+        .where(ProjectFile.id == file_id, ProjectFile.project_id == project_id)
+        .with_for_update()
+    )
+    file = result.one_or_none()
+    if file is None or file[1]:
+        raise HTTPException(status_code=404, detail="Text file not found")
+
+    current_text = file[0] or ""
+    current_revision = _file_revision(current_text)
+    if data.content == current_text:
+        # Safe when a client retries a save whose successful response was lost.
+        await db.rollback()
+        return {"status": "success", "revision": current_revision}
+    if data.revision != current_revision:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "file_revision_conflict",
+                "content": current_text,
+                "revision": current_revision,
+            },
+        )
+
+    await db.execute(
         update(ProjectFile)
         .where(ProjectFile.id == file_id, ProjectFile.project_id == project_id)
         .values(content_text=data.content)
     )
-    if result.rowcount == 0:
-        raise HTTPException(status_code=404, detail="File not found")
     await db.execute(
         update(Project).where(Project.id == project_id).values(updated_at=datetime.now(UTC))
     )
     await db.commit()
-    return {"status": "success"}
+    return {"status": "success", "revision": _file_revision(data.content)}
 
 
 @router.post(

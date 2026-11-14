@@ -10,11 +10,11 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from sqlalchemy import create_engine, delete, event, inspect
 from sqlalchemy.orm import Session
 
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
 from shared_lib.models import CurriculumDocument, CurriculumGroup
 from shared_lib.services import curriculum_service as service
 from shared_lib.services.curriculum_documents import MAX_DOCUMENT_BYTES, MAX_DOCUMENT_PAGES
@@ -139,6 +139,49 @@ class TestCurriculumPersistence(unittest.IsolatedAsyncioTestCase):
         doc = await self.imported()
         doc = await service.publish_curriculum(doc["id"], doc["pending_hash"], self.rows)
         return await service.bind_curriculum_groups(doc["id"], self.groups)
+
+    async def test_extend_curriculum_exposes_reviewed_spring_row_and_is_idempotent(self):
+        doc = await self.published()
+        group = self.groups[0]
+        await service.bind_curriculum_groups(doc["id"], [{**group, "terms": group["terms"][:1]}])
+        spring = [{**group, "terms": group["terms"][1:]}]
+        row = {
+            **self.rows[0],
+            "discipline_code": "Б.2.2.1",
+            "discipline_name": "Производственная практика",
+            "semester": 8,
+            "kind": "graded_pass",
+        }
+        extended = await service.extend_curriculum(doc["id"], doc["published_hash"], [row], spring)
+        matched = await service.lookup_curriculum(
+            group["group_id"], row["discipline_name"], date(2027, 3, 1)
+        )
+        self.assertEqual(matched["status"], "confirmed")
+        self.assertEqual(matched["semester"], 8)
+        self.assertEqual(matched["assessments"][0]["kind"], "graded_pass")
+        self.assertEqual(matched["assessments"][0]["source_sha256"], doc["published_hash"])
+        self.assertEqual(
+            await service.extend_curriculum(doc["id"], doc["published_hash"], [row], spring),
+            extended,
+        )
+        self.assertCountEqual(extended["published_assessments"], [*self.rows, row])
+        self.assertEqual(extended["groups"], self.groups)
+
+    async def test_extend_curriculum_rolls_back_new_rows_when_dates_conflict(self):
+        doc = await self.published()
+        group = self.groups[0]
+        changed = [{**group, "terms": [{**group["terms"][0], "end_date": "2027-01-29"}]}]
+        new_row = {**self.rows[0], "semester": 5}
+        with self.assertRaises(service.CurriculumConflictError):
+            await service.extend_curriculum(doc["id"], doc["published_hash"], [new_row], changed)
+        self.assertEqual(await service.get_curriculum(doc["id"]), doc)
+        with self.assertRaises(service.CurriculumConflictError):
+            await service.extend_curriculum(doc["id"], "0" * 64, [new_row], [])
+        with self.assertRaises(service.CurriculumConflictError):
+            await service.extend_curriculum(
+                doc["id"], doc["published_hash"], [new_row], [{**group, "group_id": "new"}]
+            )
+        self.assertEqual(await service.get_curriculum(doc["id"]), doc)
 
     async def supplement(self, parent, *, rows=None, publish=True):
         """Import a synthetic separately paginated document through the real service."""

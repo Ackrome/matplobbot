@@ -1,0 +1,706 @@
+{
+  "version": 1,
+  "verified_on": "2026-11-14",
+  "scope": "Existing cohort calendars and exact published plans; dates are planned, prospective RUZ schedules are not available.",
+  "group_dictionary": {
+    "url": "https://ruz.fa.ru/api/dictionary/groups",
+    "http": 200,
+    "records": 4060,
+    "sha256": "14263656721f6328d7d962ba53b46ba67e6cd5c10b8ae0cf3804d19a17575c64"
+  },
+  "faculty_dictionary": {
+    "url": "https://ruz.fa.ru/api/dictionary/faculties",
+    "http": 200,
+    "sha256": "dc3efdf7b766045d659f3707f003f050cda819a7e9bebf029fbd1173a1c03595",
+    "faculty": {
+      "facultyOid": 6,
+      "name": "Факультет информационных технологий и анализа больших данных",
+      "institute": "Московский кампус"
+    }
+  },
+  "calendar_evidence": [
+    {
+      "url": "https://www.fa.ru/upload/constructor/097/bz23oq9v6en1grnexho4qvh7119g6tnf/KUG.pdf",
+      "sha256": "0089aae4968b3a2cd605ad67b1f1ec084445ab403484566de02de828b52486b0",
+      "title": "Календарный учебный график, 01.03.02, очная, 2023–2027",
+      "approved": "2023-01-31",
+      "render": "group-binding/calendar2023-1.png",
+      "render_origin": "2026-10-09 university download; live PDF returned 403 during verification",
+      "course": 4,
+      "semester": 8,
+      "start_date": "2027-02-02",
+      "end_date": "2027-07-05",
+      "cells": [
+        "23–26: study practice",
+        "27–37: industrial practice",
+        "38: break inside the term",
+        "39–44: state final certification",
+        "45: begins summer vacation"
+      ]
+    },
+    {
+      "url": "https://www.fa.ru/upload/constructor/908/3504j6nh3idpc6elldfzlpvl9klpboe2/KUG_PMiI_25_och.pdf",
+      "sha256": "17536829aa988c11d4e84739c806a7760d6f7f198a55789d9a61d59618ace5df",
+      "title": "Календарный учебный график, 01.03.02, очная, 2025–2029",
+      "approved": "2025-01-31",
+      "render": "group-binding/calendar2025-1.png",
+      "render_origin": "2026-10-09 university download; live PDF returned 403 during verification",
+      "course": 2,
+      "semester": 4,
+      "start_date": "2027-02-02",
+      "end_date": "2027-06-28",
+      "cells": [
+        "23–40: teaching including holidays",
+        "41–43: assessments",
+        "44: begins summer vacation"
+      ]
+    }
+  ],
+  "plan_evidence": [
+    {
+      "admission_year": 2023,
+      "publication_snapshot": "https://api.ivantishchenko.ru/api/schedule/curriculum/documents/1/73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3.pdf",
+      "sha256": "73d6fa541ce75445d21d3e6ed810ee532954959056f6d9cf314e0f84fcd94bf3",
+      "reviewed_page": 2,
+      "facts_added": 3
+    },
+    {
+      "admission_year": 2025,
+      "publication_snapshot": "https://api.ivantishchenko.ru/api/schedule/curriculum/documents/2/26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86.pdf",
+      "sha256": "26aa4732da0efe213f5e2426ce63c85c04ab15a854c1542c4264d5d4c9239b86",
+      "reviewed_pages": [
+        1,
+        2
+      ],
+      "previously_reviewed_semester_facts_enabled": 13
+    }
+  ],
+  "groups": [
+    {
+      "name": "ПМ23-1",
+      "groupOid": 162426,
+      "facultyOid": 6,
+      "course": 4,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/162426?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 468,
+        "sha256": "ba8b1ccb9e2fde70f994d972991d9551d98d2230f5961a3cb202fb0de7b70fcc",
+        "parent_schedules": [
+          "*7 семестр - ПМ23-1-5 - 4 курс"
+        ],
+        "plan_ids": [
+          3860,
+          6142
+        ]
+      },
+      "spring_2027": {
+        "url": "https://ruz.fa.ru/api/schedule/group/162426?start=2027.02.02&finish=2027.07.05&lng=1",
+        "http": 200,
+        "returned_records": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "parent_schedules": [],
+        "plan_ids": []
+      }
+    },
+    {
+      "name": "ПМ23-2",
+      "groupOid": 162428,
+      "facultyOid": 6,
+      "course": 4,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/162428?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 468,
+        "sha256": "ac9175c2ba52fc4421fbd57e70a9e8c4964b79d798b9e8bdcd155e346c357f9c",
+        "parent_schedules": [
+          "*7 семестр - ПМ23-1-5 - 4 курс"
+        ],
+        "plan_ids": [
+          3860,
+          6142
+        ]
+      },
+      "spring_2027": {
+        "url": "https://ruz.fa.ru/api/schedule/group/162428?start=2027.02.02&finish=2027.07.05&lng=1",
+        "http": 200,
+        "returned_records": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "parent_schedules": [],
+        "plan_ids": []
+      }
+    },
+    {
+      "name": "ПМ23-3",
+      "groupOid": 162430,
+      "facultyOid": 6,
+      "course": 4,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/162430?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 519,
+        "sha256": "ccd7bcd840b3f1935e4d375d8788101f056f0ec3eb42ade8d84a879a92c74728",
+        "parent_schedules": [
+          "*7 семестр - ПМ23-1-5 - 4 курс"
+        ],
+        "plan_ids": [
+          3860,
+          6142
+        ]
+      },
+      "spring_2027": {
+        "url": "https://ruz.fa.ru/api/schedule/group/162430?start=2027.02.02&finish=2027.07.05&lng=1",
+        "http": 200,
+        "returned_records": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "parent_schedules": [],
+        "plan_ids": []
+      }
+    },
+    {
+      "name": "ПМ23-4",
+      "groupOid": 162432,
+      "facultyOid": 6,
+      "course": 4,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/162432?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 468,
+        "sha256": "f985703fad9ca87138f549d350d4320549fbfe657343626381f1b68f631243df",
+        "parent_schedules": [
+          "*7 семестр - ПМ23-1-5 - 4 курс"
+        ],
+        "plan_ids": [
+          3860,
+          6142
+        ]
+      },
+      "spring_2027": {
+        "url": "https://ruz.fa.ru/api/schedule/group/162432?start=2027.02.02&finish=2027.07.05&lng=1",
+        "http": 200,
+        "returned_records": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "parent_schedules": [],
+        "plan_ids": []
+      }
+    },
+    {
+      "name": "ПМ23-5",
+      "groupOid": 162434,
+      "facultyOid": 6,
+      "course": 4,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/162434?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 468,
+        "sha256": "adb4458dd926c9cb3e4d727b49108aecd77c08d2b5377f9ab9311b9a7b6755bf",
+        "parent_schedules": [
+          "*7 семестр - ПМ23-1-5 - 4 курс"
+        ],
+        "plan_ids": [
+          3860,
+          6142
+        ]
+      },
+      "spring_2027": {
+        "url": "https://ruz.fa.ru/api/schedule/group/162434?start=2027.02.02&finish=2027.07.05&lng=1",
+        "http": 200,
+        "returned_records": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "parent_schedules": [],
+        "plan_ids": []
+      }
+    },
+    {
+      "name": "ПМ24-1",
+      "groupOid": 164377,
+      "facultyOid": 6,
+      "course": 3,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/164377?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 374,
+        "sha256": "6643612c85d56d1f61f4ab800b46603c417254d1ae2e47211c982fa4efa32fd8",
+        "parent_schedules": [
+          "*5 семестр - ПМ24-1-5 - 3 курс"
+        ],
+        "plan_ids": [
+          5303,
+          5338,
+          6142
+        ]
+      }
+    },
+    {
+      "name": "ПМ24-2",
+      "groupOid": 164378,
+      "facultyOid": 6,
+      "course": 3,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/164378?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 374,
+        "sha256": "b74ec45e0b29f15437c0ae16c7089da4acc94fd4f2fc983ba6bf508e82565602",
+        "parent_schedules": [
+          "*5 семестр - ПМ24-1-5 - 3 курс"
+        ],
+        "plan_ids": [
+          5303,
+          5338,
+          6142
+        ]
+      }
+    },
+    {
+      "name": "ПМ24-3",
+      "groupOid": 164379,
+      "facultyOid": 6,
+      "course": 3,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/164379?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 340,
+        "sha256": "5c15f6afcf010ec1720eb4244ef19241f84fd42fde53532a14f0bbbd53a7c5ea",
+        "parent_schedules": [
+          "*5 семестр - ПМ24-1-5 - 3 курс"
+        ],
+        "plan_ids": [
+          5338,
+          6142
+        ]
+      }
+    },
+    {
+      "name": "ПМ24-4",
+      "groupOid": 164380,
+      "facultyOid": 6,
+      "course": 3,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/164380?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 323,
+        "sha256": "e1a6afb9da743f09e8faee681176145bb120d8d9f233c7580a235ecd3ed2d633",
+        "parent_schedules": [
+          "*5 семестр - ПМ24-1-5 - 3 курс"
+        ],
+        "plan_ids": [
+          5338,
+          6142
+        ]
+      }
+    },
+    {
+      "name": "ПМ24-5",
+      "groupOid": 164381,
+      "facultyOid": 6,
+      "course": 3,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/164381?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 356,
+        "sha256": "5964bd9255c84ea2532cf5b856fe59630dbac5aa187491c411b5b1e33da4f3d7",
+        "parent_schedules": [
+          "*5 семестр - ПМ24-1-5 - 3 курс"
+        ],
+        "plan_ids": [
+          5303,
+          5338,
+          6142
+        ]
+      }
+    },
+    {
+      "name": "ПМ25-1",
+      "groupOid": 164554,
+      "facultyOid": 6,
+      "course": 2,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/164554?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 377,
+        "sha256": "45650544cea4d971373c02dbd7fe6b9744a36fe207b31c25c24e28778434b58d",
+        "parent_schedules": [
+          "*3 семестр - ПМ25-1-6 - 2 курс"
+        ],
+        "plan_ids": [
+          6088,
+          6142,
+          6954,
+          6962
+        ]
+      },
+      "spring_2027": {
+        "url": "https://ruz.fa.ru/api/schedule/group/164554?start=2027.02.02&finish=2027.06.28&lng=1",
+        "http": 200,
+        "returned_records": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "parent_schedules": [],
+        "plan_ids": []
+      }
+    },
+    {
+      "name": "ПМ25-2",
+      "groupOid": 164555,
+      "facultyOid": 6,
+      "course": 2,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/164555?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 376,
+        "sha256": "ae64d61e737c519e5640ee5782cec1f35eb386626c01d567219eac799789cce3",
+        "parent_schedules": [
+          "*3 семестр - ПМ25-1-6 - 2 курс"
+        ],
+        "plan_ids": [
+          6088,
+          6142,
+          6954,
+          6962
+        ]
+      },
+      "spring_2027": {
+        "url": "https://ruz.fa.ru/api/schedule/group/164555?start=2027.02.02&finish=2027.06.28&lng=1",
+        "http": 200,
+        "returned_records": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "parent_schedules": [],
+        "plan_ids": []
+      }
+    },
+    {
+      "name": "ПМ25-3",
+      "groupOid": 164556,
+      "facultyOid": 6,
+      "course": 2,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/164556?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 393,
+        "sha256": "4ba24f4486e57e3d67ccf6bfb961e4c64138463075d946908aadff46f2e16f19",
+        "parent_schedules": [
+          "*3 семестр - ПМ25-1-6 - 2 курс"
+        ],
+        "plan_ids": [
+          6044,
+          6088,
+          6142,
+          6954,
+          6962
+        ]
+      },
+      "spring_2027": {
+        "url": "https://ruz.fa.ru/api/schedule/group/164556?start=2027.02.02&finish=2027.06.28&lng=1",
+        "http": 200,
+        "returned_records": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "parent_schedules": [],
+        "plan_ids": []
+      }
+    },
+    {
+      "name": "ПМ25-4",
+      "groupOid": 164557,
+      "facultyOid": 6,
+      "course": 2,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/164557?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 376,
+        "sha256": "a1cf78a234c741603d63011ded2813c1d69694105f5faa7717f05c41215fd7e6",
+        "parent_schedules": [
+          "*3 семестр - ПМ25-1-6 - 2 курс"
+        ],
+        "plan_ids": [
+          6088,
+          6142,
+          6954,
+          6962
+        ]
+      },
+      "spring_2027": {
+        "url": "https://ruz.fa.ru/api/schedule/group/164557?start=2027.02.02&finish=2027.06.28&lng=1",
+        "http": 200,
+        "returned_records": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "parent_schedules": [],
+        "plan_ids": []
+      }
+    },
+    {
+      "name": "ПМ25-5",
+      "groupOid": 164558,
+      "facultyOid": 6,
+      "course": 2,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/164558?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 392,
+        "sha256": "5d9590a7d5e377156b4b9c86db42b6f1781c37db78b638721b7ce4702fdaddac",
+        "parent_schedules": [
+          "*3 семестр - ПМ25-1-6 - 2 курс"
+        ],
+        "plan_ids": [
+          6044,
+          6088,
+          6142,
+          6954,
+          6962
+        ]
+      },
+      "spring_2027": {
+        "url": "https://ruz.fa.ru/api/schedule/group/164558?start=2027.02.02&finish=2027.06.28&lng=1",
+        "http": 200,
+        "returned_records": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "parent_schedules": [],
+        "plan_ids": []
+      }
+    },
+    {
+      "name": "ПМ25-6",
+      "groupOid": 164559,
+      "facultyOid": 6,
+      "course": 2,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/164559?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 392,
+        "sha256": "2e2b74666adca2792f6aba601fdb25e3d75c62d2c58e7f196e862d7d7672a2bc",
+        "parent_schedules": [
+          "*3 семестр - ПМ25-1-6 - 2 курс"
+        ],
+        "plan_ids": [
+          6044,
+          6088,
+          6142,
+          6954,
+          6962
+        ]
+      },
+      "spring_2027": {
+        "url": "https://ruz.fa.ru/api/schedule/group/164559?start=2027.02.02&finish=2027.06.28&lng=1",
+        "http": 200,
+        "returned_records": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "parent_schedules": [],
+        "plan_ids": []
+      }
+    },
+    {
+      "name": "ПМ26-1",
+      "groupOid": 165300,
+      "facultyOid": 6,
+      "course": 1,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/165300?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 368,
+        "sha256": "1ce9911e3013ad35b426c6fd1d1022d7fb0e633083fc7daaf6a72f3171642111",
+        "parent_schedules": [
+          "*1 семестр - ПМ26-1-6 - 1 курс"
+        ],
+        "plan_ids": [
+          6954
+        ]
+      }
+    },
+    {
+      "name": "ПМ26-2",
+      "groupOid": 165301,
+      "facultyOid": 6,
+      "course": 1,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/165301?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 367,
+        "sha256": "c1a46cbf6940674da292df1442c3be507dbeed0750724a9a92c018790eb576e5",
+        "parent_schedules": [
+          "*1 семестр - ПМ26-1-6 - 1 курс"
+        ],
+        "plan_ids": [
+          6954
+        ]
+      }
+    },
+    {
+      "name": "ПМ26-3",
+      "groupOid": 165302,
+      "facultyOid": 6,
+      "course": 1,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/165302?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 366,
+        "sha256": "a80e420802b91d14db2a96f36aa87b22399ea83ae873a160ebe839c76fc07862",
+        "parent_schedules": [
+          "*1 семестр - ПМ26-1-6 - 1 курс"
+        ],
+        "plan_ids": [
+          6954
+        ]
+      }
+    },
+    {
+      "name": "ПМ26-4",
+      "groupOid": 165303,
+      "facultyOid": 6,
+      "course": 1,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/165303?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 298,
+        "sha256": "d17defd2b5379685e27a99ac190e4dfb8660eb6c112d4b10533f8e84930b0f8d",
+        "parent_schedules": [
+          "*1 семестр - ПМ26-1-6 - 1 курс"
+        ],
+        "plan_ids": [
+          6954
+        ]
+      }
+    },
+    {
+      "name": "ПМ26-5",
+      "groupOid": 165304,
+      "facultyOid": 6,
+      "course": 1,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/165304?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 300,
+        "sha256": "ff05872e6aa76da6dd0622524475370f0bf3612d4077effbe3e5f35e81ffc996",
+        "parent_schedules": [
+          "*1 семестр - ПМ26-1-6 - 1 курс"
+        ],
+        "plan_ids": [
+          6954
+        ]
+      }
+    },
+    {
+      "name": "ПМ26-6",
+      "groupOid": 165305,
+      "facultyOid": 6,
+      "course": 1,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/165305?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 271,
+        "sha256": "46aa651e8940a2bb44b2dd6cf9ad925fa77d1f0948d8856b007c8cd332c5c468",
+        "parent_schedules": [
+          "*1 семестр - ПМ26-1-6 - 1 курс"
+        ],
+        "plan_ids": [
+          6954
+        ]
+      }
+    },
+    {
+      "name": "ПМ26-7",
+      "groupOid": 165306,
+      "facultyOid": 6,
+      "course": 1,
+      "formOfEducation": "Очная",
+      "YearOfEducation": 2026,
+      "is_schedule": 1,
+      "autumn_2026": {
+        "url": "https://ruz.fa.ru/api/schedule/group/165306?start=2026.09.01&finish=2027.01.25&lng=1",
+        "http": 200,
+        "returned_records": 132,
+        "sha256": "ea0093209c7438856ba7ade0462c0604da0adfe61e0ff8d26b2291c7e2f483fe",
+        "parent_schedules": [
+          "*1 семестр - ПМ26-1-6 - 1 курс"
+        ],
+        "plan_ids": [
+          6839,
+          6954
+        ]
+      }
+    }
+  ],
+  "extension_sha256": "776dba8719425e07de6722bdc6ecc08ad1d7c0f781207827fca3376e826ad125",
+  "next_plan_candidates": [
+    {
+      "cohort": 2024,
+      "expected_ruz_plan_id": 5338,
+      "term": 5,
+      "catalog_plan_url": "https://www.fa.ru/upload/constructor/19c/moez0bhagwyvvpzxgntnpelhdyu0mnvu/UP.pdf",
+      "cohort_calendar_url": "https://www.fa.ru/upload/constructor/a27/ppmqld2hzzzpp922hpjmi5z7yc1ah1mt/KUG.pdf",
+      "blocked_by": "Official source returned HTTP 403 from both work environments; exact plan bytes not obtained."
+    },
+    {
+      "cohort": 2026,
+      "expected_ruz_plan_id": 6954,
+      "term": 1,
+      "catalog_plan_url": "https://www.fa.ru/upload/constructor/bab/kz6w05ci0g8kyx0ce4b290bmghokd2wm/uch_plan_PMiI_OP-PMO_PMO_2026.pdf",
+      "same_identifying_plan_mirror": "https://www.fa.ru/upload/medialibrary/8dc/zbdezsn3dm0nn7e3evwhoqz6ja70qmaj/uch_plan_PMiI_OP-PMO_PMO_2026.pdf",
+      "cohort_calendar_url": "https://www.fa.ru/upload/constructor/bf4/t7x8p6woj7rub6pb2lpu450athz5hnqc/KUG_PMiI_26_och.pdf",
+      "blocked_by": "The indexed official mirror has plan 006954; HTTP 403 prevented acquisition of exact source bytes/hash. RUZ group 165306 is a mixed source, not proof of a separate seventh cohort group plan."
+    }
+  ]
+}

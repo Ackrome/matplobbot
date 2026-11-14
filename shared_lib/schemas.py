@@ -553,6 +553,34 @@ class ScheduleCacheResponse(BaseModel):
     model_config = BASE_CONFIG
 
 
+class ScheduleHistoryLesson(BaseModel):
+    date: str
+    begin: str
+    end: str
+    discipline: str
+    kind: str
+    building: str
+    room: str
+    teacher: str
+    group: str
+    oid: str
+
+
+class ScheduleHistoryChange(BaseModel):
+    observed_at: str
+    kind: Literal["added", "cancelled", "moved", "replaced"]
+    before: ScheduleHistoryLesson | None
+    after: ScheduleHistoryLesson | None
+    fields: list[str]
+
+
+class ScheduleHistoryResponse(BaseModel):
+    items: list[ScheduleHistoryChange]
+    truncated: bool
+    tracked: bool
+    retention_days: int
+
+
 class ActivitySeriesEntry(BaseModel):
     period_start: str = Field(..., description="Bucket label for the selected aggregation period.")
     actions_count: int = Field(..., ge=0, description="Number of actions in the bucket.")
@@ -660,8 +688,13 @@ class StudioProjectFileSchema(BaseModel):
     is_main: bool
     is_binary: bool
     content: str | None = None
+    revision: str | None = Field(None, description="Opaque revision of this saved text file.")
 
     model_config = BASE_CONFIG
+
+
+class StudioFileSaveResponse(StatusResponse):
+    revision: str = Field(..., description="Revision to send with the next save.")
 
 
 class StudioUploadAssetResponse(StatusResponse):
