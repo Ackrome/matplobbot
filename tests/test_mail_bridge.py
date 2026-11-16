@@ -166,9 +166,7 @@ class MailTests(unittest.TestCase):
                 "message_id": None,
             }
 
-            self.assertFalse(
-                await module.deliver_step(bot, SimpleNamespace(user_id=1), pending)
-            )
+            self.assertFalse(await module.deliver_step(bot, SimpleNamespace(user_id=1), pending))
 
             self.assertEqual(pending["message_id"], 456)
             self.assertEqual(pending["chunks"], [])
