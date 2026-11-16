@@ -53,6 +53,9 @@ services:
     env_file: ./.env
     environment:
       - ENVIRONMENT=production
+      - TELEGRAM_PROXY_URL=http://proxy:20170
+      - TELEGRAM_PROXY_TRANSPORT=http
+      - TELEGRAM_PROXY_RECHECK_URL=http://proxy:8080/recheck?group=telegram
     depends_on:
       mpb-worker:
         condition: service_started
@@ -62,6 +65,8 @@ services:
         condition: service_healthy
       migrator:
         condition: service_completed_successfully
+      proxy:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -81,6 +86,9 @@ services:
     environment:
       - TZ=Europe/Moscow
       - ENVIRONMENT=production
+      - TELEGRAM_PROXY_URL=http://proxy:20170
+      - TELEGRAM_PROXY_TRANSPORT=http
+      - TELEGRAM_PROXY_RECHECK_URL=http://proxy:8080/recheck?group=telegram
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -88,6 +96,8 @@ services:
         condition: service_healthy
       migrator:
         condition: service_completed_successfully
+      proxy:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9584/health"]
       interval: 30s
@@ -226,10 +236,11 @@ services:
         bind:
           create_host_path: false
     healthcheck:
-      test: ["CMD", "nc", "-z", "127.0.0.1", "20170"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health >/dev/null && curl -fsS 'http://127.0.0.1:8080/ready?group=telegram' >/dev/null && nc -z 127.0.0.1 20170 && curl -fsS --proxy http://127.0.0.1:20170 --max-time 10 -o /dev/null https://api.telegram.org"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 6
+      start_period: 60s
 
 volumes:
   redis_data:

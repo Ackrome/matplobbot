@@ -175,6 +175,31 @@ class MailTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
+    def test_mail_worker_supervisor_restarts_after_task_failure(self):
+        async def scenario():
+            module = handlers()
+            calls = []
+
+            async def worker(_bot):
+                calls.append(True)
+                if len(calls) == 1:
+                    raise RuntimeError("worker crashed")
+                raise asyncio.CancelledError
+
+            sleep = AsyncMock()
+            with patch.dict(os.environ, {"MAIL_CREDENTIAL_KEY": "configured"}), patch.object(
+                module, "mail_worker", side_effect=worker
+            ), patch.object(module.asyncio, "sleep", sleep):
+                with self.assertRaises(asyncio.CancelledError):
+                    await module.run_mail_worker_with_retry(
+                        SimpleNamespace(), retry_delay_seconds=7
+                    )
+
+            self.assertEqual(len(calls), 2)
+            sleep.assert_awaited_once_with(7)
+
+        asyncio.run(scenario())
+
     def test_nested_attached_email(self):
         message = EmailMessage()
         message.set_content("Outer")

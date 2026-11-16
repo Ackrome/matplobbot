@@ -3,12 +3,14 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import yaml
 
 from proxy.proxy_cleaner import (
     _build_group_summary,
+    _group_readiness,
+    _select_fastest_group_candidate,
     build_outline_mihomo_yaml,
     build_summary_payload,
     load_or_build_provider_yaml,
@@ -461,3 +463,64 @@ class TestProxyCleaner(unittest.TestCase):
         self.assertEqual(summary["telegram"]["selected"], "node-a")
         self.assertEqual(summary["telegram"]["top_candidates"][0]["delay"], 90)
         self.assertEqual(summary["openai"]["selected"], "node-b")
+
+    def test_select_fastest_group_candidate_updates_controller(self):
+        import proxy.proxy_cleaner as proxy_cleaner
+
+        with patch.object(
+            proxy_cleaner,
+            "controller_request",
+            side_effect=[{"now": "slow"}, {"now": "fast"}],
+        ) as request:
+            selected = _select_fastest_group_candidate(
+                "TELEGRAM-AUTO", {"slow": 300, "fast": 120}
+            )
+
+        self.assertEqual(selected, "fast")
+        request.assert_has_calls(
+            [
+                call("/proxies/TELEGRAM-AUTO"),
+                call(
+                    "/proxies/TELEGRAM-AUTO",
+                    method="PUT",
+                    body={"name": "fast"},
+                ),
+            ]
+        )
+
+    def test_select_fastest_group_candidate_ignores_invalid_delays(self):
+        import proxy.proxy_cleaner as proxy_cleaner
+
+        with patch.object(proxy_cleaner, "controller_request") as request:
+            selected = _select_fastest_group_candidate(
+                "TELEGRAM-AUTO", {"offline": None, "invalid": "120"}
+            )
+
+        self.assertIsNone(selected)
+        request.assert_not_called()
+
+    def test_group_readiness_requires_active_candidate(self):
+        import proxy.proxy_cleaner as proxy_cleaner
+
+        with patch.object(
+            proxy_cleaner,
+            "controller_request",
+            return_value={"now": "node-a", "alive": True, "all": ["node-a"]},
+        ):
+            payload = _group_readiness("TELEGRAM-AUTO")
+
+        self.assertTrue(payload["ready"])
+        self.assertEqual(payload["selected"], "node-a")
+
+    def test_group_readiness_reports_controller_failure(self):
+        import proxy.proxy_cleaner as proxy_cleaner
+
+        with patch.object(
+            proxy_cleaner,
+            "controller_request",
+            side_effect=RuntimeError("controller unavailable"),
+        ):
+            payload = _group_readiness("TELEGRAM-AUTO")
+
+        self.assertFalse(payload["ready"])
+        self.assertIn("controller unavailable", payload["error"])

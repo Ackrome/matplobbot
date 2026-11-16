@@ -165,6 +165,25 @@ class TestComposeConfiguration(unittest.TestCase):
                 environment = self.production["services"][service_name]["environment"]
                 self.assertIn("ENVIRONMENT=production", environment)
 
+    def test_telegram_services_wait_for_proxy_route_readiness(self):
+        proxy = self.production["services"]["proxy"]
+        healthcheck = proxy["healthcheck"]["test"][1]
+        self.assertIn("/ready?group=telegram", healthcheck)
+        self.assertIn("--proxy http://127.0.0.1:20170", healthcheck)
+        self.assertIn("https://api.telegram.org", healthcheck)
+
+        for service_name in ("mpb-telegram-bot", "mpb-scheduler"):
+            with self.subTest(service=service_name):
+                service = self.production["services"][service_name]
+                environment = service["environment"]
+                self.assertIn("TELEGRAM_PROXY_URL=http://proxy:20170", environment)
+                self.assertIn("TELEGRAM_PROXY_TRANSPORT=http", environment)
+                self.assertIn(
+                    "TELEGRAM_PROXY_RECHECK_URL=http://proxy:8080/recheck?group=telegram",
+                    environment,
+                )
+                self.assertEqual(service["depends_on"]["proxy"]["condition"], "service_healthy")
+
     def test_quality_gates_share_validation_dependencies(self):
         github_workflow = GITHUB_WORKFLOW.read_text(encoding="utf-8")
         jenkinsfile = JENKINSFILE.read_text(encoding="utf-8")

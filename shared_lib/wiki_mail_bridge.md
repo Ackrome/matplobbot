@@ -32,5 +32,7 @@ Schema changes must update the Alembic migration. The pending encrypted payload
 is temporary storage, not a permanent email archive. Rich HTML is validated
 again by Telegram at delivery time. The bot keeps the original component
 pending until acknowledgement and retries one escaped plain paragraph when
-Telegram rejects the rich markup, so a provider message cannot be lost solely
-because its HTML is outside the current Rich Message parser.
+ Telegram rejects the rich markup, so a provider message cannot be lost solely
+ because its HTML is outside the current Rich Message parser. The
+ `run_mail_worker_with_retry` supervisor restarts the polling task after an
+ unexpected task-level failure while preserving PostgreSQL pending state.

@@ -1839,7 +1839,7 @@ What it does:
 - When `TELEGRAM_PROXY_URL` points to the local Docker `proxy` service on its mixed listener and transport is `auto`, Telegram traffic is sent through `http://proxy:...` to avoid the aiogram SOCKS TLS handshake path.
 - The bot uses a custom aiogram session wrapper so HTTP proxies go through native `aiohttp` request proxying instead of aiogram's `aiohttp_socks` proxy connector.
 - The Mihomo proxy now routes by exact target domain instead of catch-all proxying: Telegram domains use `TELEGRAM-AUTO`, OpenAI/ChatGPT domains use `OPENAI-AUTO`, and everything else stays direct.
-- The Telegram provider/group health checks probe Telegram directly (`https://api.telegram.org`), and the `TELEGRAM-AUTO` `url-test` group picks the lowest-latency Telegram-capable node instead of just the first alive node.
+- The Telegram group delay probe targets `https://api.telegram.org`, and the `TELEGRAM-AUTO` `url-test` group picks the lowest-latency Telegram-capable node instead of just the first alive node. The unsupported provider-level healthcheck endpoint is not required.
 - The OpenAI provider/group health checks probe `https://api.openai.com/v1/models`, accept `401`/`403` style responses, and the `OPENAI-AUTO` `url-test` group independently picks the lowest-latency OpenAI-capable node.
 - The bundled production proxy image pins Mihomo `v1.19.32` and verifies the official amd64/arm64 archive SHA-256 before installation, so a changed or corrupted release artifact fails the image build.
 - The subscription cleaner preserves every supported outbound from Happ/Xray JSON instead of only the last VLESS outbound. VLESS (including WebSocket, gRPC, XHTTP, TLS, and Reality), Hysteria2, Shadowsocks, and SOCKS chains are converted to uniquely named Mihomo nodes.
@@ -1851,11 +1851,12 @@ What it does:
 - Imported legacy Clash YAML is normalized from JSON UTF-16 surrogate escapes to real UTF-8 and maps legacy `obfs-local` option names to Mihomo fields. URI conversion also preserves boolean plugin options such as `v2ray-plugin;mux=0` as booleans rather than invalid strings.
 - The Outline cleaner emits JSON-escaped YAML scalars for dynamic access keys, so provider values such as Shadowsocks `prefix` strings with CRLF control characters stay valid for Mihomo parsing.
 - The proxy keeps localhost and RFC1918 addresses direct so its own subscription refresh path does not recurse back through remote proxy nodes.
-- The proxy cleaner now exposes internal diagnostics endpoints on port `8080`: `/health`, `/diagnostics`, `/summary`, and `/recheck?group=telegram|openai|all`.
+- The proxy cleaner now exposes internal diagnostics endpoints on port `8080`: `/health`, `/ready?group=telegram|openai`, `/diagnostics`, `/summary`, and `/recheck?group=telegram|openai|all`.
 - The proxy image waits for the local cleaner `/health` endpoint before launching Mihomo, which removes the startup race where Mihomo tried to fetch providers before the cleaner was listening.
 - `/diagnostics` reports the last merged-provider build state plus Mihomo controller snapshots for providers and the active Telegram/OpenAI groups.
 - `/summary` extracts the practical view you usually need: selected Telegram/OpenAI group member, candidate counts, and the top candidates sorted by the latest known delay.
-- `/recheck` triggers Mihomo provider health checks and group delay tests immediately, which the bot now uses before retrying a failed Telegram request.
+- `/recheck` triggers a Mihomo group delay test and explicitly selects the fastest valid candidate, which the bot uses before retrying a failed Telegram request. A startup thread repeats this selection until Mihomo has loaded the provider after a proxy restart.
+- `/ready?group=telegram` returns 503 until Mihomo has an active Telegram candidate. Production bot and scheduler startup depends on this proxy readiness and uses the HTTP mixed listener for Telegram traffic.
 - Keeps `ruz.fa.ru` out of process-level proxy env via `NO_PROXY`, and creates RUZ aiohttp sessions with `trust_env=False` so schedule fetches stay direct.
 - The bot session retries a small number of transport-level Telegram request failures before surfacing an error, which helps when a proxy node briefly resets or times out before the request reaches Telegram.
 - Route groups probe their real destinations every 60 seconds (`max-failed-times: 1`, `lazy: false`), while provider-level checks run every 300 seconds. This avoids continuously flooding Telegram/OpenAI when the merged pool contains hundreds of nodes; the bot can still request an immediate targeted recheck after a transport failure.
@@ -2221,6 +2222,10 @@ How to use:
 - Delivery progress is transactional, but the Telegram API has no idempotency
   key: ambiguous network failures can duplicate a sent component. Initial
   acceptance testing requires an explicitly supplied test mailbox and chat.
+- The mail worker keeps encrypted pending deliveries in PostgreSQL and retries
+  account-level network failures. A supervisor restarts the worker after an
+  unexpected task-level exit, so mail delivery recovers without restarting the
+  Telegram bot. Normal bot shutdown still cancels the supervisor cleanly.
 
 - Public calendar links are secrets. Rotate immediately if exposed.
 - `Caddyfile` contains only public application/API routes. Personal or

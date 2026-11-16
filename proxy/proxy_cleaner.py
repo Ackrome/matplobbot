@@ -26,6 +26,7 @@ REFRESH_THREAD = None
 STATE = {
     "last_build": None,
     "last_cache_write": None,
+    "telegram_startup_recheck": {"status": "pending"},
 }
 
 
@@ -592,6 +593,60 @@ def build_summary_payload():
     }
 
 
+def _select_fastest_group_candidate(group_name, delays):
+    """Select the fastest candidate that answered the target probe."""
+    if not isinstance(delays, dict):
+        return None
+
+    candidates = [
+        (name, delay)
+        for name, delay in delays.items()
+        if isinstance(name, str)
+        and name.strip()
+        and isinstance(delay, (int, float))
+        and not isinstance(delay, bool)
+        and delay >= 0
+    ]
+    if not candidates:
+        return None
+
+    selected = min(candidates, key=lambda item: (item[1], item[0]))[0]
+    current = controller_request(f"/proxies/{group_name}")
+    if isinstance(current, dict) and current.get("now") == selected:
+        return selected
+
+    controller_request(
+        f"/proxies/{group_name}",
+        method="PUT",
+        body={"name": selected},
+    )
+    return selected
+
+
+def _group_readiness(group_name):
+    """Return readiness data for a Mihomo selector group."""
+    try:
+        snapshot = controller_request(f"/group/{group_name}")
+    except Exception as exc:
+        return {"ready": False, "group": group_name, "error": str(exc)}
+
+    if not isinstance(snapshot, dict):
+        return {"ready": False, "group": group_name, "error": "invalid controller response"}
+
+    selected = snapshot.get("now") or snapshot.get("selected")
+    candidates = snapshot.get("all") or snapshot.get("proxies") or []
+    ready = bool(selected) and snapshot.get("alive", True) is not False
+    payload = {
+        "ready": ready,
+        "group": group_name,
+        "selected": selected,
+        "candidate_count": len(candidates) if isinstance(candidates, list) else 0,
+    }
+    if not ready:
+        payload["error"] = "no active candidate"
+    return payload
+
+
 def trigger_group_recheck(target):
     targets = []
     normalized = (target or "all").strip().lower()
@@ -599,7 +654,6 @@ def trigger_group_recheck(target):
     if normalized in {"telegram", "all"}:
         targets.append(
             {
-                "provider": "something-telegram",
                 "group": "TELEGRAM-AUTO",
                 "url": "https://api.telegram.org",
             }
@@ -607,7 +661,6 @@ def trigger_group_recheck(target):
     if normalized in {"openai", "all"}:
         targets.append(
             {
-                "provider": "something-openai",
                 "group": "OPENAI-AUTO",
                 "url": "https://api.openai.com/v1/models",
             }
@@ -618,25 +671,63 @@ def trigger_group_recheck(target):
         entry = {"target": current["group"]}
 
         try:
-            entry["provider_healthcheck"] = controller_request(
-                f"/providers/proxies/{current['provider']}/healthcheck",
-                method="PUT",
-                query={"url": current["url"], "timeout": 7000},
-            )
-        except Exception as e:
-            entry["provider_healthcheck_error"] = str(e)
-
-        try:
-            entry["group_delay"] = controller_request(
+            group_delay = controller_request(
                 f"/group/{current['group']}/delay",
                 query={"url": current["url"], "timeout": 7000},
             )
+            entry["group_delay"] = group_delay
+            try:
+                entry["selected"] = _select_fastest_group_candidate(
+                    current["group"], group_delay
+                )
+            except Exception as exc:
+                entry["selection_error"] = str(exc)
         except Exception as e:
             entry["group_delay_error"] = str(e)
 
         results.append(entry)
 
     return {"requested_target": normalized, "results": results}
+
+
+def _startup_group_recheck():
+    deadline = time.monotonic() + 300
+    while time.monotonic() < deadline:
+        try:
+            payload = trigger_group_recheck("telegram")
+            result = (payload.get("results") or [{}])[0]
+            selected = result.get("selected")
+            if selected:
+                STATE["telegram_startup_recheck"] = {
+                    "status": "ready",
+                    "selected": selected,
+                    "checked_at": int(time.time()),
+                }
+                return
+            STATE["telegram_startup_recheck"] = {
+                "status": "waiting",
+                "error": result.get("group_delay_error", "no candidate"),
+            }
+        except Exception as exc:
+            STATE["telegram_startup_recheck"] = {
+                "status": "waiting",
+                "error": str(exc),
+            }
+        time.sleep(2)
+
+    STATE["telegram_startup_recheck"] = {
+        "status": "failed",
+        "error": "startup recheck timeout",
+    }
+
+
+def start_startup_recheck():
+    thread = threading.Thread(
+        target=_startup_group_recheck,
+        name="telegram-startup-recheck",
+        daemon=True,
+    )
+    thread.start()
 
 
 def _query_first(query, key, default=None):
@@ -1418,6 +1509,20 @@ class SubHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"ok": True}).encode("utf-8"))
             return
 
+        if self.path.startswith("/ready"):
+            parsed = urlsplit(self.path)
+            group = parse_qs(parsed.query).get("group", ["telegram"])[0]
+            group_name = {
+                "telegram": "TELEGRAM-AUTO",
+                "openai": "OPENAI-AUTO",
+            }.get(group.lower(), group)
+            payload = _group_readiness(group_name)
+            self.send_response(200 if payload["ready"] else 503)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(payload).encode("utf-8"))
+            return
+
         if self.path.startswith("/diagnostics"):
             payload = {
                 "state": STATE,
@@ -1463,6 +1568,7 @@ class SubHandler(BaseHTTPRequestHandler):
 def main():
     print("Cleaner with caching started on 8080", flush=True)
     start_background_refresh()
+    start_startup_recheck()
     ThreadingHTTPServer((PROXY_HTTP_BIND, 8080), SubHandler).serve_forever()
 
 

@@ -1,6 +1,7 @@
 # Mail Bot Integration
 
-`mail.py` provides `MailManager` and `mail_worker(bot)`. The router exposes `/mail`
+`mail.py` provides `MailManager`, `mail_worker(bot)` and
+`run_mail_worker_with_retry(bot)`. The router exposes `/mail`
 in private chats: add up to ten mailboxes, inspect status, pause/resume, delete
 with confirmation. Connection setup uses aiogram FSM, deletes the password
 message best-effort, and never places the password in FSM storage.
@@ -8,7 +9,9 @@ Setup format: `name@yandex.ru imap.yandex.ru 993 imap`. The port is required,
 persisted and displayed in account details; only implicit TLS is supported.
 
 Example: register `MailManager().router` ahead of general text handlers and run
-`mail_worker(bot)` as a managed background task. `bot/main.py` does both.
+`run_mail_worker_with_retry(bot)` as a managed background task. `bot/main.py`
+does both. The supervisor restarts the worker after an unexpected task-level
+failure and re-raises normal cancellation during shutdown.
 The bot must receive `MAIL_CREDENTIAL_KEY`; absent key disables ingestion.
 
 Dependencies: shared mailbox model, async SQLAlchemy sessions, aiogram rich
@@ -31,6 +34,8 @@ creating an endless retry loop.
 
 Maintenance: polling is approximately every 30 seconds, not IMAP IDLE; network
 latency and account count extend it. One worker processes accounts sequentially.
-Retry delays honor Telegram retry_after with a 30-second minimum. Permanent
+Retry delays honor Telegram retry_after with a 30-second minimum. The supervisor
+restarts a task that exits unexpectedly, so a transient task-level failure does
+not require a bot restart. Permanent
 authentication errors require reconnecting; UI shows the exception class only.
 Add tests when changing checkpoint, redaction, partial-delivery or ownership logic.

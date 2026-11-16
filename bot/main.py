@@ -201,9 +201,12 @@ async def run_bot_once(ruz_api_client_instance) -> None:
     dp.update.outer_middleware(GroupMentionCommandMiddleware())
     dp.update.middleware(UserLoggingMiddleware())
     setup_handlers(dp, bot=bot, ruz_api_client=ruz_api_client_instance)
-    from bot.handlers.mail import mail_worker
+    from bot.handlers.mail import run_mail_worker_with_retry
 
-    mail_task = asyncio.create_task(mail_worker(bot), name="mail-worker")
+    mail_task = asyncio.create_task(
+        run_mail_worker_with_retry(bot),
+        name="mail-worker-supervisor",
+    )
 
     try:
         await set_bot_commands(bot)

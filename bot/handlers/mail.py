@@ -361,3 +361,19 @@ async def mail_worker(bot):
         except Exception as exc:
             logging.warning("Mail worker failed (%s)", type(exc).__name__)
         await asyncio.sleep(1)
+
+
+async def run_mail_worker_with_retry(bot, retry_delay_seconds=30):
+    """Keep the mailbox worker alive after an unexpected task-level failure."""
+    if not os.getenv("MAIL_CREDENTIAL_KEY"):
+        return
+
+    while True:
+        try:
+            await mail_worker(bot)
+            logging.warning("Mail worker stopped unexpectedly; restarting")
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logging.exception("Mail worker crashed; restarting")
+        await asyncio.sleep(retry_delay_seconds)
