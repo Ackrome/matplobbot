@@ -1811,6 +1811,10 @@ images, inactive Buildx builders, BuildKit cache and stopped containers. The pro
 profile keeps tagged release images and cleans only dangling images, BuildKit cache and
 stopped containers.
 Neither profile removes Docker volumes or deletes containerd snapshots directly.
+The final CI `Soft Cleanup` step is best-effort after immutable release evidence and
+RC acceptance. Its failure remains visible in the job while it does not invalidate a
+release that already passed those gates. Jenkins still runs the blocking production
+disk guard before touching the deployment candidate.
 
 Install the production timer from a reviewed checkout as root with the commands in
 `ops/systemd/README.md`. It runs every 15 minutes and records failures in the systemd

@@ -495,7 +495,10 @@ jobs:
 
       - name: Soft Cleanup
         if: always()
+        continue-on-error: true
         run: |
+          # Cleanup is best-effort after immutable release and RC gates.
+          # Disk guard preflight and Jenkins production checks remain blocking.
           python scripts/docker_disk_guard.py monitor --profile runner \
             --warn-gib 20 --critical-gib 8 --warn-percent 20 --critical-percent 10 --image-age 72h
 
