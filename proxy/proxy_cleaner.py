@@ -17,6 +17,8 @@ SUB_URLS_FILE = os.environ.get("SUB_URLS_FILE", "/run/secrets/proxy-subscription
 MAX_SUBSCRIPTION_SOURCES = 32
 SUBSCRIPTION_FETCH_TIMEOUT_SECONDS = 15
 CACHE_REFRESH_INTERVAL_SECONDS = 300
+MIXED_PROXY_URL = "http://127.0.0.1:20170"
+MAX_ROUTE_PROBE_CANDIDATES = 8
 
 CACHE_LOCK = threading.Lock()
 BUILD_LOCK = threading.Lock()
@@ -593,7 +595,17 @@ def build_summary_payload():
     }
 
 
-def _select_fastest_group_candidate(group_name, delays):
+def _probe_mixed_target(url):
+    proxy = urllib.request.ProxyHandler({"http": MIXED_PROXY_URL, "https": MIXED_PROXY_URL})
+    opener = urllib.request.build_opener(proxy)
+    try:
+        with opener.open(urllib.request.Request(url, method="GET"), timeout=10) as response:
+            return 200 <= response.status < 500
+    except Exception:
+        return False
+
+
+def _select_fastest_group_candidate(group_name, delays, probe_url=None):
     """Select the fastest candidate that answered the target probe."""
     if not isinstance(delays, dict):
         return None
@@ -610,17 +622,19 @@ def _select_fastest_group_candidate(group_name, delays):
     if not candidates:
         return None
 
-    selected = min(candidates, key=lambda item: (item[1], item[0]))[0]
-    current = controller_request(f"/proxies/{group_name}")
-    if isinstance(current, dict) and current.get("now") == selected:
-        return selected
-
-    controller_request(
-        f"/proxies/{group_name}",
-        method="PUT",
-        body={"name": selected},
-    )
-    return selected
+    for selected, _delay in sorted(candidates, key=lambda item: (item[1], item[0]))[
+        :MAX_ROUTE_PROBE_CANDIDATES
+    ]:
+        current = controller_request(f"/proxies/{group_name}")
+        if not isinstance(current, dict) or current.get("now") != selected:
+            controller_request(
+                f"/proxies/{group_name}",
+                method="PUT",
+                body={"name": selected},
+            )
+        if probe_url is None or _probe_mixed_target(probe_url):
+            return selected
+    return None
 
 
 def _group_readiness(group_name):
@@ -677,7 +691,9 @@ def trigger_group_recheck(target):
             )
             entry["group_delay"] = group_delay
             try:
-                entry["selected"] = _select_fastest_group_candidate(current["group"], group_delay)
+                entry["selected"] = _select_fastest_group_candidate(
+                    current["group"], group_delay, current["url"]
+                )
             except Exception as exc:
                 entry["selection_error"] = str(exc)
         except Exception as e:

@@ -1855,7 +1855,7 @@ What it does:
 - The proxy image waits for the local cleaner `/health` endpoint before launching Mihomo, which removes the startup race where Mihomo tried to fetch providers before the cleaner was listening.
 - `/diagnostics` reports the last merged-provider build state plus Mihomo controller snapshots for providers and the active Telegram/OpenAI groups.
 - `/summary` extracts the practical view you usually need: selected Telegram/OpenAI group member, candidate counts, and the top candidates sorted by the latest known delay.
-- `/recheck` triggers a Mihomo group delay test and explicitly selects the fastest valid candidate, which the bot uses before retrying a failed Telegram request. A startup thread repeats this selection until Mihomo has loaded the provider after a proxy restart.
+- `/recheck` triggers a Mihomo group delay test, probes the mixed listener through the selected candidate, and explicitly selects the fastest candidate that passes both checks. The bot uses this before retrying a failed Telegram request. A startup thread repeats this selection until Mihomo has loaded the provider after a proxy restart.
 - `/ready?group=telegram` returns 503 until Mihomo has an active Telegram candidate. Production bot and scheduler startup depends on this proxy readiness and uses the HTTP mixed listener for Telegram traffic.
 - Keeps `ruz.fa.ru` out of process-level proxy env via `NO_PROXY`, and creates RUZ aiohttp sessions with `trust_env=False` so schedule fetches stay direct.
 - The bot session retries a small number of transport-level Telegram request failures before surfacing an error, which helps when a proxy node briefly resets or times out before the request reaches Telegram.

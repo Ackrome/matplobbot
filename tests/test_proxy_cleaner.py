@@ -497,6 +497,27 @@ class TestProxyCleaner(unittest.TestCase):
         self.assertIsNone(selected)
         request.assert_not_called()
 
+    def test_select_fastest_group_candidate_skips_failed_route_probe(self):
+        import proxy.proxy_cleaner as proxy_cleaner
+
+        with (
+            patch.object(
+                proxy_cleaner,
+                "controller_request",
+                side_effect=[{"now": "slow"}, {"now": "slow"}, None],
+            ),
+            patch.object(
+                proxy_cleaner,
+                "_probe_mixed_target",
+                side_effect=[False, True],
+            ),
+        ):
+            selected = _select_fastest_group_candidate(
+                "TELEGRAM-AUTO", {"slow": 100, "fast": 120}, "https://api.telegram.org"
+            )
+
+        self.assertEqual(selected, "fast")
+
     def test_group_readiness_requires_active_candidate(self):
         import proxy.proxy_cleaner as proxy_cleaner
 
