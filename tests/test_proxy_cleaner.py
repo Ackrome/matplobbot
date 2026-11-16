@@ -472,9 +472,7 @@ class TestProxyCleaner(unittest.TestCase):
             "controller_request",
             side_effect=[{"now": "slow"}, {"now": "fast"}],
         ) as request:
-            selected = _select_fastest_group_candidate(
-                "TELEGRAM-AUTO", {"slow": 300, "fast": 120}
-            )
+            selected = _select_fastest_group_candidate("TELEGRAM-AUTO", {"slow": 300, "fast": 120})
 
         self.assertEqual(selected, "fast")
         request.assert_has_calls(

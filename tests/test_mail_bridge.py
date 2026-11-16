@@ -187,9 +187,11 @@ class MailTests(unittest.TestCase):
                 raise asyncio.CancelledError
 
             sleep = AsyncMock()
-            with patch.dict(os.environ, {"MAIL_CREDENTIAL_KEY": "configured"}), patch.object(
-                module, "mail_worker", side_effect=worker
-            ), patch.object(module.asyncio, "sleep", sleep):
+            with (
+                patch.dict(os.environ, {"MAIL_CREDENTIAL_KEY": "configured"}),
+                patch.object(module, "mail_worker", side_effect=worker),
+                patch.object(module.asyncio, "sleep", sleep),
+            ):
                 with self.assertRaises(asyncio.CancelledError):
                     await module.run_mail_worker_with_retry(
                         SimpleNamespace(), retry_delay_seconds=7

@@ -677,9 +677,7 @@ def trigger_group_recheck(target):
             )
             entry["group_delay"] = group_delay
             try:
-                entry["selected"] = _select_fastest_group_candidate(
-                    current["group"], group_delay
-                )
+                entry["selected"] = _select_fastest_group_candidate(current["group"], group_delay)
             except Exception as exc:
                 entry["selection_error"] = str(exc)
         except Exception as e:
