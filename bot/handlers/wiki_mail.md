@@ -23,6 +23,12 @@ Deletion removes pending content and credentials; it cannot retract existing
 Telegram messages or database backups/WAL. Users should revoke app passwords
 at their provider as well. Telegram bot chats are not end-to-end encrypted.
 
+Rich delivery first uses the sanitized HTML component. If Telegram rejects that
+component with `TelegramBadRequest`, the handler sends one escaped paragraph
+derived from the same component and advances the same pending state only after
+that fallback is acknowledged. This keeps malformed provider HTML from
+creating an endless retry loop.
+
 Maintenance: polling is approximately every 30 seconds, not IMAP IDLE; network
 latency and account count extend it. One worker processes accounts sequentially.
 Retry delays honor Telegram retry_after with a 30-second minimum. Permanent

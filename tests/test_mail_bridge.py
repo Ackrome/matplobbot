@@ -9,6 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from aiogram.exceptions import TelegramBadRequest
 from cryptography.fernet import Fernet
 
 from shared_lib.mail_bridge import (
@@ -147,6 +148,32 @@ class MailTests(unittest.TestCase):
             self.assertFalse(await module.deliver_step(bot, SimpleNamespace(user_id=1), pending))
             bot.send_rich_message.assert_awaited_once()
             self.assertEqual(bot.send_document.call_args.kwargs["reply_parameters"].message_id, 123)
+
+        asyncio.run(scenario())
+
+    def test_rich_delivery_falls_back_to_escaped_paragraph(self):
+        async def scenario():
+            module = handlers()
+            rich_error = TelegramBadRequest(method=MagicMock(), message="bad rich HTML")
+            bot = SimpleNamespace(
+                send_rich_message=AsyncMock(
+                    side_effect=[rich_error, SimpleNamespace(message_id=456)]
+                )
+            )
+            pending = {
+                "chunks": ["<p><table><tr><td>Mail &amp; details</td></tr></table></p>"],
+                "attachments": [],
+                "message_id": None,
+            }
+
+            self.assertFalse(
+                await module.deliver_step(bot, SimpleNamespace(user_id=1), pending)
+            )
+
+            self.assertEqual(pending["message_id"], 456)
+            self.assertEqual(pending["chunks"], [])
+            fallback = bot.send_rich_message.await_args_list[1].args[1].html
+            self.assertEqual(fallback, "<p>Mail &amp; details</p>")
 
         asyncio.run(scenario())
 

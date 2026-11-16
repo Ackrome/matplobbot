@@ -2205,7 +2205,10 @@ How to use:
 - Uses Telegram [Rich Messages](https://core.telegram.org/bots/api#sendrichmessage)
   with sanitized rich HTML, preserving supported emphasis, links, lists and
   tables. Rich HTML and rich Markdown target the same interface. Remote images,
-  scripts and tracking pixels are not loaded. Long HTML falls back to text.
+  scripts and tracking pixels are not loaded. If Telegram rejects a sanitized
+  component, delivery retries that component once as an escaped plain paragraph
+  before advancing the encrypted pending state. This avoids an endless retry
+  loop while preserving the original provider content for later components.
 - Raw mail limit: 35 MiB; larger mail sends a notice. Body limit: 100000 characters
   with explicit truncation. Files accompany the original message as replies.
 - Pause/resume and confirmed removal are available per mailbox. Removal does

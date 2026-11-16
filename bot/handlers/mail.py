@@ -6,8 +6,10 @@ import logging
 import os
 import time
 from contextlib import suppress
+from html import escape
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -19,6 +21,7 @@ from aiogram.types import (
     InputRichMessage,
     ReplyParameters,
 )
+from bs4 import BeautifulSoup
 from sqlalchemy import select
 
 from shared_lib.database import get_session
@@ -34,6 +37,15 @@ from shared_lib.mail_bridge import (
 from shared_lib.models import MailAccount, User
 
 MAX_MAILBOXES_PER_USER = 10
+
+
+def _plain_rich_fallback(html_text: str) -> str:
+    """Convert a failed rich HTML component to a conservative rich paragraph."""
+    soup = BeautifulSoup(html_text, "html.parser")
+    for tag in soup.find_all(["br", "p", "li"]):
+        tag.insert_before("\n")
+    text = soup.get_text(" ", strip=True)
+    return f"<p>{escape(text)}</p>" if text else "<p>Получено письмо без текста.</p>"
 
 
 class MailSetup(StatesGroup):
@@ -252,12 +264,27 @@ async def deliver_step(bot, account, pending):
         else None
     )
     if pending["chunks"]:
-        sent = await bot.send_rich_message(
-            account.user_id,
-            InputRichMessage(html=pending["chunks"][0], skip_entity_detection=True),
-            reply_parameters=reply,
-            request_timeout=60,
-        )
+        rich_html = pending["chunks"][0]
+        try:
+            sent = await bot.send_rich_message(
+                account.user_id,
+                InputRichMessage(html=rich_html, skip_entity_detection=True),
+                reply_parameters=reply,
+                request_timeout=60,
+            )
+        except TelegramBadRequest:
+            # Mail HTML can contain a construct accepted by BeautifulSoup but
+            # rejected by the current Rich Message parser. Keep delivery moving
+            # with a safe, escaped paragraph and preserve the same progress model.
+            sent = await bot.send_rich_message(
+                account.user_id,
+                InputRichMessage(
+                    html=_plain_rich_fallback(rich_html),
+                    skip_entity_detection=True,
+                ),
+                reply_parameters=reply,
+                request_timeout=60,
+            )
         pending["message_id"] = pending["message_id"] or sent.message_id
         pending["chunks"].pop(0)
     elif pending["attachments"]:

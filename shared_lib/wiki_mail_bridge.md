@@ -29,4 +29,8 @@ oversize messages produce a notice instead. HTML over 8000 characters falls
 back to escaped text; body text above 100000 characters is explicitly truncated.
 UIDVALIDITY changes fail closed: reconnect to establish a new baseline.
 Schema changes must update the Alembic migration. The pending encrypted payload
-is temporary storage, not a permanent email archive.
+is temporary storage, not a permanent email archive. Rich HTML is validated
+again by Telegram at delivery time. The bot keeps the original component
+pending until acknowledgement and retries one escaped plain paragraph when
+Telegram rejects the rich markup, so a provider message cannot be lost solely
+because its HTML is outside the current Rich Message parser.
