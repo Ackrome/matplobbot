@@ -78,6 +78,14 @@ permission failure stops the workflow with an operator instruction; it never run
 the old deployment pipeline to bootstrap parameters. The CLI is read-only unless
 `--apply` is supplied. Avoid concurrent manual job configuration edits.
 
+The Actions deployment job follows the queue item returned by its submission
+and the build assigned to it. To pass, the build must finish with `SUCCESS` and
+serve its `release-smoke.json` artifact for the accepted source commit and build
+number. The Jenkins smoke stage archives that artifact after checking the remote
+smoke and finalization marker. The Actions summary links both the queue item and
+the build. If the 40-minute wait expires or the submit loses its connection,
+inspect Jenkins before rerunning because the original deployment may still run.
+
 `bash deploy.sh --manifest .release-state/accepted.json` verifies source/digests,
 backs up an existing running PostgreSQL database, stops the old scheduler before
 the notification-baseline migration, migrates and starts the accepted services.

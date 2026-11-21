@@ -19,10 +19,10 @@ setup(
         "pdfplumber==0.11.10",
         "markdown-it-py",
         "mdit-py-plugins",
-        "opentelemetry-api>=1.45.1,<2",
-        "opentelemetry-exporter-otlp-proto-http>=1.45.1,<2",
-        "opentelemetry-instrumentation-aiohttp-client>=0.66b1,<1",
-        "opentelemetry-sdk>=1.45.1,<2",
+        "opentelemetry-api>=1.45.2,<2",
+        "opentelemetry-exporter-otlp-proto-http>=1.45.2,<2",
+        "opentelemetry-instrumentation-aiohttp-client>=0.66b2,<1",
+        "opentelemetry-sdk>=1.45.2,<2",
     ],
     # Keep the small numeric recognizer and its integrity metadata in wheels.
     # Its inference runtime is installed only by the scheduler image.
@@ -32,6 +32,7 @@ setup(
             "templates/*.tex",
             "data/curriculum_numeric.onnx",
             "data/curriculum_numeric.json",
+            "data/curriculum_aliases.json",
         ],
     },
     include_package_data=True,

@@ -316,13 +316,16 @@
             entityEl.textContent = currentEntity?.name || t("schedule.context.none", "Группа не выбрана");
         }
 
-        const loadedRangeText = t("schedule.context.loadedRange", "Загружено {start} - {end}", {
-            start: formatLoadedBound(loadedBounds.start),
-            end: formatLoadedBound(loadedBounds.end),
-        });
-        if (rangeEl) rangeEl.textContent = loadedRangeText;
+        const verified = getVerifiedScheduleBounds();
+        if (rangeEl) {
+            rangeEl.textContent = verified
+                ? t("schedule.coverage.range", "Verified: {range}", {
+                    range: `${formatLoadedBound(verified.start)} – ${formatLoadedBound(verified.end)}`,
+                })
+                : "";
+        }
 
-        const parsedDate = sourceUpdatedAt ? new Date(sourceUpdatedAt) : null;
+        const parsedDate = verified && sourceUpdatedAt ? new Date(sourceUpdatedAt) : null;
         const parsedValue = parsedDate && !Number.isNaN(parsedDate.getTime())
             ? formatUiDate(parsedDate, {
                 day: "numeric",
@@ -372,13 +375,14 @@
         resizeDesktopTableViewport(tableWrap);
         applyInitialTableScroll(tableWrap);
     }
-    function renderEmptyStateWithCta(container, text) {
+    function renderEmptyStateWithCta(container) {
+        const canClearFilters = isCurrentWeekCovered() && fullSchedule.some(isLessonInCurrentPeriod);
         container.innerHTML = `
             <div class="schedule-empty-card">
-                <p class="text-sm font-semibold text-slate-700">${text}</p>
+                <p class="text-sm font-semibold text-slate-700">${escapeHtml(getScheduleEmptyMessage())}</p>
                 <div class="schedule-empty-actions">
                     <button type="button" data-schedule-action="retry">${t("schedule.action.retry", "Повторить")}</button>
-                    <button type="button" data-schedule-action="clear">${t("schedule.action.clearFilters", "Сбросить фильтры")}</button>
+                    ${canClearFilters ? `<button type="button" data-schedule-action="clear">${t("schedule.action.clearFilters", "Сбросить фильтры")}</button>` : ""}
                     <button type="button" data-schedule-action="reset">${t("schedule.action.changeGroup", "Сменить группу")}</button>
                 </div>
             </div>
@@ -390,7 +394,7 @@
         const container = document.getElementById("mobileSchedule");
         if (!container) return;
         if (!Array.isArray(lessons) || lessons.length === 0) {
-            renderEmptyStateWithCta(container, t("schedule.state.emptyPeriod", "Нет занятий за выбранный период."));
+            renderEmptyStateWithCta(container);
         }
     };
     const rawRenderDesktopGrid = renderDesktopGrid;
@@ -400,7 +404,7 @@
         const container = document.getElementById("desktopSchedule");
         if (!container) return;
         if (!Array.isArray(lessons) || lessons.length === 0) {
-            renderEmptyStateWithCta(container, t("schedule.state.emptyPeriod", "Нет занятий за выбранный период."));
+            renderEmptyStateWithCta(container);
         }
     };
     const rawFilterAndRender = filterAndRender;
@@ -421,10 +425,15 @@
             const action = target.getAttribute("data-schedule-action");
             if (!action) return;
             if (action === "retry" && currentEntity?.id) {
-                loadSchedule(currentEntity.type, currentEntity.id, currentEntity.name);
+                loadSchedule(currentEntity.type, currentEntity.id, currentEntity.name, getISODateStr(currentWeekStart), {
+                    refresh: true, preserveModules: true,
+                    keepEmptyModules: allAvailableModules.length > 0 && selectedModules.size === 0,
+                    urlMode: "replace"
+                });
             }
             if (action === "clear") {
                 selectedModules = new Set(allAvailableModules);
+                if (window.getSchedulePageState?.().lessonMode === "exams_only") setViewMode("auto");
                 renderModuleFilters();
                 filterAndRender();
                 savePreferences();

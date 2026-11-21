@@ -264,7 +264,9 @@ async def refresh_cached_schedule_entity_ids_and_semester_cache(
                 start=start_date_str,
                 finish=end_date_str,
             )
-            await upsert_cached_schedule(entity_type, new_entity_id, schedule_data)
+            await upsert_cached_schedule(
+                entity_type, new_entity_id, schedule_data, coverage=(start_date_str, end_date_str)
+            )
             schedule_hash = hashlib.sha256(
                 json.dumps(schedule_data, sort_keys=True, default=str).encode()
             ).hexdigest()
@@ -1414,7 +1416,9 @@ async def get_schedule_with_cache_fallback(
 
             # A successful JSON list is authoritative, including an empty semester.
             # Unexpected payload shapes are rejected by RuzAPIClient before this point.
-            await upsert_cached_schedule(entity_type, entity_id, api_data)
+            await upsert_cached_schedule(
+                entity_type, entity_id, api_data, coverage=(sem_start, sem_end)
+            )
             cached_data = api_data
             logging.info(
                 "Successfully cached %s lessons for %s:%s",

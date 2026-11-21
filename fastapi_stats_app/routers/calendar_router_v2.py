@@ -1370,12 +1370,7 @@ async def get_webcal_schedule(
     except HTTPException:
         raise
     except Exception as error:
-        logger.error(
-            "Error generating calendar feed for secret %s: %s",
-            secret_token,
-            error,
-            exc_info=True,
-        )
+        logger.error("Error generating calendar feed (%s)", type(error).__name__)
         raise HTTPException(status_code=500, detail="Internal Error") from error
 
 
@@ -1402,12 +1397,7 @@ async def get_webcal_schedule_telegram_filtered(
     except HTTPException:
         raise
     except Exception as error:
-        logger.error(
-            "Error generating Telegram-filtered calendar feed for secret %s: %s",
-            secret_token,
-            error,
-            exc_info=True,
-        )
+        logger.error("Error generating Telegram-filtered calendar feed (%s)", type(error).__name__)
         raise HTTPException(status_code=500, detail="Internal Error") from error
 
 
@@ -1441,11 +1431,5 @@ async def get_webcal_schedule_profile(
     except HTTPException:
         raise
     except Exception as error:
-        logger.error(
-            "Error generating profile calendar feed for secret %s profile %s: %s",
-            secret_token,
-            profile_id,
-            error,
-            exc_info=True,
-        )
+        logger.error("Error generating profile calendar feed (%s)", type(error).__name__)
         raise HTTPException(status_code=500, detail="Internal Error") from error

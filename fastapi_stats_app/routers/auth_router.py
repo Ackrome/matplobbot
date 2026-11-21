@@ -26,6 +26,7 @@ from shared_lib.services.account_data import delete_account_data, export_account
 from ..auth import (
     create_access_token,
     create_account_export_token,
+    create_ws_ticket,
     get_current_user,
     get_password_hash,
     parse_verified_telegram_webapp_init_data,
@@ -35,8 +36,9 @@ from ..auth import (
     verify_password,
     verify_telegram_authorization,
 )
-from ..config import ADMIN_USER_IDS, AUTH_PASSWORD_REGISTRATION_ENABLED
+from ..config import ADMIN_USER_IDS, AUTH_PASSWORD_REGISTRATION_ENABLED, RateLimitSettings
 from ..login_limits import enforce_login_limits
+from ..rate_limit import enforce_rate_limit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -44,6 +46,26 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 class AccountDeleteRequest(BaseModel):
     confirmation: Literal["DELETE"]
     export_token: str = Field(min_length=1, max_length=4096)
+
+
+class WebSocketTicketRequest(BaseModel):
+    path: str = Field(max_length=64)
+
+
+@router.post("/ws-ticket", summary="Issue a short-lived ticket for one WebSocket connection")
+async def websocket_ticket(
+    request: Request,
+    data: WebSocketTicketRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    await enforce_rate_limit(
+        request,
+        scope="ws_ticket",
+        settings=RateLimitSettings(limit=30, window_seconds=60),
+        current_user=current_user,
+    )
+    ticket = await create_ws_ticket(data.path, current_user)
+    return JSONResponse({"ticket": ticket}, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/account/export", summary="Download your account data before deletion")

@@ -18,6 +18,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 from starlette.requests import Request
+from starlette.websockets import WebSocket
 
 from fastapi_stats_app import auth, bootstrap_admin, login_limits
 from fastapi_stats_app.routers import auth_router, ws_router
@@ -53,6 +54,22 @@ class AuthSessionTests(unittest.IsolatedAsyncioTestCase):
         self.app.include_router(auth_router.router, prefix="/api")
         self.app.dependency_overrides[auth.get_db_session_dependency] = lambda: self.db
         self.client = TestClient(self.app)
+        self.tickets = {}
+
+        def save_ticket(key, claims, *, ex, nx):
+            self.assertEqual(ex, 30)
+            self.assertTrue(nx)
+            self.tickets[key] = claims
+            return True
+
+        self.ticket_store = SimpleNamespace(
+            set=AsyncMock(side_effect=save_ticket),
+            getdel=AsyncMock(side_effect=lambda key: self.tickets.pop(key, None)),
+        )
+        self.enterContext(
+            patch.object(auth, "redis_client", SimpleNamespace(client=self.ticket_store))
+        )
+        self.enterContext(patch.object(auth_router, "enforce_rate_limit", AsyncMock()))
 
     def token(self):
         self.session.refresh(self.account)
@@ -61,8 +78,30 @@ class AuthSessionTests(unittest.IsolatedAsyncioTestCase):
     def headers(self, token):
         return {"Authorization": "Bearer " + token}
 
+    def ticket(self, token, path="/ws/stats/total_actions"):
+        return self.client.post(
+            "/api/auth/ws-ticket", headers=self.headers(token), json={"path": path}
+        )
+
+    async def ws_user(self, ticket, path="/ws/stats/total_actions", *, legacy_token=None):
+        socket = WebSocket(
+            {
+                "type": "websocket",
+                "path": path,
+                "query_string": b"" if legacy_token is None else f"token={legacy_token}".encode(),
+                "headers": []
+                if ticket is None
+                else [(b"sec-websocket-protocol", f"matplobbot, mpb-ticket.{ticket}".encode())],
+            },
+            receive=AsyncMock(),
+            send=AsyncMock(),
+        )
+        with patch.object(auth, "get_session", self.db_context):
+            return await auth.get_ws_user(socket)
+
     async def test_logout_revokes_only_current_token_and_survives_new_db_session(self):
         first, second = self.token(), self.token()
+        first_ticket = self.ticket(first).json()["ticket"]
         self.assertEqual(
             self.client.get("/api/auth/me", headers=self.headers(first)).status_code, 200
         )
@@ -77,20 +116,23 @@ class AuthSessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             self.client.get("/api/auth/me", headers=self.headers(second)).status_code, 200
         )
-        await self.assert_ws_rejected(first)
+        with self.assertRaises(WebSocketException):
+            await self.ws_user(first_ticket)
         self.assertTrue(await self.stream_active(second))
         self.assertFalse(await self.stream_active(first))
 
     async def test_logout_all_revokes_old_tokens_but_allows_fresh_login(self):
         first, second = self.token(), self.token()
+        tickets = [self.ticket(token).json()["ticket"] for token in (first, second)]
         self.assertEqual(
             self.client.post("/api/auth/logout-all", headers=self.headers(first)).status_code, 200
         )
-        for token in (first, second):
+        for token, ticket in zip((first, second), tickets, strict=True):
             self.assertEqual(
                 self.client.get("/api/auth/me", headers=self.headers(token)).status_code, 401
             )
-            await self.assert_ws_rejected(token)
+            with self.assertRaises(WebSocketException):
+                await self.ws_user(ticket)
             self.assertFalse(await self.stream_active(token))
         with patch.object(auth_router, "enforce_login_limits", AsyncMock()):
             response = self.client.post(
@@ -131,10 +173,34 @@ class AuthSessionTests(unittest.IsolatedAsyncioTestCase):
     async def db_context(self):
         yield self.db
 
-    async def assert_ws_rejected(self, token):
-        with patch.object(auth, "get_session", self.db_context):
-            with self.assertRaises(WebSocketException):
-                await auth.get_ws_user(SimpleNamespace(query_params={"token": token}))
+    async def test_websocket_ticket_bound_to_path_and_consumed_once(self):
+        from redis.exceptions import ConnectionError as RedisConnectionError
+
+        token = self.token()
+        response = self.ticket(token)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+        ticket = response.json()["ticket"]
+        self.assertNotIn(ticket, str(self.tickets))
+        self.assertNotIn(token, str(self.tickets))
+        with self.assertRaises(WebSocketException):
+            await self.ws_user(None, legacy_token=token)
+        with self.assertRaises(WebSocketException):
+            await self.ws_user(ticket, "/ws/bot_log")
+        self.assertEqual((await self.ws_user(ticket))["role"], "admin")
+        with self.assertRaises(WebSocketException):
+            await self.ws_user(ticket)
+        self.assertEqual(self.ticket(token, "/ws/no_such_stream").status_code, 422)
+        self.ticket_store.set.side_effect = RedisConnectionError("fixture config error")
+        self.assertEqual(self.ticket(token).status_code, 503)
+
+    async def test_websocket_ticket_issuance_respects_live_permissions(self):
+        self.account.role = "user"
+        self.session.commit()
+        token = self.token()
+        self.assertEqual(self.ticket(token).status_code, 403)
+        self.assertEqual(self.ticket(token, "/ws/users/42").status_code, 403)
+        self.assertEqual(self.ticket(token, "/ws/bot_log").status_code, 200)
 
     async def stream_active(self, token):
         with patch.object(ws_router, "get_session", self.db_context):

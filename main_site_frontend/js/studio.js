@@ -170,7 +170,8 @@ async function upgradeEditor() {
 }
 function currentFile() { return projectFiles.find(file=>file.id===currentFileId); }
 function editorReadOnly() {
-    return transitionBusy || Boolean(session?.snapshot()?.conflict ||
+    const documentState = session?.snapshot();
+    return transitionBusy || Boolean(documentState?.conflict || documentState?.draftChoices ||
         currentMode === 'project' && (!currentProjectId || !currentFile() || currentFile().is_binary));
 }
 function editorLanguage() { return currentMode==='quick' ? ($('doc-type').value==='mermaid'?'plaintext':$('doc-type').value) : ({tex:'latex',sty:'latex',md:'markdown'}[currentFile()?.path.split('.').pop()]||'plaintext'); }
@@ -229,6 +230,10 @@ async function activateDocument(record) {
     let restored = session.open(record);
     setEditorContent(restored.conflict ? restored.draftContent : restored.content, editorReadOnly());
     setModelLanguage();
+    if (restored.draftChoices) {
+        restored = session.restoreDraft(await MpbStudioUX.chooseDraft(restored.draftChoices));
+        setEditorContent(restored.conflict ? restored.draftContent : restored.content, editorReadOnly());
+    }
     if (restored.conflict) {
         try { restored = await resolveEditorConflict(); }
         catch (error) { showError(error); return; }

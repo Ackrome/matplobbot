@@ -1,3 +1,18 @@
+{
+	# A private iCal credential is part of the URI. Reverse-proxy errors also log requests.
+	log {
+		format filter {
+			wrap json
+			fields {
+				request>uri delete
+				request>headers>Authorization delete
+				request>headers>Referer delete
+				request>headers>Sec-Websocket-Protocol delete
+			}
+		}
+	}
+}
+
 # Основной домен (Nginx сам разберется с путями)
 ivantishchenko.ru {
     reverse_proxy 127.0.0.1:8080

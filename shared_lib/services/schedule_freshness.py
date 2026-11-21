@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import secrets
 import time
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Literal
 
-from shared_lib.database import get_cached_schedule_snapshot, upsert_cached_schedule
+from shared_lib.database import (
+    get_cached_schedule_snapshot,
+    get_cached_schedule_with_coverage,
+    upsert_cached_schedule,
+)
 from shared_lib.redis_client import redis_client
 from shared_lib.services.schedule_service import (
     get_semester_bounds,
@@ -23,6 +28,9 @@ FreshnessState = Literal["live", "fresh_cache", "refreshing", "stale_fallback"]
 _LOCK_PREFIX = "schedule_refresh_lock:"
 _FAILURE_PREFIX = "schedule_refresh_failure:"
 _REDIS_OPERATION_TIMEOUT_SECONDS = 0.3
+_WINDOW_CACHE_PREFIX = "schedule_window:v1:"
+_WINDOW_CACHE_TTL_SECONDS = 24 * 60 * 60
+_WINDOW_CACHE_MAX_BYTES = 1024 * 1024
 _RELEASE_LOCK_SCRIPT = """
 if redis.call('get', KEYS[1]) == ARGV[1] then
     return redis.call('del', KEYS[1])
@@ -43,6 +51,7 @@ class ScheduleFreshnessResult:
     refresh_in_progress: bool
     cache_age_seconds: int | None
     content_changed: bool = False
+    covered_bounds: tuple[str, str] | None = None
 
     @property
     def is_offline(self) -> bool:
@@ -55,6 +64,7 @@ class _RefreshOutcome:
     schedule: list[dict] | None = None
     source_checked_at: datetime | None = None
     content_changed: bool = False
+    covered_bounds: tuple[str, str] | None = None
 
 
 _refresh_tasks: dict[str, asyncio.Task[_RefreshOutcome]] = {}
@@ -64,6 +74,53 @@ _local_failure_until: dict[str, float] = {}
 
 def _entity_key(entity_type: str, entity_id: str) -> str:
     return f"{entity_type}:{entity_id}"
+
+
+def _window_cache_scope(requested_start: str, requested_end: str) -> tuple[str, str] | None:
+    """Use the canonical semester or group nearby date selections into weekly windows."""
+    current_start, current_end = get_semester_bounds()
+    if current_start <= requested_start and requested_end <= current_end:
+        return None
+    start, end = map(date.fromisoformat, (requested_start, requested_end))
+    start -= timedelta(days=start.weekday())
+    end += timedelta(days=min(6 - end.weekday(), (date.max - end).days))
+    return start.isoformat(), end.isoformat()
+
+
+def _refresh_key(entity_type: str, entity_id: str, window: tuple[str, str] | None) -> str:
+    key = _entity_key(entity_type, entity_id)
+    return f"window:{key}:{window[0]}:{window[1]}" if window else key
+
+
+async def _get_window_cache(key: str) -> tuple[list | None, datetime | None]:
+    try:
+        raw = await asyncio.wait_for(
+            redis_client.client.get(f"{_WINDOW_CACHE_PREFIX}{key}"),
+            timeout=_REDIS_OPERATION_TIMEOUT_SECONDS,
+        )
+        if raw:
+            schedule, stamp = json.loads(raw)
+            if isinstance(schedule, list) and all(isinstance(row, dict) for row in schedule):
+                return schedule, datetime.fromisoformat(stamp)
+    except Exception:
+        # This is an opportunistic cache. RUZ live and the canonical cache still work.
+        pass
+    return None, None
+
+
+async def _store_window_cache(key: str, schedule: list[dict], checked_at: datetime) -> None:
+    payload = json.dumps([schedule, checked_at.isoformat()], separators=(",", ":"))
+    if len(payload) > _WINDOW_CACHE_MAX_BYTES:
+        return
+    try:
+        await asyncio.wait_for(
+            redis_client.client.set(
+                f"{_WINDOW_CACHE_PREFIX}{key}", payload, ex=_WINDOW_CACHE_TTL_SECONDS
+            ),
+            timeout=_REDIS_OPERATION_TIMEOUT_SECONDS,
+        )
+    except Exception:
+        pass
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
@@ -113,14 +170,19 @@ def _filter_schedule_window(schedule: list[dict], start: str, end: str) -> list[
     requested_end = date.fromisoformat(end)
     filtered: list[dict] = []
     for lesson in schedule:
-        lesson_date_value = str(lesson.get("date") or "").replace(".", "-")
+        if not isinstance(lesson, dict):
+            continue
         try:
-            lesson_date = date.fromisoformat(lesson_date_value)
+            lesson_date = _lesson_date(lesson)
         except ValueError:
             continue
         if requested_start <= lesson_date <= requested_end:
             filtered.append(lesson)
     return filtered
+
+
+def _lesson_date(lesson: dict) -> date:
+    return date.fromisoformat(str(lesson.get("date") or "").replace(".", "-"))
 
 
 async def _acquire_distributed_lock(key: str, ttl_seconds: int) -> str | None | bool:
@@ -207,16 +269,17 @@ async def _refresh_schedule(
     lock_ttl_seconds: int,
     failure_cooldown_seconds: int,
     upstream_timeout_seconds: float | None,
+    window: tuple[str, str] | None = None,
 ) -> _RefreshOutcome:
-    key = _entity_key(entity_type, entity_id)
+    key = _refresh_key(entity_type, entity_id, window)
     lock_token = await _acquire_distributed_lock(key, lock_ttl_seconds)
     if lock_token is False:
         return _RefreshOutcome(status="coalesced")
 
     try:
-        semester_start, semester_end = get_semester_bounds()
+        bounds = window or get_semester_bounds()
         schedule_request = ruz_api_client.get_schedule(
-            entity_type, entity_id, start=semester_start, finish=semester_end
+            entity_type, entity_id, start=bounds[0], finish=bounds[1]
         )
         if upstream_timeout_seconds is None:
             schedule = await schedule_request
@@ -225,12 +288,22 @@ async def _refresh_schedule(
                 schedule_request,
                 timeout=upstream_timeout_seconds,
             )
-        if not isinstance(schedule, list):
-            raise TypeError("University schedule response must be a list")
+        if not isinstance(schedule, list) or any(not isinstance(row, dict) for row in schedule):
+            raise TypeError("University schedule response must be a list of lessons")
+        if window:
+            # A malformed or unrelated date must not turn into a verified empty window.
+            if any(not bounds[0] <= _lesson_date(row).isoformat() <= bounds[1] for row in schedule):
+                raise ValueError(
+                    "University schedule response contains a lesson outside the requested range"
+                )
 
         content_changed = cached_schedule is None or cached_schedule != schedule
-        await upsert_cached_schedule(entity_type, entity_id, schedule)
-        _, source_checked_at = await get_cached_schedule_snapshot(entity_type, entity_id)
+        if window:
+            source_checked_at = datetime.now(UTC)
+            await _store_window_cache(key, schedule, source_checked_at)
+        else:
+            await upsert_cached_schedule(entity_type, entity_id, schedule, coverage=bounds)
+            _, source_checked_at = await get_cached_schedule_snapshot(entity_type, entity_id)
         await _clear_refresh_failure(key)
         _record_refresh_metric("ruz_api_success")
         logger.info(
@@ -244,6 +317,7 @@ async def _refresh_schedule(
             schedule=schedule,
             source_checked_at=_as_utc(source_checked_at) or datetime.now(UTC),
             content_changed=content_changed,
+            covered_bounds=bounds,
         )
     except asyncio.CancelledError:
         raise
@@ -273,8 +347,9 @@ def _get_or_start_refresh_task(
     lock_ttl_seconds: int,
     failure_cooldown_seconds: int,
     upstream_timeout_seconds: float | None,
+    window: tuple[str, str] | None = None,
 ) -> asyncio.Task[_RefreshOutcome]:
-    key = _entity_key(entity_type, entity_id)
+    key = _refresh_key(entity_type, entity_id, window)
     task = _refresh_tasks.get(key)
     if task and not task.done():
         return task
@@ -288,6 +363,7 @@ def _get_or_start_refresh_task(
             lock_ttl_seconds=lock_ttl_seconds,
             failure_cooldown_seconds=failure_cooldown_seconds,
             upstream_timeout_seconds=upstream_timeout_seconds,
+            window=window,
         ),
         name=f"schedule-refresh:{key}",
     )
@@ -305,6 +381,7 @@ def _build_result(
     *,
     refresh_in_progress: bool,
     content_changed: bool = False,
+    covered_bounds: tuple[str, str] | None = None,
 ) -> ScheduleFreshnessResult:
     return ScheduleFreshnessResult(
         schedule=_filter_schedule_window(schedule, requested_start, requested_end),
@@ -313,6 +390,7 @@ def _build_result(
         refresh_in_progress=refresh_in_progress,
         cache_age_seconds=_cache_age_seconds(source_checked_at),
         content_changed=content_changed,
+        covered_bounds=covered_bounds,
     )
 
 
@@ -330,10 +408,28 @@ async def get_schedule_with_freshness(
     failure_cooldown_seconds: int,
     force_refresh: bool = False,
     upstream_timeout_seconds: float | None = None,
+    require_coverage: bool = False,
 ) -> ScheduleFreshnessResult:
     """Return cached data immediately while coalescing a live refresh when needed."""
 
-    cached_payload, source_checked_at = await get_cached_schedule_snapshot(entity_type, entity_id)
+    window = _window_cache_scope(requested_start, requested_end) if require_coverage else None
+    key = _refresh_key(entity_type, entity_id, window)
+
+    async def read_snapshot():
+        if window:
+            payload, checked_at = await _get_window_cache(key)
+            return payload, checked_at, window if payload is not None else None
+        if require_coverage:
+            return await get_cached_schedule_with_coverage(entity_type, entity_id)
+        payload, checked_at = await get_cached_schedule_snapshot(entity_type, entity_id)
+        return payload, checked_at, None
+
+    cached_payload, source_checked_at, covered = await read_snapshot()
+    if window and cached_payload is None:
+        # A current-semester cache can still supply the covered portion of a boundary week.
+        cached_payload, source_checked_at, covered = await get_cached_schedule_with_coverage(
+            entity_type, entity_id
+        )
     cached_schedule = cached_payload if isinstance(cached_payload, list) else None
     has_cache = cached_schedule is not None
     cache_age_seconds = _cache_age_seconds(source_checked_at)
@@ -343,6 +439,10 @@ async def get_schedule_with_freshness(
         and not force_refresh
         and cache_age_seconds is not None
         and cache_age_seconds <= freshness_seconds
+        and (
+            not require_coverage
+            or (covered and covered[0] <= requested_start <= requested_end <= covered[1])
+        )
     ):
         return _build_result(
             cached_schedule,
@@ -351,9 +451,9 @@ async def get_schedule_with_freshness(
             requested_start,
             requested_end,
             refresh_in_progress=False,
+            covered_bounds=covered,
         )
 
-    key = _entity_key(entity_type, entity_id)
     if not force_refresh and await _failure_cooldown_active(key):
         if has_cache:
             return _build_result(
@@ -363,6 +463,7 @@ async def get_schedule_with_freshness(
                 requested_start,
                 requested_end,
                 refresh_in_progress=False,
+                covered_bounds=covered,
             )
         raise ScheduleUnavailableError(
             "University schedule is temporarily unavailable and no cached copy exists."
@@ -376,19 +477,21 @@ async def get_schedule_with_freshness(
         lock_ttl_seconds=lock_ttl_seconds,
         failure_cooldown_seconds=failure_cooldown_seconds,
         upstream_timeout_seconds=upstream_timeout_seconds,
+        window=window,
     )
     wait_seconds = initial_live_wait_seconds if not has_cache else live_wait_seconds
     try:
         outcome = await asyncio.wait_for(asyncio.shield(task), timeout=wait_seconds)
     except TimeoutError:
-        if has_cache:
+        if has_cache or require_coverage:
             return _build_result(
-                cached_schedule,
+                cached_schedule or [],
                 "refreshing",
                 source_checked_at,
                 requested_start,
                 requested_end,
                 refresh_in_progress=True,
+                covered_bounds=covered,
             )
         raise ScheduleUnavailableError(
             "University schedule is taking too long to respond and no cached copy exists."
@@ -403,24 +506,24 @@ async def get_schedule_with_freshness(
             requested_end,
             refresh_in_progress=False,
             content_changed=outcome.content_changed,
+            covered_bounds=outcome.covered_bounds,
         )
 
     if outcome.status == "coalesced":
-        if has_cache:
+        if has_cache or require_coverage:
             return _build_result(
-                cached_schedule,
+                cached_schedule or [],
                 "refreshing",
                 source_checked_at,
                 requested_start,
                 requested_end,
                 refresh_in_progress=True,
+                covered_bounds=covered,
             )
         deadline = time.monotonic() + initial_live_wait_seconds
         while time.monotonic() < deadline:
             await asyncio.sleep(0.2)
-            refreshed_payload, refreshed_at = await get_cached_schedule_snapshot(
-                entity_type, entity_id
-            )
+            refreshed_payload, refreshed_at, refreshed_bounds = await read_snapshot()
             if isinstance(refreshed_payload, list):
                 return _build_result(
                     refreshed_payload,
@@ -429,6 +532,7 @@ async def get_schedule_with_freshness(
                     requested_start,
                     requested_end,
                     refresh_in_progress=False,
+                    covered_bounds=refreshed_bounds,
                 )
 
     if has_cache:
@@ -439,6 +543,7 @@ async def get_schedule_with_freshness(
             requested_start,
             requested_end,
             refresh_in_progress=False,
+            covered_bounds=covered,
         )
     raise ScheduleUnavailableError("University schedule is unavailable and no cached copy exists.")
 

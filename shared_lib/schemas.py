@@ -541,6 +541,9 @@ class ScheduleDataResponse(BaseModel):
     cache_age_seconds: int | None = Field(None, ge=0)
     content_changed: bool = False
     loaded_bounds: LoadedBoundsSchema
+    covered_bounds: LoadedBoundsSchema | None = Field(
+        None, description="Inclusive dates actually checked against the source, when known."
+    )
 
     model_config = BASE_CONFIG
 

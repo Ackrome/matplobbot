@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import and_, delete, func, insert, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from .database import get_session
+from .database import get_session, schedule_coverage_columns
 from .models import (
     CachedSchedule,
     ScheduleChangeDelivery,
@@ -237,6 +237,7 @@ async def commit_schedule_change_transition(
     deliveries: list[dict[str, Any]],
     expected_revision: int | None = None,
     history: list[dict] | None = None,
+    coverage: tuple[str, str] | None = None,
 ) -> int:
     """CAS the baseline and atomically persist public history and delivery checkpoints."""
     normalized_entity_id = str(entity_id)
@@ -255,6 +256,7 @@ async def commit_schedule_change_transition(
         for item in deliveries
     ]
     now = datetime.now(UTC)
+    bounds = schedule_coverage_columns(coverage)
 
     async with get_session() as session:
         if expected_revision is None:
@@ -322,6 +324,7 @@ async def commit_schedule_change_transition(
                 entity_name=str(entity_name)[:255],
                 schedule_data=normalized_schedule,
                 updated_at=now,
+                **bounds,
             )
             .on_conflict_do_update(
                 constraint="uq_cached_schedule_entity",
@@ -329,6 +332,7 @@ async def commit_schedule_change_transition(
                     "entity_name": str(entity_name)[:255],
                     "schedule_data": normalized_schedule,
                     "updated_at": now,
+                    **bounds,
                 },
             )
         )

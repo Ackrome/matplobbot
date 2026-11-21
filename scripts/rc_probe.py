@@ -224,21 +224,34 @@ async def websocket_revocation(token):
     from redis.asyncio import Redis
 
     redis = Redis.from_url(os.environ["REDIS_URL"])
+    path = "/ws/users/910000002"
+
+    def ticket_protocols():
+        ticket = request("POST", "/auth/ws-ticket", {"path": path}, token)["ticket"]
+        return ("matplobbot", f"mpb-ticket.{ticket}")
+
+    async def reject_upgrade(client, target, protocols):
+        try:
+            async with client.ws_connect(f"http://api:9583{target}", protocols=protocols):
+                raise AssertionError("Unauthorized ticket established a WebSocket")
+        except aiohttp.WSServerHandshakeError as error:
+            assert error.status == 403
+
     try:
         async with aiohttp.ClientSession() as client:
+            first_ticket, unspent_ticket = ticket_protocols(), ticket_protocols()
+            await reject_upgrade(client, "/ws/bot_log", first_ticket)
             async with client.ws_connect(
-                f"http://api:9583/ws/users/910000002?token={token}"
+                f"http://api:9583{path}", protocols=first_ticket
             ) as socket:
+                assert socket.protocol == "matplobbot"
+                await reject_upgrade(client, path, first_ticket)
                 request("POST", "/auth/logout", token=token)
                 await redis.publish("user_updates:910000002", "synthetic-after-revocation")
                 message = await socket.receive(timeout=20)
                 assert message.type == aiohttp.WSMsgType.CLOSE and socket.close_code == 1008
-            try:
-                await client.ws_connect(f"http://api:9583/ws/users/910000002?token={token}")
-            except aiohttp.WSServerHandshakeError as error:
-                assert error.status == 403
-            else:
-                raise AssertionError("Revoked token established a new WebSocket")
+            await reject_upgrade(client, path, unspent_ticket)
+            request("POST", "/auth/ws-ticket", {"path": path}, token, expected=401)
     finally:
         await redis.aclose()
 

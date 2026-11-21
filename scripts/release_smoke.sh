@@ -33,14 +33,26 @@ retry_http() {
 }
 
 check_ws_upgrade() {
-  url="$1"
-  token="$2"
-  status="$(curl --http1.1 -sS -o /dev/null -w '%{http_code}' --max-time 5 \
+  local url="$1" token="$2" body ticket status
+  if ! body="$(printf 'Authorization: Bearer %s\n' "$token" | \
+    curl -fsS --max-time 5 -H @- -H 'Content-Type: application/json' \
+    --data '{"path":"/ws/stats/total_actions"}' \
+    'http://127.0.0.1:9583/api/auth/ws-ticket')"; then
+    echo "Smoke check FAILED: could not issue WebSocket ticket"
+    return 1
+  fi
+  ticket="$(printf '%s\n' "$body" | sed -n 's/.*"ticket"[[:space:]]*:[[:space:]]*"\([0-9a-f]*\)".*/\1/p')"
+  if ! [[ "$ticket" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "Smoke check FAILED: invalid WebSocket ticket response"
+    return 1
+  fi
+  status="$(printf 'Sec-WebSocket-Protocol: matplobbot, mpb-ticket.%s\n' "$ticket" | \
+    curl --http1.1 -sS -o /dev/null -w '%{http_code}' --max-time 5 -H @- \
     -H 'Connection: Upgrade' \
     -H 'Upgrade: websocket' \
     -H 'Sec-WebSocket-Version: 13' \
     -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
-    "${url}?token=${token}" || true)"
+    "$url" || true)"
   if [ "$status" != "101" ]; then
     echo "Smoke check FAILED: WebSocket upgrade returned HTTP $status for $url"
     return 1

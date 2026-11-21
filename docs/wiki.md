@@ -1960,7 +1960,7 @@ What it does:
 - Pins PyJWT to `2.15.0` for FastAPI access tokens and restricts decoding to HS256 with required issuer, audience, subject, issued-at, not-before, and expiry claims.
 - Removes unused `markdown` from the bot/worker requirements; Markdown rendering uses `markdown-it-py`.
 - Pins `python-multipart` to `0.0.31` for multipart parser DoS fixes.
-- Pins `setuptools` to `84.1.0`, `certifi` to `2026.10.18`, the OpenTelemetry 1.45.1/0.66b1 family, `cryptography` to `50.0.0` and `weasyprint` to `70.0` in the root requirements lock for the current audit gate. The cryptography minimum is also enforced in `setup.py`; do not restore the vulnerable 46.x upper bound. Security fixes must pass the unchanged strict audit before deployment.
+- Pins `setuptools` to `84.1.0`, `certifi` to `2026.10.18`, the OpenTelemetry 1.45.2/0.66b2 family, `cryptography` to `50.0.0` and `weasyprint` to `70.0` in the root requirements lock for the current audit gate. OpenTelemetry API 1.45.2 fixes CVE-2026-126360. The SDK, OTLP exporter and aiohttp and FastAPI instrumentation use matching releases. The cryptography minimum is also enforced in `setup.py`. Security fixes must pass the unchanged strict audit before deployment.
 - Uses `scripts/build_audit_requirements.py` to build the same filtered `audit-requirements.txt` in GitHub Actions, Jenkins, and local checks. The builder excludes editable installs and the local `matplobbot-shared` package, deduplicates matching pins, and fails on conflicting pins.
 - Publishes the `dependencies` path-filter output from the CI change-detection job so requirement changes actually run the dependency audit instead of silently skipping it.
 - Pins the Python Redis client to the Celery/Kombu-compatible 6.x line; older 5.x clients let the worker image build but make the Redis transport terminate at runtime.
@@ -2814,3 +2814,36 @@ it does not train a max-margin SVM or solve the SVM quadratic program.
 If offline access is added later, update `service-worker.js` and its cache
 version together. Keep each visualization's colocated `wiki_*.md` file in sync
 with its public controls, dependencies and maintenance constraints.
+
+## Schedule, Studio and deployment reliability
+
+The timetable API reports `covered_bounds` alongside the requested
+`loaded_bounds`. Old snapshots can show saved classes while coverage is
+unverified. Requests outside the current semester use expiring Redis windows.
+Bot notifications and calendar subscriptions use the canonical semester
+snapshot. Table and list views distinguish unverified dates, dates hidden by
+filters and verified empty dates. Retry checks the open week.
+
+Choose **Session** from a group's timetable to list reviewed forms by semester.
+The first `GET /api/schedule/session` reads the curriculum. A second request
+checks the bound term in RUZ and attaches dates only to matching assessment
+types. Every planned form links to the reviewed PDF page. A scoped alias in
+`shared_lib/data/curriculum_aliases.json` requires reviewed group and RUZ
+identifiers and the current published document hash. The 2026/27 [PM24 and
+PM26 publication package](reports/curriculum-numeric-pipeline/pm24-pm26-2026-27.md)
+contains the source and group evidence.
+
+Studio stores draft versions by editing context. Reopening a file offers
+earlier local drafts individually. A successful save retires the recovered
+version only when its stored content still matches. The existing server
+revision comparison handles a recovered draft based on older text.
+
+The API exchanges authenticated sessions for short-lived, single-use
+WebSocket tickets scoped to one stream. Browser and smoke clients send the
+ticket through the WebSocket subprotocol header. Application and proxy logs
+mask or omit private calendar paths and credential-bearing requests.
+
+GitHub Actions follows the specific Jenkins queue item and build it submitted.
+Deployment passes after Jenkins reports success and archives smoke evidence
+for the matching source commit. The workflow summary links the queue item and
+build. Ambiguous submissions stop so a retry does not duplicate a deployment.

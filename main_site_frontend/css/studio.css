@@ -73,6 +73,13 @@ html.dark #mode-quick[aria-pressed="true"], html.dark #mode-project[aria-pressed
 #mobile-tabs [aria-selected="true"] { border-color: #2563eb; color: #1d4ed8; }
 #create-project-modal { padding: 1rem; overflow-y: auto; }
 #create-project-modal > div { max-height: calc(100dvh - 2rem); overflow-y: auto; }
+.studio-draft-options { display: grid; gap: .65rem; max-height: min(43dvh, 25rem); overflow-y: auto; padding: 3px; }
+.studio-draft-option { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: .75rem; padding: .8rem; border: 1px solid var(--ui-line); border-radius: .75rem; background: var(--ui-bg); cursor: pointer; }
+.studio-draft-option:has(input:checked) { border-color: var(--ui-accent, #2563eb); box-shadow: inset 0 0 0 1px var(--ui-accent, #2563eb); }
+.studio-draft-option > input { margin-block-start: .25rem; accent-color: var(--ui-accent, #2563eb); }
+.studio-draft-summary { min-width: 0; display: grid; gap: .3rem; }
+.studio-draft-summary time { color: var(--ui-muted); font-size: .8rem; }
+.studio-draft-preview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; font: .8rem/1.45 ui-monospace, monospace; }
 @media (max-width: 767px) {
     #navbar { padding-left: .5rem; padding-right: .5rem; }
     #navbar > div { gap: .35rem; }

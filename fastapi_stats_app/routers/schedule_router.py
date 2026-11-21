@@ -425,7 +425,7 @@ async def refresh_schedule_semester_cache(
     try:
         resolved_id = await _resolve_schedule_entity_id(client, entity_type, requested_id)
         schedule = await client.get_schedule(entity_type, resolved_id, start=start, finish=finish)
-        await upsert_cached_schedule(entity_type, resolved_id, schedule)
+        await upsert_cached_schedule(entity_type, resolved_id, schedule, coverage=(start, finish))
         source_updated_at = await get_cached_schedule_updated_at(entity_type, resolved_id)
 
         return {
@@ -517,7 +517,7 @@ async def get_schedule_history(
     summary="Load a schedule window for a specific entity",
     description=(
         "Returns a centered 29-day schedule window, module metadata, offline-mode signal, "
-        "and the loaded date bounds used by the frontend."
+        "the requested date bounds and the date range verified against the university source."
     ),
 )
 async def get_schedule_data(
@@ -544,11 +544,14 @@ async def get_schedule_data(
     entity_type = _normalize_schedule_entity_type(type)
 
     # Build a +/- 14 day window from the selected center date.
-    start_date = center_date - timedelta(days=14)
-    finish_date = center_date + timedelta(days=14)
+    try:
+        start_date = center_date - timedelta(days=14)
+        finish_date = center_date + timedelta(days=14)
+    except OverflowError as exc:
+        raise HTTPException(status_code=422, detail="Schedule date is out of range.") from exc
 
-    start = start_date.strftime("%Y-%m-%d")
-    finish = finish_date.strftime("%Y-%m-%d")
+    start = start_date.isoformat()
+    finish = finish_date.isoformat()
 
     client = create_ruz_api_client(
         http_session,
@@ -574,6 +577,7 @@ async def get_schedule_data(
             lock_ttl_seconds=SCHEDULE_REFRESH_LOCK_TTL_SECONDS,
             failure_cooldown_seconds=SCHEDULE_REFRESH_FAILURE_COOLDOWN_SECONDS,
             force_refresh=refresh,
+            require_coverage=True,
         )
         schedule = await _enrich_schedule_lessons(freshness_result.schedule)
 
@@ -592,6 +596,14 @@ async def get_schedule_data(
             "refresh_in_progress": freshness_result.refresh_in_progress,
             "cache_age_seconds": freshness_result.cache_age_seconds,
             "content_changed": freshness_result.content_changed,
+            "covered_bounds": (
+                {
+                    "start": freshness_result.covered_bounds[0],
+                    "end": freshness_result.covered_bounds[1],
+                }
+                if freshness_result.covered_bounds
+                else None
+            ),
             "loaded_bounds": {
                 "start": start,
                 "end": finish,

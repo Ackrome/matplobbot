@@ -1151,9 +1151,21 @@ def _cached_entity_name(entity_type: str, data: list | dict, fallback: str) -> s
     return fallback
 
 
-async def upsert_cached_schedule(entity_type: str, entity_id: str, data: list | dict):
+def schedule_coverage_columns(coverage: tuple[str, str] | None) -> dict:
+    if coverage is None:
+        return {"covered_start": None, "covered_end": None}
+    start, end = map(datetime.date.fromisoformat, coverage)
+    if start > end:
+        raise ValueError("Schedule coverage start must precede its end")
+    return {"covered_start": start, "covered_end": end}
+
+
+async def upsert_cached_schedule(
+    entity_type: str, entity_id: str, data: list | dict, *, coverage: tuple[str, str] | None = None
+):
     json_data = json.loads(json.dumps(data, default=str))  # Ensure serializable
     entity_name = _cached_entity_name(entity_type, json_data, str(entity_id))
+    bounds = schedule_coverage_columns(coverage)
     async with get_session() as session:
         stmt = (
             pg_insert(CachedSchedule)
@@ -1163,6 +1175,7 @@ async def upsert_cached_schedule(entity_type: str, entity_id: str, data: list | 
                 entity_name=entity_name,
                 schedule_data=json_data,
                 updated_at=datetime.datetime.now(datetime.UTC),
+                **bounds,
             )
             .on_conflict_do_update(
                 constraint="uq_cached_schedule_entity",
@@ -1170,6 +1183,7 @@ async def upsert_cached_schedule(entity_type: str, entity_id: str, data: list | 
                     entity_name=entity_name,
                     schedule_data=json_data,
                     updated_at=datetime.datetime.now(datetime.UTC),
+                    **bounds,
                 ),
             )
         )
@@ -1208,6 +1222,33 @@ async def get_cached_schedule_snapshot(
         if row is None:
             return None, None
         return row.schedule_data, row.updated_at
+
+
+async def get_cached_schedule_with_coverage(
+    entity_type: str, entity_id: str
+) -> tuple[list | dict | None, datetime.datetime | None, tuple[str, str] | None]:
+    """Read rows, check time and proven range from the same database snapshot."""
+    async with get_session() as session:
+        result = await session.execute(
+            select(
+                CachedSchedule.schedule_data,
+                CachedSchedule.updated_at,
+                CachedSchedule.covered_start,
+                CachedSchedule.covered_end,
+            ).where(
+                CachedSchedule.entity_type == entity_type,
+                CachedSchedule.entity_id == str(entity_id),
+            )
+        )
+        row = result.first()
+        if row is None:
+            return None, None, None
+        bounds = (
+            (row.covered_start.isoformat(), row.covered_end.isoformat())
+            if row.covered_start is not None and row.covered_end is not None
+            else None
+        )
+        return row.schedule_data, row.updated_at, bounds
 
 
 async def delete_cached_schedule(entity_type: str, entity_id: str) -> int:
@@ -1708,6 +1749,8 @@ async def merge_cached_schedule(
                     entity_name=entity_name,
                     schedule_data=json_data,
                     updated_at=datetime.datetime.now(datetime.UTC),
+                    covered_start=None,
+                    covered_end=None,
                 ),
             )
         )

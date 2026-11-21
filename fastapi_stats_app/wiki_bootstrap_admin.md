@@ -54,5 +54,6 @@ losing transaction fails closed and can be retried.
 The CLI suppresses raw database exception text because SQL parameters can contain
 password hashes or connection secrets. Keep smoke login strict: after provisioning,
 Jenkins must still obtain a token from `/api/auth/login`, check protected HTTP access,
-check the WebSocket upgrade, and reject anonymous access. Tests live in
+obtain a fresh one-use ticket from `/api/auth/ws-ticket` for each WebSocket upgrade,
+and reject anonymous access. Tests live in
 `tests/test_auth_flow.py` and `tests/test_compose_configuration.py`.

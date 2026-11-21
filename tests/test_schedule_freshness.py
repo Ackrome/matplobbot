@@ -20,6 +20,8 @@ def _policy(**overrides):
 
 
 class TestScheduleFreshness(unittest.IsolatedAsyncioTestCase):
+    semester_bounds = ("2026-08-25", "2027-01-31")
+
     async def asyncSetUp(self):
         await schedule_freshness.shutdown_schedule_refresh_tasks()
         schedule_freshness.reset_schedule_refresh_state_for_tests()
@@ -29,6 +31,11 @@ class TestScheduleFreshness(unittest.IsolatedAsyncioTestCase):
             AsyncMock(),
         )
         self.metric_patcher.start()
+        semester_patcher = patch.object(
+            schedule_freshness, "get_semester_bounds", return_value=self.semester_bounds
+        )
+        semester_patcher.start()
+        self.addCleanup(semester_patcher.stop)
 
     async def asyncTearDown(self):
         await schedule_freshness.shutdown_schedule_refresh_tasks()
@@ -100,7 +107,7 @@ class TestScheduleFreshness(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.freshness, "live")
         self.assertTrue(result.content_changed)
         self.assertEqual(result.schedule, live)
-        upsert.assert_awaited_once_with("group", "42", live)
+        upsert.assert_awaited_once_with("group", "42", live, coverage=self.semester_bounds)
 
     async def test_concurrent_viewers_share_one_upstream_request(self):
         cached = [{"date": "2026-09-24", "discipline": "Old"}]
@@ -119,7 +126,7 @@ class TestScheduleFreshness(unittest.IsolatedAsyncioTestCase):
         async def load_snapshot(*_args):
             return (live, checked_at) if cache_updated else (cached, stale_at)
 
-        async def upsert(*_args):
+        async def upsert(*_args, **_kwargs):
             nonlocal cache_updated
             cache_updated = True
 
@@ -320,7 +327,103 @@ class TestScheduleFreshness(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.freshness, "live")
         self.assertEqual(result.schedule, [])
         self.assertTrue(result.content_changed)
-        upsert.assert_awaited_once_with("group", "42", [])
+        upsert.assert_awaited_once_with("group", "42", [], coverage=self.semester_bounds)
+
+    async def test_future_week_checks_actual_window_and_preserves_semester_cache(self):
+        autumn = [{"date": "2026-11-16", "discipline": "Autumn"}]
+        spring = [{"date": "2027.03.02", "discipline": "Spring"}]
+        checked_at = datetime.now(UTC)
+        source = SimpleNamespace(get_schedule=AsyncMock(return_value=spring))
+        read_window = AsyncMock(side_effect=[(None, None), (spring, checked_at)])
+        read_canonical = AsyncMock(return_value=(autumn, checked_at, self.semester_bounds))
+        expected_window = ("2027-03-01", "2027-03-14")
+        with (
+            patch.object(schedule_freshness, "_get_window_cache", read_window),
+            patch.object(schedule_freshness, "get_cached_schedule_with_coverage", read_canonical),
+            patch.object(schedule_freshness, "_store_window_cache", AsyncMock()) as store,
+            patch.object(schedule_freshness, "upsert_cached_schedule", AsyncMock()) as upsert,
+            patch.object(
+                schedule_freshness, "_failure_cooldown_active", AsyncMock(return_value=False)
+            ),
+            patch.object(
+                schedule_freshness,
+                "_acquire_distributed_lock",
+                AsyncMock(return_value="lease-token"),
+            ),
+            patch.object(schedule_freshness, "_release_distributed_lock", AsyncMock()),
+            patch.object(schedule_freshness, "_clear_refresh_failure", AsyncMock()),
+        ):
+            for freshness in ("live", "fresh_cache"):
+                result = await schedule_freshness.get_schedule_with_freshness(
+                    source,
+                    "group",
+                    "42",
+                    "2027-03-02",
+                    "2027-03-09",
+                    **_policy(require_coverage=True),
+                )
+                self.assertEqual(result.freshness, freshness)
+                self.assertEqual(result.schedule, spring)
+                self.assertEqual(result.covered_bounds, expected_window)
+        source.get_schedule.assert_awaited_once_with(
+            "group", "42", start=expected_window[0], finish=expected_window[1]
+        )
+        self.assertEqual(
+            store.await_args.args[:2], ("window:group:42:2027-03-01:2027-03-14", spring)
+        )
+        read_canonical.assert_awaited_once_with("group", "42")
+        upsert.assert_not_awaited()
+
+    async def test_missing_or_malformed_future_payload_preserves_only_proven_dates(self):
+        legacy = [{"date": "2027-02-02", "discipline": "Old"}]
+        checked_at = datetime.now(UTC)
+        with (
+            patch.object(
+                schedule_freshness, "_get_window_cache", AsyncMock(return_value=(None, None))
+            ),
+            patch.object(
+                schedule_freshness,
+                "get_cached_schedule_with_coverage",
+                AsyncMock(return_value=(legacy, checked_at, None)),
+            ),
+            patch.object(schedule_freshness, "_store_window_cache", AsyncMock()) as store,
+            patch.object(
+                schedule_freshness, "_failure_cooldown_active", AsyncMock(return_value=False)
+            ),
+            patch.object(
+                schedule_freshness,
+                "_acquire_distributed_lock",
+                AsyncMock(return_value="lease-token"),
+            ),
+            patch.object(schedule_freshness, "_release_distributed_lock", AsyncMock()),
+            patch.object(schedule_freshness, "_clear_refresh_failure", AsyncMock()),
+            patch.object(schedule_freshness, "_mark_refresh_failure", AsyncMock()),
+        ):
+            for payload in (RuntimeError("down"), [{"discipline": "missing date"}], []):
+                with self.subTest(payload=payload):
+                    get_schedule = (
+                        AsyncMock(side_effect=payload)
+                        if isinstance(payload, Exception)
+                        else AsyncMock(return_value=payload)
+                    )
+                    result = await schedule_freshness.get_schedule_with_freshness(
+                        SimpleNamespace(get_schedule=get_schedule),
+                        "group",
+                        "42",
+                        "2027-01-29",
+                        "2027-02-04",
+                        **_policy(require_coverage=True),
+                    )
+                    self.assertEqual(get_schedule.await_count, 1)
+                    if payload == []:
+                        self.assertEqual(result.freshness, "live")
+                        self.assertEqual(result.schedule, [])
+                        self.assertEqual(result.covered_bounds, ("2027-01-25", "2027-02-07"))
+                    else:
+                        self.assertEqual(result.freshness, "stale_fallback")
+                        self.assertEqual(result.schedule, legacy)
+                        self.assertIsNone(result.covered_bounds)
+        store.assert_awaited_once()
 
     async def test_wait_for_refresh_reuses_existing_local_task(self):
         cached = [{"date": "2026-09-24", "discipline": "Cached"}]

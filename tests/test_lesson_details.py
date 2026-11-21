@@ -51,7 +51,7 @@ class LessonDetailsTests(unittest.TestCase):
             };
             const pending = [];
             const oldLesson = {...base, groupOid:7};
-            const state = {console, URL, AbortController, setTimeout, clearTimeout,
+            const state = {console, URL, AbortController, setTimeout, clearTimeout, navigator:{onLine:true},
                 window:{ScheduleApi:{loadScheduleData:()=>new Promise((resolve,reject)=>pending.push({resolve,reject}))},
                     mpbI18n:{registerTranslator:handler=>{state.translate=handler;}},
                     MpbLessonDetails:{open:(lesson, context)=>{state.opened=context;}}},
@@ -61,7 +61,7 @@ class LessonDetailsTests(unittest.TestCase):
                 resultsBox:element('results'), groupInput:element('input'),
                 currentEntity:entity, scheduleCacheEntityId:'7', fullSchedule:[oldLesson],
                 selectedModules:new Set(['Module']), allAvailableModules:['Module'],
-                loadedBounds:{start:'2026-09-01',end:'2027-01-31'},
+                loadedBounds:{start:'2026-09-01',end:'2027-01-31'}, coveredBounds:{start:'2026-09-01',end:'2027-01-31'},
                 currentWeekStart:new Date('2026-10-05T12:00:00Z'), schedulePageState:{},
                 scheduleFreshness:'fresh_cache', sourceUpdatedAt:'2026-10-09',
                 scheduleRefreshInProgress:false, isOfflineMode:false,
@@ -87,6 +87,7 @@ class LessonDetailsTests(unittest.TestCase):
                 cut('window.showLessonDetails =', 'function bindLessonDetails(') +
                 cut('function getLessonActionId(', 'function getLessonActionLabels(') +
                 cut('function parseDate(', 'function getISODateStr(') +
+                cut('function getVerifiedScheduleBounds(', 'function isLessonInCurrentPeriod(') +
                 cut('async function changeWeek(', 'async function setTodayWeek(') +
                 cut("document.addEventListener('DOMContentLoaded', async () => {", 'function formatRelativeDateTime('), state);
             const oldAction = state.getLessonActionId(oldLesson);
@@ -238,11 +239,15 @@ class LessonDetailsTests(unittest.TestCase):
     def test_table_metadata_rerenders_from_locale_after_language_switch(self):
         self.run_model("""
             const source=fs.readFileSync('main_site_frontend/js/schedule.js','utf8');
-            const render=source.slice(source.indexOf('function renderDesktopGrid('),source.indexOf('function renderMobileFeed('));
+            const render=source.slice(source.indexOf('function renderDesktopGrid('),source.indexOf('function renderMobileFeed('))
+                +source.slice(source.indexOf('function getVerifiedScheduleBounds('),source.indexOf('function isLessonInCurrentPeriod('));
             const dictionaries=Object.fromEntries(['en','ru'].map(lang=>[lang,JSON.parse(fs.readFileSync('main_site_frontend/locales/'+lang+'.json','utf8'))]));
+            const lessons=[{date:'2026.10.05'}];
             let language='ru'; const container={innerHTML:''};
             const state={document:{getElementById:()=>container}, currentWeekStart:new Date('2026-10-05T12:00:00Z'),
                 currentEntity:{name:'PM23-1'},loadedBounds:{start:'2026-10-01',end:'2026-10-31'},
+                coveredBounds:{start:'2026-10-01',end:'2026-10-09'},fullSchedule:lessons,
+                isLessonInCurrentPeriod:()=>true,
                 allAvailableModules:['Module'],selectedModules:new Set(['Module']),FIXED_TIMES:[],
                 TABLE_SLOT_ROW_HEIGHT_PX:156,getTableInitialScrollTop:()=>0,getScheduleTableRenderKey:()=>'',
                 getISODateStr:d=>d.toISOString().slice(0,10),parseDate:d=>new Date(d.replaceAll('.','-')+'T12:00:00Z'),
@@ -251,14 +256,14 @@ class LessonDetailsTests(unittest.TestCase):
                 formatScheduleDayLessonCount:count=>String(count),
                 t:(key,fallback,params={})=>(dictionaries[language][key]||fallback).replace(/\\{(\\w+)\\}/g,(_,key)=>params[key])};
             vm.createContext(state);vm.runInContext(render,state);
-            const lessons=[{date:'2026.10.05'}];
             state.renderDesktopGrid(lessons); assert.ok(container.innerHTML.includes('Занятий: 1'));
             language='en'; state.renderDesktopGrid(lessons);
-            for(const expected of ['Classes: 1','Days: 1','Modules: 1/1','Loaded:','no classes'])
+            for(const expected of ['Classes: 1','Days: 1','Modules: 1/1','Verified:','no classes','not verified'])
                 assert.ok(container.innerHTML.includes(expected),expected);
             assert.equal(/[А-Яа-яЁё]/.test(container.innerHTML),false);
             state.loadedBounds={};state.allAvailableModules=[];state.renderDesktopGrid([]);
-            assert.ok(container.innerHTML.includes('range not loaded'));
+            assert.ok(container.innerHTML.includes('not verified'));
+            assert.ok(!container.innerHTML.includes('no classes'));
             assert.ok(container.innerHTML.includes('Modules: none'));
             language='ru';state.renderDesktopGrid(lessons);assert.ok(container.innerHTML.includes('Занятий: 1'));
         """)
@@ -335,6 +340,20 @@ class LessonDetailsTests(unittest.TestCase):
             const other = context(normalize({...base, group:'ПМ23-2', groupOid:8, date:'2027.03.05'}, entity), entity);
             assert.equal(other.group_id, '7');
             assert.equal(other.lesson_date, '2027-03-05');
+        """)
+
+    def test_curriculum_context_forwards_exact_ruz_plan_and_discipline_ids(self):
+        self.run_model("""
+            const context = sandbox.window.MpbLessonDetails.curriculumContext;
+            const exact = {disciplineOid:38437, disciplineinplan:5338};
+            const request = context(normalize({...base, ...exact}, entity), entity);
+            assert.equal(request.plan_id, '5338');
+            assert.equal(request.discipline_id, '38437');
+            for (const disciplineinplan of [undefined, 0, '5338,6954']) {
+                const invalid = context(normalize({...base, ...exact, disciplineinplan}, entity), entity);
+                assert.equal(invalid.plan_id, undefined);
+                assert.equal(invalid.discipline_id, undefined);
+            }
         """)
 
     def test_group_timetable_curriculum_uses_parent_for_module_and_shared_classes(self):

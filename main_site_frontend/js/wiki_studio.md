@@ -10,7 +10,9 @@ on-demand previews, and asynchronous build jobs. It uses `studio_session.js` for
   before changing IDs. `saveCurrentFile()` rejects failed requests; build/export/send stop when
   saving fails. Every input is journaled locally; storage failure is reported without losing RAM
   contents. Quick snippets have independent drafts for each format.
-- `activateDocument()` restores matching drafts. A remote save conflict also opens the
+- `activateDocument()` lets the user choose among separately stored drafts, with a local
+  timestamp and changed-text preview. Opening the saved document leaves other drafts available
+  the next time the file opens. A remote save conflict also opens the
   comparison dialog, which displays both texts and can download them together. Dismissal keeps
   the draft and blocks save-required actions; Retry opens the comparison again.
 - `upgradeEditor()` retains an editable textarea until the same-origin Monaco frame is ready.
@@ -31,6 +33,11 @@ project autosave follows after a short debounce. On an error the document stays 
 then repeat the intended transition. Ctrl/Cmd+S submits a build; the result may be downloaded after
 completion. A banner marks results that no longer match the displayed source. Project ZIP export
 and Telegram send require a successful save first.
+
+Each page context writes its own account/file journal so two tabs can edit offline and recover
+both drafts later. Legacy local drafts remain readable. An acknowledged save removes only
+its matching entry and the exact selected draft if that entry has remained unchanged. After
+selection, a stale draft still has to pass the existing conflict comparison against server text.
 
 ## Dependencies and side effects
 

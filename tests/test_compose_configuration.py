@@ -243,9 +243,19 @@ class TestComposeConfiguration(unittest.TestCase):
         )
         self.assertIn('JENKINS_LAN_IP="$(bash scripts/resolve_private_ipv4.sh', github_workflow)
         self.assertIn('APP_VM_LAN_IP="$(bash scripts/resolve_private_ipv4.sh', github_workflow)
-        self.assertIn('--noproxy "$JENKINS_HOST,$JENKINS_LAN_IP"', github_workflow)
-        self.assertIn('--resolve "$JENKINS_HOST:$JENKINS_PORT:$JENKINS_LAN_IP"', github_workflow)
-        self.assertIn('--data-urlencode "DEPLOY_HOST=$APP_VM_LAN_IP"', github_workflow)
+        self.assertIn("python3 scripts/jenkins_deploy_wait.py", github_workflow)
+        self.assertIn(
+            '--resolve-ip "$JENKINS_LAN_IP" --deploy-host "$APP_VM_LAN_IP"', github_workflow
+        )
+        waiter = (PROJECT_ROOT / "scripts/jenkins_deploy_wait.py").read_text(encoding="utf-8")
+        self.assertIn('self.pin = f"{url.hostname}:{port}:{ip}"', waiter)
+        self.assertIn('"--resolve",', waiter)
+        self.assertIn('"--noproxy",', waiter)
+        self.assertIn('"DEPLOY_HOST": deploy_host', waiter)
+        self.assertLess(
+            jenkinsfile.index("Release smoke and finalization completed:"),
+            jenkinsfile.index("archiveArtifacts artifacts: 'release-smoke.json'"),
+        )
         self.assertNotIn("secrets.JENKINS_URL", github_workflow)
         self.assertEqual(jenkinsfile.count("ssh-keyscan -T 5 -t ed25519"), 3)
 
@@ -382,7 +392,17 @@ class TestComposeConfiguration(unittest.TestCase):
         self.assertIn("proxy_http_version 1.1", ws_location)
         self.assertIn("proxy_set_header Upgrade $http_upgrade", ws_location)
         self.assertIn('proxy_set_header Connection "upgrade"', ws_location)
+        self.assertIn("mpb_private", ws_location)
+        self.assertIn("error_log /dev/null", ws_location)
+        private_calendar = nginx.split("location ^~ /api/cal/", 1)[1].split("}", 1)[0]
+        self.assertIn("mpb_private", private_calendar)
+        self.assertIn("error_log /dev/null", private_calendar)
+        self.assertIn(
+            "request>uri delete", (PROJECT_ROOT / "Caddyfile").read_text(encoding="utf-8")
+        )
         self.assertIn("check_ws_upgrade", smoke_script)
+        self.assertIn("Sec-WebSocket-Protocol: matplobbot, mpb-ticket.", smoke_script)
+        self.assertNotIn("?token=", smoke_script)
         self.assertIn('if [ "$status" != "101" ]', smoke_script)
         self.assertIn("http://127.0.0.1:8080/ws/stats/total_actions", smoke_script)
         self.assertNotIn("http://127.0.0.1:9584/ws/", jenkinsfile)
@@ -398,16 +418,17 @@ python3() { "$SMOKE_PYTHON" "$@"; }
 docker() {
   cat > smoke-consumed-stdin
   if [ "$FAKE_ENV_FAILURE" = 1 ]; then return 1; fi
-  STATS_USER="$TEST_STATS_USER" STATS_PASS="$TEST_STATS_PASS" PUBLIC_SITE_URL="" \
+  STATS_USER="$TEST_STATS_USER" STATS_PASS="$TEST_STATS_PASS" PUBLIC_SITE_URL="https://example.test" \
     "$SMOKE_PYTHON" -c "${@: -1}"
 }
 curl() {
-  local output="" url="" arg="" previous="" authenticated=0
+  local output="" url="" arg="" previous="" authenticated=0 header="" tickets=0
   for arg in "$@"; do
     if [ "$previous" = "-o" ]; then output="$arg"; fi
     case "$arg" in
       http*) url="$arg" ;;
       Authorization:*) authenticated=1 ;;
+      @-) header="$(cat)" ;;
       username=*) [ "$arg" = "username=$TEST_STATS_USER" ] || return 99 ;;
       password=*) [ "$arg" = "password=$TEST_STATS_PASS" ] || return 99 ;;
     esac
@@ -417,7 +438,15 @@ curl() {
     */api/auth/login)
       printf '{"access_token":"test-token"}' > "$output"
       printf '%s' "$FAKE_LOGIN_STATUS" ;;
+    */api/auth/ws-ticket)
+      [ "$header" = "Authorization: Bearer test-token" ] || return 98
+      if [ -f smoke-ws-tickets.txt ]; then tickets="$(cat smoke-ws-tickets.txt)"; fi
+      tickets=$((tickets + 1))
+      printf '%s' "$tickets" > smoke-ws-tickets.txt
+      printf '{"ticket":"%064x"}' "$tickets" ;;
     */ws/*)
+      tickets="$(cat smoke-ws-tickets.txt)"
+      [ "$header" = "Sec-WebSocket-Protocol: matplobbot, mpb-ticket.$(printf '%064x' "$tickets")" ] || return 97
       printf '%s\n' "$url" >> smoke-ws-calls.txt
       printf '101' ;;
     */api/stats/leaderboard)
@@ -483,7 +512,14 @@ curl() {
                 )
                 if reached_finalize:
                     self.assertEqual((root / "finalize-consumed-stdin").read_bytes(), b"")
-                    self.assertIn("127.0.0.1:8080/ws/", ws_calls.read_text(encoding="utf-8"))
+                    self.assertEqual(
+                        ws_calls.read_text(encoding="utf-8").splitlines(),
+                        [
+                            "http://127.0.0.1:8080/ws/stats/total_actions",
+                            "https://example.test/ws/stats/total_actions",
+                        ],
+                    )
+                    self.assertEqual((root / "smoke-ws-tickets.txt").read_text(), "2")
                 else:
                     self.assertFalse(ws_calls.exists())
 
@@ -556,6 +592,8 @@ curl() {
         self.assertIn("apiUrl.pathname.replace(/\\/api\\/?$/", ui_utils)
         self.assertIn("window.getMpbWebSocketBase()", stats)
         self.assertIn("wsReconnectTimer", stats)
+        self.assertIn('fetchWithAuth("/auth/ws-ticket"', stats)
+        self.assertNotIn("?token=", stats)
         self.assertIn("WebSocket.CONNECTING", stats)
         self.assertNotIn("window.location.host}/ws/stats", stats)
 
