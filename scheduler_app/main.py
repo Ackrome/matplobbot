@@ -37,6 +37,7 @@ from shared_lib.product_metrics import purge_expired_product_events
 from shared_lib.redis_client import redis_client
 from shared_lib.schedule_outbox import get_schedule_outbox_health
 from shared_lib.services.curriculum_service import process_curriculum_queue, refresh_due_curricula
+from shared_lib.services.curriculum_session import refresh_session_dates
 from shared_lib.services.university_api import create_ruz_api_client
 
 # --- Logging Setup ---
@@ -192,6 +193,16 @@ async def main():
                 max_instances=1,
                 coalesce=True,
                 next_run_time=datetime.now(UTC),
+            )
+            scheduler.add_job(
+                refresh_session_dates,
+                "interval",
+                minutes=15,
+                kwargs={"http_session": ruz_session},
+                id="curriculum_session_dates",
+                max_instances=1,
+                coalesce=True,
+                next_run_time=datetime.now(UTC) + timedelta(seconds=20),
             )
 
             scheduler.add_job(

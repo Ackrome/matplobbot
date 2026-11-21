@@ -2825,9 +2825,20 @@ snapshot. Table and list views distinguish unverified dates, dates hidden by
 filters and verified empty dates. Retry checks the open week.
 
 Choose **Session** from a group's timetable to list reviewed forms by semester.
-The first `GET /api/schedule/session` reads the curriculum. A second request
-checks the bound term in RUZ and attaches dates only to matching assessment
-types. Every planned form links to the reviewed PDF page. A scoped alias in
+`GET /api/schedule/session` reads the curriculum, then the browser can request
+saved RUZ dates with `include_dates=true`. A bounded scheduler task checks
+published group/semester bindings in the background. A source timeout preserves
+the last successful dates and their check time. The dialog distinguishes partial
+coverage, stale dates, and a fully checked semester with no date for a form.
+RUZ's `Семинар+зачет` can supply a date for a unique planned credit. The plan
+provides the distinction between a pass and a graded pass.
+
+Selecting a published date opens the group's timetable for that day and the
+matching lesson when its ID is available. **Add exams to calendar** opens the
+existing calendar profile form for the group with the exam filter selected.
+The user saves the profile to create a subscription. Calendar events come from
+timed lessons in RUZ, and every planned form links to the reviewed PDF page.
+A scoped alias in
 `shared_lib/data/curriculum_aliases.json` requires reviewed group and RUZ
 identifiers and the current published document hash. The 2026/27 [PM24 and
 PM26 publication package](reports/curriculum-numeric-pipeline/pm24-pm26-2026-27.md)
@@ -2846,4 +2857,9 @@ mask or omit private calendar paths and credential-bearing requests.
 GitHub Actions follows the specific Jenkins queue item and build it submitted.
 Deployment passes after Jenkins reports success and archives smoke evidence
 for the matching source commit. The workflow summary links the queue item and
-build. Ambiguous submissions stop so a retry does not duplicate a deployment.
+build. Jenkins checks the live checkout, release markers, disk space and worker
+policy before quality checks and image downloads. Preparation rechecks the live
+checkout before maintenance. A failed build can supply a structured stage and
+error code to Actions. The waiter accepts this report only for the exact commit
+and build, and the report contains no raw console output. Ambiguous submissions
+stop so a retry does not duplicate a deployment.

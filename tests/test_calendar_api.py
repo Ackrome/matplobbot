@@ -578,6 +578,74 @@ class TestCalendarAPI(unittest.TestCase):
             "Консультации перед экзаменом",
         )
 
+    def test_group_exam_feed_serializes_only_dated_assessments_for_its_source(self):
+        from shared_lib.services.schedule_service import (
+            _get_simple_lesson_type,
+            generate_profile_ical_from_aggregated_schedule,
+        )
+
+        profile = {
+            "id": "session-exams",
+            "name": "Group exams",
+            "kind": "custom",
+            "lesson_mode": "exams_only",
+            "entity_type": "group",
+            "entity_id": "165300",
+            "entity_name": "ПМ26-1",
+            "modules": [],
+        }
+        credit = {
+            "date": "2026-12-11",
+            "beginLesson": "08:30",
+            "endLesson": "10:00",
+            "discipline": "Практикум по программированию",
+            "kindOfWork": "Семинар+зачет",
+            "lessonOid": 101,
+            "source_entity_type": "group",
+            "source_entity_id": "165300",
+        }
+        lessons = [
+            credit,
+            {**credit, "kindOfWork": "Семинар", "lessonOid": 102},
+            {**credit, "source_entity_id": "165301", "lessonOid": 103},
+            {**credit, "beginLesson": "", "endLesson": "", "lessonOid": 104},
+        ]
+        for lesson in lessons:
+            lesson["simple_type"] = _get_simple_lesson_type(lesson["kindOfWork"])
+
+        with (
+            patch.object(
+                calendar_router,
+                "_resolve_public_calendar_context",
+                AsyncMock(
+                    return_value=(
+                        12345,
+                        None,
+                        calendar_router._default_calendar_sync_state(),
+                        [],
+                        profile,
+                    )
+                ),
+            ),
+            patch.object(
+                calendar_router,
+                "get_calendar_aggregated_schedule",
+                AsyncMock(return_value=lessons),
+            ),
+            patch.object(calendar_router, "_get_source_update_map", AsyncMock(return_value={})),
+            patch.object(
+                calendar_router,
+                "generate_profile_ical_from_aggregated_schedule",
+                generate_profile_ical_from_aggregated_schedule,
+            ),
+        ):
+            response = self.client.get("/api/cal/secret123/profiles/session-exams.ics")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.text.count("BEGIN:VEVENT"), 1)
+        self.assertIn("UID:lesson-group-165300-101@matplobbot.ru", response.text)
+        self.assertIn("DTSTART:20261211T053000Z", response.text)
+
     def test_public_custom_feed_uses_custom_profile_source_without_bot_subscription(self):
         sync_state = calendar_router._default_calendar_sync_state()
         custom_profile = {

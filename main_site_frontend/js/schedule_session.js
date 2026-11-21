@@ -5,6 +5,8 @@
     const controls = document.getElementById("scheduleSessionControls");
     const term = document.getElementById("scheduleSessionTerm");
     const status = document.getElementById("scheduleSessionStatus");
+    const checkedLabel = document.getElementById("scheduleSessionChecked");
+    const calendar = document.getElementById("scheduleSessionCalendar");
     const content = document.getElementById("scheduleSessionContent");
     const translate = (key, params = {}) => window.mpbI18n.t(`schedule.session.${key}`, key, params);
     const kindLabel = kind => window.mpbI18n.t(`schedule.details.curriculum.kind.${kind}`, kind);
@@ -25,6 +27,29 @@
         return new Intl.DateTimeFormat(window.mpbI18n.getLanguage(), {
             day: "numeric", month: "short", timeZone: "UTC",
         }).format(new Date(`${value}T00:00:00Z`));
+    }
+
+    function verificationLabel(value) {
+        if (!value) return "";
+        const checked = new Date(value);
+        if (Number.isNaN(checked.getTime())) return "";
+        return new Intl.DateTimeFormat(window.mpbI18n.getLanguage(), {
+            dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Moscow",
+        }).format(checked);
+    }
+
+    function scheduleLink(event) {
+        const query = new URLSearchParams({
+            type: "group", id: entity.id, name: entity.name || entity.id,
+            date: event.date, lesson_date: event.date,
+        });
+        if (event.lesson_id) query.set("lesson", event.lesson_id);
+        const view = window.getSchedulePageState().viewMode;
+        if (view === "table" || view === "cards") query.set("view", view);
+        const link = node("a", "", "session-event-link");
+        link.href = `/schedule?${query}`;
+        link.title = translate(event.lesson_id ? "openLesson" : "openDay");
+        return link;
     }
 
     function selectTerms() {
@@ -59,10 +84,17 @@
             status.textContent = translate(plan.status === "unmapped" ? "unmapped" : "unavailable");
             return;
         }
-        const dateState = dates?.dates_status === "unavailable" ? "datesUnavailable" : dates?.dates_status;
+        const dateState = {
+            checked: "checked", partial: "datesPartial", stale: "datesStale",
+            unavailable: "datesUnavailable", unchecked: "unchecked",
+        }[dates?.dates_status];
         status.textContent = translate(plan.assessments.length ? dateState || "checking" : "empty");
         if (plan.stale) content.append(node("p", translate("stale"), "session-warning"));
         if (!plan.assessments.length) return;
+
+        const lastChecked = verificationLabel(dates?.dates_checked_at);
+        if (checkedLabel) checkedLabel.textContent = lastChecked ? translate("lastChecked", { checked: lastChecked }) : "";
+        if (calendar) calendar.hidden = !plan.assessments.some(row => ["exam", "pass", "graded_pass"].includes(row.kind));
         const records = new Map();
         for (const row of plan.assessments) {
             const key = rowKey(row);
@@ -103,12 +135,23 @@
                 if (kinds.size > 1) block.append(node("span", kindLabel(event.kind)));
                 const time = node("time", `${dateLabel(event.date)} · ${event.start}`);
                 time.dateTime = `${event.date}T${event.start}:00+03:00`;
-                block.append(time);
+                const link = scheduleLink(event);
+                link.append(time);
+                block.append(link);
                 if (event.room) block.append(node("span", event.room));
+                if (dates.dates_status === "partial" || dates.dates_status === "stale") {
+                    const range = dates.dates_coverage?.find(item => item.start_date <= event.date && event.date <= item.end_date);
+                    const checked = verificationLabel(range?.checked_at);
+                    if (checked && checked !== lastChecked) {
+                        block.append(node("span", translate("lastChecked", { checked }), "session-event-check"));
+                    }
+                }
                 timing.append(block);
             }
             if (!timing.children.length && dates?.dates_status === "checked") {
                 timing.append(node("span", translate("noDate")));
+            } else if (!timing.children.length && ["partial", "stale"].includes(dates?.dates_status)) {
+                timing.append(node("span", translate("dateUnverified")));
             }
             item.append(details, timing);
             list.append(item);
@@ -132,6 +175,8 @@
         controller = request;
         plan = dates = null;
         content.replaceChildren();
+        if (checkedLabel) checkedLabel.textContent = "";
+        if (calendar) calendar.hidden = true;
         status.textContent = translate("loading");
         try {
             const data = await fetchSession(semester, false, request.signal);
@@ -168,6 +213,10 @@
         controls.hidden = true;
         dialog.showModal();
         load();
+    });
+    calendar?.addEventListener("click", () => {
+        dialog.close();
+        window.openCalendarSyncPanel?.({ lessonMode: "exams_only" });
     });
     term.addEventListener("change", () => load(term.value));
     dialog.addEventListener("close", () => controller?.abort());

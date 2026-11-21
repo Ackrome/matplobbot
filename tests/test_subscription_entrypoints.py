@@ -135,6 +135,55 @@ class SubscriptionEntrypointTests(unittest.IsolatedAsyncioTestCase):
 
 @unittest.skipUnless(shutil.which("node"), "Node required for shared calendar lifecycle")
 class CalendarHostTests(unittest.TestCase):
+    def test_session_calendar_draft_writes_only_on_explicit_save(self):
+        source = r"""
+            const vm = require('node:vm'), fs = require('node:fs'), assert = require('node:assert/strict');
+            const writes = [];
+            const context = {
+                URLSearchParams, console,
+                currentEntity:{type:'group',id:'164377',name:'ПМ24-1'},
+                allAvailableModules:[], selectedModules:new Set(),
+                scheduleAuthUser:{id:1,telegram_id:77},
+                localStorage:{getItem:key=>key==='jwt_token'?'fixture-token':null,setItem(){}},
+                document:{addEventListener(){},getElementById(){return null;}},
+                window:{location:{pathname:'/schedule',search:'?type=group&id=164377'},addEventListener(){},
+                    mpbI18n:{t:(key,fallback)=>fallback,getLanguage:()=> 'ru'}},
+                fetch:async (url, options)=>{
+                    writes.push({url, method:options.method, data:JSON.parse(options.body)});
+                    return {ok:true,status:200,json:async()=>({profiles:[]})};
+                }
+            };
+            vm.createContext(context);
+            vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),context);
+            (async()=>{
+                const {window} = context;
+                window.openCalendarSyncPanel({lessonMode:'exams_only'});
+                assert.equal(writes.length,0);
+                assert.equal(window.calendarCurrentViewMode,'all');
+                assert.match(context.calendarSignInReturnPath(),/calendar=1&calendar_preset=exams_only/);
+                window.closeCalendarSyncPanel();
+                assert.equal(writes.length,0);
+                assert.equal(context.calendarDraftLessonMode(),'all');
+                window.openCalendarSyncPanel({lessonMode:'exams_only'});
+                await window.createCalendarProfileFromCurrentView();
+                assert.equal(writes.length,1);
+                assert.equal(writes[0].url,'/api/cal/subscription/profiles');
+                assert.equal(writes[0].method,'POST');
+                assert.equal(writes[0].data.entity_id,'164377');
+                assert.equal(writes[0].data.lesson_mode,'exams_only');
+                assert.equal(window.calendarCurrentViewMode,'all');
+                assert.equal(context.calendarDraftLessonMode(),'all');
+            })().catch(error=>{console.error(error);process.exitCode=1;});
+        """
+        result = subprocess.run(
+            ["node", "-e", source, str(ROOT / "main_site_frontend/js/calendar_sync.js")],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_account_host_without_schedule_globals_and_stale_auth_response(self):
         source = r"""
             const vm=require('node:vm'),fs=require('node:fs'),assert=require('node:assert/strict');

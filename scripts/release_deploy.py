@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 import uuid
 from datetime import UTC, datetime
@@ -28,6 +29,82 @@ from worker_security import (
 
 ROOT = Path.cwd()
 STATE = ROOT / ".release-state"
+
+
+class ProductionPreflightError(RuntimeError):
+    """A production blocker with a stable exit status for Jenkins."""
+
+    def __init__(self, status, message):
+        super().__init__(message)
+        self.status = status
+
+
+def check_live_checkout():
+    if any(
+        (STATE / name).exists()
+        for name in ("attempt.json", "pending.json", "rollback-pending.json")
+    ):
+        raise ProductionPreflightError(
+            20, "Resolve the previous deployment/rollback attempt before another switch"
+        )
+    try:
+        repository = Path(run("git", "rev-parse", "--show-toplevel", cwd=ROOT)).resolve()
+        if repository != ROOT.resolve():
+            raise ValueError("Not the deployment repository root")
+        changed = run("git", "--no-optional-locks", "diff", "--name-only", "HEAD", cwd=ROOT)
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        raise ProductionPreflightError(26, "Cannot read the live checkout") from exc
+    if changed:
+        raise ProductionPreflightError(21, "Live checkout has tracked edits")
+    try:
+        verify_no_untracked_inputs(ROOT)
+    except ValueError as exc:
+        raise ProductionPreflightError(22, "Live checkout has untracked deployment inputs") from exc
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ProductionPreflightError(26, "Cannot read the live checkout") from exc
+
+    current = STATE / "current.json"
+    if current.exists():
+        try:
+            record = json.loads(current.read_bytes())
+            if record["status"] not in ("successful", "observed-legacy") or record["manifest"][
+                "commit"
+            ] != run("git", "rev-parse", "HEAD", cwd=ROOT):
+                raise ValueError("Current release differs from checkout")
+        except (KeyError, OSError, TypeError, ValueError, subprocess.SubprocessError) as exc:
+            raise ProductionPreflightError(
+                23, "Current release state does not match the live checkout"
+            ) from exc
+
+
+def production_preflight(candidate):
+    """Read live checkout state, disk headroom and installed candidate policy."""
+    # Recovery tools do not use the disk guard after reverting to an older checkout.
+    from docker_disk_guard import (
+        DEFAULT_CRITICAL_GIB,
+        DEFAULT_CRITICAL_PERCENT,
+        DEFAULT_WARN_GIB,
+        DEFAULT_WARN_PERCENT,
+        snapshot,
+    )
+
+    check_live_checkout()
+    try:
+        disk = snapshot()
+    except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+        raise ProductionPreflightError(24, "Cannot verify production Docker disk space") from exc
+    status = disk.status(
+        DEFAULT_WARN_PERCENT, DEFAULT_CRITICAL_PERCENT, DEFAULT_WARN_GIB, DEFAULT_CRITICAL_GIB
+    )
+    if status == "critical":
+        raise ProductionPreflightError(24, "Production Docker disk space is critical")
+    print(f"Production disk headroom: {status}", flush=True)
+    try:
+        apparmor_security_option(candidate)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise ProductionPreflightError(
+            25, "Cannot verify the candidate worker AppArmor policy"
+        ) from exc
 
 
 def write_private(path, value):
@@ -151,16 +228,13 @@ def prepare(path, candidate):
     """Validate off-line, capture rollback state, then quiesce host binds before checkout."""
     manifest = validate(json.loads(path.read_text(encoding="utf-8")))
     verify(manifest, candidate.resolve(), require_rc=True)
+    check_live_checkout()
     # Downloads and digest validation happen while the previous site is still live.
     for image in manifest["images"].values():
         execute(["docker", "pull", image])
     verify(manifest, candidate.resolve(), inspect_images=True, require_rc=True)
     worker_apparmor = probe_worker(manifest["images"]["worker"], candidate)
-    if (STATE / "attempt.json").exists() or (STATE / "rollback-pending.json").exists():
-        raise ValueError("Resolve the previous deployment/rollback attempt before another switch")
-    if run("git", "diff", "--name-only", "HEAD", cwd=ROOT):
-        raise ValueError("Live checkout has tracked edits")
-    verify_no_untracked_inputs(ROOT)
+    production_preflight(candidate)
     STATE.mkdir(parents=True, mode=0o700, exist_ok=True)
     preserve_configuration()
     prefix = ["docker", "compose", "-f", "docker-compose.prod.yml"]
@@ -499,6 +573,8 @@ def main():
     start.add_argument("manifest", type=Path)
     sub.add_parser("finalize")
     sub.add_parser("preserve-config")
+    check = sub.add_parser("preflight")
+    check.add_argument("--candidate", required=True, type=Path)
     pre = sub.add_parser("prepare")
     pre.add_argument("manifest", type=Path)
     pre.add_argument("--candidate", required=True, type=Path)
@@ -514,6 +590,9 @@ def main():
         finalize()
     elif args.command == "preserve-config":
         preserve_configuration()
+    elif args.command == "preflight":
+        production_preflight(args.candidate)
+        print("Production preflight passed.")
     elif args.command == "prepare":
         prepare(args.manifest, args.candidate)
     else:
@@ -521,4 +600,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except ProductionPreflightError as exc:
+        print(f"Production preflight failed: {exc}", file=sys.stderr)
+        raise SystemExit(exc.status) from None

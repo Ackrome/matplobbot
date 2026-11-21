@@ -18,7 +18,30 @@ PARAMETERS_TREE = "property[parameterDefinitions[name]]"
 QUEUE_TREE = "id,cancelled,executable[number,url]"
 BUILD_TREE = "number,queueId,building,inProgress,result"
 SMOKE_ARTIFACT = "release-smoke.json"
+FAILURE_ARTIFACT = "release-failure.json"
 TRANSIENT_STATUSES = {408, 429, 500, 502, 503, 504}
+PREPARE_FAILURE_CODES = {
+    "production_release_pending",
+    "production_tracked_changes",
+    "production_untracked_inputs",
+    "production_release_state_mismatch",
+    "production_disk_check_failed",
+    "production_worker_policy_check_failed",
+    "production_checkout_unavailable",
+}
+FAILURE_CODES = {
+    "Pin Accepted Source": {"source_verification_failed"},
+    "Production Preflight": {
+        *PREPARE_FAILURE_CODES,
+        "production_preflight_failed",
+        "production_ssh_pin_failed",
+        "production_preflight_timeout",
+        "production_ssh_failed",
+    },
+    "Pre-Deploy Quality Gate": {"quality_gate_failed"},
+    "Deploy to Production": {"production_deploy_failed", *PREPARE_FAILURE_CODES},
+    "Post-Deploy Smoke Checks": {"smoke_failed"},
+}
 
 
 class DeploymentError(RuntimeError):
@@ -113,6 +136,32 @@ def _absolute_path(link):
     return link.path
 
 
+def _failure_summary(transport, build, commit, number, deadline):
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return None
+    try:
+        status, _, content = transport.request(
+            build + "artifact/" + FAILURE_ARTIFACT, timeout=min(10, remaining)
+        )
+        if status != 200:
+            return None
+        data = _json_object(content)
+    except DeploymentError:
+        return None
+    if (
+        set(data) != {"commit", "number", "stage", "code"}
+        or data["commit"] != commit
+        or type(data["number"]) is not int
+        or data["number"] != number
+    ):
+        return None
+    stage, code = data["stage"], data["code"]
+    if isinstance(stage, str) and isinstance(code, str) and code in FAILURE_CODES.get(stage, ()):
+        return f"Jenkins failure in {stage}: `{code}`."
+    return None
+
+
 def deploy(transport, commit, manifest, deploy_host, *, timeout=2400, interval=5, report=print):
     """Submit once, follow the exact queue ID, and verify its immutable smoke artifact."""
     job = transport.job_path
@@ -202,23 +251,23 @@ def deploy(transport, commit, manifest, deploy_host, *, timeout=2400, interval=5
         ):
             return None
         result = data["result"]
-        if (
-            result != "SUCCESS"
-            or data.get("building") is not False
-            or data.get("inProgress") is not False
-        ):
-            known = {"FAILURE", "ABORTED", "UNSTABLE", "NOT_BUILT"}
-            raise DeploymentError(
-                f"Jenkins build #{number} finished with {result if result in known else 'an unexpected result'}"
-            )
-        return result
+        if data.get("building") is not False or data.get("inProgress") is not False:
+            raise DeploymentError(f"Jenkins build #{number} returned an invalid completion state")
+        known = {"SUCCESS", "FAILURE", "ABORTED", "UNSTABLE", "NOT_BUILT"}
+        return result if isinstance(result, str) and result in known else "an unexpected result"
 
-    poll(
+    result = poll(
         build + "api/json?" + urlencode({"tree": BUILD_TREE}),
         "build result",
         build_result,
         retry_missing=True,
     )
+    if result != "SUCCESS":
+        if result == "FAILURE":
+            detail = _failure_summary(transport, build, commit, number, deadline)
+            if detail:
+                report(detail)
+        raise DeploymentError(f"Jenkins build #{number} finished with {result}")
 
     def verify_smoke(data):
         if data != {"commit": commit, "number": number, "status": "smoke_verified"}:

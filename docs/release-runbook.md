@@ -51,16 +51,22 @@ revocations. Both disposable databases and their volumes are removed. Missing Do
 denied worker namespaces, failed compilation or failed restore fail the job.
 
 Only a passed report can be embedded in `release-manifest-accepted.json`. Jenkins
-receives `SOURCE_COMMIT` and `RELEASE_MANIFEST_B64`, checks out that exact commit,
-reruns quality checks and prepares a detached candidate worktree on the application
-host. Tracked edits and unexpected untracked deployment inputs fail verification.
+receives `SOURCE_COMMIT` and `RELEASE_MANIFEST_B64` and checks out that exact commit.
+Before repeating the quality checks, it streams the reviewed preflight code to a
+temporary directory on the application host over pinned SSH. The preflight reads
+the live checkout, release state, disk space and the candidate worker policy.
+Tracked edits and unexpected untracked deployment inputs fail verification.
+The support stack and live checkout are provisioned separately. Build emergency
+support image fixes from a separate Git worktree to keep the live checkout clean.
+After the quality gate, Jenkins stages the candidate in a detached worktree.
 The candidate is validated and its images downloaded before maintenance starts.
 The destination host then runs a disposable positive LaTeX compile from the accepted
 worker digest under the production security profile, no network/environment/mounts
 from production, and a 120-second bound. This proves the destination kernel permits
 the sandbox; a denied namespace fails while the old site is still running.
-`release_deploy.py prepare` saves the old private configuration and observed legacy
-runtime if needed, retains recovery tools, writes an attempt marker, stops every
+`release_deploy.py prepare` rechecks the live checkout before image pulls and
+repeats production preflight before maintenance. It saves the old private configuration
+and observed legacy runtime if needed, retains recovery tools, writes an attempt marker, stops every
 service with a host bind mount, then switches the live checkout. This bounded
 maintenance window prevents new frontend/config files being served with the old
 API. Jenkins writes the new credentials only after this baseline is safe.
@@ -83,7 +89,10 @@ and the build assigned to it. To pass, the build must finish with `SUCCESS` and
 serve its `release-smoke.json` artifact for the accepted source commit and build
 number. The Jenkins smoke stage archives that artifact after checking the remote
 smoke and finalization marker. The Actions summary links both the queue item and
-the build. If the 40-minute wait expires or the submit loses its connection,
+the build. On `FAILURE`, it also reports the stage and code from
+`release-failure.json` when its SHA and build ID match and its fields pass the
+allowlist. The report does not include console output or change the failed result.
+If the 40-minute wait expires or the submit loses its connection,
 inspect Jenkins before rerunning because the original deployment may still run.
 
 `bash deploy.sh --manifest .release-state/accepted.json` verifies source/digests,

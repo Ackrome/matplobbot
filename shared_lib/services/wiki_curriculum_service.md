@@ -57,4 +57,9 @@ Successful same-byte rechecks preserve reviewed corrections; parser/model upgrad
 
 There is no inference from group names, cohort digits, shortened course titles, generic RUZ exam flags or a fuzzy match. Two codes with the same title remain ambiguous. Explicit mappings protect different branches/program editions and nonstandard semester calendars. Published results include source provenance and a stale/review marker. PDF blobs are deferred for list and public lookup queries, avoiding large per-card reads.
 
+`match_session_dates(assessments, schedule, start, end, group_id=...)` recognizes
+explicit RUZ assessment labels. A general credit such as `Семинар+зачет` is
+matched only when the reviewed plan supplies one unambiguous plain or graded
+credit, including any approved alias. A consultation never establishes an exam.
+
 The source schema is introduced by Alembic `f9f0a1b2c3d4`; `fa0a1b2c3d4e` adds durable processing/version metadata and queues existing stored PDFs. Imports permit PDFs up to 20 MiB and 100 pages. Page-count validation happens in the background; invalid replacements retain the previous published snapshot and cannot be published. Parsing remains conservative; scanned or ambiguous files can be manually reviewed through the admin API. Keep tests in `test_curriculum_service.py`, `test_curriculum_api.py` and `test_curriculum_processing.py` when changing queue, identity, refresh or publication rules. SQLite tests cover actual statements and transaction rollback, but do not simulate PostgreSQL lock contention across processes.

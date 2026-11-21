@@ -434,6 +434,63 @@ class TestReleaseEngineering(unittest.TestCase):
                     release_deploy.rollback()
                 execute.assert_not_called()
 
+    def test_prepare_rejects_production_drift_before_pulling_images(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            path = root / "accepted.json"
+            path.write_text(json.dumps(manifest()))
+            with (
+                patch.object(release_deploy, "ROOT", root),
+                patch.object(release_deploy, "STATE", root / ".release-state"),
+                patch.object(release_deploy, "verify"),
+                patch.object(
+                    release_deploy, "run", side_effect=[str(root), "proxy/proxy_cleaner.py"]
+                ),
+                patch.object(release_deploy, "execute") as execute,
+            ):
+                with self.assertRaises(release_deploy.ProductionPreflightError) as error:
+                    release_deploy.prepare(path, root)
+                self.assertEqual(error.exception.status, 21)
+                execute.assert_not_called()
+
+    def test_prepare_rechecks_production_drift_after_worker_probe(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            state = root / ".release-state"
+            path = root / "accepted.json"
+            path.write_text(json.dumps(manifest()))
+            with (
+                patch.object(release_deploy, "ROOT", root),
+                patch.object(release_deploy, "STATE", state),
+                patch.object(release_deploy, "verify"),
+                patch.object(release_deploy, "verify_no_untracked_inputs"),
+                patch.object(
+                    release_deploy, "run", side_effect=[str(root), "", str(root), "deploy.sh"]
+                ),
+                patch.object(release_deploy, "probe_worker") as probe,
+                patch.object(release_deploy, "execute") as execute,
+            ):
+                with self.assertRaises(release_deploy.ProductionPreflightError) as error:
+                    release_deploy.prepare(path, root)
+                self.assertEqual(error.exception.status, 21)
+                self.assertEqual(execute.call_count, len(manifest()["images"]))
+                self.assertTrue(all(call.args[0][1] == "pull" for call in execute.call_args_list))
+                probe.assert_called_once()
+                self.assertFalse(state.exists())
+
+    def test_read_only_production_preflight_blocks_critical_disk_space(self):
+        with (
+            patch.object(release_deploy, "check_live_checkout") as checkout,
+            patch("docker_disk_guard.snapshot") as disk,
+            patch.object(release_deploy, "apparmor_security_option") as policy,
+        ):
+            disk.return_value.status.return_value = "critical"
+            with self.assertRaises(release_deploy.ProductionPreflightError) as error:
+                release_deploy.production_preflight(ROOT)
+            self.assertEqual(error.exception.status, 24)
+            checkout.assert_called_once()
+            policy.assert_not_called()
+
     def test_prepare_stops_all_host_binds_after_baseline_before_checkout(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -459,6 +516,8 @@ class TestReleaseEngineering(unittest.TestCase):
             }
 
             def run(*command, **kwargs):
+                if "--show-toplevel" in command:
+                    return str(root)
                 if "diff" in command:
                     return ""
                 if "ps" in command:
@@ -519,11 +578,13 @@ class TestReleaseEngineering(unittest.TestCase):
                     return_value="apparmor=matplobbot-render-test",
                 ),
                 patch.object(release_deploy, "verify_no_untracked_inputs"),
+                patch("docker_disk_guard.snapshot") as disk,
                 patch.object(release_deploy, "source_files", return_value={"deploy.sh": "a" * 64}),
                 patch.object(release_deploy, "heads", return_value=["old"]),
                 patch.object(release_deploy, "run", side_effect=run),
                 patch.object(release_deploy, "execute", side_effect=execute),
             ):
+                disk.return_value.status.return_value = "ok"
                 with self.assertRaises(subprocess.CalledProcessError):
                     release_deploy.prepare(path, candidate)
             self.assertEqual(seen[-2][-3:], ["stop", "frontend", "proxy"])

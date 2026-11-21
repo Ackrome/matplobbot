@@ -119,6 +119,21 @@ class CurriculumGroup(Base):
     terms = Column(JSON, nullable=False, default=list)
 
 
+class CurriculumSessionSnapshot(Base):
+    """Last successful RUZ snapshot for one explicitly bound semester."""
+
+    __tablename__ = "curriculum_session_snapshots"
+    group_id = Column(
+        String(128), ForeignKey("curriculum_groups.group_id", ondelete="CASCADE"), primary_key=True
+    )
+    semester = Column(Integer, primary_key=True)
+    start_date = Column(Date, primary_key=True)
+    end_date = Column(Date, primary_key=True)
+    attempted_at = Column(DateTime(timezone=True), nullable=False)
+    checked_at = Column(DateTime(timezone=True), nullable=True)
+    lessons = Column(JSON, nullable=False, default=list)
+
+
 class User(Base):
     __tablename__ = "users"
 

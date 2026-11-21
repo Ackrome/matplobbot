@@ -184,6 +184,24 @@ function bindScheduleDayToggleButtons(container) {
     });
 }
 
+function focusLinkedScheduleDay(date) {
+    const cards = document.querySelector(`[data-schedule-day="${date}"]`);
+    if (cards?.getClientRects().length) {
+        const button = cards.querySelector('[data-schedule-day-toggle]');
+        if (button?.getAttribute('aria-expanded') !== 'true') window.toggleScheduleDay(date);
+        cards.scrollIntoView({ block: 'start' });
+        button?.focus({ preventScroll: true });
+        return button;
+    }
+    const column = document.querySelector(`[data-schedule-date-head="${date}"]`);
+    if (column?.getClientRects().length) {
+        column.scrollIntoView({ block: 'nearest', inline: 'center' });
+        column.focus({ preventScroll: true });
+        return column;
+    }
+    return null;
+}
+
 function normalizeScheduleDate(value) {
     const raw = String(value || '').trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
@@ -1774,7 +1792,8 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         }
     }
     currentEntity = nextEntity;
-    const requestedDate = normalizeScheduleDate(targetDate) || getISODateStr(new Date());
+    const linkedDate = normalizeScheduleDate(options.lessonDate);
+    const requestedDate = linkedDate || normalizeScheduleDate(targetDate) || getISODateStr(new Date());
     currentWeekStart = getMonday(parseDate(requestedDate));
     setSchedulePageState({
         entity: currentEntity,
@@ -1834,9 +1853,17 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         filterAndRender();
         savePreferences();
         syncScheduleUrl(options.urlMode || (entityChanged ? 'push' : 'replace'));
-        if (options.lesson && options.lessonDate) {
-            const matches = fullSchedule.filter(lesson => lesson.date === options.lessonDate && String(lesson.lessonOid) === options.lesson);
-            if (matches.length === 1) window.showLessonDetails(matches[0], document.getElementById('scheduleChangesToggleBtn'));
+        let linkResolved = false;
+        if (linkedDate) {
+            const matches = options.lesson ? fullSchedule.filter(lesson => lesson.date === linkedDate && String(lesson.lessonOid) === options.lesson) : [];
+            if (matches.length === 1) {
+                const origin = focusLinkedScheduleDay(linkedDate);
+                window.showLessonDetails(matches[0], origin || document.getElementById('scheduleChangesToggleBtn'));
+                linkResolved = true;
+            } else if (!options.lesson || !scheduleRefreshInProgress) {
+                const origin = focusLinkedScheduleDay(linkedDate);
+                linkResolved = !options.lesson && Boolean(origin);
+            }
         }
         // Вызываем обновление календаря, так как сменилась сущность
         if (window._renderCalendarSubscriptionImpl) window._renderCalendarSubscriptionImpl();
@@ -1854,7 +1881,9 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
                         keepEmptyModules: selectedModules.size === 0,
                         silent: true,
                         pollAttempt: pollAttempt + 1,
-                        urlMode: 'replace'
+                        urlMode: 'replace',
+                        lesson: linkResolved ? '' : options.lesson,
+                        lessonDate: linkResolved ? null : linkedDate,
                     }
                 );
             }, Math.min(1500 + pollAttempt * 750, 3750));
@@ -2277,7 +2306,7 @@ function renderDesktopGrid(lessons) {
             else if (unfilteredDays.has(getISODateStr(d))) summary = t('schedule.coverage.dayFiltered', 'filtered out');
             else summary = t('schedule.table.dayEmpty', 'нет пар');
         }
-        html += `<th class="schedule-day-head schedule-sticky-day p-3 border-r last:border-r-0 ${isToday ? 'is-today' : ''} relative">
+        html += `<th data-schedule-date-head="${getISODateStr(d)}" tabindex="-1" class="schedule-day-head schedule-sticky-day p-3 border-r last:border-r-0 ${isToday ? 'is-today' : ''} relative">
             ${isToday ? '<div class="schedule-today-marker absolute top-0 left-0 w-full h-1"></div>' : ''}
             <div class="schedule-day-head-inner">
                 <span class="schedule-day-label text-xs uppercase tracking-widest font-bold">${escapeHtml(formatUiDate(d, {weekday: 'short'}))}</span>
