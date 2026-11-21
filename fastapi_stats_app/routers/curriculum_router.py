@@ -9,7 +9,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from shared_lib.services import curriculum_service as service
 from shared_lib.services.curriculum_documents import validate_official_document_url
-from shared_lib.services.curriculum_session import MAX_TERM_DAYS, cached_session_dates
+from shared_lib.services.curriculum_session import (
+    MAX_TERM_DAYS,
+    admin_session_coverage,
+    admin_session_reviews,
+    cached_session_dates,
+    confirm_session_review,
+)
 
 from ..auth import require_admin
 from ..config import RATE_LIMIT_SCHEDULE_DATA
@@ -76,6 +82,17 @@ class CurriculumGroups(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     groups: list[CurriculumGroupInput] = Field(max_length=100)
+
+
+class SessionReviewConfirmation(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    group_id: str = Field(min_length=1, max_length=128)
+    term: CurriculumTerm
+    event_key: str = Field(pattern=r"^[0-9a-f]{64}$")
+    review_key: str = Field(pattern=r"^[0-9a-f]{64}$")
+    candidate_key: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_selected: str | None = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class CurriculumExtension(CurriculumGroups):
@@ -173,6 +190,28 @@ async def curricula_list():
 @router.post("/curricula", dependencies=[Depends(require_admin)], status_code=201)
 async def curricula_create(body: CurriculumCreate):
     return await _result(service.create_curriculum(body.model_dump()))
+
+
+@router.get("/curricula/session-coverage", dependencies=[Depends(require_admin)])
+async def curricula_session_coverage(response: Response):
+    response.headers["Cache-Control"] = "no-store"
+    return await admin_session_coverage()
+
+
+@router.get("/curricula/session-reviews", dependencies=[Depends(require_admin)])
+async def curricula_session_reviews(
+    response: Response,
+    group_id: str = Query(min_length=1, max_length=128),
+    semester: int = Query(ge=1, le=16),
+):
+    response.headers["Cache-Control"] = "no-store"
+    return await _result(admin_session_reviews(group_id.strip(), semester))
+
+
+@router.put("/curricula/session-reviews", dependencies=[Depends(require_admin)], status_code=204)
+async def curricula_confirm_session_review(body: SessionReviewConfirmation):
+    await _result(confirm_session_review(**body.model_dump(mode="json")))
+    return Response(status_code=204, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/curricula/{document_id}", dependencies=[Depends(require_admin)])

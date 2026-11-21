@@ -37,6 +37,55 @@
         return normalized ? `${normalized.type}:${normalized.id}` : "";
     }
 
+    function publicUrl(entity, { date, lesson, semester } = {}) {
+        const selected = normalizeEntity(entity);
+        if (!selected) return "";
+        const url = new URL("/schedule", window.location.origin);
+        const query = url.searchParams;
+        query.set("type", selected.type);
+        query.set("id", selected.id);
+        query.set("name", selected.name);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(date || "")) {
+            query.set("date", date);
+            if (lesson !== undefined) {
+                query.set("lesson_date", date);
+                const id = String(lesson ?? "");
+                if (/^[1-9]\d{0,24}$/.test(id)) query.set("lesson", id);
+            }
+        }
+        if (selected.type === "group" && /^(?:[1-9]|1[0-6])$/.test(String(semester ?? ""))) {
+            query.set("session", semester);
+        }
+        return url.href;
+    }
+
+    async function copyPublicUrl(url, input, feedback, stillCurrent = () => true) {
+        const t = key => window.mpbI18n.t(`schedule.share.${key}`);
+        try {
+            await navigator.clipboard.writeText(url);
+            if (!input.isConnected || !stillCurrent()) return;
+            input.hidden = true;
+            feedback.textContent = t("copied");
+        } catch {
+            if (!input.isConnected || !stillCurrent()) return;
+            input.value = url;
+            input.hidden = false;
+            input.focus();
+            input.select();
+            feedback.textContent = t("manual");
+        }
+    }
+
+    function resolvePublicLesson(schedule, date, id) {
+        const candidates = schedule.filter(item => String(item.lessonOid) === id && ![true, 1, "1", "true"].includes(item.deletion_mark));
+        const onDay = candidates.filter(item => item.date === date);
+        if (onDay.length === 1) return { status: "found", lesson: onDay[0] };
+        if (onDay.length || candidates.length > 1) return { status: "ambiguous" };
+        const moved = candidates[0];
+        if (moved && /^\d{4}-\d{2}-\d{2}$/.test(moved.date)) return { status: "moved", lesson: moved };
+        return { status: "missing" };
+    }
+
     function readList(key) {
         try {
             const payload = JSON.parse(localStorage.getItem(key) || "[]");
@@ -196,6 +245,7 @@
 
     window.ScheduleState = {
         addRecent,
+        copyPublicUrl,
         entityKey,
         filterLocalEntities,
         getFavorite,
@@ -204,6 +254,8 @@
         isFavorite,
         mergeEntities,
         normalizeEntity,
+        publicUrl,
+        resolvePublicLesson,
         toggleFavorite,
         updateFavorite,
     };

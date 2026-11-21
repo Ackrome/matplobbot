@@ -378,10 +378,13 @@ jobs:
       (needs.check-changes.result == 'success')
     runs-on: self-hosted
     permissions:
+      actions: read
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Set up RC Python
         uses: actions/setup-python@v6
@@ -482,6 +485,16 @@ jobs:
           .venv/bin/python scripts/rc_acceptance.py --manifest release-manifest.json --output rc-acceptance.json
           .venv/bin/python scripts/release_manifest.py attest release-manifest.json --report rc-acceptance.json --output release-manifest-accepted.json
 
+      - name: Rehearse rollback compatibility after schema changes
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          .venv/bin/python scripts/release_baseline.py --exclude-commit "$GITHUB_SHA" \
+            --output previous-accepted-release.json || true
+          .venv/bin/python scripts/rc_rollback_compat.py --manifest release-manifest-accepted.json \
+            --previous previous-accepted-release.json --output rc-rollback-compat.json
+
       - name: Upload release evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -492,6 +505,7 @@ jobs:
             release-manifest*.json
             rc-acceptance.json
             rc-acceptance.log
+            rc-rollback-compat.json
 
       - name: Soft Cleanup
         if: always()

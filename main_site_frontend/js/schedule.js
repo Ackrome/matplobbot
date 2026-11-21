@@ -202,6 +202,43 @@ function focusLinkedScheduleDay(date) {
     return null;
 }
 
+let sharedLessonNotice = null;
+
+function renderSharedLessonNotice() {
+    const notice = document.getElementById('sharedLessonNotice');
+    if (!notice) return;
+    notice.hidden = !sharedLessonNotice;
+    notice.replaceChildren();
+    if (!sharedLessonNotice) return;
+    const { status, lesson } = sharedLessonNotice;
+    const fallbacks = {
+        moved: 'This class moved. The original day is shown.',
+        ambiguous: 'Several classes match this link. The linked day is shown.',
+        missing: 'This class is not in the current timetable. The linked day is shown.',
+        unavailable: 'This class could not be verified. The linked day is shown.',
+    };
+    notice.append(t(`schedule.share.${status}`, fallbacks[status]));
+    if (lesson) {
+        const href = window.ScheduleState?.publicUrl?.(currentEntity, { date: lesson.date, lesson: lesson.lessonOid });
+        if (!href) return;
+        const link = document.createElement('a');
+        link.href = href;
+        link.textContent = t('schedule.share.openMoved', 'Open the new date');
+        notice.append(link);
+    }
+}
+
+function clearSharedLessonLink() {
+    sharedLessonNotice = null;
+    renderSharedLessonNotice();
+    if (!window.location?.href || !window.history?.replaceState) return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('lesson_date')) return;
+    url.searchParams.delete('lesson_date');
+    url.searchParams.delete('lesson');
+    window.history.replaceState(window.history.state, '', url);
+}
+
 function normalizeScheduleDate(value) {
     const raw = String(value || '').trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
@@ -543,6 +580,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadInitialPreferences();
     window.mpbI18n?.registerTranslator?.(() => {
         renderOfflineHistory();
+        renderSharedLessonNotice();
         if (!resultsBox.classList.contains('hidden')) {
             if (latestSearchQuery.length < 2) renderSearchHome();
             else renderSearchResults(latestSearchResults, { query: latestSearchQuery, networkState: latestSearchResults.length ? 'ok' : 'empty' });
@@ -1514,6 +1552,7 @@ function getMonday(d) {
 }
 
 async function changeWeek(offset) {
+    clearSharedLessonLink();
     currentWeekStart.setDate(currentWeekStart.getDate() + offset * 7);
     if (!isCurrentWeekCovered()) {
         const targetDateStr = getISODateStr(currentWeekStart);
@@ -1793,6 +1832,13 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
     }
     currentEntity = nextEntity;
     const linkedDate = normalizeScheduleDate(options.lessonDate);
+    if (!options.silent) {
+        if (!linkedDate) clearSharedLessonLink();
+        else {
+            sharedLessonNotice = null;
+            renderSharedLessonNotice();
+        }
+    }
     const requestedDate = linkedDate || normalizeScheduleDate(targetDate) || getISODateStr(new Date());
     currentWeekStart = getMonday(parseDate(requestedDate));
     setSchedulePageState({
@@ -1855,14 +1901,20 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         syncScheduleUrl(options.urlMode || (entityChanged ? 'push' : 'replace'));
         let linkResolved = false;
         if (linkedDate) {
-            const matches = options.lesson ? fullSchedule.filter(lesson => lesson.date === linkedDate && String(lesson.lessonOid) === options.lesson) : [];
-            if (matches.length === 1) {
+            const match = options.lesson ? window.ScheduleState?.resolvePublicLesson?.(fullSchedule, linkedDate, options.lesson) : null;
+            if (match?.status === 'found') {
                 const origin = focusLinkedScheduleDay(linkedDate);
-                window.showLessonDetails(matches[0], origin || document.getElementById('scheduleChangesToggleBtn'));
+                window.showLessonDetails(match.lesson, origin || document.getElementById('scheduleChangesToggleBtn'));
                 linkResolved = true;
             } else if (!options.lesson || !scheduleRefreshInProgress) {
                 const origin = focusLinkedScheduleDay(linkedDate);
                 linkResolved = !options.lesson && Boolean(origin);
+                if (options.lesson) {
+                    const reliable = isScheduleDateCovered(parseDate(linkedDate)) && !isOfflineMode
+                        && ['live', 'fresh_cache'].includes(scheduleFreshness);
+                    sharedLessonNotice = reliable && match ? match : { status: 'unavailable' };
+                    renderSharedLessonNotice();
+                }
             }
         }
         // Вызываем обновление календаря, так как сменилась сущность
@@ -1890,6 +1942,10 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         }
     } catch (err) {
         if (err?.name === 'AbortError' || requestSeq !== scheduleLoadRequestSeq) return;
+        if (linkedDate && options.lesson) {
+            sharedLessonNotice = { status: 'unavailable' };
+            renderSharedLessonNotice();
+        }
         if (options.silent || err?.status === 503 || !navigator.onLine) {
             scheduleFreshness = 'stale_fallback';
             scheduleRefreshInProgress = false;

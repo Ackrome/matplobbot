@@ -80,6 +80,14 @@ html.dark #mode-quick[aria-pressed="true"], html.dark #mode-project[aria-pressed
 .studio-draft-summary { min-width: 0; display: grid; gap: .3rem; }
 .studio-draft-summary time { color: var(--ui-muted); font-size: .8rem; }
 .studio-draft-preview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; font: .8rem/1.45 ui-monospace, monospace; }
+.studio-version-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .65rem; }
+.studio-archive-picker { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; }
+.studio-archive-picker span, .studio-archive-inventory { overflow-wrap: anywhere; }
+.studio-archive-inventory { max-height: 7rem; overflow-y: auto; }
+.studio-archive-inventory li + li { margin-top: .35rem; }
+@media (max-width: 520px) {
+    .studio-version-form { grid-template-columns: 1fr; }
+}
 @media (max-width: 767px) {
     #navbar { padding-left: .5rem; padding-right: .5rem; }
     #navbar > div { gap: .35rem; }

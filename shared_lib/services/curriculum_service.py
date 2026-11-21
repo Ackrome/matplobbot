@@ -786,26 +786,25 @@ async def get_curriculum_pdf(document_id: int, published_hash: str | None = None
         return document.source_pdf
 
 
-async def _supplements(db, document):
-    return list(
-        (
-            await db.scalars(
-                select(CurriculumDocument)
-                .where(
-                    CurriculumDocument.parent_document_id == document.id,
-                    *(
-                        getattr(CurriculumDocument, field) == getattr(document, field)
-                        for field in _SCOPE_FIELDS
-                    ),
-                )
-                .options(
-                    defer(CurriculumDocument.source_pdf),
-                    defer(CurriculumDocument.published_pdf),
-                )
-                .order_by(CurriculumDocument.id)
-            )
-        ).all()
+async def _supplements(db, document, *, lock=False):
+    supplemental = (
+        select(CurriculumDocument)
+        .where(
+            CurriculumDocument.parent_document_id == document.id,
+            *(
+                getattr(CurriculumDocument, field) == getattr(document, field)
+                for field in _SCOPE_FIELDS
+            ),
+        )
+        .options(
+            defer(CurriculumDocument.source_pdf),
+            defer(CurriculumDocument.published_pdf),
+        )
+        .order_by(CurriculumDocument.id)
     )
+    if lock:
+        supplemental = supplemental.with_for_update(read=True)
+    return list((await db.scalars(supplemental)).all())
 
 
 def _with_source(source, row):
@@ -822,53 +821,72 @@ def _with_source(source, row):
 async def lookup_curriculum_session(group_id: str, reference_date: date, semester: int | None):
     """Return reviewed forms for one bound group and calendar term."""
     async with get_session() as db:
-        group = await db.get(CurriculumGroup, group_id)
-        if not group:
-            return {"status": "unmapped", "group_id": group_id, "terms": [], "assessments": []}
-        document = await db.get(
+        return await read_curriculum_session(db, group_id, reference_date, semester)
+
+
+async def read_curriculum_session(db, group_id, reference_date, semester, *, lock=False):
+    """Read the currently approved plan, optionally pinning it through a date review."""
+    group = await db.get(CurriculumGroup, group_id)
+    if lock and group:
+        # Publication and group edits lock the root first. Keep that order.
+        document_id = group.document_id
+        await db.get(
             CurriculumDocument,
-            group.document_id,
+            document_id,
+            with_for_update={"read": True},
             options=[defer(CurriculumDocument.source_pdf), defer(CurriculumDocument.published_pdf)],
         )
-        terms = sorted(group.terms, key=lambda term: term["start_date"])
-        result = {
-            "status": "unavailable",
-            "group_id": group_id,
-            "group_name": group.group_name,
-            "terms": terms,
-            "term": None,
-            "assessments": [],
-            "stale": False,
-        }
-        day = reference_date.isoformat()
-        if semester is None:
-            term = next((term for term in terms if term["end_date"] >= day), None)
-            term = term or (terms[-1] if terms else None)
-        else:
-            term = next((term for term in terms if term["semester"] == semester), None)
-        result["term"] = term
-        if (
-            not term
-            or not document
-            or document.parent_document_id is not None
-            or not document.published_hash
-        ):
-            return result
-        result["status"] = "confirmed"
-        used_sources = [document]
-        for source in [document, *await _supplements(db, document)]:
-            if not source.published_hash:
-                continue
-            rows = [
-                row
-                for row in (source.published_assessments or [])
-                if row["semester"] == term["semester"]
-            ]
-            if rows and source is not document:
-                used_sources.append(source)
-            result["assessments"].extend(_with_source(source, row) for row in rows)
-        result["stale"] = any(_source_stale(source) for source in used_sources)
+        group = await db.get(
+            CurriculumGroup, group_id, with_for_update=True, populate_existing=True
+        )
+        if group and group.document_id != document_id:
+            raise CurriculumConflictError("Group binding changed during review")
+    if not group:
+        return {"status": "unmapped", "group_id": group_id, "terms": [], "assessments": []}
+    document = await db.get(
+        CurriculumDocument,
+        group.document_id,
+        options=[defer(CurriculumDocument.source_pdf), defer(CurriculumDocument.published_pdf)],
+    )
+    terms = sorted(group.terms, key=lambda term: term["start_date"])
+    result = {
+        "status": "unavailable",
+        "group_id": group_id,
+        "group_name": group.group_name,
+        "terms": terms,
+        "term": None,
+        "assessments": [],
+        "stale": False,
+    }
+    day = reference_date.isoformat()
+    if semester is None:
+        term = next((term for term in terms if term["end_date"] >= day), None)
+        term = term or (terms[-1] if terms else None)
+    else:
+        term = next((term for term in terms if term["semester"] == semester), None)
+    result["term"] = term
+    if (
+        not term
+        or not document
+        or document.parent_document_id is not None
+        or not document.published_hash
+    ):
         return result
+    result["status"] = "confirmed"
+    used_sources = [document]
+    for source in [document, *await _supplements(db, document, lock=lock)]:
+        if not source.published_hash:
+            continue
+        rows = [
+            row
+            for row in (source.published_assessments or [])
+            if row["semester"] == term["semester"]
+        ]
+        if rows and source is not document:
+            used_sources.append(source)
+        result["assessments"].extend(_with_source(source, row) for row in rows)
+    result["stale"] = any(_source_stale(source) for source in used_sources)
+    return result
 
 
 async def lookup_curriculum(
@@ -982,13 +1000,11 @@ def schedule_assessment_kind(kind):
     return _SCHEDULE_ASSESSMENT_KINDS.get(re.sub(r"\s*\+\s*", "+", _name(kind).replace("ё", "е")))
 
 
-def match_session_dates(assessments, schedule, start, end, *, group_id=None):
-    """Match published RUZ events only to an unambiguous planned form."""
+def _session_date_options(assessments, schedule, start, end, group_id):
     by_title = defaultdict(list)
     for row in assessments:
         by_title[(_name(row["discipline_name"]), row["kind"])].append(row)
 
-    events = {}
     for lesson in schedule:
         day, title, kind = (lesson.get(key) for key in ("date", "discipline", "kindOfWork"))
         if (
@@ -1020,27 +1036,126 @@ def match_session_dates(assessments, schedule, start, end, *, group_id=None):
                 for row in by_title.get((canonical, candidate), [])
                 if row["source_sha256"] == source_sha and row not in rows
             )
-        if len(rows) != 1:
+        if not rows:
             continue
-        row = rows[0]
         begin = str(lesson.get("beginLesson") or "")[:5]
         if not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", begin):
             continue
         room = str(lesson.get("auditorium") or lesson.get("auditorium_title") or "")
-        key = (day, begin, row["discipline_name"], row["kind"], room)
         lesson_oid = _ruz_oid(lesson.get("lessonOid"))
-        lesson_id = str(lesson_oid) if lesson_oid else None
-        if key in events and events[key]["lesson_id"] != lesson_id:
-            lesson_id = None
-        events[key] = {
+        event = {
             "date": day,
             "start": begin,
             "room": room,
+            "lesson_id": str(lesson_oid) if lesson_oid else None,
+        }
+        yield event, lesson, rows
+
+
+def _session_digest(data):
+    return hashlib.sha256(
+        json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def _session_review(event, lesson, rows):
+    candidates = []
+    for row in rows:
+        candidate = {
+            key: row[key]
+            for key in (
+                "source_document_id",
+                "source_title",
+                "source_sha256",
+                "snapshot_url",
+                "discipline_code",
+                "discipline_name",
+                "kind",
+                "page",
+            )
+        }
+        candidate["candidate_key"] = _session_digest(
+            [
+                row[key]
+                for key in (
+                    "source_document_id",
+                    "source_sha256",
+                    "discipline_code",
+                    "discipline_name",
+                    "kind",
+                    "page",
+                )
+            ]
+        )
+        candidates.append(candidate)
+    event_key = _session_digest(
+        [
+            event,
+            _name(lesson["discipline"]),
+            _name(lesson["kindOfWork"]),
+            _ruz_oid(lesson.get("disciplineinplan")),
+            _ruz_oid(lesson.get("disciplineOid")),
+        ]
+    )
+    return {
+        "event": {**event, "title": lesson["discipline"], "assessment_label": lesson["kindOfWork"]},
+        "event_key": event_key,
+        "review_key": _session_digest(sorted(row["candidate_key"] for row in candidates)),
+        "candidates": candidates,
+    }
+
+
+def _review_selection(review, resolutions):
+    approved = resolutions.get(review["event_key"]) or {}
+    if approved.get("review_key") != review["review_key"]:
+        return None
+    matches = [
+        row for row in review["candidates"] if row["candidate_key"] == approved.get("candidate_key")
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def session_date_reviews(assessments, schedule, start, end, group_id, resolutions):
+    """List current ambiguous timetable events, with only eligible reviewed rows."""
+    reviews = {}
+    for event, lesson, rows in _session_date_options(assessments, schedule, start, end, group_id):
+        if len(rows) > 1:
+            review = _session_review(event, lesson, rows)
+            selected = _review_selection(review, resolutions)
+            review["selected"] = selected["candidate_key"] if selected else None
+            reviews[review["event_key"]] = review
+    return sorted(
+        reviews.values(),
+        key=lambda row: (row["event"]["date"], row["event"]["start"], row["event_key"]),
+    )
+
+
+def match_session_dates(assessments, schedule, start, end, *, group_id=None, resolutions=None):
+    """Use the sole exact candidate or a still-valid administrator resolution."""
+    events = {}
+    for event, lesson, rows in _session_date_options(assessments, schedule, start, end, group_id):
+        row = rows[0] if len(rows) == 1 else None
+        if row is None and resolutions:
+            row = _review_selection(_session_review(event, lesson, rows), resolutions)
+        if row is None:
+            continue
+        key = (
+            event["date"],
+            event["start"],
+            row["discipline_name"],
+            row["kind"],
+            event["room"],
+            row["source_document_id"],
+            row["discipline_code"],
+        )
+        if key in events and events[key]["lesson_id"] != event["lesson_id"]:
+            event["lesson_id"] = None
+        events[key] = {
+            **event,
             "discipline_name": row["discipline_name"],
             "discipline_code": row["discipline_code"],
             "kind": row["kind"],
             "source_document_id": row["source_document_id"],
-            "lesson_id": lesson_id,
         }
     return [events[key] for key in sorted(events)]
 

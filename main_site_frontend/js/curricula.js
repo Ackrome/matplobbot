@@ -12,6 +12,8 @@
     const requests = new Set(), rowPreviews = new WeakMap();
     let pollTimer = null, pollController = null, pollGeneration = 0, incomingPlan = null, pageActive = true;
     let previewTrigger = null, previousOverflow = "";
+    let coverageGroups = [], coverageState = "idle", coverageGeneration = 0;
+    let reviewScope, reviewData, reviewState, reviewGeneration = 0;
     const isProcessing = plan => ["queued", "processing"].includes(plan?.processing_state);
 
     function translate() {
@@ -22,6 +24,8 @@
         document.title = `${t("heading")} | Matplobbot`;
         renderStatus();
         renderProcessing();
+        renderCoverage();
+        if ($("session-review")?.open) renderReviews();
         if ($("crop-preview")?.open) updatePreviewLabels();
     }
     function renderStatus() {
@@ -86,6 +90,10 @@
     }
     function hideForAuth() {
         stopPolling(); requests.forEach(controller => controller.abort());
+        coverageGeneration++;
+        coverageGroups = []; coverageState = "idle"; renderCoverage();
+        reviewGeneration++; reviewScope = reviewData = null; $("session-review-list")?.replaceChildren();
+        if ($("session-review")?.open) $("session-review").close();
         closePreview(); $("curricula-controls").hidden = true; status("forbidden");
     }
     function schedulePoll(delay = 1800) {
@@ -134,7 +142,18 @@
         el.innerHTML = key ? `<p>${text(key)}</p>${incomingPlan ? button("showResults", "show-results") : retryable ? button("retryProcessing", "retry-processing") : ""}` : "";
     }
     function shell() {
-        $("curricula-controls").innerHTML = `<section class="curricula-card"><label>${text("select")}<select id="plan-select"></select></label></section>
+        $("curricula-controls").innerHTML = `<details id="session-coverage" class="curricula-card"><summary>${text("coverageTitle")}</summary>
+            <div class="curricula-coverage-controls"><label>${text("coverageSearch")}<input id="coverage-query" type="search" autocomplete="off"></label>
+            ${button("coverageRefresh","coverage-refresh")}</div><p id="coverage-status" class="curricula-muted" role="status"></p>
+            <div id="coverage-groups"></div></details>
+            <dialog id="session-review" class="curricula-preview curricula-session-review" aria-labelledby="session-review-title">
+                <header><h2 id="session-review-title">${text("reviewDates")}</h2>${button("closePreview","close-review")}</header>
+                <p id="session-review-scope" class="curricula-muted"></p>
+                <p data-curricula="reviewDatesHint">${t("reviewDatesHint")}</p>
+                <p id="session-review-status" class="curricula-muted" role="status"></p>
+                <div id="session-review-list"></div>
+            </dialog>
+            <section class="curricula-card"><label>${text("select")}<select id="plan-select"></select></label></section>
             <details class="curricula-card"><summary>${text("create")}</summary><p><a class="curricula-catalog" href="https://www.fa.ru/sveden/education/edupr/" target="_blank" rel="noopener noreferrer">${text("catalog")}</a></p><form id="plan-create"><fieldset class="curricula-grid">
             ${field("title", "", "text", 'maxlength="300"')}${field("source_url", "", "url", 'placeholder="https://www.fa.ru/upload/…pdf"')}
             ${field("program")}${field("profile")}${field("campus")}${field("admission_year", new Date().getFullYear(), "number", 'min="2000" max="2100"')}${field("study_form")}
@@ -178,6 +197,146 @@
             if (["assessment-form", "groups-form"].includes(formId)) markDirty(formId);
         });
         $("plan-detail").addEventListener("click", event => handleAction(event.target.closest("[data-action]")?.dataset.action, event));
+        $("session-coverage").addEventListener("toggle", () => {
+            if ($("session-coverage").open && coverageState === "idle") void loadCoverage();
+        });
+        $("session-coverage").querySelector("[data-action=coverage-refresh]").addEventListener("click", loadCoverage);
+        $("coverage-query").addEventListener("input", renderCoverage);
+        $("coverage-groups").addEventListener("click", event => {
+            const trigger = event.target.closest("[data-review-group]");
+            if (!trigger) return;
+            reviewScope = { group_id: trigger.dataset.reviewGroup, semester: Number(trigger.dataset.reviewSemester) };
+            reviewData = null;
+            $("session-review").showModal();
+            void loadReviews();
+        });
+        $("session-review").querySelector("[data-action=close-review]").addEventListener("click", () => $("session-review").close());
+        $("session-review").addEventListener("close", () => { reviewGeneration++; });
+        $("session-review-list").addEventListener("submit", confirmReview);
+    }
+
+    async function loadCoverage() {
+        if (coverageState === "loading") return;
+        const generation = ++coverageGeneration;
+        coverageState = "loading"; renderCoverage();
+        try {
+            const result = await request("/session-coverage");
+            if (generation !== coverageGeneration || !pageActive) return;
+            if (!Array.isArray(result.groups)) throw new Error("invalid");
+            coverageGroups = result.groups; coverageState = "ready";
+        } catch (error) {
+            if (generation !== coverageGeneration || !pageActive) return;
+            if (error.message === "forbidden") { hideForAuth(); return; }
+            coverageState = "error";
+        }
+        renderCoverage();
+    }
+
+    function renderCoverage() {
+        const panel = $("session-coverage");
+        if (!panel) return;
+        const busy = coverageState === "loading";
+        panel.setAttribute("aria-busy", String(busy));
+        panel.querySelector("[data-action=coverage-refresh]").disabled = busy;
+        const query = $("coverage-query").value.trim().toLocaleLowerCase();
+        const shown = coverageGroups.filter(group => `${group.group_name} ${group.group_id}`.toLocaleLowerCase().includes(query));
+        const message = { idle: "", loading: "coverageLoading", error: "coverageError", ready: "coverageCount" }[coverageState];
+        $("coverage-status").textContent = message ? t(message, { shown: shown.length, total: coverageGroups.length }) : "";
+        $("coverage-groups").innerHTML = shown.map(group => {
+            const terms = group.terms.map(term => coverageTerm(term, group.group_id)).join("");
+            return `<section class="curricula-coverage-group"><h3>${esc(group.group_name)} <span class="curricula-muted">· ${esc(group.group_id)}</span></h3>${terms}</section>`;
+        }).join("");
+    }
+
+    function coverageTerm(term, groupId) {
+        const state = { checked: "coverageChecked", stale: "coverageStale", pending: "coveragePending" }[term.dates_status] || "coveragePending";
+        const failure = { upstream_unavailable: "coverageUpstreamError", invalid_response: "coverageInvalid", refresh_failed: "coverageFailed" }[term.last_error];
+        const rangeLabel = (start, end) => {
+            const format = new Intl.DateTimeFormat(lang(), {dateStyle:"medium", timeZone:"UTC"});
+            return format.formatRange(new Date(start), new Date(end));
+        };
+        const timestamp = value => value ? new Date(value).toLocaleString(lang(), {dateStyle:"medium", timeStyle:"short", timeZone:"Europe/Moscow"}) : t("never");
+        const coverage = (term.dates_coverage || []).map(range => `<li>${esc(rangeLabel(range.start_date, range.end_date))} · ${esc(timestamp(range.checked_at))}</li>`).join("");
+        return `<div class="curricula-coverage-term">
+            <div><strong>${esc(t("coverageSemester", {number:term.semester}))}</strong><span class="curricula-muted">${esc(rangeLabel(term.start_date, term.end_date))}</span></div>
+            <div><p class="curricula-coverage-state" data-coverage-state="${state}">${text(state)}</p>
+            <p>${text("coverageLastSuccess")}: ${esc(timestamp(term.dates_checked_at))}</p>
+            <p>${text("coverageLastAttempt")}: ${esc(timestamp(term.last_attempted_at))}</p>
+            ${failure ? `<p class="curricula-coverage-error">${text(failure)}</p>` : ""}
+            ${coverage ? `<details><summary>${text("coverageRanges")}</summary><ul>${coverage}</ul></details>` : ""}
+            <button class="curricula-review-open" type="button" data-review-group="${esc(groupId)}" data-review-semester="${esc(term.semester)}">${text("reviewDates")}</button></div>
+        </div>`;
+    }
+
+    async function loadReviews(message) {
+        const generation = ++reviewGeneration;
+        reviewState = "reviewLoading";
+        renderReviews();
+        try {
+            const result = await request("/session-reviews?" + new URLSearchParams(reviewScope));
+            if (generation !== reviewGeneration || !$("session-review").open) return;
+            reviewData = result;
+            reviewState = message || (result.reviews.length ? "" : result.dates_checked_at ? "reviewEmpty" : "reviewPending");
+        } catch (error) {
+            if (generation !== reviewGeneration || !$("session-review").open) return;
+            if (error.message === "forbidden") { hideForAuth(); return; }
+            reviewData = null;
+            reviewState = "reviewError";
+        }
+        renderReviews();
+    }
+
+    function renderReviews() {
+        const scope = $("session-review-scope"), statusEl = $("session-review-status"), list = $("session-review-list");
+        const semester = t("coverageSemester", { number: reviewScope.semester });
+        scope.textContent = reviewData?.group_name ? [reviewData.group_name, semester].join(" · ") : semester;
+        statusEl.textContent = reviewState ? t(reviewState) : "";
+        const locked = ["reviewLoading", "reviewSaving"].includes(reviewState);
+        list.innerHTML = (reviewData?.reviews || []).map(item => {
+            const { event, candidates, event_key, selected } = item;
+            const timing = [new Intl.DateTimeFormat(lang(), { dateStyle:"medium", timeZone:"UTC" }).format(new Date(event.date)),
+                event.start, event.room, event.assessment_label].filter(Boolean).join(" · ");
+            const rows = candidates.map(candidate => {
+                const url = candidate.snapshot_url;
+                const details = [candidate.discipline_code, t(candidate.kind), candidate.source_title,
+                    t("reviewPage", { page:candidate.page })].join(" · ");
+                const base = (window.getMpbApiBase?.() || "/api").replace(/\/+$/, "");
+                const sourceLink = /^\/api\/schedule\/curriculum\/documents\/[1-9]\d*\/[a-f0-9]{64}\.pdf$/.test(url)
+                    ? '<a class="curricula-catalog" target="_blank" rel="noopener noreferrer" href="' + esc(base + url.slice(4)) + '#page=' + esc(candidate.page) + '">' + text("reviewSource") + '</a>' : "";
+                return '<div class="curricula-review-option"><label><input type="radio" required name="candidate" value="' + esc(candidate.candidate_key)
+                    + '" ' + (selected === candidate.candidate_key ? "checked" : "") + '><span><strong>' + esc(candidate.discipline_name)
+                    + '</strong><small class="curricula-muted">' + esc(details) + '</small></span></label>' + sourceLink + '</div>';
+            }).join("");
+            return '<form class="curricula-review-event" data-review-event="' + esc(event_key) + '"><h3>'
+                + esc(event.title) + '</h3><p class="curricula-muted">' + esc(timing)
+                + '</p><fieldset aria-label="' + esc(t("reviewCandidates")) + '" ' + (locked ? "disabled" : "")
+                + '>' + rows + '<div class="curricula-actions"><button class="primary" type="submit">'
+                + text("reviewConfirm") + '</button>' + (selected ? text("reviewConfirmed") : "") + '</div></fieldset></form>';
+        }).join("");
+    }
+
+    async function confirmReview(event) {
+        event.preventDefault();
+        if (!reviewData || ["reviewLoading", "reviewSaving"].includes(reviewState)) return;
+        const item = reviewData.reviews.find(row => row.event_key === event.target.dataset.reviewEvent);
+        const candidate = new FormData(event.target).get("candidate");
+        if (!item?.candidates.some(row => row.candidate_key === candidate) || item.selected === candidate) return;
+        if (!window.confirm(t("reviewConfirmPrompt"))) return;
+        const generation = reviewGeneration;
+        reviewState = "reviewSaving";
+        renderReviews();
+        try {
+            await request("/session-reviews", json("PUT", {
+                group_id: reviewData.group_id, term: reviewData.term, event_key: item.event_key,
+                review_key: item.review_key, expected_selected: item.selected, candidate_key: candidate,
+            }));
+            if (generation === reviewGeneration && $("session-review").open) void loadReviews("reviewSaved");
+        } catch (error) {
+            if (generation !== reviewGeneration || !$("session-review").open) return;
+            if (error.message === "forbidden") { hideForAuth(); return; }
+            if (error.message === "conflict") void loadReviews("reviewChanged");
+            else { reviewState = "reviewError"; renderReviews(); }
+        }
     }
     async function load(id = selected?.id) {
         const data = await request(""); plans = Array.isArray(data) ? data : data.items || data.curricula || [];
@@ -327,8 +486,11 @@
         markDirty(["add-row","remove-row"].includes(action) ? "assessment-form" : "groups-form"); updateEmpty();
     }
     window.addEventListener("beforeunload", event => { if (dirty) { event.preventDefault(); event.returnValue = ""; } });
-    window.addEventListener("pagehide", () => { pageActive = false; stopPolling(); requests.forEach(controller => controller.abort()); closePreview(); });
-    window.addEventListener("pageshow", () => { pageActive = true; schedulePoll(); });
+    window.addEventListener("pagehide", () => { pageActive = false; coverageGeneration++; stopPolling(); requests.forEach(controller => controller.abort()); closePreview(); });
+    window.addEventListener("pageshow", () => {
+        pageActive = true; schedulePoll();
+        if (coverageState === "loading") { coverageState = "idle"; void loadCoverage(); }
+    });
     document.addEventListener("visibilitychange", () => { if (document.hidden) stopPolling(); else schedulePoll(); });
     window.addEventListener("storage", event => { if (event.key === "jwt_token") hideForAuth(); });
     window.addEventListener("mpb-auth-token-changed", hideForAuth);
@@ -336,6 +498,6 @@
     window.mpbI18n?.registerTranslator(translate);
     window.mpbI18n.ready.then(() => {
         shell(); translate();
-        run(async () => { await load(); $("curricula-controls").hidden = false; });
+        run(async () => { await load(); $("curricula-controls").hidden = false; }, "listLoaded", "loading");
     });
 })();

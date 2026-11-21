@@ -1,0 +1,147 @@
+name: Worker Image Audit
+
+on:
+  workflow_run:
+    workflows: ["CI-CD Pipeline"]
+    types: [completed]
+    branches: [main]
+  schedule:
+    - cron: "29 6 * * 2"
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Attach evidence to an existing stable GitHub Release (optional)"
+        type: string
+        required: false
+
+permissions:
+  actions: read
+  attestations: read
+  contents: read
+  packages: read
+
+jobs:
+  worker-audit:
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository) ||
+      (github.event_name == 'release' && !github.event.release.prerelease) ||
+      (github.event_name != 'workflow_run' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    outputs:
+      publication-tag: ${{ steps.baseline.outputs.publication-tag }}
+      workflow-source-sha: ${{ steps.baseline.outputs.workflow-source-sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refs/heads/main
+          persist-credentials: false
+
+      - name: Resolve a successfully deployed manifest
+        id: baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYED_RUN_ID: ${{ github.event.workflow_run.id || '' }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag || '' }}
+        run: |
+          if [[ -n "$RELEASE_TAG" ]]; then args=(--tag "$RELEASE_TAG")
+          elif [[ -n "$DEPLOYED_RUN_ID" ]]; then args=(--run-id "$DEPLOYED_RUN_ID")
+          else args=(--prefer-published)
+          fi
+          python3 scripts/release_evidence_bundle.py select "${args[@]}" --output release-baseline.json
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          data = json.loads(Path("release-baseline.json").read_text())
+          print("available=" + str(data["status"] == "passed").lower())
+          print("publication-tag=" + data.get("publication_tag", ""))
+          PY
+          printf 'workflow-source-sha=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v4
+        if: steps.baseline.outputs.available == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Install pinned scanner
+        if: steps.baseline.outputs.available == 'true'
+        run: |
+          scanner="$RUNNER_TEMP/worker-image-trivy"
+          archive="$RUNNER_TEMP/trivy_0.76.2_Linux-64bit.tar.gz"
+          curl --disable --fail --show-error --silent --location --proto '=https' --proto-redir '=https' \
+            --retry 3 --max-time 180 -o "$archive" \
+            https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz
+          printf '%s  %s\n' bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf "$archive" | sha256sum --check
+          mkdir -p "$scanner"
+          tar -xzf "$archive" -C "$scanner" trivy
+
+      - name: Record worker inventory and report-only findings
+        if: always() && !cancelled()
+        run: |
+          python3 scripts/worker_image_audit.py --baseline release-baseline.json \
+            --scanner "$RUNNER_TEMP/worker-image-trivy/trivy" --output-dir worker-image-audit
+
+      - name: Upload worker image audit evidence
+        if: always() && !cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-image-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: worker-image-audit/
+          if-no-files-found: error
+          retention-days: 45
+
+      - name: Bundle matched versioned release evidence
+        if: steps.baseline.outputs.publication-tag != ''
+        run: |
+          python3 scripts/release_evidence_bundle.py pack --baseline release-baseline.json \
+            --audit-directory worker-image-audit --output matplobbot-release-evidence.zip
+
+      - uses: actions/upload-artifact@v4
+        if: steps.baseline.outputs.publication-tag != ''
+        with:
+          name: versioned-release-evidence
+          path: matplobbot-release-evidence.zip
+          if-no-files-found: error
+          overwrite: true
+
+  publish-release-evidence:
+    needs: worker-audit
+    if: needs.worker-audit.outputs.publication-tag != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: matplobbot-release-evidence-${{ needs.worker-audit.outputs.publication-tag }}
+      cancel-in-progress: false
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.worker-audit.outputs.workflow-source-sha }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: versioned-release-evidence
+
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        id: attest
+        with:
+          subject-path: matplobbot-release-evidence.zip
+          create-storage-record: false
+
+      - name: Attach attested evidence to the existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.worker-audit.outputs.publication-tag }}
+          ATTESTATION_BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          python3 scripts/release_evidence_bundle.py publish --tag "$RELEASE_TAG" \
+            --archive matplobbot-release-evidence.zip --attestation "$ATTESTATION_BUNDLE"

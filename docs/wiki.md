@@ -18,6 +18,45 @@ This page is a full feature map of the project: bot, website, API, scheduler, wo
 
 This document is an OKF concept inside the [documentation bundle](index.md). It is kept as the global project wiki source and is mirrored to GitHub Wiki by the existing wiki sync workflow.
 
+## Schedule, Studio and release workflow refinements
+
+- The RU/EN frontend loader retries transient dictionary fetch failures.
+  An open lesson redraws translated labels on recovery and retains its current
+  tab and focused control. Schedule links can point to an individual lesson
+  or a group and semester in **Session**. Guests can open both. If the lesson
+  can no longer be identified, the original schedule date remains available.
+- **Admin → Curricula → Session** shows the last successful RUZ check, the
+  verified date intervals and a short error code for the latest failed attempt.
+  The account-only admin route is `GET /api/curricula/session-coverage`.
+  A failed refresh retains previously verified dates.
+- **Studio → Versions** saves a named private snapshot of all project files,
+  including binary assets and the main file. Open a version to inspect the
+  file list or restore it as a new project. The original project stays in place.
+  Account storage limits apply, and deleting the original project removes its
+  versions.
+- Releases with migrated schemas record a disposable N−1 compatibility
+  rehearsal using the previous accepted application's images. Worker image
+  auditing records a CycloneDX inventory and vulnerability findings for the
+  accepted worker digest, then rechecks it on a weekly schedule.
+- The independent proxy workflow publishes a tested image digest. The
+  production helper changes only the proxy, tests readiness and real SOCKS
+  egress, and restores the previous pinned image on rollout failure. See the
+  [release runbook](release-runbook.md) for both operational procedures.
+- Administrators can review an ambiguous RUZ event against the eligible rows
+  of the published plan. An explicit decision applies to that group, term and
+  evidence. A change to the source or candidate set requires a fresh review.
+  The planned assessment remains the responsibility of the published plan.
+- A visitor can save a single public Session semester on the current device.
+  The offline copy shows when it was saved and when RUZ dates were checked.
+  Replace or remove the copy from the Session view.
+- Studio ZIP export embeds project metadata alongside the original file
+  paths. A signed preview binds the archived bytes to the account before
+  import. A valid import creates a new owned project.
+- The N−1 rehearsal writes a project and calendar subscription through the
+  candidate API before returning to the previous images. The published GitHub
+  release also carries an attested evidence archive with the accepted image
+  manifest, worker audit summary and CycloneDX inventory.
+
 ## Selected Growth Improvements (2026-10-09)
 
 This implementation covers review items 1–7, 13, 20, 23–25, 27, and 34–35.

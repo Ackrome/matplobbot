@@ -10,6 +10,10 @@ Loads the shared English and Russian frontend locale files and exposes one local
   when one fails before the other completes. Available translations are applied
   together; failed loads are logged individually.
 - `getLanguage()` returns the active `en` or `ru` locale.
+- `available()` indicates whether either complete dictionary loaded.
+- `retry()` fetches missing dictionaries and shares any in-flight request.
+- `bootText(key)` supplies the minimal bilingual loading, failure and controls
+  copy for panes that are open when both dictionaries are missing.
 - `setLanguage(locale)` persists and broadcasts a locale change.
 - `t(key, fallback, params)` translates a key and interpolates `{name}` placeholders.
 - `registerTranslator(callback)` registers a render callback and returns an unsubscribe function.
@@ -32,6 +36,11 @@ Versioned requests bypass old workers' unversioned locale cache entries. The
 current service worker handles locales with network first and falls back to the
 latest runtime dictionary before considering the install snapshot. Dictionary
 contents remain in the two JSON files; do not duplicate translations in JS.
+Network failures, request deadlines and temporary HTTP statuses are retried
+twice with short delays. The loader dispatches `mpb-locales-ready` after each
+attempt series settles. A recovery can also start from the browser's online
+event or the user's retry control. An HTTP permission error or invalid JSON
+ends the current attempt without automatic retry.
 
 ## Maintenance
 

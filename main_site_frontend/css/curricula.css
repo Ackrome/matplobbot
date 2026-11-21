@@ -34,6 +34,25 @@ body { margin:0; background:#f8fafc; color:#0f172a; font-family:Inter,system-ui,
 .curricula-main .curricula-review-check { display:flex; align-items:flex-start; gap:10px; margin-top:16px; }
 .curricula-review-check input { width:18px; margin-top:3px; }
 .curricula-group { background:#f8fafc; padding:16px; border:1px solid #e2e8f0; border-radius:12px; margin-top:14px; }
+.curricula-coverage-controls { display:flex; flex-wrap:wrap; align-items:end; gap:12px; }
+.curricula-coverage-controls label { flex:1 1 220px; }
+.curricula-coverage-group { border-top:1px solid #e2e8f0; padding:16px 0 4px; }
+.curricula-coverage-group h3 span { font-weight:400; }
+.curricula-coverage-term { display:grid; grid-template-columns:minmax(160px,1fr) minmax(0,2fr); gap:8px 16px; padding-bottom:12px; font-size:.88rem; overflow-wrap:anywhere; }
+.curricula-coverage-term strong { display:block; }
+.curricula-coverage-term p { margin:0; }
+.curricula-coverage-term ul { padding-inline-start:16px; }
+.curricula-main .curricula-review-open { margin-top:8px; }
+.curricula-preview.curricula-session-review { width:min(760px,calc(100vw - 32px)); }
+.curricula-review-event { border-top:1px solid #cbd5e1; padding:16px 0 10px; overflow-wrap:anywhere; }
+.curricula-review-event h3,.curricula-review-event p { margin:0 0 8px; }
+.curricula-review-option { display:flex; align-items:center; flex-wrap:wrap; gap:4px 12px; padding:8px 0; }
+.curricula-main .curricula-review-option label { display:flex; flex:1 1 280px; align-items:flex-start; gap:9px; cursor:pointer; }
+.curricula-main .curricula-review-option input { width:auto; margin-top:3px; }
+.curricula-review-option small { display:block; font-size:.8rem; font-weight:500; }
+.curricula-coverage-state { font-weight:700; }
+.curricula-coverage-state[data-coverage-state="coverageChecked"] { color:#047857; }
+.curricula-coverage-state[data-coverage-state="coverageStale"],.curricula-coverage-error { color:#92400e; }
 .curricula-term { display:grid; grid-template-columns:90px 1fr 1fr auto; gap:10px; align-items:end; margin-top:12px; }
 .curricula-note { padding:12px 16px; background:#eef2ff; border-radius:10px; overflow-wrap:anywhere; }
 .curricula-processing { margin:16px 0; padding:14px 16px; background:#eef2ff; border:1px solid #c7d2fe; border-radius:12px; overflow-wrap:anywhere; }
@@ -65,6 +84,11 @@ body { margin:0; background:#f8fafc; color:#0f172a; font-family:Inter,system-ui,
 .dark .curricula-preview { background:#1e293b; border-color:#475569; color:#e2e8f0; }
 .dark .curricula-main button.danger,.dark .curricula-danger h2 { color:#fca5a5; }
 .dark .curricula-catalog { color:#a5b4fc; }
+.dark .curricula-coverage-group { border-color:#334155; }
+.dark .curricula-review-event { border-color:#475569; }
+.dark .curricula-coverage-state[data-coverage-state="coverageChecked"] { color:#6ee7b7; }
+.dark .curricula-coverage-state[data-coverage-state="coverageStale"],.dark .curricula-coverage-error { color:#fcd34d; }
 [hidden] { display:none !important; }
 @media(max-width:640px) { .curricula-main { padding:90px 14px 32px; } .curricula-card { padding:16px; } .curricula-grid { grid-template-columns:1fr; } .curricula-term { grid-template-columns:1fr 1fr; } .curricula-main h1 { font-size:1.7rem; } .curricula-preview { padding:16px; } .curricula-preview header { flex-wrap:wrap; } }
 @media(max-width:420px) { .curricula-term { grid-template-columns:1fr; } .curricula-term button { justify-self:start; } }
+@media(max-width:640px) { .curricula-coverage-term { grid-template-columns:1fr; } }

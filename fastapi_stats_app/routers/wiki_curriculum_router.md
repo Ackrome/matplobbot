@@ -11,6 +11,7 @@ Public routes:
 - `GET /api/schedule/curriculum?group_id=162426&discipline=Full%20course%20name&lesson_date=2026-10-09` returns `status`, selected `semester`, all matching `assessments`, source/program metadata, last successful `checked_at`, `stale`, and `review_pending`. The date determines the explicit group-term mapping; this endpoint never calls the university or downloads PDFs.
 - `GET /api/schedule/curriculum/documents/{id}/{published_hash}.pdf` returns exactly the current reviewed snapshot. A different or superseded hash returns 404.
 - `GET /api/schedule/session?group_id=162426&semester=7&include_dates=true` lists reviewed forms and locally stored RUZ events. `dates_status` distinguishes `checked`, `stale`, `partial` and `unavailable`. With `include_dates=false` it is `unchecked`. `dates_coverage` lists inclusive date windows and UTC timestamps. `dates_checked_at` contains the newest check. An event has `lesson_id` when its timetable occurrence has an unambiguous RUZ OID. Opening Session never requests a live university refresh.
+- `GET /api/curricula/session-coverage` is admin-only and sends `Cache-Control: no-store`. It lists the scheduler-eligible terms, verified date intervals, last check and last attempt. Persisted short failure codes contain no upstream response body.
 
 All registry routes require `require_admin`:
 
@@ -57,3 +58,13 @@ List/detail data include `pending_hash`, `published_hash`, `candidates`, `warnin
 Uses FastAPI/Pydantic, the existing administrator dependency and schedule rate-limit configuration, shared API HTTP session for administrator imports, `curriculum_service`, `curriculum_session` and the official URL validator. Public routes are rate limited. Public PDFs have a PDF content type, `nosniff`, and a content-hash cache key; private review PDFs use `no-store`.
 
 Creation validates an HTTPS university source URL before any persistence. Upload streaming checks bytes as they arrive rather than trusting Content-Length. Normal domain conflicts return 409, missing documents return 404 and invalid review input returns 422. Review code cannot obtain arbitrary upstream response bodies through errors. Tests in `test_curriculum_api.py` cover guards, upload bounds, official-host validation, response contracts and version lookup; service tests cover transactions and matching.
+## Ambiguous timetable dates
+
+`GET /api/curricula/session-reviews?group_id=164377&semester=5` returns
+current ambiguous RUZ events and published-candidate evidence for that
+group and term. `PUT /api/curricula/session-reviews` accepts the exact group,
+term, event, candidate-set fingerprint, selected candidate key and expected
+previous selection. Both routes require an administrator and return
+`Cache-Control: no-store` on success. PUT returns 204 or rejects changed
+evidence or a competing selection with 409. It stores the selected match in
+the dated snapshot and leaves the approved document untouched.

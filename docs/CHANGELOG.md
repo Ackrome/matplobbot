@@ -1,7 +1,7 @@
 ---
 type: Changelog
 title: Matplobbot Release Changelog
-description: Release history from early 0.x versions through v0.7.1 with summarized product and infrastructure changes.
+description: Matplobbot release history and links to published release notes.
 resource: /CHANGELOG.md
 tags: [changelog, releases, history]
 status: stable
@@ -13,6 +13,18 @@ sources:
 ---
 
 # Matplobbot Release Changelog
+
+## 1.2.0
+
+- Делитесь ссылкой на конкретное занятие или семестр «Сессии». Открыть ссылку можно без входа, а выбранный семестр можно сохранить на телефоне для просмотра без сети.
+- Если загрузка перевода прерывается, открытая карточка обновляет язык после восстановления связи и сохраняет выбранную вкладку.
+- В админке учебных планов видны результаты проверки дат РУЗ. Для неоднозначного совпадения администратор может сверить варианты и подтвердить нужную строку.
+- В Studio можно сохранить именованную версию со всеми файлами, восстановить её в отдельную копию и перенести проект через ZIP с главным файлом и вложениями.
+- Проверка отката прогоняет предыдущую версию на мигрированной БД с данными, которые записал кандидат. Манифест образов и состав воркера привязаны к релизу. У прокси свой выпуск и проверка возврата к предыдущему образу.
+
+## 1.1.0 и 1.0.0
+
+Подробности доступны в заметках к выпускам [v1.1.0](https://github.com/Ackrome/matplobbot/releases/tag/v1.1.0) и [v1.0.0](https://github.com/Ackrome/matplobbot/releases/tag/v1.0.0).
 
 # 0.1.0
 

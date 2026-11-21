@@ -48,6 +48,9 @@ class TestCurriculumAPI(unittest.TestCase):
         self.app.dependency_overrides[get_current_user] = lambda: {"role": "user", "id": 2}
         routes = [
             ("get", "/curricula"),
+            ("get", "/curricula/session-coverage"),
+            ("get", "/curricula/session-reviews?group_id=164377&semester=5"),
+            ("put", "/curricula/session-reviews"),
             ("post", "/curricula"),
             ("get", "/curricula/1"),
             ("post", "/curricula/1/refresh"),
@@ -64,6 +67,42 @@ class TestCurriculumAPI(unittest.TestCase):
             with self.subTest(path=path, method=method):
                 response = getattr(self.client, method)("/api" + path)
                 self.assertEqual(response.status_code, 403)
+
+    def test_session_coverage_returns_admin_only_no_store_snapshot(self):
+        payload = {"groups": [{"group_id": "164377", "terms": []}]}
+        with patch.object(api, "admin_session_coverage", AsyncMock(return_value=payload)) as query:
+            response = self.client.get("/api/curricula/session-coverage")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertEqual(response.json(), payload)
+        query.assert_awaited_once_with()
+
+    def test_review_confirms_only_the_exact_group_term_and_candidates(self):
+        path = "/api/curricula/session-reviews"
+        term = {"semester": 5, "start_date": "2026-09-01", "end_date": "2027-01-22"}
+        payload = {
+            "group_id": "164377",
+            "term": term,
+            "event_key": "a" * 64,
+            "review_key": "b" * 64,
+            "candidate_key": "c" * 64,
+            "expected_selected": None,
+        }
+        with (
+            patch.object(
+                api, "admin_session_reviews", AsyncMock(return_value={"reviews": []})
+            ) as list_reviews,
+            patch.object(api, "confirm_session_review", AsyncMock()) as confirm,
+        ):
+            listed = self.client.get(path, params={"group_id": "164377", "semester": 5})
+            self.assertEqual(listed.headers["cache-control"], "no-store")
+            list_reviews.assert_awaited_once_with("164377", 5)
+            result = self.client.put(path, json=payload)
+            self.assertEqual(result.status_code, 204)
+            self.assertEqual(result.headers["cache-control"], "no-store")
+            confirm.assert_awaited_once_with(**payload)
+            invalid = self.client.put(path, json={**payload, "event_key": "made up"})
+            self.assertEqual(invalid.status_code, 422)
 
     def test_official_source_validation_blocks_unrelated_and_internal_urls(self):
         with patch.object(

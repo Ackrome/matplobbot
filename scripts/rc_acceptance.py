@@ -102,6 +102,28 @@ def build_compose(images, root, worker_apparmor=None):
     }
 
 
+def wait_api(compose, service="api"):
+    for _ in range(90):
+        probe = subprocess.run(
+            [
+                *compose,
+                "exec",
+                "-T",
+                service,
+                "python",
+                "-c",
+                "import urllib.request;urllib.request.urlopen('http://127.0.0.1:9583/api/stats/health',timeout=2)",
+            ],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            timeout=10,
+        )
+        if probe.returncode == 0:
+            return
+        time.sleep(1)
+    raise RuntimeError("RC API did not become healthy")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path)
@@ -169,26 +191,7 @@ def main():
             execute("run", "--rm", "migrator", timeout=180)
             execute("up", "-d", "api", "worker", "scheduler")
 
-            def wait_api():
-                for _ in range(90):
-                    probe = subprocess.run(
-                        [
-                            *compose,
-                            "exec",
-                            "-T",
-                            "api",
-                            "python",
-                            "-c",
-                            "import urllib.request;urllib.request.urlopen('http://127.0.0.1:9583/api/stats/health',timeout=2)",
-                        ],
-                        capture_output=True,
-                    )
-                    if probe.returncode == 0:
-                        return
-                    time.sleep(1)
-                raise RuntimeError("RC API did not become healthy")
-
-            wait_api()
+            wait_api(compose)
             execute(
                 "exec", "-T", "api", "python", "-m", "fastapi_stats_app.bootstrap_admin", timeout=30
             )
@@ -229,10 +232,10 @@ def main():
             )
             execute("exec", "-T", "api", "python", "/tmp/rc_probe.py", "prepare", timeout=120)
             execute("restart", "api")
-            wait_api()
+            wait_api(compose)
             execute("exec", "-T", "api", "python", "/tmp/rc_probe.py", "verify", timeout=600)
             execute("restart", "api")
-            wait_api()
+            wait_api(compose)
             execute(
                 "exec", "-T", "api", "python", "/tmp/rc_probe.py", "after_revocation", timeout=60
             )

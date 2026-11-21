@@ -34,6 +34,11 @@
 .session-dialog :focus-visible { outline: 2px solid #5566e8; outline-offset: 2px; }
 .session-body { padding: 20px 28px 28px; overflow: auto; overscroll-behavior: contain; }
 .session-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-weight: 650; }
+.session-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.session-share-link { width: 100%; padding: 8px 12px; border: 1px solid #dce4f0; border-radius: 8px; color: inherit; background: transparent; }
+.schedule-link-notice { margin: 12px; padding: 10px 14px; border-radius: 10px; background: #fff4d9; color: #775415; }
+.schedule-link-notice a { text-decoration: underline; margin-inline-start: 6px; }
+.dark .schedule-link-notice { background: #473618; color: #ffdf99; }
 .session-status, .session-warning { margin: 14px 0; color: #4f607d; font-size: 0.875rem; }
 .session-status:empty { display: none; }
 .session-checked { margin: -6px 0 12px; color: #4f607d; font-size: 0.8125rem; }
@@ -47,6 +52,7 @@
 .session-kind { padding: 3px 8px; border-radius: 8px; background: #ebeffa; color: #283b68; font-size: 0.81rem; font-weight: 700; }
 .session-kind[data-kind="exam"] { background: #eeeaff; color: #4e369e; }
 .session-source { display: inline-block; margin: 6px 13px 0 0; color: #4856cd; font-size: 0.81rem; text-decoration: underline; text-underline-offset: 2px; }
+.session-source:not(a) { color: inherit; opacity: .8; text-decoration: none; }
 .session-timing { display: grid; align-content: center; gap: 2px; font-size: 0.85rem; overflow-wrap: anywhere; color: #4f607d; }
 .session-event { display: grid; }
 .session-event + .session-event { margin-top: 6px; }

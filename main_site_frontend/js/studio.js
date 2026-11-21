@@ -65,6 +65,7 @@ async function api(path, options = {}) {
                 : typeof detail === 'string' ? detail : t(response.status === 401 ? 'authExpired' : 'requestFailed', {status: response.status});
             const error = new Error(message);
             error.status = response.status;
+            error.code = typeof detail?.code === 'string' ? detail.code : null;
             throw error;
         }
         return response;
@@ -286,6 +287,7 @@ function renderProjectList() {
     select.replaceChildren(new Option(t('chooseProject'),''));
     projectsList.forEach(project=>select.add(new Option(project.name,project.id)));
     select.value=currentProjectId||'';
+    window.MpbStudioUX?.mode?.();
 }
 function switchMode(mode) { return transition(async()=>{
     if(mode===currentMode) return;

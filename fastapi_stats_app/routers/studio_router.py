@@ -2,12 +2,10 @@ import asyncio
 import base64
 import hashlib
 import html
-import io
 import logging
 import os
 import re
 import unicodedata
-import zipfile
 from datetime import UTC, datetime
 from typing import Literal
 from urllib.parse import quote
@@ -19,6 +17,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from shared_lib.celery_app import dispatch_traced_task
 from shared_lib.database import get_db_session_dependency
@@ -34,6 +33,7 @@ from shared_lib.schemas import (
     StudioTelegramSendResponse,
     StudioUploadAssetResponse,
 )
+from shared_lib.studio_archive import ArchiveFile, write_studio_zip
 from shared_lib.tasks import (
     compile_full_latex_task,
     compile_project_task,
@@ -71,10 +71,18 @@ def _build_zip_content_disposition(project_name: str) -> str:
     return f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{encoded_filename}"
 
 
-async def get_owned_project_or_404(db: AsyncSession, project_id: int, owner_id: int) -> Project:
-    result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.owner_id == owner_id)
-    )
+async def get_owned_project_or_404(
+    db: AsyncSession,
+    project_id: int,
+    owner_id: int,
+    *,
+    lock: bool = False,
+    include_cache: bool = True,
+) -> Project:
+    statement = select(Project).where(Project.id == project_id, Project.owner_id == owner_id)
+    if lock or not include_cache:
+        statement = statement.options(defer(Project.build_cache))
+    result = await db.execute(statement.with_for_update() if lock else statement)
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -293,7 +301,7 @@ async def rename_project(
     db: AsyncSession = Depends(get_db_session_dependency),
     current_user: dict = Depends(get_current_user),
 ):
-    project = await get_owned_project_or_404(db, project_id, current_user["id"])
+    project = await get_owned_project_or_404(db, project_id, current_user["id"], lock=True)
     project.name = data.name
     await db.commit()
     return {"id": project.id, "name": data.name, "type": project.project_type}
@@ -335,7 +343,7 @@ async def delete_project(
     db: AsyncSession = Depends(get_db_session_dependency),
     current_user: dict = Depends(get_current_user),
 ):
-    await get_owned_project_or_404(db, project_id, current_user["id"])
+    await get_owned_project_or_404(db, project_id, current_user["id"], lock=True)
     await db.execute(delete(ProjectFile).where(ProjectFile.project_id == project_id))
     await db.execute(
         delete(Project).where(Project.id == project_id, Project.owner_id == current_user["id"])
@@ -367,7 +375,7 @@ async def get_project_files(
         {
             "id": f.id,
             "path": f.file_path,
-            "is_main": f.is_main,
+            "is_main": bool(f.is_main),
             "is_binary": f.content_binary is not None,
             "content": f.content_text,
             "revision": _file_revision(f.content_text) if f.content_binary is None else None,
@@ -392,7 +400,7 @@ async def save_file(
     db: AsyncSession = Depends(get_db_session_dependency),
     current_user: dict = Depends(get_current_user),
 ):
-    await get_owned_project_or_404(db, project_id, current_user["id"])
+    await get_owned_project_or_404(db, project_id, current_user["id"], lock=True)
     if data.revision is None:
         raise HTTPException(
             status_code=428, detail="Reload Studio to get the current file revision before saving."
@@ -448,7 +456,7 @@ async def upload_asset(
     db: AsyncSession = Depends(get_db_session_dependency),
     current_user: dict = Depends(get_current_user),
 ):
-    await get_owned_project_or_404(db, project_id, current_user["id"])
+    await get_owned_project_or_404(db, project_id, current_user["id"], lock=True)
     content = await file.read(MAX_ASSET_BYTES + 1)
     if len(content) > MAX_ASSET_BYTES:
         raise HTTPException(status_code=400, detail="File too large (max 5MB)")
@@ -542,7 +550,7 @@ async def delete_file(
     current_user: dict = Depends(get_current_user),
 ):
     # Проверяем, не является ли файл главным (main.tex)
-    await get_owned_project_or_404(db, project_id, current_user["id"])
+    await get_owned_project_or_404(db, project_id, current_user["id"], lock=True)
     result = await db.execute(
         select(ProjectFile).where(ProjectFile.id == file_id, ProjectFile.project_id == project_id)
     )
@@ -572,7 +580,7 @@ async def rename_file(
     db: AsyncSession = Depends(get_db_session_dependency),
     current_user: dict = Depends(get_current_user),
 ):
-    await get_owned_project_or_404(db, project_id, current_user["id"])
+    await get_owned_project_or_404(db, project_id, current_user["id"], lock=True)
     safe_filename = _sanitize_project_filename(data.new_name)
 
     try:
@@ -608,26 +616,30 @@ async def export_project_zip(
     db: AsyncSession = Depends(get_db_session_dependency),
     current_user: dict = Depends(get_current_user),
 ):
-    # 1. Получаем проект и файлы
-    project = await get_owned_project_or_404(db, project_id, current_user["id"])
-
-    files_result = await db.execute(select(ProjectFile).where(ProjectFile.project_id == project_id))
+    project = await get_owned_project_or_404(db, project_id, current_user["id"], lock=True)
+    files_result = await db.execute(
+        select(ProjectFile)
+        .where(ProjectFile.project_id == project_id)
+        .order_by(ProjectFile.file_path)
+    )
     files = files_result.scalars().all()
-
-    # 2. Создаем ZIP архив в памяти
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        for f in files:
-            if f.content_binary:
-                zip_file.writestr(f.file_path, f.content_binary)
-            else:
-                zip_file.writestr(f.file_path, f.content_text or "")
-
-    zip_buffer.seek(0)
-
-    headers = {"Content-Disposition": _build_zip_content_disposition(project.name)}
-
-    return StreamingResponse(zip_buffer, media_type="application/zip", headers=headers)
+    name, project_type = project.name, project.project_type
+    entries = [
+        ArchiveFile(
+            f.file_path, f.content_binary if f.content_binary is not None else f.content_text or ""
+        )
+        for f in files
+    ]
+    main = next(
+        (f.file_path for f in reversed(files) if f.is_main and f.content_binary is None), None
+    )
+    await db.rollback()
+    archive = await asyncio.to_thread(write_studio_zip, name, project_type, main, entries)
+    headers = {
+        "Content-Disposition": _build_zip_content_disposition(name),
+        "Cache-Control": "private, no-store",
+    }
+    return StreamingResponse(archive, media_type="application/zip", headers=headers)
 
 
 # --- Эндпоинт для локальных картинок в Markdown ---

@@ -49,6 +49,7 @@
     .lesson-details-dialog .ld-count{background:var(--ld-soft);padding:12px 14px;border-radius:10px;font-size:13px}
     .lesson-details-dialog .ld-copy{border-top:1px solid var(--ld-border);padding:16px 26px}
     .lesson-details-dialog textarea{width:100%;min-height:154px;padding:10px;background:var(--ld-soft);color:var(--ld-text);border:1px solid var(--ld-border);border-radius:8px;font:13px/1.6 Inter,system-ui,sans-serif}
+    .lesson-details-dialog .ld-copy[data-display="link"] textarea{min-height:62px}
     .lesson-details-dialog .ld-occurrence[aria-current="true"]{background:var(--ld-tint);border-radius:8px}
     .lesson-details-dialog .ld-button:hover,.lesson-details-dialog .ld-close:hover,.lesson-details-dialog .ld-occurrence:hover{filter:brightness(.96)}
     .lesson-details-dialog :is(button,a,summary,textarea):focus-visible{outline:2px solid var(--ld-accent);outline-offset:3px}

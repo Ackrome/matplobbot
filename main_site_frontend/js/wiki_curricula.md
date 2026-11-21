@@ -26,6 +26,24 @@ deletion, surface failed-import detail states, and use the published hash when
 correcting an already published version. Review desktop/mobile, RU/EN and dark
 theme in Playwright after changes; version assets and dictionaries together.
 
+## Assessment date status
+
+Opening “Assessment dates from the timetable” reads the admin-only
+`GET /api/curricula/session-coverage`. The section lists the recorded scheduler
+coverage and both the successful check and the latest attempt for each group
+and semester. An upstream failure is displayed separately from stale saved
+dates. Search narrows the current response by group name or ID. Refresh reads
+status again and does not schedule an upstream job. Authentication changes reset
+the displayed status and invalidate its in-flight response.
+
+“Review ambiguous dates” opens a native dialog scoped to that group and term.
+It requests `GET /api/curricula/session-reviews` and compares the RUZ event
+title, time and room against existing approved rows with links to their exact
+PDF versions. No match is initially selected unless the current evidence
+already has a confirmed match. Explicit confirmation sends the term and
+review keys to PUT; a concurrent change reloads the evidence for another
+review. This flow does not re-render the underlying unsaved plan forms.
+
 ## Background scan recognition
 
 The registry fetch is lightweight; selecting a plan loads its authenticated

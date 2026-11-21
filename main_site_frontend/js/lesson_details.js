@@ -264,6 +264,7 @@
             ratings.close();
             document.documentElement.style.overflow = previousOverflow;
             window.removeEventListener('mpb-language-change', languageChanged);
+            window.removeEventListener('mpb-locales-ready', languageChanged);
             dialog.remove();
             if (trigger?.isConnected) trigger.focus?.({ preventScroll: true });
             window.scrollTo({ ...scroll, behavior: 'instant' });
@@ -625,14 +626,40 @@
         }
         function render() {
             const position = dialog.scrollTop;
-            ratings.select(selected.teachers);
+            const localeUnavailable = window.mpbI18n.available?.() === false;
             dialog.replaceChildren();
             const header = node('header', 'ld-header');
             const heading = node('div', 'ld-heading');
+            const close = button('', () => dialog.close(), 'ld-close');
+            close.dataset.ldFocus = 'close';
+            close.setAttribute('aria-label', localeUnavailable ? window.mpbI18n.bootText('close') : t('close'));
+            close.autofocus = true;
+            close.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke-width="1.8" stroke-linecap="round"/></svg>';
+            if (localeUnavailable) {
+                const title = node('h2', '', selected.title || window.mpbI18n.bootText('unavailable'));
+                title.id = 'lessonDetailsTitle';
+                heading.append(title);
+                header.append(heading, close);
+                const body = node('div', 'ld-body');
+                const note = node('p', 'ld-subtitle', window.mpbI18n.bootText('unavailable'));
+                note.setAttribute('role', 'status');
+                const retry = button(window.mpbI18n.bootText('retry'), async () => {
+                    if (retry.getAttribute('aria-disabled') === 'true') return;
+                    retry.setAttribute('aria-disabled', 'true');
+                    note.textContent = window.mpbI18n.bootText('loading');
+                    await window.mpbI18n.retry();
+                });
+                retry.dataset.ldFocus = 'locale-retry';
+                const occurrence = [selected.date && dateLabel(selected.date),
+                    [selected.start, selected.end].filter(Boolean).join(' — '), selected.room].filter(Boolean).join(' · ');
+                if (occurrence) body.append(node('p', '', occurrence));
+                body.append(note, retry);
+                dialog.append(header, body);
+                return;
+            }
+            ratings.select(selected.teachers);
             heading.append(node('span', 'ld-kind', selected.kind || t('kindUnknown')));
             const title = node('h2', '', selected.title || t('titleMissing')); title.id = 'lessonDetailsTitle'; heading.append(title);
-            const close = button('', () => dialog.close(), 'ld-close'); close.setAttribute('aria-label', t('close')); close.autofocus = true;
-            close.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke-width="1.8" stroke-linecap="round"/></svg>';
             header.append(heading, close);
             const tabs = node('div', 'ld-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', t('tabs'));
             [['lesson', 'lessonTab', 'lessonDetailsLessonTab', 'lessonDetailsOccurrence'], ['course', 'courseTab', 'lessonDetailsCourseTab', 'lessonDetailsCourse']].forEach(([key, label, id, panelId]) => {
@@ -644,30 +671,54 @@
                 event.preventDefault(); showTab(event.key === 'Home' ? 'lesson' : event.key === 'End' ? 'course' : tab === 'lesson' ? 'course' : 'lesson', true);
             });
             const footer = node('footer', 'ld-footer');
-            const courseButton = button('', () => showTab(tab === 'lesson' ? 'course' : 'lesson', true), 'ld-button ld-primary'); courseButton.dataset.course = '';
+            const courseButton = button('', () => showTab(tab === 'lesson' ? 'course' : 'lesson', true), 'ld-button ld-primary');
+            courseButton.dataset.course = ''; courseButton.dataset.ldFocus = 'course-action';
             const copy = node('div', 'ld-copy'); copy.hidden = true;
             const feedback = node('p', 'ld-subtitle'); feedback.setAttribute('role', 'status');
             const area = node('textarea'); area.readOnly = true; area.setAttribute('aria-label', t('copyLabel')); copy.append(feedback, area);
-            footer.append(courseButton, button(t('copy'), async () => {
-                const value = copyText(); copy.hidden = false; area.value = value;
+            const copyDetails = button(t('copy'), async () => {
+                const value = copyText(); copy.hidden = false; delete copy.dataset.display;
+                area.value = value; area.setAttribute('aria-label', t('copyLabel'));
                 try { await navigator.clipboard.writeText(value); if (closed) return; feedback.textContent = t('copied'); area.hidden = true; }
                 catch { if (closed) return; feedback.textContent = t('copyFallback'); area.hidden = false; area.focus(); area.select(); }
                 copy.scrollIntoView({ block: 'nearest' });
-            }));
+            });
+            copyDetails.dataset.ldFocus = 'copy';
+            footer.append(courseButton, copyDetails);
+            const shareUrl = selected.date && window.ScheduleState?.publicUrl?.(context.entity, { date: selected.date, lesson: selected.raw.lessonOid ?? null });
+            if (shareUrl) {
+                const share = button(t('share'), async () => {
+                    copy.hidden = false;
+                    copy.dataset.display = 'link';
+                    area.setAttribute('aria-label', t('share'));
+                    await window.ScheduleState.copyPublicUrl(shareUrl, area, feedback);
+                    if (copy.isConnected) copy.scrollIntoView({ block: 'nearest' });
+                });
+                share.dataset.ldFocus = 'share';
+                footer.append(share);
+            }
             dialog.append(header, tabs, renderOccurrence(), renderCourse(), footer, copy);
             showTab(tab); dialog.scrollTop = position;
         }
         function languageChanged() {
-            const focusedTab = document.activeElement?.dataset.tab;
-            const ratingKey = document.activeElement?.closest('[data-rating-key]')?.dataset.ratingKey;
-            const ratingFocus = document.activeElement?.dataset.ratingFocus;
+            const focused = document.activeElement;
+            const hadFocus = dialog.contains(focused);
+            const focusedTab = focused?.dataset.tab;
+            const focusKey = focused?.dataset.ldFocus;
+            const ratingKey = focused?.closest('[data-rating-key]')?.dataset.ratingKey;
+            const ratingFocus = focused?.dataset.ratingFocus;
             render();
+            if (!hadFocus) return;
             const panel = [...dialog.querySelectorAll('[data-rating-key]')].find(item => item.dataset.ratingKey === ratingKey);
             if (panel) {
                 const target = [...panel.querySelectorAll('[data-rating-focus]')].find(item => item.dataset.ratingFocus === ratingFocus);
                 if (target) target.focus({ preventScroll: true });
                 else { panel.tabIndex = -1; panel.focus({ preventScroll: true }); }
-            } else (focusedTab ? dialog.querySelector(`[data-tab="${focusedTab}"]`) : dialog.querySelector('.ld-close')).focus({ preventScroll: true });
+            } else {
+                const tabButton = focusedTab && dialog.querySelector(`[data-tab="${focusedTab}"]`);
+                const control = focusKey && dialog.querySelector(`[data-ld-focus="${focusKey}"]`);
+                (tabButton || control || dialog.querySelector('.ld-close')).focus({ preventScroll: true });
+            }
         }
         dialog.addEventListener('close', cleanup, { once: true });
         dialog.addEventListener('keydown', event => {
@@ -688,6 +739,7 @@
         dialog.addEventListener('click', event => { if (pressedBackdrop && event.target === dialog && outside(event)) dialog.close(); pressedBackdrop = false; });
         function outside(event) { const rect = dialog.getBoundingClientRect(); return event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom; }
         window.addEventListener('mpb-language-change', languageChanged);
+        window.addEventListener('mpb-locales-ready', languageChanged);
         document.body.append(dialog); render();
         document.documentElement.style.overflow = 'hidden';
         dialog.showModal();

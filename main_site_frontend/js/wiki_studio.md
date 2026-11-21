@@ -55,8 +55,9 @@ the explicit send button. All UI copy lives in the shared RU/EN locale JSON.
 The project endpoint supplies each text file's `revision`. Save with that revision and replace
 it after success. A structured HTTP 409 supplies the latest saved text and revision; send another
 write only after the user explicitly chooses the local version. A 428 asks outdated clients to
-reload; their unsaved text remains in local storage where available. There is no archive of prior
-server versions.
+reload; their unsaved text remains in local storage where available. Studio
+project versions are named snapshots saved explicitly from the toolbar. Ordinary
+autosaves update the live source independently.
 
 Preserve reject-on-save-failure, account isolation, filename `textContent`, sanitizer/SRI/CSP,
 and manual asset version bumps. Keep job response shapes aligned with `studio_jobs_router.py`.

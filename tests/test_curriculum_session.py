@@ -14,7 +14,12 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from shared_lib.models import CurriculumDocument, CurriculumGroup, CurriculumSessionSnapshot
 from shared_lib.services import curriculum_session as dates
-from shared_lib.services.curriculum_service import match_session_dates
+from shared_lib.services.curriculum_service import (
+    CurriculumConflictError,
+    match_session_dates,
+    read_curriculum_session,
+    session_date_reviews,
+)
 from shared_lib.services.university_api import RuzAPIError
 from tests.test_curriculum_service import _AsyncSession
 
@@ -112,6 +117,7 @@ class TestCurriculumSessionDates(unittest.IsolatedAsyncioTestCase):
             snapshot = db.get(CurriculumSessionSnapshot, key)
             self.assertEqual(dates._utc(snapshot.attempted_at), later)
             self.assertEqual(dates._utc(snapshot.checked_at), NOW)
+            self.assertEqual(snapshot.last_error, "upstream_unavailable")
         calls = self.ruz.get_schedule.await_count
         result = await dates.cached_session_dates(GROUP, TERM, [PLAN_ROW], now=later)
         self.assertEqual(result["dates_status"], "stale")
@@ -142,6 +148,44 @@ class TestCurriculumSessionDates(unittest.IsolatedAsyncioTestCase):
                 result = await dates.cached_session_dates(GROUP, TERM, [PLAN_ROW], now=later)
                 self.assertEqual(result["dates_checked_at"], NOW.isoformat())
                 self.assertEqual([event["lesson_id"] for event in result["events"]], ["456"])
+                coverage = await dates.admin_session_coverage(now=later)
+                self.assertEqual(
+                    coverage["groups"][0]["terms"][0]["last_error"], "invalid_response"
+                )
+
+    async def test_admin_coverage_distinguishes_failed_verification_from_old_evidence(self):
+        self.add_group()
+        self.add_group("164378", term={**SPRING, "start_date": "2027-01-03"})
+        self.add_group("164379", published=False)
+        self.add_group("164380", term={**TERM, "end_date": "2026-11-20"})
+        initial = await dates.admin_session_coverage(now=NOW)
+        self.assertEqual([group["group_id"] for group in initial["groups"]], [GROUP, "164378"])
+        self.assertEqual(initial["groups"][0]["terms"][0]["dates_status"], "pending")
+        self.ruz.get_schedule.side_effect = [[RUZ_ROW], RuzAPIError("private upstream body")]
+        await dates.refresh_session_dates(object(), now=NOW)
+        later = NOW + timedelta(hours=7)
+        self.ruz.get_schedule.side_effect = RuzAPIError("private upstream body")
+        await dates.refresh_session_dates(object(), now=later)
+        coverage = await dates.admin_session_coverage(now=later)
+        stale, pending = (group["terms"][0] for group in coverage["groups"])
+        self.assertEqual(stale["dates_status"], "stale")
+        self.assertEqual(stale["dates_checked_at"], NOW.isoformat())
+        self.assertEqual(stale["last_attempted_at"], later.isoformat())
+        self.assertEqual(stale["dates_coverage"][0]["end_date"], TERM["end_date"])
+        self.assertEqual(stale["last_error"], "upstream_unavailable")
+        self.assertEqual(pending["dates_status"], "pending")
+        self.assertEqual(pending["dates_coverage"], [])
+        self.assertNotIn("private upstream body", repr(coverage))
+        self.ruz.get_schedule.side_effect = None
+        self.ruz.get_schedule.return_value = []
+        retry = later + timedelta(hours=1)
+        await dates.refresh_session_dates(object(), now=retry)
+        coverage = await dates.admin_session_coverage(now=retry)
+        for group in coverage["groups"]:
+            verified = group["terms"][0]
+            self.assertEqual(verified["dates_status"], "checked")
+            self.assertIsNone(verified["last_error"])
+        self.canonical.assert_not_awaited()
 
     async def test_partial_bootstrap_then_authoritative_full_snapshot_survives_rollover(self):
         self.add_group()
@@ -221,6 +265,93 @@ class TestCurriculumSessionDates(unittest.IsolatedAsyncioTestCase):
         duplicates = match_session_dates([graded], [raw, {**raw, "lessonOid": 789}], *bounds)
         self.assertIsNone(duplicates[0]["lesson_id"])
 
+    async def test_confirm_ambiguous_date_is_scoped_to_current_event_and_publication(self):
+        self.add_group()
+        self.add_group("164378")
+        raw = {**RUZ_ROW, "kindOfWork": "Семинар + зачёт"}
+        root = int(GROUP)
+        row = {
+            "discipline_code": PLAN_ROW["discipline_code"],
+            "discipline_name": PLAN_ROW["discipline_name"],
+            "page": 1,
+            "semester": TERM["semester"],
+        }
+        published = [{**row, "kind": "pass"}, {**row, "kind": "graded_pass"}]
+        with Session(self.engine) as db:
+            db.get(CurriculumDocument, root).published_assessments = published
+            db.commit()
+        self.ruz.get_schedule.return_value = [raw]
+        await dates.refresh_session_dates(object(), now=NOW)
+        review = (await dates.admin_session_reviews(GROUP, TERM["semester"]))["reviews"][0]
+        self.assertEqual(review["event"]["lesson_id"], "456")
+        self.assertEqual(review["event"]["assessment_label"], "Семинар + зачёт")
+        self.assertCountEqual(
+            [row["kind"] for row in review["candidates"]], ["pass", "graded_pass"]
+        )
+        self.assertTrue(
+            all(row["snapshot_url"].endswith("a" * 64 + ".pdf") for row in review["candidates"])
+        )
+        self.assertIsNone(review["selected"])
+
+        async def public_events():
+            async with dates.get_session() as db:
+                plan = await read_curriculum_session(db, GROUP, NOW.date(), TERM["semester"])
+            return (await dates.cached_session_dates(GROUP, TERM, plan["assessments"], now=NOW))[
+                "events"
+            ]
+
+        self.assertEqual(await public_events(), [])
+        first, second = [row["candidate_key"] for row in review["candidates"]]
+        event_key, review_key = review["event_key"], review["review_key"]
+        with self.assertRaises(CurriculumConflictError):
+            await dates.confirm_session_review(
+                GROUP, {**TERM, "start_date": "2026-09-02"}, event_key, review_key, first, None
+            )
+        await dates.confirm_session_review(GROUP, TERM, event_key, review_key, first, None)
+        await dates.confirm_session_review(GROUP, TERM, event_key, review_key, first, None)
+        with self.assertRaises(CurriculumConflictError):
+            await dates.confirm_session_review(GROUP, TERM, event_key, review_key, second, None)
+        self.assertEqual(
+            (await dates.admin_session_reviews(GROUP, TERM["semester"]))["reviews"][0]["selected"],
+            first,
+        )
+        self.assertEqual([row["kind"] for row in await public_events()], [published[0]["kind"]])
+        with Session(self.engine) as db:
+            document = db.get(CurriculumDocument, root)
+            self.assertEqual(document.published_assessments, published)
+            self.assertEqual(
+                db.get(CurriculumSessionSnapshot, dates._term_key("164378", TERM)).date_resolutions,
+                {},
+            )
+            document.published_hash = "b" * 64
+            db.commit()
+        self.assertEqual(await public_events(), [])
+        with self.assertRaises(CurriculumConflictError):
+            await dates.confirm_session_review(GROUP, TERM, event_key, review_key, first, None)
+        with Session(self.engine) as db:
+            db.get(CurriculumDocument, root).published_assessments = published[1:]
+            db.commit()
+        self.assertEqual([row["kind"] for row in await public_events()], ["graded_pass"])
+
+    def test_resolved_events_in_same_slot_are_kept_for_distinct_published_rows(self):
+        row = {**PLAN_ROW, "source_title": "Основной план", "snapshot_url": "", "page": 1}
+        second = {**row, "discipline_code": "Б.1.02", "source_document_id": 2}
+        schedule = [RUZ_ROW, {**RUZ_ROW, "lessonOid": 789}]
+        bounds = TERM["start_date"], TERM["end_date"]
+        reviews = session_date_reviews([row, second], schedule, *bounds, GROUP, {})
+        resolutions = {
+            review["event_key"]: {
+                "review_key": review["review_key"],
+                "candidate_key": review["candidates"][index]["candidate_key"],
+            }
+            for index, review in enumerate(reviews)
+        }
+        resolved = match_session_dates(
+            [row, second], schedule, *bounds, group_id=GROUP, resolutions=resolutions
+        )
+        self.assertCountEqual([item["discipline_code"] for item in resolved], ["Б.1.01", "Б.1.02"])
+        self.assertCountEqual([item["lesson_id"] for item in resolved], ["456", "789"])
+
     def test_migration_upgrade_and_downgrade(self):
         module = runpy.run_path(
             str(
@@ -229,6 +360,18 @@ class TestCurriculumSessionDates(unittest.IsolatedAsyncioTestCase):
             )
         )
         table = CurriculumSessionSnapshot.__tablename__
+        errors = runpy.run_path(
+            str(
+                Path(__file__).parents[1]
+                / "alembic/versions/ea1400010005_curriculum_session_errors.py"
+            )
+        )
+        reviews = runpy.run_path(
+            str(
+                Path(__file__).parents[1]
+                / "alembic/versions/ea1400010006_curriculum_session_reviews.py"
+            )
+        )
         CurriculumSessionSnapshot.__table__.drop(self.engine)
         with (
             self.engine.begin() as connection,
@@ -236,5 +379,26 @@ class TestCurriculumSessionDates(unittest.IsolatedAsyncioTestCase):
         ):
             module["upgrade"]()
             self.assertTrue(inspect(connection).has_table(table))
+            self.assertNotIn(
+                "last_error", {column["name"] for column in inspect(connection).get_columns(table)}
+            )
+            errors["upgrade"]()
+            self.assertIn(
+                "last_error", {column["name"] for column in inspect(connection).get_columns(table)}
+            )
+            reviews["upgrade"]()
+            self.assertIn(
+                "date_resolutions",
+                {column["name"] for column in inspect(connection).get_columns(table)},
+            )
+            reviews["downgrade"]()
+            self.assertNotIn(
+                "date_resolutions",
+                {column["name"] for column in inspect(connection).get_columns(table)},
+            )
+            errors["downgrade"]()
+            self.assertNotIn(
+                "last_error", {column["name"] for column in inspect(connection).get_columns(table)}
+            )
             module["downgrade"]()
             self.assertFalse(inspect(connection).has_table(table))

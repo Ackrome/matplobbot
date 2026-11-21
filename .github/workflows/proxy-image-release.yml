@@ -1,0 +1,60 @@
+name: Proxy Image Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REPOSITORY: ghcr.io/ackrome/matplobbot-proxy
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Build and test the proxy
+        env:
+          SOURCE: https://github.com/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          image="$REPOSITORY:$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          docker build --tag "$image" --file proxy/Dockerfile.proxy \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.source=$SOURCE" proxy
+          bash scripts/test_proxy_image.sh "$image"
+          echo "PROXY_CANDIDATE=$image" >> "$GITHUB_ENV"
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish and verify the immutable digest
+        run: |
+          set -euo pipefail
+          id=$(docker image inspect --format '{{.Id}}' "$PROXY_CANDIDATE")
+          docker push "$PROXY_CANDIDATE"
+          reference=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$PROXY_CANDIDATE" |
+            grep -E '^ghcr\.io/ackrome/matplobbot-proxy@sha256:[0-9a-f]{64}$')
+          docker pull "$reference"
+          test "$(docker image inspect --format '{{.Id}}' "$reference")" = "$id"
+          jq -n --arg commit "$GITHUB_SHA" --arg image "$reference" --arg image_id "$id" \
+            '{status:"passed",commit:$commit,image:$image,image_id:$image_id}' > proxy-release.json
+          printf 'Tested proxy image for `%s`: `%s`\n' "$GITHUB_SHA" "$reference" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: proxy-release-${{ github.sha }}
+          path: proxy-release.json
+          if-no-files-found: error

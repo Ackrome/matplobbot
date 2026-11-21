@@ -104,6 +104,18 @@ smoke checks and invokes `bash deploy.sh --finalize`. Only finalize advances
 successful pointer intact. Previous source, configuration and runtime image IDs are
 retained. Production deployment does not prune images.
 
+### Publish versioned worker evidence
+
+Create the stable product tag on the commit confirmed by CI and Jenkins. Once
+the GitHub release is published, Worker Image Audit scans the accepted worker
+digest and attaches `matplobbot-release-evidence.zip` after verifying the tag,
+successful deployment and signed workflow provenance. The ZIP contains the
+accepted manifest, CycloneDX SBOM, report-only vulnerability summary and release
+receipt. Re-run Worker Image Audit on `main` with `release_tag` to retry attaching
+the same version. An existing verified attachment is reused. Weekly audits
+prefer the latest stable release's verified bundle and fall back to deployment
+evidence when an older release has no bundle. An invalid bundle fails validation.
+
 Before `release_deploy.py prepare` Jenkins runs
 `scripts/docker_disk_guard.py monitor --profile production`. The guard checks both
 the root filesystem and Docker's data root, including the containerd content store,
@@ -135,6 +147,27 @@ support image is resolved or proxy rebuilt during an application release. Suppor
 bootstrap/repair or a deliberate support-image upgrade is a separate operation
 with its own validation. The RC tests the four application images; it does not
 claim fresh-build reproducibility of the observed support stack.
+
+### Independent proxy release
+
+Run **Proxy Image Release** against the reviewed commit on `main`. The workflow
+builds the proxy, exercises its SOCKS listener and cleaner in a disposable
+network namespace, and publishes a GHCR digest with its source SHA in
+`proxy-release.json`. From the clean live release checkout, use that exact
+digest and SHA with the existing deploy account:
+
+```bash
+python3 scripts/proxy_release.py apply --image "$PROXY_DIGEST_REFERENCE" --commit "$PROXY_SOURCE_SHA"
+python3 scripts/proxy_release.py rollback # only when reversing a proxy release or recovering an attempt
+```
+
+The deploy command changes only the proxy container. It requires Docker health
+and a real Telegram API request over SOCKS, restoring and checking the previous
+image on failure. If recovery also fails, the private attempt record remains
+and blocks application mutation until the operator retries proxy rollback.
+The live application release checkout must already contain the proxy helper.
+The first previous image may be a legacy content ID, while subsequent releases
+record the registry digest alongside the local image ID.
 
 Keep `.release-state` private and backed up to an access-controlled location. Its
 configuration snapshots contain signing and mail-encryption keys. The Docker data
@@ -169,6 +202,18 @@ production restore drill must be recorded separately. The tool verifies DB conte
 it does not start delivery services or send user notifications.
 
 ## Rollback
+
+On a schema-changing release, `rc-rollback-compat.json` records the N−1 rehearsal.
+The job resolves an exact previously deployed main release, verifies its immutable
+images and seeds a disposable database with the previous runtime. After applying
+the candidate migrations, the candidate API creates a Studio project and calendar
+profile. The previous runtime restarts from the same digests, reads and updates
+those records, renders a PDF and checks for duplicate subscriptions. It also
+checks session revocation and pending delivery retry and deduplication. An
+unchanged schema is recorded as skipped, a missing
+accepted previous artifact as unsupported, and unverified runs as errors. This
+advisory evidence informs recovery review. The normal rollback refusal and the
+requirement for an explicit compatibility decision stay in force.
 
 Review the recorded state and preserve the smoke helper below before invoking
 rollback. After a failed deployment it targets the last successful release; after

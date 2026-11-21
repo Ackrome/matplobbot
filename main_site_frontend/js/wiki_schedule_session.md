@@ -14,3 +14,16 @@ when its RUZ lesson ID is unique on that date, or focuses the linked day when th
 ID is missing or ambiguous. The calendar action opens an editable, per-group
 exam and assessment subscription draft. A user must explicitly save it.
 Keep the date request independent so the reviewed list stays usable if dates fail.
+
+The semester share button copies a public schedule URL with a group and
+`session=<semester>`. An anonymous visit opens that semester directly. The URL
+is built by the shared schedule state helper and only contains public group
+and date context. Clipboard denial reveals a selected input for manual copy.
+
+Saving offline captures one confirmed public semester through
+`MpbSessionOffline`. An explicit `saved_session=1` URL prefers the device copy
+for its exact group and semester even when connected. A normal visit falls
+back to the matching copy after a failed public request or when offline.
+The saved view displays the device capture time separately from the RUZ
+check and lets the user remove the copy. Offline dates and PDF page references
+are readable as text. Keep the share URL free of device-local flags.

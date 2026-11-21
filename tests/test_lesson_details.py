@@ -11,6 +11,47 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @unittest.skipUnless(shutil.which("node"), "node is required for lesson-details tests")
 class LessonDetailsTests(unittest.TestCase):
+    def test_offline_session_keeps_only_the_selected_public_term_and_valid_dates(self):
+        self.run_model("""
+            const cacheKeys = [];
+            let stored, rejectWrite = false;
+            sandbox.document = {currentScript:{src:'https://example.test/js/session_offline.js?v=1'}};
+            sandbox.navigator = {serviceWorker:{controller:{}}};
+            sandbox.caches = {match:async key=>{cacheKeys.push(key); return true;}};
+            sandbox.URLSearchParams = URLSearchParams;
+            sandbox.localStorage = {getItem:()=>stored,
+                setItem:(_key, value)=>{if (rejectWrite) throw Error('Quota exceeded'); stored=value;},
+                removeItem:()=>{stored=undefined;}};
+            vm.runInContext(fs.readFileSync('main_site_frontend/js/session_offline.js','utf8'), sandbox);
+            const offline=sandbox.window.MpbSessionOffline;
+            const term={semester:6,start_date:'2027-02-02',end_date:'2027-06-28'};
+            const row={semester:6,discipline_code:'Б1',discipline_name:'Системный анализ',
+                kind:'exam',page:2,source_document_id:1,source_title:'План',
+                snapshot_url:'/api/schedule/curriculum/documents/1/'+'a'.repeat(64)+'.pdf',evidence:'private'};
+            const plan={status:'confirmed',group_id:'105',group_name:'ПМ24-1',term,
+                terms:[term,{...term,semester:7}],assessments:[row],jwt_token:'private'};
+            const event={...row,date:'2027-06-11',start:'10:00',lesson_id:'77',room:'303',calendar_url:'private'};
+            const dated={dates_status:'checked',events:[event,{...event,date:'2027-09-01'},
+                {...event,discipline_code:'Б2'}]};
+            (async()=>{
+                assert.equal(await offline.available(),true);
+                assert.deepEqual(cacheKeys,['/schedule','https://example.test/js/session_offline.js?v=1']);
+                assert.equal(offline.save(plan,dated),true);
+                assert.ok(!stored.includes('private'));
+                assert.equal(offline.read().plan.terms.length,1);
+                assert.equal(offline.read().dates.events.length,1);
+                assert.equal(offline.read().dates.events[0].lesson_id,'77');
+                assert.match(offline.url(offline.read()),/session=6&saved_session=1$/);
+                const old = stored;
+                assert.equal(offline.save(plan,{...dated,events:Array(1001).fill(event)}),false);
+                rejectWrite=true;
+                assert.equal(offline.save({...plan,group_id:'106'},dated),false);
+                assert.equal(stored,old);
+                assert.equal(offline.remove(),true);
+                assert.equal(offline.read(),null);
+            })().catch(error=>{console.error(error);process.exitCode=1;});
+        """)
+
     def run_model(self, assertions):
         script = (
             """
@@ -55,7 +96,7 @@ class LessonDetailsTests(unittest.TestCase):
                 window:{ScheduleApi:{loadScheduleData:()=>new Promise((resolve,reject)=>pending.push({resolve,reject}))},
                     mpbI18n:{registerTranslator:handler=>{state.translate=handler;}},
                     MpbLessonDetails:{open:(lesson, context)=>{state.opened=context;}}},
-                document:{getElementById:id=>id==='offlineWarning'?null:element(id),
+                document:{getElementById:id=>['offlineWarning','sharedLessonNotice'].includes(id)?null:element(id),
                     addEventListener:(_event,handler)=>{state.domReady=handler;}},
                 scheduleRefreshPollTimer:null, scheduleLoadAbortController:null, scheduleLoadRequestSeq:0,
                 resultsBox:element('results'), groupInput:element('input'),
@@ -88,6 +129,7 @@ class LessonDetailsTests(unittest.TestCase):
                 cut('function getLessonActionId(', 'function getLessonActionLabels(') +
                 cut('function parseDate(', 'function getISODateStr(') +
                 cut('function getVerifiedScheduleBounds(', 'function isLessonInCurrentPeriod(') +
+                cut('let sharedLessonNotice = null;', 'function normalizeScheduleDate(') +
                 cut('async function changeWeek(', 'async function setTodayWeek(') +
                 cut("document.addEventListener('DOMContentLoaded', async () => {", 'function formatRelativeDateTime('), state);
             const oldAction = state.getLessonActionId(oldLesson);
@@ -537,6 +579,28 @@ class LessonDetailsTests(unittest.TestCase):
             actions.openLessonEntitySchedule('person', '123', 'Иванов').then(()=>{
                 assert.equal(actions.destination[1], '123');
             });
+        """)
+
+    def test_public_links_keep_only_shareable_context_and_resolve_occurrences(self):
+        self.run_model("""
+            const page = {URL, window:{location:{origin:'https://site.example',
+                href:'https://site.example/schedule?profile=private&token=secret'}}};
+            vm.createContext(page);
+            vm.runInContext(fs.readFileSync('main_site_frontend/js/schedule_state.js','utf8'),page);
+            const {publicUrl, resolvePublicLesson} = page.window.ScheduleState;
+            const group={type:'group',id:'7',name:'ПМ23-1',profile:'private',token:'secret'};
+            const url=new URL(publicUrl(group,{date:'2026-10-09',lesson:'10'}));
+            assert.equal(url.pathname,'/schedule');
+            assert.deepEqual([...url.searchParams.keys()],['type','id','name','date','lesson_date','lesson']);
+            const session=new URL(publicUrl(group,{semester:4}));
+            assert.equal(session.searchParams.get('session'),'4');
+            assert.equal(session.searchParams.has('lesson'),false);
+            assert.equal(new URL(publicUrl(group,{semester:900})).searchParams.has('session'),false);
+            const row={date:'2026-10-09',lessonOid:10};
+            assert.equal(resolvePublicLesson([row],'2026-10-09','10').status,'found');
+            assert.equal(resolvePublicLesson([row,{...row,room:'100'}],'2026-10-09','10').status,'ambiguous');
+            assert.equal(resolvePublicLesson([row],'2026-10-08','10').status,'moved');
+            assert.equal(resolvePublicLesson([{...row,deletion_mark:true}],'2026-10-09','10').status,'missing');
         """)
 
 

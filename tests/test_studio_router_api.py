@@ -271,12 +271,15 @@ class TestStudioRouterAPI(unittest.TestCase):
         self.assertEqual(response.json().get("detail"), "Filename might already exist or invalid")
 
     def test_zip_export_uses_ascii_fallback_and_utf8_filename(self):
-        project = SimpleNamespace(id=7, owner_id=1, name='Курсовая "работа" финал')
+        project = SimpleNamespace(
+            id=7, owner_id=1, name='Курсовая "работа" финал', project_type="latex"
+        )
         files = [
             SimpleNamespace(
                 file_path="main.tex",
                 content_text="Привет",
                 content_binary=None,
+                is_main=True,
             )
         ]
         self.db.execute.side_effect = [

@@ -17,6 +17,8 @@ status notices. Mobile pane positioning and controls work from 320 pixels; touch
 remain visible. Fallback textarea and Monaco frame styles share the same editor container.
 Focus indicators, selected states, reduced motion, and modal overflow rules support keyboard
 and small-screen use without hiding autosave errors.
+The project-version form keeps the title and save action together on wider
+screens and stacks them on small screens.
 
 ## Dependencies and side effects
 

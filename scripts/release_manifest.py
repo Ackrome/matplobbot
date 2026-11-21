@@ -117,6 +117,28 @@ def validate(manifest):
     return manifest
 
 
+def verify_rc_acceptance(manifest):
+    report = manifest.get("acceptance", {})
+    if (
+        not isinstance(report, dict)
+        or report.get("status") != "passed"
+        or report.get("commit") != manifest["commit"]
+        or report.get("images") != manifest["images"]
+        or report.get("restore_verified") is not True
+    ):
+        raise ValueError("This exact release has no successful RC/restore acceptance")
+
+
+def verify_local_images(manifest):
+    for ref in manifest["images"].values():
+        info = json.loads(run("docker", "image", "inspect", ref))[0]
+        if ref not in info.get("RepoDigests", []):
+            raise ValueError("Locally pulled image digest differs")
+        labels = info.get("Config", {}).get("Labels") or {}
+        if labels.get("org.opencontainers.image.revision") != manifest["commit"]:
+            raise ValueError("Image source revision differs from release commit")
+
+
 def verify(manifest, root, *, inspect_images=False, require_rc=False):
     validate(manifest)
     if run("git", "rev-parse", "HEAD", cwd=root) != manifest["commit"]:
@@ -127,22 +149,9 @@ def verify(manifest, root, *, inspect_images=False, require_rc=False):
     if source_files(root) != manifest["files"] or schema_heads(root) != manifest["schema_heads"]:
         raise ValueError("Deploy inputs or schema differ from release manifest")
     if require_rc:
-        report = manifest.get("acceptance", {})
-        if (
-            report.get("status") != "passed"
-            or report.get("commit") != manifest["commit"]
-            or report.get("images") != manifest["images"]
-            or not report.get("restore_verified")
-        ):
-            raise ValueError("This exact release has no successful RC/restore acceptance")
+        verify_rc_acceptance(manifest)
     if inspect_images:
-        for ref in manifest["images"].values():
-            info = json.loads(run("docker", "image", "inspect", ref))[0]
-            if ref not in info.get("RepoDigests", []):
-                raise ValueError("Locally pulled image digest differs")
-            labels = info.get("Config", {}).get("Labels") or {}
-            if labels.get("org.opencontainers.image.revision") != manifest["commit"]:
-                raise ValueError("Image source revision differs from release commit")
+        verify_local_images(manifest)
 
 
 def compose_override(manifest):

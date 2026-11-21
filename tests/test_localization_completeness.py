@@ -98,6 +98,42 @@ class TestLocalizationCompleteness(unittest.TestCase):
             })().catch(error=>{console.error(error);process.exitCode=1;});
         """)
 
+    @unittest.skipUnless(shutil.which("node"), "node is required for browser logic tests")
+    def test_locale_startup_bounds_retries_and_online_restores_missing_dictionary(self):
+        self.run_browser_script("""
+            const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+            const events=[], handlers={}, byLocale={en:0,ru:0}; let online=false;
+            const sandbox={document:{documentElement:{lang:'ru'}},console:{error(){}},
+                localStorage:{getItem:()=> 'ru',setItem(){}},
+                window:{dispatchEvent:event=>events.push(event.type),addEventListener:(key,cb)=>handlers[key]=cb},
+                CustomEvent:class {constructor(type){this.type=type;}},
+                setTimeout:callback=>callback(),
+                fetch:async url=>{
+                    const locale=url.includes('/ru.json')?'ru':'en';
+                    byLocale[locale]++;
+                    if(online) return {ok:true,json:async()=>({welcome:locale==='ru'?'Готово':'Ready'})};
+                    if(locale==='en') return {ok:false,status:403};
+                    if(byLocale.ru===1) throw new TypeError('Network changed');
+                    return {ok:false,status:503};
+                }};
+            vm.createContext(sandbox);
+            vm.runInContext(fs.readFileSync('main_site_frontend/js/frontend_i18n.js','utf8'),sandbox);
+            (async()=>{
+                const i18n=sandbox.window.mpbI18n;
+                await i18n.ready;
+                assert.deepEqual(byLocale,{en:1,ru:3});
+                assert.equal(i18n.available(),false);
+                assert.match(i18n.bootText('unavailable'),/Переводы недоступны/);
+                online=true;
+                const recovery=handlers.online();
+                assert.equal(recovery,i18n.retry());
+                await recovery;
+                assert.deepEqual(byLocale,{en:2,ru:4});
+                assert.equal(i18n.t('welcome'),'Готово');
+                assert.deepEqual(events,['mpb-locales-ready','mpb-locales-ready']);
+            })().catch(error=>{console.error(error);process.exitCode=1;});
+        """)
+
     def test_locale_asset_versions_match_loader_pages_and_precache(self):
         root = Path("main_site_frontend")
         loader = (root / "js/frontend_i18n.js").read_text(encoding="utf-8")

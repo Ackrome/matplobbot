@@ -3,11 +3,13 @@
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import time
 import uuid
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -29,6 +31,9 @@ from worker_security import (
 
 ROOT = Path.cwd()
 STATE = ROOT / ".release-state"
+PROXY_STATE = STATE / "proxy-release.json"
+PROXY_ATTEMPT = STATE / "proxy-attempt.json"
+IMAGE_ID_RE = re.compile(r"sha256:[0-9a-f]{64}")
 
 
 class ProductionPreflightError(RuntimeError):
@@ -39,8 +44,25 @@ class ProductionPreflightError(RuntimeError):
         self.status = status
 
 
-def check_live_checkout():
-    if any(
+@contextmanager
+def maintenance_lock():
+    """Serialize local application and proxy rollout mutations on Linux."""
+    import fcntl
+
+    STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor = os.open(STATE / "maintenance.lock", os.O_CREAT | os.O_RDWR, 0o600)
+    with os.fdopen(descriptor, "r+") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise ProductionPreflightError(
+                20, "Another production maintenance operation is running"
+            ) from exc
+        yield
+
+
+def check_live_checkout(*, allow_proxy_recovery=False):
+    if (PROXY_ATTEMPT.exists() and not allow_proxy_recovery) or any(
         (STATE / name).exists()
         for name in ("attempt.json", "pending.json", "rollback-pending.json")
     ):
@@ -509,6 +531,18 @@ def rollback(compatible_schema=None):
         run_worker_probe(
             runtime["mpb-worker"]["image"], saved / "worker-seccomp.json", worker_apparmor
         )
+    rollback_compose = saved / "compose.json"
+    if PROXY_STATE.exists():
+        proxy = json.loads(PROXY_STATE.read_text(encoding="utf-8"))["current"]["image_id"]
+        if (
+            not IMAGE_ID_RE.fullmatch(proxy)
+            or run("docker", "image", "inspect", "--format", "{{.Id}}", proxy) != proxy
+        ):
+            raise ValueError("The independently released proxy image is unavailable")
+        override = json.loads(rollback_compose.read_text(encoding="utf-8"))
+        override["services"]["proxy"] = {"image": proxy}
+        rollback_compose = STATE / "app-rollback-compose.json"
+        write_private(rollback_compose, override)
     live_config = json.loads(
         run("docker", "compose", "-f", "docker-compose.prod.yml", "config", "--format", "json")
     )
@@ -526,7 +560,7 @@ def rollback(compatible_schema=None):
         if (saved / name).exists():
             shutil.copyfile(saved / name, ROOT / name)
             (ROOT / name).chmod(0o600)
-    prefix = compose(saved / "compose.json")
+    prefix = compose(rollback_compose)
     # No automatic migrations/downgrades, pulls, builds or destructive volume work.
     execute(
         [
@@ -584,19 +618,25 @@ def main():
         help="Explicitly reviewed current head compatible with the previous code",
     )
     args = parser.parse_args()
-    if args.command == "deploy":
-        deploy(args.manifest)
-    elif args.command == "finalize":
-        finalize()
-    elif args.command == "preserve-config":
-        preserve_configuration()
-    elif args.command == "preflight":
+    if args.command == "preflight":
         production_preflight(args.candidate)
         print("Production preflight passed.")
-    elif args.command == "prepare":
-        prepare(args.manifest, args.candidate)
-    else:
-        rollback(args.compatible_schema)
+        return
+    with maintenance_lock():
+        if PROXY_ATTEMPT.exists():
+            raise ProductionPreflightError(
+                20, "Resolve the pending proxy release before proceeding"
+            )
+        if args.command == "deploy":
+            deploy(args.manifest)
+        elif args.command == "finalize":
+            finalize()
+        elif args.command == "preserve-config":
+            preserve_configuration()
+        elif args.command == "prepare":
+            prepare(args.manifest, args.candidate)
+        else:
+            rollback(args.compatible_schema)
 
 
 if __name__ == "__main__":

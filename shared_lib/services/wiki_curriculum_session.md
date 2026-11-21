@@ -33,3 +33,20 @@ canonical timetable untouched. Run `python -m unittest tests.test_curriculum_ses
 tests.test_curriculum_api` when changing coverage, scheduling or publication
 matching. Keep frontend status handling compatible with the API when editing the
 coverage contract.
+
+`admin_session_coverage()` reads the scheduler snapshots for current terms and
+terms beginning within 45 days. Status is checked, stale or pending, independently
+of the latest attempt's short error code. A rejected or failed refresh
+leaves the last successful data and date range available.
+
+`admin_session_reviews(group_id, semester)` reports only events from a
+successful durable snapshot that have several eligible approved plan rows.
+`confirm_session_review(group_id, term, event_key, review_key, candidate_key,
+expected_selected)` takes locks on the current approved evidence, checks all
+identities and updates that snapshot's `date_resolutions`. The event key binds
+its public date, time, room and RUZ identity. The review key binds the complete
+set of candidate rows to their approved document hashes. A changed event,
+term, document or competing confirmation needs another review. The public
+matcher still uses automatic exact matches when there is one eligible row.
+A manual selection affects presentation of the observed date for that group
+and term. It does not update the plan, calendar feed or the RUZ timetable.

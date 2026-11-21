@@ -38,8 +38,10 @@ from .routers import (
     planning_router,
     schedule_router,
     stats_router,
+    studio_import_router,
     studio_jobs_router,
     studio_router,
+    studio_versions_router,
     teacher_ratings_router,
     ux_router,
     ws_router,
@@ -141,6 +143,8 @@ app.include_router(teacher_ratings_router.router, prefix="/api")
 app.include_router(curriculum_router.router, prefix="/api")
 app.include_router(studio_router.router, prefix="/api")
 app.include_router(studio_jobs_router.router, prefix="/api")
+app.include_router(studio_import_router.router, prefix="/api")
+app.include_router(studio_versions_router.router, prefix="/api")
 app.include_router(insights_router.router, prefix="/api")
 app.include_router(ux_router.router, prefix="/api")
 app.include_router(planning_router.router, prefix="/api")

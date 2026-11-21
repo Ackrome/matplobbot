@@ -16,7 +16,18 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 STATE = Path("/tmp/matplobbot-rc-state.json")
-API = "http://api:9583/api"
+CANDIDATE_STATE = Path("/tmp/matplobbot-rc-candidate.json")
+CANDIDATE_PROFILE = {
+    "entity_type": "group",
+    "entity_id": "rc-candidate-group",
+    "entity_name": "RC candidate group",
+    "timezone": "Europe/Moscow",
+}
+API = (
+    "http://candidate-api:9583/api"
+    if os.getenv("MPB_RC_CANDIDATE_API") == "1"
+    else "http://api:9583/api"
+)
 
 
 def request(method, path, payload=None, token=None, expected=200, raw=False):
@@ -51,7 +62,7 @@ def login(user_id):
     return request("POST", "/auth/telegram", data)["access_token"]
 
 
-async def seed_schedule():
+async def seed_schedule(entity_id="rc-group", entity_name="RC group"):
     from shared_lib.database import close_db_pool, get_session, init_db_pool
     from shared_lib.models import CachedSchedule
 
@@ -61,8 +72,8 @@ async def seed_schedule():
         session.add(
             CachedSchedule(
                 entity_type="group",
-                entity_id="rc-group",
-                entity_name="RC group",
+                entity_id=entity_id,
+                entity_name=entity_name,
                 updated_at=datetime.now(UTC),
                 schedule_data=[
                     {
@@ -73,7 +84,7 @@ async def seed_schedule():
                         "kindOfWork": "Лекция",
                         "auditorium": "101",
                         "lecturer": "RC Teacher",
-                        "group": "RC group",
+                        "group": entity_name,
                         "subGroup": "",
                         "stream": "",
                     }
@@ -292,6 +303,112 @@ def after_revocation():
     STATE.unlink()
 
 
+def rollback_before():
+    """Create a durable fixture while the previous release owns its own schema."""
+    owner = login(910000002)
+    revoked = login(910000002)
+    request("POST", "/auth/logout", token=revoked)
+    request("GET", "/auth/me", token=revoked, expected=401)
+    request("GET", "/auth/me", token=owner)
+    project = request(
+        "POST",
+        "/studio/projects",
+        {
+            "name": "Rollback preserved source",
+            "project_type": "latex",
+            "initial_content": r"\documentclass{article}\begin{document}Previous release\end{document}",
+        },
+        owner,
+    )
+    STATE.write_text(json.dumps({"owner": owner, "revoked": revoked, "project": project["id"]}))
+    STATE.chmod(0o600)
+    asyncio.run(seed_schedule())
+    asyncio.run(seed_schedule(CANDIDATE_PROFILE["entity_id"], CANDIDATE_PROFILE["entity_name"]))
+
+
+def edit_project(owner, project_id, expected_text, edit_marker):
+    file = request("GET", f"/studio/projects/{project_id}", token=owner)[0]
+    assert expected_text in file["content"]
+    path = f"/studio/projects/{project_id}/files/{file['id']}"
+    content = file["content"] + f"\n% {edit_marker}"
+    edit = {"content": content}
+    if "revision" in file:
+        edit["revision"] = file["revision"]
+    request("PUT", path, edit, owner)
+    assert request("GET", f"/studio/projects/{project_id}", token=owner)[0]["content"] == content
+
+
+def rollback_candidate_write():
+    """Exercise ordinary API writes in the candidate before rolling back its runtime."""
+    owner = login(910000002)
+    project = request(
+        "POST",
+        "/studio/projects",
+        {
+            "name": "Candidate source",
+            "project_type": "latex",
+            "initial_content": r"\documentclass{article}\begin{document}Candidate release\end{document}",
+        },
+        owner,
+    )
+    edit_project(owner, project["id"], "Candidate release", "Saved through candidate API")
+    profile = request("POST", "/cal/subscription/profiles", CANDIDATE_PROFILE, owner)
+    CANDIDATE_STATE.write_text(
+        json.dumps({"project": project["id"], "profile": profile["selected_profile_id"]})
+    )
+    CANDIDATE_STATE.chmod(0o600)
+
+
+async def verify_candidate_profile_row(profile_id):
+    from sqlalchemy import select
+
+    from shared_lib.database import close_db_pool, get_session, init_db_pool
+    from shared_lib.models import UserScheduleSubscription
+
+    await init_db_pool()
+    try:
+        async with get_session() as db:
+            row = (
+                await db.execute(
+                    select(UserScheduleSubscription).where(
+                        UserScheduleSubscription.user_id == 910000002,
+                        UserScheduleSubscription.entity_type == CANDIDATE_PROFILE["entity_type"],
+                        UserScheduleSubscription.entity_id == CANDIDATE_PROFILE["entity_id"],
+                    )
+                )
+            ).scalar_one()
+            assert row.profile_id == profile_id and row.timezone == "UTC"
+            assert row.delivery_mode == "calendar" and row.is_active
+    finally:
+        await close_db_pool()
+
+
+def rollback_after():
+    """Read and edit data from both releases through the restarted prior API."""
+    state = json.loads(STATE.read_text(encoding="utf-8"))
+    candidate = json.loads(CANDIDATE_STATE.read_text(encoding="utf-8"))
+    owner, project_id = state["owner"], candidate["project"]
+    request("GET", "/auth/me", token=state["revoked"], expected=401)
+    request("GET", "/auth/me", token=owner)
+    request("GET", "/auth/me", token=login(910000002))
+    edit_project(owner, state["project"], "Previous release", "Previous release after migration")
+    edit_project(owner, project_id, "Saved through candidate API", "Updated after rollback")
+    job = request("POST", f"/studio/projects/{project_id}/jobs", token=owner, expected=202)
+    assert base64.b64decode(result(job["job_id"], owner)["pdf"]).startswith(b"%PDF-")
+    profile_id = candidate["profile"]
+    config = request("GET", "/cal/subscription", token=owner)
+    profiles = [item for item in config["profiles"] if item["id"] == profile_id]
+    assert len(profiles) == 1 and profiles[0]["timezone"] == "Europe/Moscow"
+    request("PATCH", "/cal/subscription/profiles/" + profile_id, {"timezone": "UTC"}, owner)
+    config = request(
+        "POST", "/cal/subscription/profiles", {**CANDIDATE_PROFILE, "timezone": "UTC"}, owner
+    )
+    assert config["selected_profile_id"] == profile_id
+    profiles = [item for item in config["profiles"] if item["id"] == profile_id]
+    assert len(profiles) == 1 and profiles[0]["timezone"] == "UTC"
+    asyncio.run(verify_candidate_profile_row(profile_id))
+
+
 async def login_lua():
     """Execute the exact limiter script through two real Redis client connections."""
     from redis.asyncio import Redis
@@ -338,19 +455,11 @@ async def login_lua():
         await second.aclose()
 
 
-async def outbox():
-    """Real scheduler + PostgreSQL; only external Telegram is a local HTTP fixture."""
-    import aiohttp
-    from aiohttp import web
-    from sqlalchemy import select, update
-
-    from scheduler_app.jobs import deliver_pending_schedule_change_notifications
-    from shared_lib.database import close_db_pool, get_session, init_db_pool
-    from shared_lib.models import ScheduleChangeDelivery, UserScheduleSubscription
+async def seed_outbox(now):
+    from shared_lib.database import get_session
+    from shared_lib.models import UserScheduleSubscription
     from shared_lib.schedule_outbox import enqueue_daily_schedule_delivery
 
-    await init_db_pool()
-    now = datetime.now(UTC)
     async with get_session() as db:
         db.add(
             UserScheduleSubscription(
@@ -378,12 +487,54 @@ async def outbox():
         )
         == 1
     )
+    await assert_outbox_deduplication(now)
+
+
+async def assert_outbox_deduplication(now):
+    from shared_lib.schedule_outbox import enqueue_daily_schedule_delivery
+
     assert (
         await enqueue_daily_schedule_delivery(
-            event_key="c" * 64, subscription=row, payload="RC notification"
+            event_key="c" * 64,
+            subscription={
+                "user_id": 910000002,
+                "chat_id": 910000002,
+                "entity_type": "group",
+                "entity_id": "rc-group",
+                "expires_at": now + timedelta(hours=1),
+            },
+            payload="RC notification",
         )
         == 0
     )
+
+
+async def rollback_seed_outbox():
+    from shared_lib.database import close_db_pool, init_db_pool
+
+    await init_db_pool()
+    try:
+        await seed_outbox(datetime.now(UTC))
+    finally:
+        await close_db_pool()
+
+
+async def outbox(*, existing_delivery=False):
+    """Real scheduler + PostgreSQL; only external Telegram is a local HTTP fixture."""
+    import aiohttp
+    from aiohttp import web
+    from sqlalchemy import select, update
+
+    from scheduler_app.jobs import deliver_pending_schedule_change_notifications
+    from shared_lib.database import close_db_pool, get_session, init_db_pool
+    from shared_lib.models import ScheduleChangeDelivery
+
+    await init_db_pool()
+    now = datetime.now(UTC)
+    if existing_delivery:
+        await assert_outbox_deduplication(now)
+    else:
+        await seed_outbox(now)
     calls = []
 
     async def receive(request):
@@ -423,12 +574,13 @@ async def outbox():
                 saved = (await db.execute(select(ScheduleChangeDelivery))).scalar_one()
                 assert saved.status == "sent" and saved.attempt_count == 2
             assert len(calls) == 2 and calls[1]["chat_id"] == 910000002
-        from rc_delivery_probe import verify_delivery_concurrency
+        if not existing_delivery:
+            from rc_delivery_probe import verify_delivery_concurrency
 
-        print(
-            "PostgreSQL concurrency:",
-            await verify_delivery_concurrency(lambda path: request("GET", path)),
-        )
+            print(
+                "PostgreSQL concurrency:",
+                await verify_delivery_concurrency(lambda path: request("GET", path)),
+            )
     finally:
         await runner.cleanup()
         await close_db_pool()
@@ -436,12 +588,29 @@ async def outbox():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("phase", choices=["prepare", "verify", "after_revocation", "outbox"])
+    parser.add_argument(
+        "phase",
+        choices=[
+            "prepare",
+            "verify",
+            "after_revocation",
+            "outbox",
+            "rollback_before",
+            "rollback_candidate_write",
+            "rollback_after",
+            "rollback_seed_outbox",
+            "rollback_deliver_outbox",
+        ],
+    )
     phase = parser.parse_args().phase
     if os.environ.get("MPB_ISOLATED_RC") != "1":
         raise SystemExit("Only the disposable RC harness may run this probe")
     if phase == "outbox":
         asyncio.run(outbox())
+    elif phase == "rollback_seed_outbox":
+        asyncio.run(rollback_seed_outbox())
+    elif phase == "rollback_deliver_outbox":
+        asyncio.run(outbox(existing_delivery=True))
     else:
         globals()[phase]()
     print("RC phase passed:", phase)

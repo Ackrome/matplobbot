@@ -2,6 +2,22 @@
 window.MpbStudioUX = (() => {
     const tr=(key,params={})=>window.MpbUI.t(key,params);
     const button=(text,action,kind='')=>{const el=document.createElement('button');el.type='button';el.className=`ui-button ${kind}`;if(typeof text==='object'){el.dataset.i18n='ux.'+text.key;el.textContent=tr(text.key);}else el.textContent=text;el.addEventListener('click',()=>run(async()=>{el.disabled=true;try{await action();}catch(error){const dialog=[...document.querySelectorAll('dialog[open]')].at(-1);if(!dialog)throw error;let status=dialog.querySelector('.dialog-error');if(!status){status=document.createElement('p');status.className='dialog-error plan-field-error';status.setAttribute('role','alert');dialog.querySelector('h2').after(status);}status.textContent=error.message||t('requestFailed');}finally{el.disabled=false;}}));return el;};
+    function modalButton(id, key, action) {
+        const trigger = document.createElement('button');
+        trigger.id = id;
+        trigger.type = 'button';
+        trigger.className = 'ui-button';
+        trigger.dataset.i18n = `ux.${key}`;
+        trigger.textContent = tr(key);
+        let open = false;
+        trigger.addEventListener('click', () => run(async () => {
+            if (open) return;
+            open = true;
+            try { await action(); }
+            finally { open = false; }
+        }));
+        return trigger;
+    }
     let importDraft=null,uploadQueue=[],uploadBusy=false,uploadProjectId=null;
     function filename(){return (projectsList.find(p=>String(p.id)===String(currentProjectId))?.name||editor.getValue().match(/(?:^# |\\(?:title|section)\{)([^\n}]+)/)?.[1]||tr('document')).replace(/[\\/:*?"<>|\x00-\x1f]/g,'_').trim().slice(0,100)||'document';}
     function init(){
@@ -9,6 +25,8 @@ window.MpbStudioUX = (() => {
         const autosave=document.createElement('span');autosave.className='ui-muted';autosave.dataset.i18n='ux.autosave';autosave.textContent=tr('autosave');toolbar.append(autosave);
         const save=button({key:'saveAsProject'},()=>{const draft={content:editor.getValue(),type:$('doc-type').value};createNewProject();importDraft=draft;$('new-project-type').value=importDraft.type;$('new-project-type').disabled=true;$('template-container').hidden=true;updateTemplateOptions();});save.id='save-as-project';toolbar.append(save);
         toolbar.append(button({key:'manageProjects'},manageProjects),button({key:'buildHistory'},history));
+        toolbar.insertBefore(modalButton('project-versions-button', 'projectVersions', manageVersions), toolbar.lastElementChild);
+        toolbar.append(modalButton('import-studio-zip', 'studioZipImport', importZIP));
         for(const id of ['btn-download-pdf','btn-download-zip','btn-send-tg']){const el=$(id);el.classList.add('ui-button');el.replaceChildren();const label=document.createElement('span');label.dataset.i18n=id==='btn-download-pdf'?'studio.downloadResult':id==='btn-download-zip'?'studio.downloadZip':'studio.send';label.textContent=window.mpbI18n.t(label.dataset.i18n);el.append(label);toolbar.append(el);}
         $('navbar').after(toolbar);
 
@@ -19,14 +37,285 @@ window.MpbStudioUX = (() => {
         $('create-project-button').textContent=tr('newProject');
         $('error-text').before(Object.assign(document.createElement('div'),{id:'studio-error-links'}));
     }
-    function mode(){if($('save-as-project'))$('save-as-project').hidden=currentMode!=='quick';}
+    function mode(){
+        if ($('save-as-project')) $('save-as-project').hidden = currentMode !== 'quick';
+        const versions = $('project-versions-button');
+        if (versions) {
+            versions.hidden = currentMode !== 'project';
+            versions.disabled = !currentProjectId;
+        }
+    }
     function resetCreate(){importDraft=null;$('new-project-type').disabled=false;$('template-container').hidden=false;}
     function draft(){return importDraft;}
+    function importZIP() {
+        const content = document.createElement('div');
+        content.className = 'ui-stack';
+        const pick = document.createElement('input');
+        pick.type = 'file';
+        pick.accept = '.zip,application/zip';
+        pick.hidden = true;
+        const choose = document.createElement('button');
+        choose.type = 'button';
+        choose.className = 'ui-button';
+        choose.textContent = tr('studioZipFile');
+        choose.addEventListener('click', () => pick.click());
+        const filename = document.createElement('span');
+        filename.className = 'ui-muted';
+        filename.setAttribute('role', 'status');
+        filename.textContent = tr('studioZipNoFile');
+        const picker = document.createElement('div');
+        picker.className = 'studio-archive-picker';
+        picker.append(pick, choose, filename);
+        const inspect = document.createElement('button');
+        inspect.className = 'ui-button';
+        inspect.type = 'button';
+        inspect.textContent = tr('studioZipPreview');
+        inspect.disabled = true;
+        const status = document.createElement('p');
+        status.setAttribute('role', 'status');
+        status.hidden = true;
+        const form = document.createElement('form');
+        form.className = 'ui-stack';
+        form.hidden = true;
+        const name = document.createElement('input');
+        name.required = true;
+        name.maxLength = 160;
+        const projectType = document.createElement('select');
+        projectType.required = true;
+        projectType.replaceChildren(new Option(tr('studioZipChooseType'), ''), ...['LaTeX','Markdown','Mermaid'].map(label=>new Option(label,label.toLowerCase())));
+        const main = document.createElement('select');
+        main.required = true;
+        const inventory = document.createElement('ul');
+        inventory.className = 'studio-archive-inventory ui-muted';
+        inventory.tabIndex = 0;
+        const commit = document.createElement('button');
+        commit.type = 'submit';
+        commit.className = 'ui-button primary';
+        commit.textContent = tr('studioZipCreateCopy');
+        const legacy = document.createElement('p');
+        legacy.className = 'ui-muted';
+        legacy.textContent = tr('studioZipLegacy');
+        let loaded, saving = false;
+
+        function field(input, labelText) {
+            input.className = 'ui-input';
+            const label = document.createElement('label');
+            label.append(labelText, input);
+            return label;
+        }
+        function showStatus(message, error = false) {
+            status.className = error ? 'plan-field-error' : 'ui-muted';
+            status.textContent = message;
+            status.hidden = !message;
+        }
+        function archiveMessage(error) {
+            if (/^archive_(?:invalid|bad_files|manifest_invalid|too_large|no_main|preview_required|bad_name|quota)$/.test(error.code || '')) return tr(`studioZipError.${error.code}`);
+            if (error.status === 413) return tr('studioZipError.archive_too_large');
+            return error.message;
+        }
+        form.append(field(name, t('projectName')), field(projectType, t('projectType')), field(main, tr('studioZipMain')), legacy, inventory, commit);
+        content.append(picker, inspect, status, form);
+
+        pick.addEventListener('change', () => {
+            loaded = null;
+            form.hidden = true;
+            inspect.disabled = !pick.files.length;
+            filename.textContent = pick.files[0]?.name || tr('studioZipNoFile');
+            showStatus('');
+        });
+        inspect.addEventListener('click', async () => {
+            const file = pick.files[0];
+            if (!file) return;
+            inspect.disabled = true;
+            loaded = null;
+            form.hidden = true;
+            showStatus('');
+            try {
+                const body = new FormData();
+                body.append('file', file);
+                const preview = await (await api('/studio/projects/import/preview', {method:'POST',body,timeoutMs:60000})).json();
+                if (pick.files[0] !== file) return;
+                loaded = {file, preview};
+                name.value = preview.name;
+                projectType.value = preview.type || '';
+                projectType.disabled = preview.manifest;
+                main.replaceChildren(new Option(tr('studioZipChooseMain'), ''), ...preview.files.filter(entry=>!entry.is_binary).map(entry=>new Option(entry.path,entry.path)));
+                main.value = preview.main || '';
+                main.disabled = Boolean(preview.manifest && preview.main);
+                legacy.hidden = preview.manifest;
+                inventory.replaceChildren(...preview.files.map(entry => {
+                    const row = document.createElement('li');
+                    row.textContent = entry.is_binary ? `${entry.path} · ${tr('projectVersionBinaryFile')}` : entry.path;
+                    return row;
+                }));
+                form.hidden = false;
+                name.focus();
+            } catch (error) {
+                if (pick.files[0] === file) showStatus(archiveMessage(error), true);
+            } finally { inspect.disabled = !pick.files.length; }
+        });
+        form.addEventListener('submit', async event => {
+            event.preventDefault();
+            if (!loaded || saving || !name.value.trim()) return;
+            const body = new FormData();
+            body.append('file', loaded.file);
+            body.append('preview_token', loaded.preview.preview_token);
+            body.append('name', name.value.trim());
+            body.append('project_type', projectType.value);
+            body.append('main', main.value);
+            saving = commit.disabled = pick.disabled = choose.disabled = inspect.disabled = true;
+            showStatus('');
+            try {
+                await transition(async () => {
+                    const created = await (await api('/studio/projects/import', {method:'POST',body,timeoutMs:60000})).json();
+                    content.closest('dialog')?.close();
+                    window.mpbPopup?.(tr('studioZipCreated'));
+                    await loadProjects();
+                    await activateProject(created.id);
+                    updateModeUi();
+                });
+            } catch (error) { showStatus(archiveMessage(error), true); }
+            finally { saving = commit.disabled = pick.disabled = choose.disabled = inspect.disabled = false; }
+        });
+        const closed = MpbUI.dialog({title:tr('studioZipImport'),content,actions:[{label:tr('close'),value:'close',validate:()=>!saving}]});
+        content.closest('dialog')?.addEventListener('cancel', event => { if (saving) event.preventDefault(); });
+        return closed;
+    }
     function templatePreview(){const el=$('template-preview');if(!el)return;const id=$('new-project-template').value;el.replaceChildren();el.className='template-preview '+(id==='latex_beamer'?'template-slide':'');const page=document.createElement('div');page.className='template-paper';const h=document.createElement('h3');h.textContent=tr('templateTitle.'+id);const p=document.createElement('p');p.textContent=tr('templateDescription.'+id);const lines=document.createElement('div');lines.className='template-lines';lines.setAttribute('aria-hidden','true');page.append(h,lines);el.append(page,p);}
     async function manageProjects(){
         await transition(loadProjects);const content=document.createElement('div');content.className='ui-stack';const search=document.createElement('input');search.type='search';search.className='ui-input';search.placeholder=tr('projectSearch');search.setAttribute('aria-label',tr('projectSearch'));const list=document.createElement('div');list.className='project-manager-list';content.append(search,button({key:'newProject'},()=>{document.querySelector('dialog[open]')?.close();createNewProject();},'primary'),list);
         const render=()=>{list.replaceChildren();const matches=projectsList.filter(p=>p.name.toLocaleLowerCase().includes(search.value.toLocaleLowerCase()));if(!matches.length){const p=document.createElement('p');p.className='ui-muted';p.textContent=tr('noProjects');list.append(p);}for(const project of matches){const row=document.createElement('section');row.className='project-manager-row';const open=button(project.name,async()=>{await openProject(project.id);updateModeUi();document.querySelector('dialog[open]')?.close();});open.classList.add('project-open');const meta=document.createElement('p');meta.className='ui-muted';meta.textContent=project.type;const actions=document.createElement('div');actions.className='ui-row';
             actions.append(button({key:'rename'},async()=>{const name=await MpbUI.prompt(tr('renameProject'),project.name);if(!name)return;await api(`/studio/projects/${project.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});await loadProjects();render();}),button({key:'duplicate'},async()=>{const name=await MpbUI.prompt(tr('duplicateProject'),`${project.name} — ${tr('copyName')}`);if(!name)return;await transition(async()=>{await api(`/studio/projects/${project.id}/duplicate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});await loadProjects();});render();}),button({key:'delete'},async()=>{if(!await MpbUI.confirm(tr('deleteProject'),tr('deleteProjectMessage',{name:project.name})))return;await transition(async()=>{await api(`/studio/projects/${project.id}`,{method:'DELETE'});await loadProjects();if(String(currentProjectId)===String(project.id)){currentProjectId=currentFileId=null;projectFiles=[];session.open({type:'empty',content:''});setEditorContent('',true);resetPreview();renderFileList();}});render();},'danger'));row.append(open,meta,actions);list.append(row);}};search.addEventListener('input',render);render();await MpbUI.dialog({title:tr('manageProjects'),content,actions:[{label:tr('close'),value:'close'}]});
+    }
+    function versionMutation(path, method, name) {
+        return api(path, {
+            method, headers:{'Content-Type':'application/json'}, body:JSON.stringify({name}),
+        }).catch(error => {
+            if (/^version_(?:name_taken|project_too_large|quota|restore_quota)$/.test(error.code || '')) {
+                error.message = tr(`projectVersionError.${error.code}`);
+            }
+            throw error;
+        });
+    }
+    async function manageVersions() {
+        const projectId = currentProjectId;
+        if (!projectId) throw new Error(t('chooseProject'));
+        const base = `/studio/projects/${projectId}/versions`;
+        const content = document.createElement('div');
+        content.className = 'ui-stack';
+        const hint = document.createElement('p');
+        hint.className = 'ui-muted';
+        hint.textContent = tr('projectVersionsHint');
+        const form = document.createElement('form');
+        form.className = 'studio-version-form';
+        const name = document.createElement('input');
+        name.className = 'ui-input';
+        name.required = true;
+        name.maxLength = 120;
+        name.placeholder = tr('projectVersionName');
+        name.setAttribute('aria-label', name.placeholder);
+        const save = document.createElement('button');
+        save.className = 'ui-button primary';
+        save.type = 'submit';
+        save.textContent = tr('saveProjectVersion');
+        const status = document.createElement('p');
+        status.setAttribute('role', 'status');
+        status.hidden = true;
+        const list = document.createElement('div');
+        list.className = 'project-manager-list';
+        form.append(name, save);
+        content.append(hint, form, status, list);
+
+        async function renderVersions() {
+            const versions = await (await api(base, {cache:'no-store'})).json();
+            list.replaceChildren();
+            if (!versions.length) {
+                const empty = document.createElement('p');
+                empty.className = 'ui-muted';
+                empty.textContent = tr('noProjectVersions');
+                list.append(empty);
+            }
+            for (const version of versions) {
+                const path = `${base}/${version.id}`;
+                const row = document.createElement('section');
+                row.className = 'project-manager-row break-words';
+                const title = document.createElement('strong');
+                title.textContent = version.name;
+                const info = document.createElement('p');
+                info.className = 'ui-muted';
+                const created = document.createElement('time');
+                created.dateTime = version.created_at;
+                created.textContent = new Intl.DateTimeFormat(window.mpbI18n.getLanguage(), {
+                    dateStyle:'medium',timeStyle:'short',
+                }).format(new Date(version.created_at));
+                info.append(created, ` · ${tr('projectVersionFiles', {count:version.file_count})}`);
+                const files = document.createElement('details');
+                const fileLabel = document.createElement('summary');
+                fileLabel.textContent = tr('projectVersionFileList');
+                const names = document.createElement('ul');
+                names.className = 'ui-muted';
+                files.append(fileLabel, names);
+                files.addEventListener('toggle', async () => {
+                    if (!files.open || files.dataset.loading) return;
+                    files.dataset.loading = 'true';
+                    try {
+                        const detail = await (await api(path, {cache:'no-store'})).json();
+                        names.replaceChildren(...detail.files.map(file => {
+                            const entry = document.createElement('li');
+                            entry.textContent = [file.path, file.is_main && tr('projectVersionMainFile'), file.is_binary && tr('projectVersionBinaryFile')].filter(Boolean).join(' · ');
+                            return entry;
+                        }));
+                    } catch (error) {
+                        delete files.dataset.loading;
+                        updateVersionStatus(error.message, true);
+                    }
+                });
+                const actions = document.createElement('div');
+                actions.className = 'ui-row';
+                actions.append(button({key:'restoreProjectVersion'}, async () => {
+                    const copyName = await MpbUI.prompt(tr('restoreProjectVersionName'), `${version.project_name} — ${version.name}`.slice(0,160));
+                    if (!copyName) return;
+                    await transition(async () => {
+                        const restored = await (await versionMutation(`${path}/restore`, 'POST', copyName)).json();
+                        content.closest('dialog')?.close();
+                        window.mpbPopup?.(tr('projectVersionRestored'));
+                        await loadProjects();
+                        await activateProject(restored.id);
+                        updateModeUi();
+                    });
+                }), button({key:'deleteProjectVersion'}, async () => {
+                    if (!await MpbUI.confirm(tr('deleteProjectVersion'), tr('deleteProjectVersionMessage', {name:version.name}))) return;
+                    await api(path, {method:'DELETE'});
+                    await renderVersions();
+                    name.focus();
+                }, 'danger'));
+                row.append(title, info, files, actions);
+                list.append(row);
+            }
+        }
+
+        function updateVersionStatus(message, error = false) {
+            status.textContent = message;
+            status.className = error ? 'plan-field-error' : 'ui-muted';
+            status.hidden = false;
+        }
+        form.addEventListener('submit', async event => {
+            event.preventDefault();
+            const value = name.value.trim();
+            if (!value || save.disabled) return;
+            save.disabled = true;
+            try {
+                await transition(async () => {
+                    await versionMutation(base, 'POST', value);
+                    name.value = '';
+                    updateVersionStatus(tr('projectVersionSaved'));
+                    await renderVersions();
+                });
+            } catch (error) { updateVersionStatus(error.message, true); }
+            finally { save.disabled = false; }
+        });
+        await renderVersions();
+        await MpbUI.dialog({title:tr('projectVersions'),content,actions:[{label:tr('close'),value:'close'}]});
     }
     function draftPreview({content, baseContent}) {
         const base = typeof baseContent === 'string' ? baseContent : '';

@@ -131,7 +131,9 @@ class CurriculumSessionSnapshot(Base):
     end_date = Column(Date, primary_key=True)
     attempted_at = Column(DateTime(timezone=True), nullable=False)
     checked_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(String(32), nullable=True)
     lessons = Column(JSON, nullable=False, default=list)
+    date_resolutions = Column(JSON, nullable=False, default=dict, server_default="{}")
 
 
 class User(Base):
@@ -462,6 +464,33 @@ class ProjectFile(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (UniqueConstraint("project_id", "file_path", name="uq_project_file_path"),)
+
+
+class ProjectVersion(Base):
+    """Immutable named copy of one Studio project's compile inputs."""
+
+    __tablename__ = "project_versions"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(120), nullable=False)
+    project_name = Column(String, nullable=False)
+    project_type = Column(String, nullable=False)
+    file_count = Column(Integer, nullable=False)
+    byte_count = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("project_id", "name", name="uq_project_version_name"),)
+
+
+class ProjectVersionFile(Base):
+    __tablename__ = "project_version_files"
+    version_id = Column(
+        Integer, ForeignKey("project_versions.id", ondelete="CASCADE"), primary_key=True
+    )
+    file_path = Column(String, primary_key=True)
+    content_text = Column(String, nullable=True)
+    content_binary = Column(LargeBinary, nullable=True)
+    is_main = Column(Boolean, nullable=True)
 
 
 class ProductEvent(Base):
