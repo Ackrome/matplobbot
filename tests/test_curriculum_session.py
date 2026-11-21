@@ -7,11 +7,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import Session
 
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from shared_lib.models import CurriculumDocument, CurriculumGroup, CurriculumSessionSnapshot
 from shared_lib.services import curriculum_session as dates
 from shared_lib.services.curriculum_service import match_session_dates
