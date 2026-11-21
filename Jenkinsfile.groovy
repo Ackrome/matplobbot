@@ -1,3 +1,15 @@
+def prepareFailureCode(int status) {
+    return [
+        20: 'production_release_pending',
+        21: 'production_tracked_changes',
+        22: 'production_untracked_inputs',
+        23: 'production_release_state_mismatch',
+        24: 'production_disk_check_failed',
+        25: 'production_worker_policy_check_failed',
+        26: 'production_checkout_unavailable',
+    ][status]
+}
+
 pipeline {
     agent any
 
@@ -33,7 +45,10 @@ pipeline {
     stages {
         stage('Pin Accepted Source') {
             steps {
-                sh '''
+                script {
+                    env.FAIL_STAGE = 'Pin Accepted Source'
+                    env.FAIL_CODE = 'source_verification_failed'
+                    sh '''
                     set -eu
                     printf '%s' "$SOURCE_COMMIT" | grep -Eq '^[0-9a-f]{40}$'
                     test -n "$RELEASE_MANIFEST_B64"
@@ -44,7 +59,28 @@ pipeline {
                     mkdir -p .release-state
                     python3 scripts/release_manifest.py decode --commit "$SOURCE_COMMIT" --output .release-state/accepted.json
                     python3 scripts/release_manifest.py verify .release-state/accepted.json --require-rc
-                '''
+                    '''
+                }
+            }
+        }
+
+        stage('Production Preflight') {
+            steps {
+                script {
+                    env.FAIL_STAGE = 'Production Preflight'
+                    env.FAIL_CODE = 'production_preflight_failed'
+                    withCredentials([sshUserPrivateKey(credentialsId: 'app-vm-ssh-key', keyFileVariable: 'SSH_KEY_FILE', usernameVariable: 'SSH_USER')]) {
+                        int status = sh(returnStatus: true, script: 'bash scripts/jenkins_production_preflight.sh')
+                        if (status != 0) {
+                            env.FAIL_CODE = prepareFailureCode(status) ?: [
+                                27: 'production_ssh_pin_failed',
+                                124: 'production_preflight_timeout',
+                                255: 'production_ssh_failed',
+                            ].get(status, 'production_preflight_failed')
+                            error('Production preflight failed')
+                        }
+                    }
+                }
             }
         }
 
@@ -52,6 +88,7 @@ pipeline {
             steps {
                 script {
                     env.FAIL_STAGE = 'Pre-Deploy Quality Gate'
+                    env.FAIL_CODE = 'quality_gate_failed'
                     sh '''
                         bash -euo pipefail <<'BASH'
 
@@ -165,9 +202,12 @@ BASH
             steps {
                 script {
                     env.FAIL_STAGE = 'Deploy to Production'
+                    env.FAIL_CODE = 'production_deploy_failed'
                     withCredentials([sshUserPrivateKey(credentialsId: 'app-vm-ssh-key', keyFileVariable: 'SSH_KEY_FILE', usernameVariable: 'SSH_USER')]) {
                         withEnv(["RELEASE_SOURCE=${params.SOURCE_COMMIT}"]) {
-                            sh '''
+                            def prepareStatusFile = '.release-state/prepare-status'
+                            writeFile file: prepareStatusFile, text: ''
+                            int status = sh(returnStatus: true, script: '''
                                 bash -euo pipefail <<'BASH'
 
                                 LOG_FILE="$WORKSPACE/deploy_stage.log"
@@ -207,33 +247,15 @@ BASH
 
                                 SSH_OPTS="-i $SSH_KEY_FILE -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
 
-                                # Keep deployment repo deterministic and recover from local drift.
-                                # If deploy path exists but is not a git worktree, preserve it and bootstrap fresh clone.
-                                # Reset first, then switch branch, so tracked local edits cannot block checkout.
+                                # Stage the exact accepted source separately from the live checkout.
                                 ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' REPO_URL='https://github.com/Ackrome/matplobbot' SOURCE_COMMIT='$SOURCE_COMMIT' bash -se" <<'REMOTE_EOF'
 set -euo pipefail
 
 DEPLOY_DIR="${DEPLOY_PATH/#~/$HOME}"
-if [ -e "$DEPLOY_DIR" ] && [ ! -d "$DEPLOY_DIR" ]; then
-  echo "ERROR: deploy path is not a directory: $DEPLOY_DIR"
-  exit 1
-fi
-
-if ! git -C "$DEPLOY_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  mkdir -p "$DEPLOY_DIR"
-  if [ -n "$(ls -A "$DEPLOY_DIR" 2>/dev/null)" ]; then
-    BACKUP_DIR="${DEPLOY_DIR}.pre_git_$(date +%Y%m%d%H%M%S)"
-    mv "$DEPLOY_DIR" "$BACKUP_DIR"
-    mkdir -p "$DEPLOY_DIR"
-    echo "Existing non-git deploy directory moved to $BACKUP_DIR"
-  fi
-  git clone --origin origin "$REPO_URL" "$DEPLOY_DIR"
-fi
-
 cd "$DEPLOY_DIR"
-git remote set-url origin "$REPO_URL"
+test "$(git rev-parse --show-toplevel)" = "$(pwd -P)"
 printf '%s' "$SOURCE_COMMIT" | grep -Eq '^[0-9a-f]{40}$'
-git fetch origin "$SOURCE_COMMIT"
+git fetch "$REPO_URL" "$SOURCE_COMMIT"
 mkdir -p .release-state
 if [ ! -d ".release-state/candidates/$SOURCE_COMMIT" ]; then
   git worktree add --detach ".release-state/candidates/$SOURCE_COMMIT" "$SOURCE_COMMIT"
@@ -245,7 +267,12 @@ REMOTE_EOF
                                 # services before switching source in a bounded maintenance window.
                                 printf '%s' "$RELEASE_MANIFEST_B64" | ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && python3 .release-state/candidates/$SOURCE_COMMIT/scripts/release_manifest.py decode --stdin --commit $SOURCE_COMMIT --output .release-state/accepted.json"
                                 ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && python3 .release-state/candidates/$SOURCE_COMMIT/scripts/docker_disk_guard.py monitor --profile production --warn-gib 30 --critical-gib 15 --warn-percent 20 --critical-percent 10"
-                                ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && python3 .release-state/candidates/$SOURCE_COMMIT/scripts/release_deploy.py prepare .release-state/accepted.json --candidate .release-state/candidates/$SOURCE_COMMIT"
+                                ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && python3 .release-state/candidates/$SOURCE_COMMIT/scripts/release_deploy.py prepare .release-state/accepted.json --candidate .release-state/candidates/$SOURCE_COMMIT" </dev/null || {
+                                    prepare_status=$?
+                                    # Only this invocation can report a late preflight failure.
+                                    printf '%s\n' "$prepare_status" > "$WORKSPACE/.release-state/prepare-status"
+                                    exit "$prepare_status"
+                                }
 
                                 # Build the complete payload locally, then atomically replace the
                                 # remote file. Optional values stay in the same SSH stream and no
@@ -291,7 +318,13 @@ REMOTE_EOF
                                 ssh $SSH_OPTS "$SSH_USER@$DEPLOY_HOST" "cd $DEPLOY_PATH && bash ./deploy.sh --manifest .release-state/accepted.json"
                                 } 2>&1 | tee -a "$LOG_FILE"
 BASH
-                            '''
+                            ''')
+                            if (status != 0) {
+                                if (fileExists(prepareStatusFile) && readFile(file: prepareStatusFile).trim() == status.toString()) {
+                                    env.FAIL_CODE = prepareFailureCode(status) ?: env.FAIL_CODE
+                                }
+                                error('Production deployment failed')
+                            }
                         }
                     }
                 }
@@ -302,6 +335,7 @@ BASH
             steps {
                 script {
                     env.FAIL_STAGE = 'Post-Deploy Smoke Checks'
+                    env.FAIL_CODE = 'smoke_failed'
                     withCredentials([sshUserPrivateKey(credentialsId: 'app-vm-ssh-key', keyFileVariable: 'SSH_KEY_FILE', usernameVariable: 'SSH_USER')]) {
                         sh '''
                             bash -euo pipefail <<'BASH'
@@ -360,6 +394,13 @@ BASH
     post {
         failure {
             script {
+                def failedStage = env.FAIL_STAGE ?: 'Pin Accepted Source'
+                def failedCode = env.FAIL_CODE ?: 'source_verification_failed'
+                if (params.SOURCE_COMMIT ==~ /[0-9a-f]{40}/) {
+                    writeFile file: 'release-failure.json', text: """{"commit":"${params.SOURCE_COMMIT}","number":${currentBuild.number},"stage":"${failedStage}","code":"${failedCode}"}\n"""
+                    archiveArtifacts artifacts: 'release-failure.json', allowEmptyArchive: false, onlyIfSuccessful: false
+                }
+
                 def adminIds = (env.PROD_ADMIN_USER_IDS ?: '')
                     .split(',')
                     .collect { it.trim() }
@@ -370,9 +411,12 @@ BASH
                     return
                 }
 
-                def failedStage = env.FAIL_STAGE ?: 'unknown'
-                def stageLogFile = (failedStage == 'Post-Deploy Smoke Checks') ? 'smoke_stage.log' : ((failedStage == 'Pre-Deploy Quality Gate') ? 'quality_gate_stage.log' : 'deploy_stage.log')
-                def stageLogContent = fileExists(stageLogFile) ? readFile(file: stageLogFile) : ''
+                def stageLogFile = [
+                    'Post-Deploy Smoke Checks': 'smoke_stage.log',
+                    'Pre-Deploy Quality Gate': 'quality_gate_stage.log',
+                    'Deploy to Production': 'deploy_stage.log',
+                ][failedStage]
+                def stageLogContent = stageLogFile && fileExists(stageLogFile) ? readFile(file: stageLogFile) : ''
                 def stageLogLines = stageLogContent ? stageLogContent.readLines() : []
                 def tailLines = stageLogLines.size() > 40 ? stageLogLines[-40..-1] : stageLogLines
                 def logTail = tailLines.join('\n')
@@ -385,6 +429,7 @@ BASH
                 def message = """matplobbot deployment FAILED
 Job: ${env.JOB_NAME} #${env.BUILD_NUMBER}
 Stage: ${failedStage}
+Code: ${failedCode}
 Result: ${currentBuild.currentResult}
 URL: ${env.BUILD_URL}
 Error: ${errorLine}

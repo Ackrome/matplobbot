@@ -1,4 +1,4 @@
-const CACHE_VERSION = "mpb-site-v53";
+const CACHE_VERSION = "mpb-site-v54";
 const CORE_CACHE = `${CACHE_VERSION}-core`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const OFFLINE_URL = "/offline.html";
@@ -36,8 +36,8 @@ const CORE_ASSETS = [
     "/css/account_subscriptions.css?v=20261009-9",
     "/js/lesson_details.js?v=20261121-1",
     "/css/lesson_details.css?v=20261010-2",
-    "/css/schedule_session.css?v=20261121-1",
-    "/js/schedule_session.js?v=20261121-1",
+    "/css/schedule_session.css?v=20261121-2",
+    "/js/schedule_session.js?v=20261121-2",
     "/js/stats_workspace.js?v=20261009-4",
     "/js/studio_workspace.js?v=20261115-1",
     "/css/product_ui.css?v=20261009-6",
@@ -48,7 +48,7 @@ const CORE_ASSETS = [
     "/css/studio.css?v=20261115-1",
     "/js/runtime_config.js?v=20260821-6",
     "/js/ui_utils.js?v=2",
-    "/js/frontend_i18n.js?v=20261121-1",
+    "/js/frontend_i18n.js?v=20261121-2",
     "/js/navbar.js?v=20261010-1",
     "/js/theme_bootstrap.js?v=20260821-6",
     "/js/telegram_webapp.js?v=20260821-6",
@@ -57,8 +57,8 @@ const CORE_ASSETS = [
     "/js/schedule_filters.js?v=20260821-6",
     "/js/schedule_render.js?v=20260924-2",
     "/js/schedule_history.js?v=20261114-1",
-    "/js/schedule.js?v=20261121-1",
-    "/js/calendar_sync.js?v=20261114-1",
+    "/js/schedule.js?v=20261121-2",
+    "/js/calendar_sync.js?v=20261121-2",
     "/js/schedule_ux.js?v=20261121-1",
     "/js/stats.js?v=20261115-1",
     "/js/stats_ux.js?v=2",
@@ -70,8 +70,8 @@ const CORE_ASSETS = [
     "/js/insights.js?v=20261009-4",
     "/css/feature_panels.css?v=20261009-1",
     "/js/auth.js?v=20261010-1",
-    "/locales/en.json?v=20261121-1",
-    "/locales/ru.json?v=20261121-1",
+    "/locales/en.json?v=20261121-2",
+    "/locales/ru.json?v=20261121-2",
     "/favicon.ico",
     "/favicon-16x16.png",
     "/favicon-32x32.png",

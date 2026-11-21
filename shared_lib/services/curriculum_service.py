@@ -32,6 +32,15 @@ from shared_lib.services.curriculum_processing import (
 logger = logging.getLogger(__name__)
 MAX_PDF_BYTES = MAX_DOCUMENT_BYTES
 ASSESSMENT_KINDS = {"exam", "pass", "graded_pass", "coursework", "course_project"}
+_SCHEDULE_ASSESSMENT_KINDS = {
+    "экзамен": "exam",
+    "зачет": "credit",
+    "семинар+зачет": "credit",
+    "зачет с оценкой": "graded_pass",
+    "дифференцированный зачет": "graded_pass",
+    "курсовая работа": "coursework",
+    "курсовой проект": "course_project",
+}
 REFRESH_LEASE = timedelta(minutes=5)
 PROCESSING_LEASE = timedelta(minutes=15)  # Always longer than the worker's hard 600-second maximum.
 _SCOPE_FIELDS = ("program", "profile", "campus", "admission_year", "study_form")
@@ -966,16 +975,15 @@ async def lookup_curriculum(
         return result
 
 
+def schedule_assessment_kind(kind):
+    """Recognize a precise RUZ assessment type, excluding consultations."""
+    if not isinstance(kind, str):
+        return None
+    return _SCHEDULE_ASSESSMENT_KINDS.get(re.sub(r"\s*\+\s*", "+", _name(kind).replace("ё", "е")))
+
+
 def match_session_dates(assessments, schedule, start, end, *, group_id=None):
     """Match published RUZ events only to an unambiguous planned form."""
-    kinds = {
-        "экзамен": "exam",
-        "зачет": "pass",
-        "зачет с оценкой": "graded_pass",
-        "дифференцированный зачет": "graded_pass",
-        "курсовая работа": "coursework",
-        "курсовой проект": "course_project",
-    }
     by_title = defaultdict(list)
     for row in assessments:
         by_title[(_name(row["discipline_name"]), row["kind"])].append(row)
@@ -988,21 +996,30 @@ def match_session_dates(assessments, schedule, start, end, *, group_id=None):
             or not start <= day <= end
         ):
             continue
-        if lesson.get("deletion_mark") in (True, 1, "1", "true"):
+        try:
+            if date.fromisoformat(day).isoformat() != day:
+                continue
+        except ValueError:
             continue
-        assessment_kind = kinds.get(_name(kind).replace("ё", "е"))
-        rows = by_title.get((_name(title), assessment_kind), [])
-        if not rows and (
+        if str(lesson.get("deletion_mark")).casefold() in {"1", "true"}:
+            continue
+        assessment_kind = schedule_assessment_kind(kind)
+        # RUZ's general credit labels omit the grade. Only the unique reviewed
+        # plan form can establish that distinction.
+        kinds = ("pass", "graded_pass") if assessment_kind == "credit" else (assessment_kind,)
+        rows = [row for candidate in kinds for row in by_title.get((_name(title), candidate), [])]
+        if (not rows or assessment_kind == "credit") and (
             alias := _approved_alias(
                 group_id, title, lesson.get("disciplineinplan"), lesson.get("disciplineOid")
             )
         ):
             canonical, source_sha = alias
-            rows = [
+            rows.extend(
                 row
-                for row in by_title.get((canonical, assessment_kind), [])
-                if row["source_sha256"] == source_sha
-            ]
+                for candidate in kinds
+                for row in by_title.get((canonical, candidate), [])
+                if row["source_sha256"] == source_sha and row not in rows
+            )
         if len(rows) != 1:
             continue
         row = rows[0]
@@ -1011,6 +1028,10 @@ def match_session_dates(assessments, schedule, start, end, *, group_id=None):
             continue
         room = str(lesson.get("auditorium") or lesson.get("auditorium_title") or "")
         key = (day, begin, row["discipline_name"], row["kind"], room)
+        lesson_oid = _ruz_oid(lesson.get("lessonOid"))
+        lesson_id = str(lesson_oid) if lesson_oid else None
+        if key in events and events[key]["lesson_id"] != lesson_id:
+            lesson_id = None
         events[key] = {
             "date": day,
             "start": begin,
@@ -1019,6 +1040,7 @@ def match_session_dates(assessments, schedule, start, end, *, group_id=None):
             "discipline_code": row["discipline_code"],
             "kind": row["kind"],
             "source_document_id": row["source_document_id"],
+            "lesson_id": lesson_id,
         }
     return [events[key] for key in sorted(events)]
 

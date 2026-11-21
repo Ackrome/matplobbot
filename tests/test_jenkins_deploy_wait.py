@@ -22,6 +22,7 @@ FORM_PATH = JOB + "/buildWithParameters"
 QUEUE_PATH = "/queue/item/72/api/json"
 BUILD_PATH = JOB + "/145/api/json"
 PROOF_PATH = JOB + "/145/artifact/release-smoke.json"
+FAILURE_PATH = JOB + "/145/artifact/release-failure.json"
 EXPECTED_AUTH = "Basic " + base64.b64encode(b"ci-fixture:local-test-token").decode()
 
 
@@ -158,6 +159,13 @@ class TestJenkinsDeployment(unittest.TestCase):
             self.assertNotIn(secret, report)
 
     def test_failed_build_is_not_reported_as_deployed(self):
+        self.fail_build()
+        with self.assertRaisesRegex(DeploymentError, "finished with FAILURE"):
+            self.go()
+        self.assertEqual(self.calls[("GET", PROOF_PATH)], 0)
+        self.assertEqual(self.calls[("GET", FAILURE_PATH)], 1)
+
+    def fail_build(self):
         self.overrides[BUILD_PATH] = (
             200,
             {},
@@ -169,8 +177,59 @@ class TestJenkinsDeployment(unittest.TestCase):
                 "result": "FAILURE",
             },
         )
+
+    def test_failure_artifact_reports_exact_stage_and_code(self):
+        self.fail_build()
+        self.overrides[FAILURE_PATH] = (200, {}, self.failure_artifact())
         with self.assertRaisesRegex(DeploymentError, "finished with FAILURE"):
             self.go()
+        self.assertEqual(self.calls[("GET", PROOF_PATH)], 0)
+        self.assertIn(
+            "Jenkins failure in Production Preflight: `production_tracked_changes`.", self.report
+        )
+
+    def test_failure_artifact_reports_late_prepare_code(self):
+        self.fail_build()
+        self.overrides[FAILURE_PATH] = (
+            200,
+            {},
+            self.failure_artifact(stage="Deploy to Production", code="production_release_pending"),
+        )
+        with self.assertRaisesRegex(DeploymentError, "finished with FAILURE"):
+            self.go()
+        self.assertIn(
+            "Jenkins failure in Deploy to Production: `production_release_pending`.", self.report
+        )
+
+    def failure_artifact(self, **overrides):
+        return {
+            "commit": COMMIT,
+            "number": 145,
+            "stage": "Production Preflight",
+            "code": "production_tracked_changes",
+            **overrides,
+        }
+
+    def test_failure_artifact_rejects_foreign_build_or_unapproved_fields(self):
+        self.fail_build()
+        for payload in (
+            self.failure_artifact(commit="b" * 40),
+            self.failure_artifact(number=146),
+            self.failure_artifact(stage="Pre-Deploy Quality Gate"),
+            self.failure_artifact(
+                stage="Deploy to Production", code="production_preflight_timeout"
+            ),
+            self.failure_artifact(code="private-debug-value"),
+            self.failure_artifact(extra="private-debug-value"),
+            {"malformed": True},
+        ):
+            with self.subTest(payload=payload):
+                self.report.clear()
+                self.overrides[FAILURE_PATH] = (200, {}, payload)
+                with self.assertRaisesRegex(DeploymentError, "finished with FAILURE"):
+                    self.go()
+                self.assertNotIn("Jenkins failure in", "\n".join(self.report))
+                self.assertNotIn("private-debug-value", "\n".join(self.report))
         self.assertEqual(self.calls[("GET", PROOF_PATH)], 0)
 
     def test_jenkins_deduplication_reuses_existing_queue(self):

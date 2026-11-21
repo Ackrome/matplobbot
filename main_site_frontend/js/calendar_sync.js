@@ -21,6 +21,37 @@ let calendarPlatform = loadCalendarPlatform();
 let revealedCalendarProfileIds = loadRevealedCalendarProfileIds();
 let isCalendarSyncPanelOpen = shouldFocusCalendarSyncPanel;
 window.calendarCurrentViewMode = 'all';
+let calendarSessionDraft = !calendarHost && shouldFocusCalendarSyncPanel
+    && calendarSyncLaunchParams.get('calendar_preset') === 'exams_only' ? { lessonMode: 'exams_only' } : null;
+
+function calendarDraftLessonMode() {
+    return calendarSessionDraft?.lessonMode || window.calendarCurrentViewMode;
+}
+
+window.setCalendarDraftLessonMode = function(mode) {
+    const lessonMode = mode === 'exams_only' ? 'exams_only' : 'all';
+    if (calendarSessionDraft) calendarSessionDraft.lessonMode = lessonMode;
+    else window.calendarCurrentViewMode = lessonMode;
+}
+
+function calendarSignInReturnPath() {
+    const query = new URLSearchParams(window.location.search);
+    if (calendarSessionDraft) {
+        query.set('calendar', '1');
+        query.set('calendar_preset', calendarSessionDraft.lessonMode);
+    }
+    const suffix = query.size ? `?${query}` : '';
+    return window.location.pathname + suffix;
+}
+
+function clearCalendarSessionDraft() {
+    if (!calendarSessionDraft) return;
+    calendarSessionDraft = null;
+    if (!calendarSyncLaunchParams.has('calendar_preset') || !window.history?.replaceState) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('calendar_preset');
+    window.history.replaceState(window.history.state, '', url);
+}
 
 function createDefaultCalendarSubscriptionState() {
     return {
@@ -165,7 +196,8 @@ function getCalendarProfileModulePayload(profile) {
     return normalized.sort((a, b) => a.localeCompare(b));
 }
 
-window.openCalendarSyncPanel = function() {
+window.openCalendarSyncPanel = function({ lessonMode } = {}) {
+    calendarSessionDraft = !calendarHost && lessonMode === 'exams_only' ? { lessonMode } : null;
     isCalendarSyncPanelOpen = true;
     setCalendarDrawerVisibility(true);
     window.MpbScheduleUX?.calendarFocus(true);
@@ -174,6 +206,7 @@ window.openCalendarSyncPanel = function() {
 }
 
 window.closeCalendarSyncPanel = function() {
+    clearCalendarSessionDraft();
     isCalendarSyncPanelOpen = false;
     setCalendarDrawerVisibility(false);
 }
@@ -326,7 +359,7 @@ function renderCalendarSubscription() {
         const miniApp = window.mpbTelegramWebApp?.isActive;
         const pending = miniApp && window.mpbTelegramAuthState?.pending;
         const key = pending ? 'schedule.calendar.telegramAuthPending' : miniApp ? 'schedule.calendar.telegramAuthUnavailable' : 'schedule.calendar.authRequired';
-        const signIn = miniApp ? '' : `<a class="calendar-button calendar-primary" href="/login?next=${encodeURIComponent(location.pathname + location.search)}">${calendarEscape(calendarTranslate('schedule.calendar.signIn', 'Sign in'))}</a>`;
+        const signIn = miniApp ? '' : `<a class="calendar-button calendar-primary" href="/login?next=${encodeURIComponent(calendarSignInReturnPath())}">${calendarEscape(calendarTranslate('schedule.calendar.signIn', 'Sign in'))}</a>`;
         renderCalendarDialog(message(calendarTranslate(key, 'Sign in to manage your calendar subscriptions.'), `${signIn}${pending ? '' : renderCalendarBotLink('calendar-button')}`));
         return;
     }
@@ -357,19 +390,21 @@ function renderCalendarSubscription() {
     const currentView = !calendarHost && calendarEntity()?.id ? `<div class="calendar-current-view">
         <h4>${calendarEscape(calendarTranslate('schedule.calendar.dialog.currentSchedule', 'Currently open schedule'))}</h4>
         <p class="calendar-note">${window.getCalendarCurrentViewSummary()}</p>
-        <div class="calendar-fields"><label class="calendar-field">${calendarEscape(calendarTranslate('schedule.calendar.meta.mode', 'Classes'))}<select data-calendar-focus="new-mode" onchange="window.calendarCurrentViewMode=this.value">
-            <option value="all" ${window.calendarCurrentViewMode !== 'exams_only' ? 'selected' : ''}>${calendarEscape(calendarTranslate('schedule.calendar.mode.all', 'All classes'))}</option>
-            <option value="exams_only" ${window.calendarCurrentViewMode === 'exams_only' ? 'selected' : ''}>${calendarEscape(calendarTranslate('schedule.calendar.mode.exams', 'Exams only'))}</option>
+        ${calendarSessionDraft ? `<p class="calendar-note">${calendarEscape(calendarTranslate('schedule.session.examsCalendarHint', 'Exams only includes scheduled exams, assessments and pre-exam consultations.'))}</p>` : ''}
+        <div class="calendar-fields"><label class="calendar-field">${calendarEscape(calendarTranslate('schedule.calendar.meta.mode', 'Classes'))}<select data-calendar-focus="new-mode" onchange="setCalendarDraftLessonMode(this.value)">
+            <option value="all" ${calendarDraftLessonMode() !== 'exams_only' ? 'selected' : ''}>${calendarEscape(calendarTranslate('schedule.calendar.mode.all', 'All classes'))}</option>
+            <option value="exams_only" ${calendarDraftLessonMode() === 'exams_only' ? 'selected' : ''}>${calendarEscape(calendarTranslate('schedule.calendar.mode.exams', 'Exams only'))}</option>
         </select></label></div>
-        ${calendarButton('schedule.calendar.dialog.saveCurrent', 'Create subscription from this schedule', 'createCalendarProfileFromCurrentView()')}
+        ${calendarButton('schedule.calendar.dialog.saveCurrent', 'Create subscription from this schedule', 'createCalendarProfileFromCurrentView()', calendarSessionDraft ? 'calendar-primary' : '')}
     </div>` : '';
-    const saved = `<details id="calendar-profiles" class="calendar-disclosure" ${!profile ? 'open' : ''}>
+    const showSessionDraft = calendarSessionDraft && state.eligibility?.has_telegram_link && currentView;
+    const saved = showSessionDraft && !profiles.length ? '' : `<details id="calendar-profiles" class="calendar-disclosure" ${!profile ? 'open' : ''}>
         <summary data-calendar-focus="profiles">${calendarEscape(calendarTranslate('schedule.calendar.dialog.mySubscriptions', 'My subscriptions'))}</summary>
         <div class="calendar-profile-list">${profiles.map(item => `<button type="button" class="calendar-profile" data-calendar-focus="profile-${calendarEscape(item.id)}" aria-pressed="${item.id === profile?.id}"
             onclick="${calendarEscape(`selectCalendarSubscriptionProfile(${JSON.stringify(item.id)})`)}">
             <span><strong>${calendarEscape(getCalendarProfileTitle(item))}</strong><span>${calendarEscape(getCalendarProfileDescription(item))}</span></span>
             ${item.id === profile?.id ? `<span class="calendar-selection">${calendarEscape(calendarTranslate('schedule.calendar.dialog.selected', 'Selected'))}</span>` : ''}
-        </button>`).join('')}</div>${state.eligibility?.has_telegram_link ? currentView : ''}
+        </button>`).join('')}</div>${state.eligibility?.has_telegram_link && !showSessionDraft ? currentView : ''}
     </details>`;
     const health = profile?.health || {};
     const shownUrl = profile && (revealedCalendarProfileIds.has(profile.id) ? profile.links?.http_url : profile.links?.masked_http_url);
@@ -399,7 +434,7 @@ function renderCalendarSubscription() {
         </section>` : ''}
         </div>
     </details>`;
-    renderCalendarDialog(`<div class="calendar-dialog-body">${source}${connection}${state.justReset ? `<p class="calendar-feedback" role="status">${calendarEscape(calendarTranslate('schedule.calendar.dialog.resetDone', 'The link has changed. Add the new link in your calendar app.'))}</p>` : ''}</div>
+    renderCalendarDialog(`<div class="calendar-dialog-body">${showSessionDraft || source + connection}${state.justReset ? `<p class="calendar-feedback" role="status">${calendarEscape(calendarTranslate('schedule.calendar.dialog.resetDone', 'The link has changed. Add the new link in your calendar app.'))}</p>` : ''}</div>
         <footer class="calendar-dialog-footer">${saved}${extra}</footer>`);
 }
 
@@ -688,7 +723,13 @@ window.toggleCalendarSync = async function(enabled) {
 }
 
 window.selectCalendarSubscriptionProfile = async function(profileId) {
-    if (!profileId || profileId === calendarSubscriptionState.selected_profile_id) return;
+    if (!profileId) return;
+    const hadDraft = Boolean(calendarSessionDraft);
+    clearCalendarSessionDraft();
+    if (profileId === calendarSubscriptionState.selected_profile_id) {
+        if (hadDraft) renderCalendarSubscription();
+        return;
+    }
     await performCalendarMutation(`${CALENDAR_API_BASE}/cal/subscription/select`, {
         method: 'POST',
         body: JSON.stringify({ profile_id: profileId })
@@ -698,17 +739,22 @@ window.selectCalendarSubscriptionProfile = async function(profileId) {
 
 window.createCalendarProfileFromCurrentView = async function() {
     if (!calendarEntity()?.id) return;
-    await performCalendarMutation(`${CALENDAR_API_BASE}/cal/subscription/profiles`, {
+    const draft = calendarSessionDraft;
+    const saved = await performCalendarMutation(`${CALENDAR_API_BASE}/cal/subscription/profiles`, {
         method: 'POST',
         body: JSON.stringify({
             entity_type: calendarEntity().type,
             entity_id: calendarEntity().id,
             entity_name: calendarEntity().name,
-            lesson_mode: window.calendarCurrentViewMode,
+            lesson_mode: calendarDraftLessonMode(),
             modules: window.getCalendarCurrentViewModules(),
             timezone: window.getSelectedCalendarProfile?.()?.timezone || 'Europe/Moscow'
         })
     });
+    if (saved && draft && draft === calendarSessionDraft) {
+        clearCalendarSessionDraft();
+        renderCalendarSubscription();
+    }
 }
 
 window.updateCalendarSubscriptionProfile = async function(profileId, payload) {

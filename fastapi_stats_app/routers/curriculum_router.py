@@ -9,20 +9,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from shared_lib.services import curriculum_service as service
 from shared_lib.services.curriculum_documents import validate_official_document_url
-from shared_lib.services.schedule_freshness import (
-    ScheduleUnavailableError,
-    get_schedule_with_freshness,
-)
-from shared_lib.services.university_api import create_ruz_api_client
+from shared_lib.services.curriculum_session import MAX_TERM_DAYS, cached_session_dates
 
 from ..auth import require_admin
-from ..config import (
-    RATE_LIMIT_SCHEDULE_DATA,
-    SCHEDULE_INTERACTIVE_FRESHNESS_SECONDS,
-    SCHEDULE_INTERACTIVE_UPSTREAM_TIMEOUT_SECONDS,
-    SCHEDULE_REFRESH_FAILURE_COOLDOWN_SECONDS,
-    SCHEDULE_REFRESH_LOCK_TTL_SECONDS,
-)
+from ..config import RATE_LIMIT_SCHEDULE_DATA
 from ..rate_limit import enforce_rate_limit
 from .schedule_router import get_shared_http_session
 
@@ -154,53 +144,24 @@ async def get_group_session(
     semester: int | None = Query(default=None, ge=1, le=16),
     reference_date: date | None = None,
     include_dates: bool = False,
-    http_session=Depends(get_shared_http_session),
 ):
     await enforce_rate_limit(request, scope="curriculum_session", settings=RATE_LIMIT_SCHEDULE_DATA)
     result = await service.lookup_curriculum_session(
         group_id.strip(), reference_date or datetime.now(ZoneInfo("Europe/Moscow")).date(), semester
     )
     result["dates_status"] = "unchecked"
+    result["dates_coverage"] = []
+    result["dates_checked_at"] = None
     result["events"] = []
     if not include_dates or result["status"] != "confirmed":
         return result
     start, end = result["term"]["start_date"], result["term"]["end_date"]
-    # Only a reviewed, bounded semester can induce a university request.
-    if not 0 <= (date.fromisoformat(end) - date.fromisoformat(start)).days <= 185:
-        return result
-    client = create_ruz_api_client(
-        http_session,
-        max_retries=1,
-        request_timeout_seconds=SCHEDULE_INTERACTIVE_UPSTREAM_TIMEOUT_SECONDS,
-    )
-    try:
-        schedule = await get_schedule_with_freshness(
-            client,
-            "group",
-            result["group_id"],
-            start,
-            end,
-            freshness_seconds=SCHEDULE_INTERACTIVE_FRESHNESS_SECONDS,
-            live_wait_seconds=3,
-            initial_live_wait_seconds=4,
-            lock_ttl_seconds=SCHEDULE_REFRESH_LOCK_TTL_SECONDS,
-            failure_cooldown_seconds=SCHEDULE_REFRESH_FAILURE_COOLDOWN_SECONDS,
-            require_coverage=True,
+    if 0 <= (date.fromisoformat(end) - date.fromisoformat(start)).days <= MAX_TERM_DAYS:
+        result.update(
+            await cached_session_dates(result["group_id"], result["term"], result["assessments"])
         )
-    except (ScheduleUnavailableError, ConnectionError):
+    else:
         result["dates_status"] = "unavailable"
-        return result
-    bounds = schedule.covered_bounds
-    result["dates_status"] = (
-        "checked"
-        if bounds
-        and bounds[0] <= start <= end <= bounds[1]
-        and schedule.freshness in {"live", "fresh_cache"}
-        else "unavailable"
-    )
-    result["events"] = service.match_session_dates(
-        result["assessments"], schedule.schedule, start, end, group_id=result["group_id"]
-    )
     return result
 
 

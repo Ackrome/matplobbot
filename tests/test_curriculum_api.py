@@ -4,7 +4,7 @@ import asyncio
 import os
 import unittest
 from contextlib import asynccontextmanager
-from types import SimpleNamespace
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 os.environ.setdefault("JWT_SECRET_KEY", "curriculum-api-test-secret-at-least-32-bytes")
@@ -17,7 +17,8 @@ from sqlalchemy.pool import StaticPool
 
 from fastapi_stats_app.auth import get_current_user
 from fastapi_stats_app.routers import curriculum_router as api
-from shared_lib.models import CurriculumDocument, CurriculumGroup
+from shared_lib.models import CurriculumDocument, CurriculumGroup, CurriculumSessionSnapshot
+from shared_lib.services import curriculum_session
 from tests.test_curriculum_documents import HEADERS, synthetic_pdf
 from tests.test_curriculum_service import _AsyncSession
 
@@ -344,7 +345,7 @@ class TestCurriculumAPI(unittest.TestCase):
             snapshot = lookup["assessments"][0]["snapshot_url"]
             self.assertEqual(self.client.get(snapshot).content, original)
             session_query = {"group_id": "test-group", "reference_date": "2026-10-09"}
-            with patch.object(api, "get_schedule_with_freshness", AsyncMock()) as fetch:
+            with patch.object(api, "cached_session_dates", AsyncMock()) as fetch:
                 planned = self.client.get("/api/schedule/session", params=session_query).json()
                 fetch.assert_not_awaited()
             self.assertEqual(planned["term"]["semester"], 7)
@@ -358,37 +359,40 @@ class TestCurriculumAPI(unittest.TestCase):
                 "beginLesson": "10:10",
                 "kindOfWork": "Экзамен",
                 "auditorium": "303",
+                "lessonOid": 987,
             }
-            lookup_schedule = AsyncMock(
-                return_value=SimpleNamespace(
-                    schedule=[
-                        assessment,
-                        {
-                            **assessment,
-                            "kindOfWork": "Консультация перед экзаменом",
-                            "date": "2027-01-17",
-                        },
-                        {**assessment, "discipline": "Machine learnin", "date": "2027-01-19"},
-                    ],
-                    freshness="live",
-                    covered_bounds=("2026-09-01", "2027-01-31"),
-                )
+            curriculum_rows = [
+                assessment,
+                {**assessment, "kindOfWork": "Консультация перед экзаменом", "date": "2027-01-17"},
+                {**assessment, "discipline": "Machine learnin", "date": "2027-01-19"},
+            ]
+            checked = datetime.now(UTC)
+            lookup = AsyncMock(
+                return_value=(curriculum_rows, checked, ("2026-09-01", "2027-01-31"))
             )
-            with patch.object(api, "get_schedule_with_freshness", lookup_schedule):
+            CurriculumSessionSnapshot.__table__.create(engine)
+            with (
+                patch.object(curriculum_session, "get_session", sessions),
+                patch.object(curriculum_session, "get_cached_schedule_with_coverage", lookup),
+                patch.object(curriculum_session, "create_ruz_api_client") as ruz,
+            ):
                 dated = self.client.get(
                     "/api/schedule/session", params={**session_query, "include_dates": True}
                 ).json()
-                self.assertTrue(lookup_schedule.await_args.kwargs["require_coverage"])
                 self.assertEqual(dated["dates_status"], "checked")
+                self.assertEqual(dated["dates_checked_at"], checked.isoformat())
                 self.assertEqual(
-                    [(row["date"], row["room"]) for row in dated["events"]], [("2027-01-18", "303")]
+                    [(row["date"], row["room"], row["lesson_id"]) for row in dated["events"]],
+                    [("2027-01-18", "303", "987")],
                 )
-                lookup_schedule.return_value.covered_bounds = None
+                lookup.return_value = (curriculum_rows, checked, ("2027-01-17", "2027-01-24"))
                 partial = self.client.get(
                     "/api/schedule/session", params={**session_query, "include_dates": True}
                 ).json()
-                self.assertEqual(partial["dates_status"], "unavailable")
+                self.assertEqual(partial["dates_status"], "partial")
                 self.assertEqual(partial["assessments"], planned["assessments"])
+                self.assertEqual(partial["events"], dated["events"])
+                ruz.assert_not_called()
             spring_query = {
                 **query,
                 "lesson_date": "2027-02-02",
