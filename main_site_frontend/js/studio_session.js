@@ -22,12 +22,38 @@
 
     function create({ storage, scope, save, onStorageError = () => {} }) {
         const prefix = `mpb-studio-v1:${scope}:`;
+        const contextId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
         let current = null;
         let pending = Promise.resolve();
         function key(record) { return record.projectId ? `${record.projectId}:${record.fileId}` : `quick:${record.type}`; }
+        function journalPrefix(record) { return `${prefix}${key(record)}:draft:`; }
+        function journalKey(record) { return journalPrefix(record) + contextId; }
         function read(name) {
             try { return JSON.parse(storage.getItem(prefix + name) || 'null'); }
             catch (_) { return null; }
+        }
+        function readDrafts(record) {
+            const legacyKey = prefix + key(record);
+            const names = new Set([legacyKey, journalKey(record)]);
+            const journals = journalPrefix(record);
+            try {
+                for (let i = 0; i < storage.length; i++) {
+                    const name = storage.key(i);
+                    if (name?.startsWith(journals)) names.add(name);
+                }
+            } catch (_) { /* The editor also works without browser storage. */ }
+
+            const drafts = [];
+            for (const name of names) {
+                try {
+                    const entry = storage.getItem(name);
+                    const draft = JSON.parse(entry);
+                    if (typeof draft?.content === 'string' && draft.content !== record.content) {
+                        drafts.push({ ...draft, name, entry, legacy: name === legacyKey });
+                    }
+                } catch (_) { /* Ignore malformed entries without deleting them. */ }
+            }
+            return drafts.sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
         }
         function write(record) {
             try {
@@ -35,32 +61,50 @@
                     content: record.content, baseContent: record.saved, updatedAt: Date.now(),
                     editId: globalThis.crypto?.randomUUID?.() || String(Math.random()),
                 });
-                storage.setItem(prefix + key(record), entry);
-                record.draftEntry = entry;
+                const name = journalKey(record);
+                storage.setItem(name, entry);
+                record.draftEntry = { name, entry };
                 return true;
             } catch (error) { onStorageError(error); return false; }
         }
-        function remove(record) {
+        function removeEntry(draft) {
             try {
-                const name = prefix + key(record);
-                if (record.draftEntry && storage.getItem(name) === record.draftEntry) storage.removeItem(name);
-                delete record.draftEntry;
+                if (draft && storage.getItem(draft.name) === draft.entry) storage.removeItem(draft.name);
             } catch (error) { onStorageError(error); }
         }
-        function open(record, { restore = true } = {}) {
-            const draft = read(key(record));
-            current = { ...record, saved: record.content, content: record.content, recovered: false, conflict: false };
-            if (restore && draft && typeof draft.content === 'string' && draft.content !== record.content) {
-                current.conflict = Boolean(record.projectId && draft.baseContent !== record.content);
+        function remove(record) {
+            removeEntry(record.draftEntry);
+            removeEntry(record.sourceDraft);
+            delete record.draftEntry;
+            delete record.sourceDraft;
+        }
+        function restoreDraft(index) {
+            const draft = current.draftChoices?.[index];
+            delete current.draftChoices;
+            if (!draft) return { ...current };
+            current.sourceDraft = draft;
+            current.conflict = Boolean(current.projectId && draft.baseContent !== current.saved);
+            if (current.conflict) {
                 current.draftContent = draft.content;
                 current.draftUpdatedAt = draft.updatedAt;
-                current.draftEntry = JSON.stringify(draft);
-                if (current.conflict) {
-                    current.serverContent = record.content;
-                    current.serverRevision = record.revision;
-                } else {
-                    current.content = draft.content;
-                    current.recovered = true;
+                current.serverContent = current.content;
+                current.serverRevision = current.revision;
+            } else {
+                current.content = draft.content;
+                current.recovered = true;
+            }
+            return { ...current };
+        }
+        function open(record, { restore = true } = {}) {
+            current = { ...record, saved: record.content, content: record.content, recovered: false, conflict: false };
+            if (restore) {
+                const drafts = readDrafts(record);
+                if (drafts.length) {
+                    current.draftChoices = drafts;
+                    const [only] = drafts;
+                    if (drafts.length === 1 && (only.legacy || only.name === journalKey(record) || !record.projectId)) {
+                        return restoreDraft(0);
+                    }
                 }
             }
             return { ...current };
@@ -81,9 +125,12 @@
             return { ...current };
         }
         function edit(content) {
-            if (!current || current.conflict) return;
+            if (!current || current.conflict || current.draftChoices) return;
             current.content = content;
-            write(current);
+            if (write(current) && !current.projectId) {
+                removeEntry(current.sourceDraft);
+                delete current.sourceDraft;
+            }
         }
         function flush() {
             const record = current;
@@ -115,7 +162,7 @@
             pending = operation;
             return operation;
         }
-        return { open, edit, flush, resolveConflict, snapshot: () => current && { ...current },
+        return { open, edit, flush, restoreDraft, resolveConflict, snapshot: () => current && { ...current },
             dirty: () => Boolean(current?.projectId && (current.conflict || current.content !== current.saved)),
             readValue: name => read(name),
             storeValue(name, value) {

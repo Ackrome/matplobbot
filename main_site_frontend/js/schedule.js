@@ -30,6 +30,7 @@ let fixedTimeSlotRangesCache = null;
 let fullSchedule =[];
 let scheduleCacheEntityId = null;
 let loadedBounds = { start: null, end: null };
+let coveredBounds = null;
 let sourceUpdatedAt = null;
 let scheduleFreshness = 'fresh_cache';
 let scheduleRefreshInProgress = false;
@@ -726,6 +727,36 @@ function getCurrentWeekEnd() {
         weekEnd.setDate(weekEnd.getDate() + 6);
         return weekEnd;
     })();
+}
+
+function getVerifiedScheduleBounds() {
+    if (!coveredBounds || !loadedBounds.start || !loadedBounds.end) return null;
+    const start = coveredBounds.start > loadedBounds.start ? coveredBounds.start : loadedBounds.start;
+    const end = coveredBounds.end < loadedBounds.end ? coveredBounds.end : loadedBounds.end;
+    return start <= end ? { start, end } : null;
+}
+
+function isScheduleDateCovered(day) {
+    const bounds = getVerifiedScheduleBounds();
+    const value = getISODateStr(day);
+    return Boolean(bounds && bounds.start <= value && value <= bounds.end);
+}
+
+function isCurrentWeekCovered() {
+    const bounds = getVerifiedScheduleBounds();
+    return Boolean(bounds && bounds.start <= getISODateStr(currentWeekStart)
+        && getISODateStr(getCurrentWeekEnd()) <= bounds.end);
+}
+
+function getScheduleEmptyMessage() {
+    if (!isCurrentWeekCovered()) {
+        return scheduleRefreshInProgress
+            ? t('schedule.coverage.checking', 'Checking the schedule for these dates…')
+            : t('schedule.coverage.unavailable', 'The schedule for these dates has not been verified.');
+    }
+    return fullSchedule.some(isLessonInCurrentPeriod)
+        ? t('schedule.coverage.filtered', 'No lessons match the selected filters.')
+        : t('schedule.state.emptyPeriod', 'No lessons in this period.');
 }
 
 function isLessonInCurrentPeriod(lesson) {
@@ -1466,13 +1497,12 @@ function getMonday(d) {
 
 async function changeWeek(offset) {
     currentWeekStart.setDate(currentWeekStart.getDate() + offset * 7);
-    const weekEnd = new Date(currentWeekStart);
-    weekEnd.setDate(weekEnd.getDate() + 6);
-    const loadedStart = loadedBounds.start ? parseDate(loadedBounds.start) : null;
-    const loadedEnd = loadedBounds.end ? parseDate(loadedBounds.end) : null;
-    if (!loadedStart || !loadedEnd || currentWeekStart < loadedStart || weekEnd > loadedEnd) {
+    if (!isCurrentWeekCovered()) {
         const targetDateStr = getISODateStr(currentWeekStart);
-        await loadSchedule(currentEntity.type, currentEntity.id, currentEntity.name, targetDateStr, { urlMode: 'replace', preserveModules: true });
+        await loadSchedule(currentEntity.type, currentEntity.id, currentEntity.name, targetDateStr, {
+            urlMode: 'replace', preserveModules: true,
+            keepEmptyModules: allAvailableModules.length > 0 && selectedModules.size === 0
+        });
     } else {
         filterAndRender();
     }
@@ -1729,6 +1759,7 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         lessonActionMap.clear();
         scheduleCacheEntityId = null;
         loadedBounds = { start: null, end: null };
+        coveredBounds = null;
         allAvailableModules = [];
         sourceUpdatedAt = null;
         scheduleFreshness = 'fresh_cache';
@@ -1756,7 +1787,6 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
     if (!options.silent) {
         document.getElementById('desktopSchedule').innerHTML = `<div class="p-8"><div class="skeleton h-64 w-full rounded-3xl"></div></div>`;
         document.getElementById('mobileSchedule').innerHTML = `<div class="skeleton h-64 w-full rounded-3xl"></div>`;
-        sourceUpdatedAt = null;
         scheduleRefreshInProgress = false;
     }
     renderScheduleHome();
@@ -1771,7 +1801,7 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         }) || fetch(`${API_BASE}/schedule/data/${nextEntity.type}/${encodeURIComponent(nextEntity.id)}?base_date=${requestedDate}${options.refresh ? '&refresh=1' : ''}`, {
             signal: requestController.signal
         }).then((res) => {
-            if (!res.ok) throw new Error('API Error');
+            if (!res.ok) throw Object.assign(new Error('API Error'), { status: res.status });
             return res.json();
         }));
         if (requestSeq !== scheduleLoadRequestSeq) return;
@@ -1780,11 +1810,16 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         // content_changed flag is false, so always adopt the returned snapshot.
         fullSchedule = receivedSchedule;
         scheduleCacheEntityId = data.entity_id || nextEntity.id;
-        allAvailableModules = buildAvailableModules(data.available_modules || [], fullSchedule);
-        loadedBounds = data.loaded_bounds || {start: "2000-01-01", end: "2099-01-01"};
+        const knownModules = options.preserveModules && !entityChanged ? allAvailableModules : [];
+        allAvailableModules = buildAvailableModules([...knownModules, ...(data.available_modules || [])], fullSchedule);
+        loadedBounds = data.loaded_bounds || { start: null, end: null };
+        coveredBounds = data.covered_bounds || null;
         sourceUpdatedAt = data.source_checked_at || data.source_updated_at || null;
         scheduleFreshness = data.freshness || (data.is_offline ? 'stale_fallback' : 'fresh_cache');
-        scheduleRefreshInProgress = Boolean(data.refresh_in_progress);
+        const pollAttempt = Number(options.pollAttempt) || 0;
+        const refreshStillPending = Boolean(data.refresh_in_progress);
+        scheduleRefreshInProgress = refreshStillPending && pollAttempt < MAX_SCHEDULE_REFRESH_POLLS;
+        if (refreshStillPending && !scheduleRefreshInProgress) scheduleFreshness = 'stale_fallback';
         window.ScheduleState?.addRecent?.(currentEntity);
         selectedModules = new Set(Array.from(selectedModules).map(canonicalizeSpecialModuleName).filter(Boolean));
         if (selectedModules.size > 0) {
@@ -1805,8 +1840,7 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         }
         // Вызываем обновление календаря, так как сменилась сущность
         if (window._renderCalendarSubscriptionImpl) window._renderCalendarSubscriptionImpl();
-        const pollAttempt = Number(options.pollAttempt) || 0;
-        if (scheduleRefreshInProgress && pollAttempt < MAX_SCHEDULE_REFRESH_POLLS) {
+        if (scheduleRefreshInProgress) {
             const expectedEntityKey = getScheduleEntityKey(nextEntity);
             scheduleRefreshPollTimer = setTimeout(() => {
                 if (getScheduleEntityKey(currentEntity) !== expectedEntityKey) return;
@@ -1827,11 +1861,12 @@ async function loadSchedule(type, id, name, targetDate = null, options = {}) {
         }
     } catch (err) {
         if (err?.name === 'AbortError' || requestSeq !== scheduleLoadRequestSeq) return;
-        if (options.silent) {
+        if (options.silent || err?.status === 503 || !navigator.onLine) {
             scheduleFreshness = 'stale_fallback';
             scheduleRefreshInProgress = false;
             isOfflineMode = true;
             filterAndRender();
+            syncScheduleUrl(options.urlMode || (entityChanged ? 'push' : 'replace'));
             return;
         }
         const errorText = escapeHtml(t('schedule.error.load', 'Ошибка загрузки расписания.'));
@@ -1868,6 +1903,9 @@ async function applyScheduleStateFromUrl() {
     allAvailableModules = [];
     selectedModules.clear();
     isOfflineMode = false;
+    loadedBounds = { start: null, end: null };
+    coveredBounds = null;
+    sourceUpdatedAt = null;
     scheduleFreshness = 'fresh_cache';
     scheduleRefreshInProgress = false;
     document.getElementById('offlineWarning')?.classList.add('hidden');
@@ -2105,7 +2143,9 @@ function filterAndRender() {
         const freshnessText = document.getElementById('scheduleFreshnessText');
         const freshnessIcon = document.getElementById('scheduleFreshnessIcon');
         const checkedTime = formatRelativeDateTime(sourceUpdatedAt);
-        const state = isOfflineMode ? 'stale_fallback' : scheduleFreshness;
+        const state = !isCurrentWeekCovered()
+            ? (scheduleRefreshInProgress ? 'checking_dates' : 'unchecked_dates')
+            : (isOfflineMode ? 'stale_fallback' : scheduleFreshness);
         const presentation = {
             live: {
                 classes: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/35 dark:text-emerald-200',
@@ -2126,9 +2166,19 @@ function filterAndRender() {
                 classes: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/35 dark:text-amber-200',
                 iconClasses: 'text-amber-500 dark:text-amber-300',
                 text: t('schedule.freshness.staleFallback', 'Could not check for updates. Showing data confirmed {time}.', { time: checkedTime })
+            },
+            checking_dates: {
+                classes: 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900/70 dark:bg-blue-950/35 dark:text-blue-200',
+                iconClasses: 'text-blue-500 dark:text-blue-300',
+                text: t('schedule.coverage.checking', 'Checking the schedule for these dates…')
+            },
+            unchecked_dates: {
+                classes: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/35 dark:text-amber-200',
+                iconClasses: 'text-amber-500 dark:text-amber-300',
+                text: t('schedule.coverage.unavailableNote', 'The university schedule for some dates has not been verified.')
             }
         }[state] || null;
-        if (presentation && currentEntity?.id) {
+        if (presentation && currentEntity?.id && (isCurrentWeekCovered() || fullSchedule.some(isLessonInCurrentPeriod))) {
             offlineWarning.className = `m-3 flex items-center gap-2 rounded-xl border p-3 fade-in ${presentation.classes}`;
             if (freshnessIcon) freshnessIcon.className = `h-4 w-4 shrink-0 ${presentation.iconClasses}`;
             if (freshnessText) freshnessText.textContent = presentation.text;
@@ -2148,7 +2198,7 @@ function filterAndRender() {
     lessonActionMap = new Map();
     renderDesktopGrid(filteredLessons);
     renderMobileFeed(filteredLessons);
-    if(currentEntity?.id&&sourceUpdatedAt)window.MpbUI?.finish('schedule_first');
+    if(currentEntity?.id&&sourceUpdatedAt&&isCurrentWeekCovered())window.MpbUI?.finish('schedule_first');
     commitScheduleState({ urlMode: 'replace' });
     renderModuleFilters();
 }
@@ -2185,10 +2235,13 @@ function renderDesktopGrid(lessons) {
         const dateStr = getISODateStr(date);
         return (dayLessonsMap[dateStr] || []).length;
     });
+    const unfilteredDays = new Set(fullSchedule.filter(isLessonInCurrentPeriod)
+        .map((lesson) => getISODateStr(parseDate(lesson.date))));
     const activeDayCount = dayCounts.filter(Boolean).length;
-    const loadedText = loadedBounds.start && loadedBounds.end
-        ? `${formatUiDate(parseDate(loadedBounds.start), { day: 'numeric', month: 'short' })} - ${formatUiDate(parseDate(loadedBounds.end), { day: 'numeric', month: 'short' })}`
-        : t('schedule.table.loadedUnknown', 'диапазон не загружен');
+    const verified = getVerifiedScheduleBounds();
+    const loadedText = verified
+        ? `${formatUiDate(parseDate(verified.start), { day: 'numeric', month: 'short' })} - ${formatUiDate(parseDate(verified.end), { day: 'numeric', month: 'short' })}`
+        : null;
     const moduleText = allAvailableModules.length
         ? `${selectedModules.size}/${allAvailableModules.length}`
         : t('schedule.table.noModules', 'нет');
@@ -2207,7 +2260,7 @@ function renderDesktopGrid(lessons) {
                 <span>${escapeHtml(t('schedule.table.lessonsCount', '{count} занятий', { count: lessons.length }))}</span>
                 <span>${escapeHtml(t('schedule.table.daysCount', '{count} дней', { count: activeDayCount }))}</span>
                 <span>${escapeHtml(t('schedule.table.modulesCount', 'Модули: {count}', { count: moduleText }))}</span>
-                <span>${escapeHtml(t('schedule.table.loadedRange', 'Загружено: {range}', { range: loadedText }))}</span>
+                ${loadedText ? `<span>${escapeHtml(t('schedule.coverage.range', 'Verified: {range}', { range: loadedText }))}</span>` : ''}
             </div>
         </div>
         <div class="schedule-table-wrap schedule-table-viewport overflow-hidden relative" data-initial-scroll-top="${tableInitialScrollTop}" data-render-key="${escapeHtml(tableRenderKey)}" style="--schedule-slot-row-height: ${TABLE_SLOT_ROW_HEIGHT_PX}px;">
@@ -2218,12 +2271,18 @@ function renderDesktopGrid(lessons) {
     weekDates.forEach((d, index) => {
         const isToday = isSameDay(d, now);
         const count = dayCounts[index];
+        let summary = formatScheduleDayLessonCount(count);
+        if (!count) {
+            if (!isScheduleDateCovered(d)) summary = t('schedule.coverage.dayUnknown', 'not verified');
+            else if (unfilteredDays.has(getISODateStr(d))) summary = t('schedule.coverage.dayFiltered', 'filtered out');
+            else summary = t('schedule.table.dayEmpty', 'нет пар');
+        }
         html += `<th class="schedule-day-head schedule-sticky-day p-3 border-r last:border-r-0 ${isToday ? 'is-today' : ''} relative">
             ${isToday ? '<div class="schedule-today-marker absolute top-0 left-0 w-full h-1"></div>' : ''}
             <div class="schedule-day-head-inner">
                 <span class="schedule-day-label text-xs uppercase tracking-widest font-bold">${escapeHtml(formatUiDate(d, {weekday: 'short'}))}</span>
                 <span class="schedule-day-number text-xl font-black">${d.getDate()}</span>
-                <span class="schedule-day-count">${escapeHtml(count ? formatScheduleDayLessonCount(count) : t('schedule.table.dayEmpty', 'нет пар'))}</span>
+                <span class="schedule-day-count">${escapeHtml(summary)}</span>
             </div>
         </th>`;
     });
@@ -2277,7 +2336,7 @@ function renderDesktopGrid(lessons) {
 function renderMobileFeed(lessons) {
     const container = document.getElementById('mobileSchedule');
     if (lessons.length === 0) {
-        container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm">${escapeHtml(t('schedule.state.emptyWeek', 'Нет занятий на этой неделе.'))}</div>`;
+        container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm">${escapeHtml(getScheduleEmptyMessage())}</div>`;
         return;
     }
     const byDate = {};
@@ -2329,7 +2388,7 @@ function renderMobileFeed(lessons) {
 
 window.showLessonDetails = function(lesson, trigger) {
     window.MpbLessonDetails?.open(lesson, {
-        schedule: fullSchedule, entity: { ...currentEntity, id: scheduleCacheEntityId || currentEntity.id }, bounds: { ...loadedBounds },
+        schedule: fullSchedule, entity: { ...currentEntity, id: scheduleCacheEntityId || currentEntity.id }, bounds: getVerifiedScheduleBounds() || {},
         prepareLesson: normalizeScheduleLesson,
         sourceUpdatedAt, freshness: scheduleFreshness, offline: isOfflineMode,
         refreshing: scheduleRefreshInProgress,

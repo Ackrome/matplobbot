@@ -10,6 +10,7 @@ Provides one stdout/stderr logging policy for the bot, FastAPI API, and schedule
 - `resolve_log_level(value=None)` validates `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`; `WARN` and `FATAL` are accepted aliases.
 - `resolve_log_format(value=None, environment=None)` validates `text` or `json`. With no explicit value, production uses JSON and other environments use text.
 - `JsonFormatter` emits one JSON object per record with timestamp, level, service, logger, message, correlation ID, and source location.
+- `redact_request_credentials(value)` masks credentials in calendar paths, query parameters, WebSocket tickets, and bearer headers. The text and JSON formatters apply it to messages and exception output, including Uvicorn's access and WebSocket logs.
 
 ## Usage
 
@@ -28,3 +29,5 @@ The module uses only the standard library and `shared_lib.request_context`. Call
 ## Maintenance notes
 
 Keep the JSON field names stable for log collectors. Do not add file handlers here. When adding a service, give it a stable service name and keep Docker `json-file` size/retention limits in both Compose configurations.
+
+Keep the proxy rules aligned in `Caddyfile` and `main_site_frontend/default.conf`. Test successful and failing calendar requests and WebSocket upgrades with synthetic credentials, including a proxy failure before the request reaches the API.

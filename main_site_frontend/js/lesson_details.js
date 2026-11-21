@@ -162,7 +162,14 @@
     function curriculumContext(item, entity = {}) {
         const group = curriculumGroup(item, entity);
         if (!group || !item.title || !item.date) return null;
-        return { group_id: group.id, discipline: item.title, lesson_date: item.date };
+        const request = { group_id: group.id, discipline: item.title, lesson_date: item.date };
+        const plan = text(item.raw?.disciplineinplan), discipline = text(item.disciplineId);
+        const ruzId = value => /^[1-9][0-9]{0,9}$/.test(value) && Number(value) <= 2147483647;
+        if (ruzId(plan) && ruzId(discipline)) {
+            request.plan_id = plan;
+            request.discipline_id = discipline;
+        }
+        return request;
     }
     function curriculumSnapshotUrl(value) {
         const path = text(value);

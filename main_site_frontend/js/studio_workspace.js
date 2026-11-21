@@ -28,6 +28,60 @@ window.MpbStudioUX = (() => {
         const render=()=>{list.replaceChildren();const matches=projectsList.filter(p=>p.name.toLocaleLowerCase().includes(search.value.toLocaleLowerCase()));if(!matches.length){const p=document.createElement('p');p.className='ui-muted';p.textContent=tr('noProjects');list.append(p);}for(const project of matches){const row=document.createElement('section');row.className='project-manager-row';const open=button(project.name,async()=>{await openProject(project.id);updateModeUi();document.querySelector('dialog[open]')?.close();});open.classList.add('project-open');const meta=document.createElement('p');meta.className='ui-muted';meta.textContent=project.type;const actions=document.createElement('div');actions.className='ui-row';
             actions.append(button({key:'rename'},async()=>{const name=await MpbUI.prompt(tr('renameProject'),project.name);if(!name)return;await api(`/studio/projects/${project.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});await loadProjects();render();}),button({key:'duplicate'},async()=>{const name=await MpbUI.prompt(tr('duplicateProject'),`${project.name} — ${tr('copyName')}`);if(!name)return;await transition(async()=>{await api(`/studio/projects/${project.id}/duplicate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});await loadProjects();});render();}),button({key:'delete'},async()=>{if(!await MpbUI.confirm(tr('deleteProject'),tr('deleteProjectMessage',{name:project.name})))return;await transition(async()=>{await api(`/studio/projects/${project.id}`,{method:'DELETE'});await loadProjects();if(String(currentProjectId)===String(project.id)){currentProjectId=currentFileId=null;projectFiles=[];session.open({type:'empty',content:''});setEditorContent('',true);resetPreview();renderFileList();}});render();},'danger'));row.append(open,meta,actions);list.append(row);}};search.addEventListener('input',render);render();await MpbUI.dialog({title:tr('manageProjects'),content,actions:[{label:tr('close'),value:'close'}]});
     }
+    function draftPreview({content, baseContent}) {
+        const base = typeof baseContent === 'string' ? baseContent : '';
+        let start = 0;
+        while (start < content.length && content[start] === base[start]) start++;
+        start = Math.max(0, start - 30);
+        const end = start + 240;
+        return content ? `${start ? '…' : ''}${content.slice(start, end)}${end < content.length ? '…' : ''}` : tr('emptyDraftPreview');
+    }
+    async function chooseDraft(drafts) {
+        const content = document.createElement('div');
+        content.className = 'ui-stack';
+        const hint = document.createElement('p');
+        hint.className = 'ui-muted';
+        hint.textContent = tr('restoreDraftsHint');
+        const choices = document.createElement('div');
+        choices.className = 'studio-draft-options';
+        choices.setAttribute('role', 'radiogroup');
+        choices.setAttribute('aria-label', tr('restoreDraftsTitle'));
+        for (const [index, draft] of drafts.entries()) {
+            const option = document.createElement('label');
+            option.className = 'studio-draft-option';
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = 'studio-draft';
+            input.value = String(index);
+            input.checked = index === 0;
+            const body = document.createElement('span');
+            body.className = 'studio-draft-summary';
+            const heading = document.createElement('strong');
+            heading.textContent = tr('draftLabel', {number:index + 1});
+            body.append(heading);
+            const updated = new Date(draft.updatedAt);
+            if (draft.updatedAt && Number.isFinite(updated.valueOf())) {
+                const time = document.createElement('time');
+                time.dateTime = updated.toISOString();
+                time.textContent = new Intl.DateTimeFormat(window.mpbI18n.getLanguage(), {
+                    dateStyle:'medium', timeStyle:'medium',
+                }).format(updated);
+                body.append(time);
+            }
+            const preview = document.createElement('span');
+            preview.className = 'studio-draft-preview';
+            preview.textContent = draftPreview(draft);
+            body.append(preview);
+            option.append(input, body);
+            choices.append(option);
+        }
+        content.append(hint, choices);
+        const answer = await MpbUI.dialog({title:tr('restoreDraftsTitle'), content, actions:[
+            {label:tr('openWithoutDraft'), value:'server'},
+            {label:tr('restoreDraft'), value:'restore', primary:true},
+        ]});
+        return answer === 'restore' ? Number(choices.querySelector(':checked').value) : -1;
+    }
     async function conflict(record) {
         const content = document.createElement('div');
         content.className = 'ui-stack';
@@ -78,5 +132,5 @@ window.MpbStudioUX = (() => {
     function renderUploads(){const list=$('studio-upload-list');list.replaceChildren();const target=document.createElement('p');target.className='ui-muted studio-upload-hint';target.textContent=tr('uploadProject',{name:projectsList.find(p=>String(p.id)===String(uploadProjectId))?.name||String(uploadProjectId)});list.append(target);const done=uploadQueue.filter(x=>x.state==='success').length;const progress=document.createElement('progress');progress.max=uploadQueue.length||1;progress.value=done;progress.setAttribute('aria-label',tr('uploadProgress',{done,total:uploadQueue.length}));list.append(progress);for(const item of uploadQueue){const row=document.createElement('div');row.className='upload-row';const span=document.createElement('span');span.textContent=`${item.file.name} · ${tr('upload.'+item.state)}`;row.append(span);if(item.state==='error')row.append(button({key:'retry'},()=>performUploads()));list.append(row);}}
     async function performUploads(){if(uploadBusy)return;uploadBusy=true;try{await transition(async()=>{const projectId=uploadProjectId;for(const item of uploadQueue.filter(i=>i.state==='queued'||i.state==='error')){if(item.file.size>5*1024*1024){item.state='large';renderUploads();continue;}item.state='uploading';renderUploads();try{const body=new FormData();body.append('file',item.file);await api(`/studio/projects/${projectId}/upload`,{method:'POST',body});item.state='success';}catch{item.state='error';}renderUploads();}if(String(currentProjectId)===String(projectId))await activateProject(projectId);setStatus('saved');});}finally{uploadBusy=false;}}
     async function upload(files){if(!currentProjectId)throw new Error(t('chooseProject'));if(uploadBusy)throw new Error(tr('uploadWait'));uploadProjectId=currentProjectId;uploadQueue=files.map(file=>({file,state:'queued'}));renderUploads();await performUploads();}
-    return {init,mode,filename,resetCreate,draft,templatePreview,manageProjects,conflict,hash,remember,errorLinks,upload};
+    return {init,mode,filename,resetCreate,draft,templatePreview,manageProjects,chooseDraft,conflict,hash,remember,errorLinks,upload};
 })();

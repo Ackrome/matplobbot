@@ -617,6 +617,7 @@ async def check_for_schedule_updates(
                         deliveries=deliveries,
                         expected_revision=baseline["revision"],
                         history=history,
+                        coverage=(start_date_str, end_date_str),
                     )
 
                 elif not reference_hash:
@@ -632,11 +633,17 @@ async def check_for_schedule_updates(
                         new_hash=new_hash,
                         deliveries=[],
                         expected_revision=None,
+                        coverage=(start_date_str, end_date_str),
                     )
                 else:
                     # The schedule did not change, but the API poll succeeded. Refresh the
                     # DB cache timestamp and repair any divergent per-subscription hashes.
-                    await upsert_cached_schedule(entity_type, entity_id, new_schedule_data)
+                    await upsert_cached_schedule(
+                        entity_type,
+                        entity_id,
+                        new_schedule_data,
+                        coverage=(start_date_str, end_date_str),
+                    )
                     await batch_update_subscription_hashes(entity_type, entity_id, new_hash)
                     logger.debug(
                         "Refreshed unchanged schedule cache for %s (%s:%s)",
@@ -708,7 +715,9 @@ async def update_schedule_cache(http_session: aiohttp.ClientSession, ruz_api_cli
                 )
 
                 # Update DB
-                await upsert_cached_schedule(entity_type, entity_id, schedule_data)
+                await upsert_cached_schedule(
+                    entity_type, entity_id, schedule_data, coverage=(start_date_str, end_date_str)
+                )
                 logger.debug(f"Updated cache for {entity_name} ({entity_type}:{entity_id})")
 
                 # Polite delay

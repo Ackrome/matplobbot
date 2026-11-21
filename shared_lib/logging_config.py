@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -22,6 +23,27 @@ _LOG_LEVELS = {
 _LOG_LEVEL_ALIASES = {"WARN": "WARNING", "FATAL": "CRITICAL"}
 _LOG_FORMATS = {"json", "text"}
 _PRODUCTION_ENVIRONMENTS = {"prod", "production"}
+_CALENDAR_CREDENTIAL = re.compile(r"(?i)((?:/api)?/cal/)[^/\s?\"'<>]+")
+_QUERY_CREDENTIAL = re.compile(r"(?i)([?&](?:token|ticket)=)[^&#\s\"'<>]+")
+_HANDSHAKE_CREDENTIAL = re.compile(r"(?i)(\bmpb-ticket\.)[a-z0-9_-]+")
+_BEARER_CREDENTIAL = re.compile(r"(?i)(\bauthorization:\s*bearer\s+)[^\s\"'<>]+")
+
+
+def redact_request_credentials(value: str) -> str:
+    """Mask secrets in rendered request targets, headers, and their error traces."""
+    for pattern in (
+        _CALENDAR_CREDENTIAL,
+        _QUERY_CREDENTIAL,
+        _HANDSHAKE_CREDENTIAL,
+        _BEARER_CREDENTIAL,
+    ):
+        value = pattern.sub(r"\g<1>[redacted]", value)
+    return value
+
+
+class TextFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        return redact_request_credentials(super().format(record))
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,7 +70,7 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "service": self.service_name,
             "logger": record.name,
-            "message": record.getMessage(),
+            "message": redact_request_credentials(record.getMessage()),
             "correlation_id": getattr(record, "correlation_id", "-"),
             "source": {
                 "module": record.module,
@@ -57,9 +79,9 @@ class JsonFormatter(logging.Formatter):
             },
         }
         if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
+            payload["exception"] = redact_request_credentials(self.formatException(record.exc_info))
         if record.stack_info:
-            payload["stack"] = self.formatStack(record.stack_info)
+            payload["stack"] = redact_request_credentials(self.formatStack(record.stack_info))
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
@@ -109,7 +131,7 @@ def configure_logging(
     if format_name == "json":
         formatter = JsonFormatter(service_name)
     else:
-        formatter = logging.Formatter(
+        formatter = TextFormatter(
             "%(asctime)s - %(levelname)s - "
             f"[service={service_name}] - [cid=%(correlation_id)s] - "
             "%(name)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s",

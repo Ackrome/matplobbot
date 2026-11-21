@@ -1,9 +1,11 @@
 # fastapi_stats_app/auth.py
+import asyncio
 import hashlib
 import hmac
 import json
 import logging
 import os
+import re
 import secrets
 import time
 from datetime import UTC, datetime, timedelta
@@ -15,12 +17,14 @@ from fastapi import Depends, HTTPException, WebSocket, WebSocketException, statu
 from fastapi.security import OAuth2PasswordBearer
 from jwt import PyJWTError as JWTError
 from passlib.context import CryptContext
+from redis.exceptions import RedisError
 from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared_lib.database import get_db_session_dependency, get_session
 from shared_lib.models import User, WebAccount, WebTokenRevocation
+from shared_lib.redis_client import redis_client
 
 from .config import ADMIN_USER_IDS
 
@@ -51,6 +55,10 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30  # 30 days
 JWT_ISSUER = os.getenv("JWT_ISSUER", "").strip() or "matplobbot-api"
 JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "").strip() or "matplobbot-web"
 JWT_LEEWAY_SECONDS = max(0, int(os.getenv("JWT_LEEWAY_SECONDS", "0")))
+WS_PROTOCOL = "matplobbot"
+WS_TICKET_TTL_SECONDS = 30
+_WS_TICKET_RE = re.compile(r"mpb-ticket\.([0-9a-f]{64})")
+_WS_USER_PATH_RE = re.compile(r"/ws/users/([1-9][0-9]{0,18})")
 TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS = int(
     os.getenv("TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS", str(60 * 60 * 24))
 )
@@ -348,17 +356,60 @@ def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     return current_user
 
 
+def can_subscribe_user_updates(user: dict, target_user_id: int) -> bool:
+    return user.get("role") == "admin" or user.get("telegram_id") == target_user_id
+
+
+def check_ws_ticket_scope(path: str, user: dict) -> None:
+    """Apply each stream's authorization before issuing a ticket."""
+    if path == "/ws/stats/total_actions":
+        require_admin(user)
+    elif path != "/ws/bot_log":
+        match = _WS_USER_PATH_RE.fullmatch(path)
+        if match is None:
+            raise HTTPException(status_code=422, detail="Unknown WebSocket stream")
+        if not can_subscribe_user_updates(user, int(match[1])):
+            raise HTTPException(status_code=403, detail="WebSocket stream access denied")
+
+
+def _ws_ticket_key(ticket: str, path: str) -> str:
+    digest = hashlib.sha256(f"{path}\0{ticket}".encode()).hexdigest()
+    return f"auth:ws-ticket:{digest}"
+
+
+async def create_ws_ticket(path: str, user: dict) -> str:
+    """Keep only the session claims needed for revocation and never store the ticket itself."""
+    check_ws_ticket_scope(path, user)
+    ticket = secrets.token_hex(32)
+    claims = {key: user["token_claims"][key] for key in ("sub", "exp", "jti", "auth_version")}
+    try:
+        async with asyncio.timeout(2):
+            saved = await redis_client.client.set(
+                _ws_ticket_key(ticket, path), json.dumps(claims), ex=WS_TICKET_TTL_SECONDS, nx=True
+            )
+    except (RedisError, TimeoutError) as exc:
+        raise HTTPException(status_code=503, detail="WebSocket authentication unavailable") from exc
+    if not saved:
+        raise HTTPException(status_code=503, detail="WebSocket authentication unavailable")
+    return ticket
+
+
 async def get_ws_user(websocket: WebSocket) -> dict:
-    token = websocket.query_params.get("token")
-    if not token:
+    protocols = websocket.headers.getlist("sec-websocket-protocol")
+    names = [name.strip() for header in protocols for name in header.split(",")]
+    match = (
+        _WS_TICKET_RE.fullmatch(names[1]) if len(names) == 2 and names[0] == WS_PROTOCOL else None
+    )
+    if match is None:
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
 
     try:
-        payload = decode_access_token(token)
-        raw_sub_id = payload.get("sub")
-        if not isinstance(raw_sub_id, str) or not raw_sub_id:
+        async with asyncio.timeout(2):
+            raw = await redis_client.client.getdel(_ws_ticket_key(match[1], websocket.url.path))
+        if raw is None:
             raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
-        sub_id = int(raw_sub_id)
+        payload = json.loads(raw)
+        sub_id = int(payload["sub"])
 
         async with get_session() as db:
             result = await db.execute(select(WebAccount).where(WebAccount.id == sub_id))
@@ -376,7 +427,7 @@ async def get_ws_user(websocket: WebSocket) -> dict:
                 "token_claims": payload,
             }
 
-    except (JWTError, ValueError) as exc:
+    except (RedisError, TimeoutError, ValueError, TypeError, KeyError) as exc:
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION) from exc
 
 

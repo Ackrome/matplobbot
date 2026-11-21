@@ -16,7 +16,8 @@ const vm = require('node:vm');
 const {create, accountScope, FileConflict} = require('./main_site_frontend/js/studio_session.js');
 function memory() {
     const values = new Map();
-    return {getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};
+    return {get length(){return values.size;}, key:index=>Array.from(values.keys())[index]??null,
+        getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};
 }
 (async()=>{
     const storage=memory(), sent=[];
@@ -27,7 +28,8 @@ function memory() {
     await assert.rejects(state.flush(),/HTTP 500/);
     assert.equal(state.dirty(),true);
     const reloaded=create({storage,scope:'alice',save:async()=>{}});
-    assert.equal(reloaded.open({projectId:1,fileId:11,content:'saved A'}).content,'dirty A');
+    assert.equal(reloaded.open({projectId:1,fileId:11,content:'saved A'}).draftChoices[0].content,'dirty A');
+    assert.equal(reloaded.restoreDraft(0).content,'dirty A');
     assert.equal(create({storage,scope:'bob',save:async()=>{}}).open({projectId:1,fileId:11,content:'saved A'}).content,'saved A');
     fail=false;await state.flush();
     assert.equal(sent[0].projectId,1);assert.equal(sent[0].fileId,11);assert.equal(sent[0].content,'dirty A');
@@ -61,7 +63,8 @@ function memory() {
     right.edit('right');
     await left.flush();
     const reopened=create({storage:shared,scope:'two-tabs',save});
-    assert.equal(reopened.open({...record,...server}).draftContent,'right');
+    assert.equal(reopened.open({...record,...server}).draftChoices[0].content,'right');
+    assert.equal(reopened.restoreDraft(0).draftContent,'right');
     await assert.rejects(right.flush(), FileConflict);
     assert.equal(right.snapshot().draftContent,'right');
     assert.equal(right.snapshot().serverContent,'left');
@@ -73,6 +76,42 @@ function memory() {
     await assert.rejects(left.flush(), FileConflict);
     assert.equal(left.resolveConflict(false).content,'right');
     assert.equal(left.dirty(),false);
+
+    const offlineStorage=memory();
+    const offlineOptions={storage:offlineStorage,scope:'offline',save:async()=>{throw Error('offline');}};
+    const firstTab=create(offlineOptions),secondTab=create(offlineOptions);
+    firstTab.open(record);firstTab.edit('first offline');
+    // A tab opened after another started editing can explicitly work from the server copy.
+    assert.equal(secondTab.open(record).draftChoices[0].content,'first offline');
+    assert.equal(secondTab.restoreDraft(-1).content,'base');
+    secondTab.edit('second offline');
+    await assert.rejects(firstTab.flush(),/offline/);
+    await assert.rejects(secondTab.flush(),/offline/);
+
+    const recovery=create({...offlineOptions,save:async record=>({revision:'r1',content:record.content})});
+    const drafts=recovery.open(record).draftChoices;
+    assert.deepEqual(new Set(drafts.map(draft=>draft.content)),new Set(['first offline','second offline']));
+    assert.equal(recovery.restoreDraft(drafts.findIndex(draft=>draft.content==='first offline')).content,'first offline');
+    await recovery.flush();
+    assert.equal(recovery.open({...record,content:'first offline',revision:'r1'}).draftChoices[0].content,'second offline');
+    assert.equal(recovery.restoreDraft(0).conflict,true);
+    assert.equal(recovery.snapshot().serverContent,'first offline');
+
+    // A still-open writer can update its original draft while another page restores its snapshot.
+    const nextRecovery=create({...offlineOptions,save:async()=>({revision:'r2'})});
+    assert.equal(nextRecovery.open(record).draftChoices[0].content,'second offline');
+    secondTab.edit('second offline updated');
+    nextRecovery.restoreDraft(0);await nextRecovery.flush();
+    assert.equal(nextRecovery.open({...record,content:'second offline',revision:'r2'}).draftChoices[0].content,'second offline updated');
+
+    const legacyKey='mpb-studio-v1:legacy:7:8';
+    const legacyEntry='{ "content": "old draft", "baseContent": "base" }';
+    offlineStorage.setItem(legacyKey,legacyEntry);
+    const legacy=create({...offlineOptions,scope:'legacy',save:async()=>({revision:'r1'})});
+    assert.equal(legacy.open(record).content,'old draft');
+    assert.equal(offlineStorage.getItem(legacyKey),legacyEntry);
+    await legacy.flush();assert.equal(offlineStorage.getItem(legacyKey),null);
+
     const quick=create({storage,scope:'quick',save:async()=>{throw Error('quick must remain local');}});
     quick.open({type:'latex',content:'template'});quick.edit('my formula');await quick.flush();
     quick.open({type:'markdown',content:'md'});assert.equal(quick.open({type:'latex',content:'template'}).content,'my formula');

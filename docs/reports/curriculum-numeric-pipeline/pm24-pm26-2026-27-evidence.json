@@ -1,0 +1,374 @@
+{
+  "verified_on": "2026-11-15",
+  "ruz_group_dictionary_sha256": "5ced915081a3cc687151aad46c345f102fa4808f9a9de052be100b4cb7abdd1a",
+  "ruz_faculty_dictionary_sha256": "dc3efdf7b766045d659f3707f003f050cda819a7e9bebf029fbd1173a1c03595",
+  "curricula": [
+    {
+      "year": 2024,
+      "plan_id": 5338,
+      "plan_url": "https://www.fa.ru/upload/constructor/19c/moez0bhagwyvvpzxgntnpelhdyu0mnvu/UP.pdf",
+      "plan_sha256": "e00a3c0c814cc6195f7cf6b035435b75e954f18751bfd64a9431d033977eecf4",
+      "calendar_url": "https://www.fa.ru/upload/constructor/a27/ppmqld2hzzzpp922hpjmi5z7yc1ah1mt/KUG.pdf",
+      "calendar_sha256": "a54d61a08b4121f6f044ff43a59105f60fc51de34ac4a023140094691bf7277d",
+      "calendar_year_row": 3,
+      "calendar_weeks": {
+        "fall": [
+          1,
+          21
+        ],
+        "spring": [
+          23,
+          43
+        ]
+      },
+      "counts": {
+        "5": {
+          "pass": 1,
+          "exam": 5,
+          "graded_pass": 1
+        },
+        "6": {
+          "exam": 5,
+          "pass": 12,
+          "coursework": 1
+        }
+      },
+      "groups": [
+        {
+          "group": "ПМ24-1",
+          "group_id": 164377,
+          "group_dict": {
+            "groupOid": 164377,
+            "name": "ПМ24-1",
+            "facultyOid": 6,
+            "course": 3,
+            "formOfEducation": "Очная",
+            "speciality": "",
+            "YearOfEducation": 2026,
+            "is_schedule": 1
+          },
+          "rows": 374,
+          "parents": [
+            "*5 семестр - ПМ24-1-5 - 3 курс",
+            "/3 курс ГМУ24 - 1- 5  (5 семестр)",
+            "1 полугодие_ПОЛИТОЛОГИЯ_3 курс_2024_ПолТех24-1_2_5366;  МПол24-1_2_5361; ; ПЭП24-1_5365"
+          ],
+          "plan_ids": [
+            "5303",
+            "5338",
+            "6142"
+          ],
+          "autumn_sha": "6643612c85d56d1f61f4ab800b46603c417254d1ae2e47211c982fa4efa32fd8",
+          "spring_sha": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "spring_rows": 0
+        },
+        {
+          "group": "ПМ24-2",
+          "group_id": 164378,
+          "group_dict": {
+            "groupOid": 164378,
+            "name": "ПМ24-2",
+            "facultyOid": 6,
+            "course": 3,
+            "formOfEducation": "Очная",
+            "speciality": "",
+            "YearOfEducation": 2026,
+            "is_schedule": 1
+          },
+          "rows": 374,
+          "parents": [
+            "*5 семестр - ПМ24-1-5 - 3 курс",
+            "*5 семестр - ТРПО24-1-2-3-4 - 3 курс"
+          ],
+          "plan_ids": [
+            "5303",
+            "5338",
+            "6142"
+          ],
+          "autumn_sha": "b74ec45e0b29f15437c0ae16c7089da4acc94fd4f2fc983ba6bf508e82565602",
+          "spring_sha": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "spring_rows": 0
+        },
+        {
+          "group": "ПМ24-3",
+          "group_id": 164379,
+          "group_dict": {
+            "groupOid": 164379,
+            "name": "ПМ24-3",
+            "facultyOid": 6,
+            "course": 3,
+            "formOfEducation": "Очная",
+            "speciality": "",
+            "YearOfEducation": 2026,
+            "is_schedule": 1
+          },
+          "rows": 340,
+          "parents": [
+            "*5 семестр - ПМ24-1-5 - 3 курс"
+          ],
+          "plan_ids": [
+            "5338",
+            "6142"
+          ],
+          "autumn_sha": "5c15f6afcf010ec1720eb4244ef19241f84fd42fde53532a14f0bbbd53a7c5ea",
+          "spring_sha": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "spring_rows": 0
+        },
+        {
+          "group": "ПМ24-4",
+          "group_id": 164380,
+          "group_dict": {
+            "groupOid": 164380,
+            "name": "ПМ24-4",
+            "facultyOid": 6,
+            "course": 3,
+            "formOfEducation": "Очная",
+            "speciality": "",
+            "YearOfEducation": 2026,
+            "is_schedule": 1
+          },
+          "rows": 323,
+          "parents": [
+            "*5 семестр - ПМ24-1-5 - 3 курс"
+          ],
+          "plan_ids": [
+            "5338",
+            "6142"
+          ],
+          "autumn_sha": "e1a6afb9da743f09e8faee681176145bb120d8d9f233c7580a235ecd3ed2d633",
+          "spring_sha": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "spring_rows": 0
+        },
+        {
+          "group": "ПМ24-5",
+          "group_id": 164381,
+          "group_dict": {
+            "groupOid": 164381,
+            "name": "ПМ24-5",
+            "facultyOid": 6,
+            "course": 3,
+            "formOfEducation": "Очная",
+            "speciality": "",
+            "YearOfEducation": 2026,
+            "is_schedule": 1
+          },
+          "rows": 356,
+          "parents": [
+            "*5 семестр - ПМ24-1-5 - 3 курс",
+            "3 курс - ИБ24-1-5 - 5 семестр*"
+          ],
+          "plan_ids": [
+            "5303",
+            "5338",
+            "6142"
+          ],
+          "autumn_sha": "5964bd9255c84ea2532cf5b856fe59630dbac5aa187491c411b5b1e33da4f3d7",
+          "spring_sha": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "spring_rows": 0
+        }
+      ]
+    },
+    {
+      "year": 2026,
+      "plan_id": 6954,
+      "plan_url": "https://www.fa.ru/upload/constructor/bab/kz6w05ci0g8kyx0ce4b290bmghokd2wm/uch_plan_PMiI_OP-PMO_PMO_2026.pdf",
+      "plan_sha256": "520eb03ec15b90cf9a8675dac15e373522f4df96d7e68dea6e3aeb6e9f0d6bfe",
+      "calendar_url": "https://www.fa.ru/upload/constructor/bf4/t7x8p6woj7rub6pb2lpu450athz5hnqc/KUG_PMiI_26_och.pdf",
+      "calendar_sha256": "caaa75052d1bed64f37eaa76be0833f38f3fb78852c7a3449c4bade3decda361",
+      "calendar_year_row": 1,
+      "calendar_weeks": {
+        "fall": [
+          1,
+          21
+        ],
+        "spring": [
+          23,
+          43
+        ]
+      },
+      "counts": {
+        "1": {
+          "pass": 8,
+          "exam": 2,
+          "graded_pass": 1
+        },
+        "2": {
+          "exam": 6,
+          "pass": 6
+        }
+      },
+      "groups": [
+        {
+          "group": "ПМ26-1",
+          "group_id": 165300,
+          "group_dict": {
+            "groupOid": 165300,
+            "name": "ПМ26-1",
+            "facultyOid": 6,
+            "course": 1,
+            "formOfEducation": "Очная",
+            "speciality": "",
+            "YearOfEducation": 2026,
+            "is_schedule": 1
+          },
+          "rows": 368,
+          "parents": [
+            "*1 семестр - ПМ26-1-6 - 1 курс"
+          ],
+          "plan_ids": [
+            "6954"
+          ],
+          "autumn_sha": "1ce9911e3013ad35b426c6fd1d1022d7fb0e633083fc7daaf6a72f3171642111",
+          "spring_sha": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "spring_rows": 0
+        },
+        {
+          "group": "ПМ26-2",
+          "group_id": 165301,
+          "group_dict": {
+            "groupOid": 165301,
+            "name": "ПМ26-2",
+            "facultyOid": 6,
+            "course": 1,
+            "formOfEducation": "Очная",
+            "speciality": "",
+            "YearOfEducation": 2026,
+            "is_schedule": 1
+          },
+          "rows": 367,
+          "parents": [
+            "*1 семестр - ПМ26-1-6 - 1 курс"
+          ],
+          "plan_ids": [
+            "6954"
+          ],
+          "autumn_sha": "c1a46cbf6940674da292df1442c3be507dbeed0750724a9a92c018790eb576e5",
+          "spring_sha": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "spring_rows": 0
+        },
+        {
+          "group": "ПМ26-3",
+          "group_id": 165302,
+          "group_dict": {
+            "groupOid": 165302,
+            "name": "ПМ26-3",
+            "facultyOid": 6,
+            "course": 1,
+            "formOfEducation": "Очная",
+            "speciality": "",
+            "YearOfEducation": 2026,
+            "is_schedule": 1
+          },
+          "rows": 366,
+          "parents": [
+            "*1 семестр - ПМ26-1-6 - 1 курс"
+          ],
+          "plan_ids": [
+            "6954"
+          ],
+          "autumn_sha": "a80e420802b91d14db2a96f36aa87b22399ea83ae873a160ebe839c76fc07862",
+          "spring_sha": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "spring_rows": 0
+        },
+        {
+          "group": "ПМ26-4",
+          "group_id": 165303,
+          "group_dict": {
+            "groupOid": 165303,
+            "name": "ПМ26-4",
+            "facultyOid": 6,
+            "course": 1,
+            "formOfEducation": "Очная",
+            "speciality": "",
+            "YearOfEducation": 2026,
+            "is_schedule": 1
+          },
+          "rows": 298,
+          "parents": [
+            "*1 семестр - ПМ26-1-6 - 1 курс"
+          ],
+          "plan_ids": [
+            "6954"
+          ],
+          "autumn_sha": "d17defd2b5379685e27a99ac190e4dfb8660eb6c112d4b10533f8e84930b0f8d",
+          "spring_sha": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "spring_rows": 0
+        },
+        {
+          "group": "ПМ26-5",
+          "group_id": 165304,
+          "group_dict": {
+            "groupOid": 165304,
+            "name": "ПМ26-5",
+            "facultyOid": 6,
+            "course": 1,
+            "formOfEducation": "Очная",
+            "speciality": "",
+            "YearOfEducation": 2026,
+            "is_schedule": 1
+          },
+          "rows": 300,
+          "parents": [
+            "*1 семестр - ПМ26-1-6 - 1 курс"
+          ],
+          "plan_ids": [
+            "6954"
+          ],
+          "autumn_sha": "ff05872e6aa76da6dd0622524475370f0bf3612d4077effbe3e5f35e81ffc996",
+          "spring_sha": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "spring_rows": 0
+        },
+        {
+          "group": "ПМ26-6",
+          "group_id": 165305,
+          "group_dict": {
+            "groupOid": 165305,
+            "name": "ПМ26-6",
+            "facultyOid": 6,
+            "course": 1,
+            "formOfEducation": "Очная",
+            "speciality": "",
+            "YearOfEducation": 2026,
+            "is_schedule": 1
+          },
+          "rows": 271,
+          "parents": [
+            "*1 семестр - ПМ26-1-6 - 1 курс"
+          ],
+          "plan_ids": [
+            "6954"
+          ],
+          "autumn_sha": "46aa651e8940a2bb44b2dd6cf9ad925fa77d1f0948d8856b007c8cd332c5c468",
+          "spring_sha": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "spring_rows": 0
+        },
+        {
+          "group": "ПМ26-7",
+          "group_id": 165306,
+          "group_dict": {
+            "groupOid": 165306,
+            "name": "ПМ26-7",
+            "facultyOid": 6,
+            "course": 1,
+            "formOfEducation": "Очная",
+            "speciality": "",
+            "YearOfEducation": 2026,
+            "is_schedule": 1
+          },
+          "rows": 132,
+          "parents": [
+            "*1 семестр - ПМ26-1-6 - 1 курс",
+            "ТД26-1,2,3,4 (1 семестр) "
+          ],
+          "plan_ids": [
+            "6839",
+            "6954"
+          ],
+          "autumn_sha": "ea0093209c7438856ba7ade0462c0604da0adfe61e0ff8d26b2291c7e2f483fe",
+          "spring_sha": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "spring_rows": 0
+        }
+      ]
+    }
+  ]
+}

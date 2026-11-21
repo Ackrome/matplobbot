@@ -32,6 +32,7 @@ setup(
             "templates/*.tex",
             "data/curriculum_numeric.onnx",
             "data/curriculum_numeric.json",
+            "data/curriculum_aliases.json",
         ],
     },
     include_package_data=True,

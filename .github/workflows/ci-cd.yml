@@ -504,13 +504,14 @@ jobs:
 
   # 7. Deploy
   trigger-deployment:
-    name: Trigger Jenkins Deployment
+    name: Deploy and Verify Jenkins Smoke
     needs: [build-services]
     if: |
       always() &&
       github.event_name == 'push' &&
       needs.build-services.result == 'success'
     runs-on: self-hosted
+    timeout-minutes: 45
     env:
       JENKINS_LAN_URL: ${{ vars.JENKINS_LAN_URL || 'http://192.168.1.130:8080' }}
       APP_VM_LAN_HOST: ${{ vars.APP_VM_LAN_HOST || '192.168.1.40' }}
@@ -520,7 +521,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: accepted-release-${{ github.sha }}
-      - name: Trigger Jenkins Job via cURL
+      - name: Follow Jenkins deployment through smoke tests
         env:
           JENKINS_USER: ${{ secrets.JENKINS_USER }}
           JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
@@ -549,20 +550,7 @@ jobs:
             --job-url "$JENKINS_SCHEME://$JENKINS_HOST:$JENKINS_PORT/job/matplobbot-deploy" \
             --resolve-ip "$JENKINS_LAN_IP" --apply
 
-          # Existing Pipeline jobs may drop unknown parameters before a new
-          # Jenkinsfile has installed its properties. Never bootstrap by deploying.
-          curl --fail --show-error --silent \
-            --noproxy "$JENKINS_HOST,$JENKINS_LAN_IP" \
-            --resolve "$JENKINS_HOST:$JENKINS_PORT:$JENKINS_LAN_IP" \
-            --user "$JENKINS_USER:$JENKINS_TOKEN" \
-            "$JENKINS_SCHEME://$JENKINS_HOST:$JENKINS_PORT/job/matplobbot-deploy/api/json?tree=property%5BparameterDefinitions%5Bname%5D%5D" \
-            | python3 -c 'import json,sys; data=json.load(sys.stdin); names={p["name"] for prop in data.get("property",[]) for p in prop.get("parameterDefinitions",[])}; missing={"SOURCE_COMMIT","RELEASE_MANIFEST_B64"}-names; sys.exit("Install the Jenkins immutable-release parameter definitions before triggering deployment; see docs/release-runbook.md. Missing: " + ", ".join(sorted(missing)) if missing else 0)'
-
-          curl --fail-with-body --show-error --silent \
-            --noproxy "$JENKINS_HOST,$JENKINS_LAN_IP" \
-            --resolve "$JENKINS_HOST:$JENKINS_PORT:$JENKINS_LAN_IP" \
-            -X POST "$JENKINS_SCHEME://$JENKINS_HOST:$JENKINS_PORT/job/matplobbot-deploy/buildWithParameters" \
-            --user "$JENKINS_USER:$JENKINS_TOKEN" \
-            --data-urlencode "SOURCE_COMMIT=${{ github.sha }}" \
-            --data-urlencode "RELEASE_MANIFEST_B64=$(base64 -w0 release-manifest-accepted.json)" \
-            --data-urlencode "DEPLOY_HOST=$APP_VM_LAN_IP"
+          python3 scripts/jenkins_deploy_wait.py \
+            --job-url "$JENKINS_SCHEME://$JENKINS_HOST:$JENKINS_PORT/job/matplobbot-deploy" \
+            --resolve-ip "$JENKINS_LAN_IP" --deploy-host "$APP_VM_LAN_IP" \
+            --commit "$GITHUB_SHA" --manifest release-manifest-accepted.json

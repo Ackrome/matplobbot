@@ -2,7 +2,7 @@ import os
 import sys
 import types
 import unittest
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import AsyncMock, Mock, patch
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
@@ -239,6 +239,7 @@ class TestScheduleSearchAPI(unittest.TestCase):
             refresh_in_progress=False,
             cache_age_seconds=30,
             content_changed=False,
+            covered_bounds=None,
         )
 
         with (
@@ -257,6 +258,7 @@ class TestScheduleSearchAPI(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["source_updated_at"], parsed_at.isoformat())
+        self.assertIsNone(payload["covered_bounds"])
 
     def test_schedule_data_refresh_resolves_group_label_id(self):
         fake_schedule = [
@@ -282,6 +284,7 @@ class TestScheduleSearchAPI(unittest.TestCase):
             refresh_in_progress=False,
             cache_age_seconds=0,
             content_changed=True,
+            covered_bounds=("2026-08-03", "2026-09-06"),
         )
 
         with (
@@ -307,9 +310,16 @@ class TestScheduleSearchAPI(unittest.TestCase):
         self.assertEqual(args[:4], (fake_client, "group", "162426", "2026-08-07"))
         self.assertEqual(args[4], "2026-09-04")
         self.assertTrue(kwargs["force_refresh"])
+        self.assertTrue(kwargs["require_coverage"])
         self.assertEqual(response.json()["source_updated_at"], parsed_at.isoformat())
         self.assertEqual(response.json()["freshness"], "live")
         self.assertEqual(response.json()["entity_id"], "162426")
+        self.assertEqual(
+            response.json()["covered_bounds"], {"start": "2026-08-03", "end": "2026-09-06"}
+        )
+        self.assertEqual(
+            response.json()["loaded_bounds"], {"start": "2026-08-07", "end": "2026-09-04"}
+        )
 
     def test_cached_schedule_returns_entire_snapshot_without_upstream_or_mutation(self):
         checked_at = datetime(2026, 10, 9, 9, 30, tzinfo=UTC)
@@ -454,7 +464,9 @@ class TestScheduleSearchAPI(unittest.TestCase):
                 fake_client.get_schedule.assert_awaited_once_with(
                     entity_type, resolved_id, start="2026-08-25", finish="2027-01-31"
                 )
-                upsert_cache.assert_awaited_once_with(entity_type, resolved_id, fake_schedule)
+                upsert_cache.assert_awaited_once_with(
+                    entity_type, resolved_id, fake_schedule, coverage=("2026-08-25", "2027-01-31")
+                )
                 get_updated_at.assert_awaited_once_with(entity_type, resolved_id)
                 self.assertEqual(
                     response.json(),
@@ -492,7 +504,9 @@ class TestScheduleSearchAPI(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["lesson_count"], 0)
-        upsert_cache.assert_awaited_once_with("group", "162426", [])
+        upsert_cache.assert_awaited_once_with(
+            "group", "162426", [], coverage=schedule_router.get_semester_bounds()
+        )
 
     def test_schedule_data_rejects_unsupported_entity_type(self):
         response = self.client.get("/api/schedule/data/unknown/42")
@@ -772,6 +786,31 @@ class TestCachedScheduleTimestamps(unittest.IsolatedAsyncioTestCase):
 
         statement = session.execute.await_args.args[0]
         self._assert_statement_datetimes_are_utc(statement)
+
+    async def test_cache_includes_source_bounds_even_for_an_empty_snapshot(self):
+        session = AsyncMock()
+        with patch.object(shared_database, "get_session", return_value=_SessionContext(session)):
+            await shared_database.upsert_cached_schedule(
+                "group", "42", [], coverage=("2027-02-01", "2027-07-15")
+            )
+        params = session.execute.await_args.args[0].compile().params
+        self.assertEqual(params["covered_start"], date(2027, 2, 1))
+        self.assertEqual(params["covered_end"], date(2027, 7, 15))
+
+        row = types.SimpleNamespace(
+            schedule_data=[], updated_at=datetime.now(UTC), covered_start=None, covered_end=None
+        )
+        session.execute = AsyncMock(return_value=Mock(first=Mock(return_value=row)))
+        with patch.object(shared_database, "get_session", return_value=_SessionContext(session)):
+            self.assertEqual(
+                await shared_database.get_cached_schedule_with_coverage("group", "42"),
+                ([], row.updated_at, None),
+            )
+            row.covered_start, row.covered_end = date(2027, 2, 1), date(2027, 7, 15)
+            self.assertEqual(
+                await shared_database.get_cached_schedule_with_coverage("group", "42"),
+                ([], row.updated_at, ("2027-02-01", "2027-07-15")),
+            )
 
     async def test_merge_cached_schedule_writes_aware_utc_timestamp(self):
         current_result = Mock()

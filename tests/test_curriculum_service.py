@@ -3,18 +3,20 @@
 import asyncio
 import copy
 import hashlib
+import json
 import runpy
+import tempfile
 import unittest
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from sqlalchemy import create_engine, delete, event, inspect
 from sqlalchemy.orm import Session
 
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
 from shared_lib.models import CurriculumDocument, CurriculumGroup
 from shared_lib.services import curriculum_service as service
 from shared_lib.services.curriculum_documents import MAX_DOCUMENT_BYTES, MAX_DOCUMENT_PAGES
@@ -439,6 +441,84 @@ class TestCurriculumPersistence(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(no_term["status"], "unavailable")
         self.assertEqual(no_term["reason"], "semester_unmapped")
         self.assertEqual(no_term["assessments"], [])
+
+    async def test_reviewed_alias_requires_matching_scope_title_and_published_pdf(self):
+        document = await self.published()
+        await service.bind_curriculum_groups(
+            document["id"], [*self.groups, {**self.groups[0], "group_id": "162428"}]
+        )
+        review = {
+            "group_id": "162426",
+            "plan_id": 53,
+            "discipline_id": 42,
+            "ruz_title": "Семантические технологии (РУЗ)",
+            "canonical_title": "Семантические технологии",
+            "source_sha256": document["published_hash"],
+            "evidence": "Synthetic RUZ and published page 2 witness",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "curriculum_aliases.json"
+            path.write_text(json.dumps({"version": 1, "aliases": [review]}), encoding="utf-8")
+            aliases = service._load_approved_aliases(path)
+            path.write_text(
+                json.dumps({"version": 1, "aliases": [review, review]}), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ValueError, "Duplicate reviewed"):
+                service._load_approved_aliases(path)
+
+        day = date(2026, 10, 9)
+        title = review["ruz_title"]
+        matched = {"plan_id": 53, "discipline_id": 42}
+        with patch.object(service, "_approved_aliases", return_value=aliases):
+            result = await service.lookup_curriculum("162426", title, day, **matched)
+            self.assertEqual(result["status"], "confirmed")
+            self.assertEqual(
+                {row["discipline_name"] for row in result["assessments"]},
+                {review["canonical_title"]},
+            )
+            for group, name, identifiers in (
+                ("162428", title, matched),
+                ("162426", title, {**matched, "plan_id": 54}),
+                ("162426", title, {**matched, "discipline_id": 43}),
+                ("162426", title, {"plan_id": 53}),
+                ("162426", title + " 2", matched),
+            ):
+                with self.subTest(group=group, name=name, identifiers=identifiers):
+                    result = await service.lookup_curriculum(group, name, day, **identifiers)
+                    self.assertEqual(result["status"], "not_found")
+            session = await service.lookup_curriculum_session("162426", day, 7)
+            lessons = [
+                {
+                    "date": "2026-10-09",
+                    "beginLesson": "10:00",
+                    "discipline": title,
+                    "disciplineOid": 42,
+                    "disciplineinplan": 53,
+                    "kindOfWork": "Зачёт",
+                }
+            ]
+            events = service.match_session_dates(
+                session["assessments"], lessons, "2026-09-01", "2027-01-31", group_id="162426"
+            )
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0]["discipline_name"], review["canonical_title"])
+            self.assertEqual(
+                service.match_session_dates(
+                    session["assessments"], lessons, "2026-09-01", "2027-01-31", group_id="162428"
+                ),
+                [],
+            )
+
+        mismatched = {key: (target, "f" * 64) for key, (target, _) in aliases.items()}
+        with patch.object(service, "_approved_aliases", return_value=mismatched):
+            result = await service.lookup_curriculum("162426", title, day, **matched)
+            self.assertEqual(result["status"], "not_found")
+            self.assertEqual(
+                service.match_session_dates(
+                    session["assessments"], lessons, "2026-09-01", "2027-01-31", group_id="162426"
+                ),
+                [],
+            )
 
     async def test_changed_source_stages_replacement_and_preserves_reviewed_snapshot(self):
         original = await self.published()

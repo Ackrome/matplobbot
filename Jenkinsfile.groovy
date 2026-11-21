@@ -350,6 +350,8 @@ BASH
 BASH
                         '''
                     }
+                    writeFile file: 'release-smoke.json', text: """{"commit":"${params.SOURCE_COMMIT}","number":${currentBuild.number},"status":"smoke_verified"}\n"""
+                    archiveArtifacts artifacts: 'release-smoke.json', allowEmptyArchive: false
                 }
             }
         }

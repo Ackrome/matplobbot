@@ -1,11 +1,15 @@
 """Persist reviewed curriculum data; refresh candidates without replacing published facts."""
 
 import hashlib
+import json
 import logging
 import os
 import re
 import uuid
+from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
+from functools import lru_cache
+from pathlib import Path
 
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -57,6 +61,72 @@ def _iso(value):
 def _name(value: str) -> str:
     # Whitespace/case equivalence only: fuzzy title matches must never become facts.
     return re.sub(r"\s+", " ", value).strip().casefold()
+
+
+_ALIASES_PATH = Path(__file__).resolve().parents[1] / "data" / "curriculum_aliases.json"
+_ALIAS_FIELDS = {
+    "group_id",
+    "plan_id",
+    "discipline_id",
+    "ruz_title",
+    "canonical_title",
+    "source_sha256",
+    "evidence",
+}
+
+
+def _ruz_oid(value):
+    if isinstance(value, str) and re.fullmatch(r"[1-9][0-9]{0,9}", value):
+        value = int(value)
+    return value if type(value) is int and 0 < value <= 2147483647 else None
+
+
+def _load_approved_aliases(path):
+    registry = json.loads(path.read_text(encoding="utf-8"))
+    if (
+        not isinstance(registry, dict)
+        or registry.get("version") != 1
+        or not isinstance(registry.get("aliases"), list)
+    ):
+        raise ValueError("Invalid curriculum alias registry format")
+    aliases = {}
+    for row in registry["aliases"]:
+        if not isinstance(row, dict) or set(row) != _ALIAS_FIELDS:
+            raise ValueError("Invalid curriculum alias fields")
+        group = row["group_id"]
+        plan = _ruz_oid(row["plan_id"])
+        discipline = _ruz_oid(row["discipline_id"])
+        if (
+            not isinstance(group, str)
+            or not _ruz_oid(group)
+            or not plan
+            or not discipline
+            or not all(
+                isinstance(row[field], str) and row[field].strip()
+                for field in ("ruz_title", "canonical_title", "source_sha256", "evidence")
+            )
+            or not re.fullmatch(r"[0-9a-f]{64}", row["source_sha256"])
+        ):
+            raise ValueError(
+                "Curriculum aliases require exact RUZ identifiers and document evidence"
+            )
+        key = (group, plan, discipline, _name(row["ruz_title"]))
+        if key in aliases:
+            raise ValueError("Duplicate reviewed curriculum alias")
+        aliases[key] = (_name(row["canonical_title"]), row["source_sha256"])
+    return aliases
+
+
+@lru_cache(maxsize=1)
+def _approved_aliases():
+    return _load_approved_aliases(_ALIASES_PATH)
+
+
+def _approved_alias(group_id, title, plan_id, discipline_id):
+    plan, discipline = _ruz_oid(plan_id), _ruz_oid(discipline_id)
+    if group_id and plan and discipline:
+        return _approved_aliases().get((group_id, plan, discipline, _name(title)))
+    return None
 
 
 def _document_dict(document, groups, *, include_records=True):
@@ -707,7 +777,94 @@ async def get_curriculum_pdf(document_id: int, published_hash: str | None = None
         return document.source_pdf
 
 
-async def lookup_curriculum(group_id: str, discipline: str, lesson_date: date) -> dict:
+async def _supplements(db, document):
+    return list(
+        (
+            await db.scalars(
+                select(CurriculumDocument)
+                .where(
+                    CurriculumDocument.parent_document_id == document.id,
+                    *(
+                        getattr(CurriculumDocument, field) == getattr(document, field)
+                        for field in _SCOPE_FIELDS
+                    ),
+                )
+                .options(
+                    defer(CurriculumDocument.source_pdf),
+                    defer(CurriculumDocument.published_pdf),
+                )
+                .order_by(CurriculumDocument.id)
+            )
+        ).all()
+    )
+
+
+def _with_source(source, row):
+    return {
+        **row,
+        "source_url": source.source_url,
+        "source_title": source.title,
+        "source_document_id": source.id,
+        "source_sha256": source.published_hash,
+        "snapshot_url": f"/api/schedule/curriculum/documents/{source.id}/{source.published_hash}.pdf",
+    }
+
+
+async def lookup_curriculum_session(group_id: str, reference_date: date, semester: int | None):
+    """Return reviewed forms for one bound group and calendar term."""
+    async with get_session() as db:
+        group = await db.get(CurriculumGroup, group_id)
+        if not group:
+            return {"status": "unmapped", "group_id": group_id, "terms": [], "assessments": []}
+        document = await db.get(
+            CurriculumDocument,
+            group.document_id,
+            options=[defer(CurriculumDocument.source_pdf), defer(CurriculumDocument.published_pdf)],
+        )
+        terms = sorted(group.terms, key=lambda term: term["start_date"])
+        result = {
+            "status": "unavailable",
+            "group_id": group_id,
+            "group_name": group.group_name,
+            "terms": terms,
+            "term": None,
+            "assessments": [],
+            "stale": False,
+        }
+        day = reference_date.isoformat()
+        if semester is None:
+            term = next((term for term in terms if term["end_date"] >= day), None)
+            term = term or (terms[-1] if terms else None)
+        else:
+            term = next((term for term in terms if term["semester"] == semester), None)
+        result["term"] = term
+        if (
+            not term
+            or not document
+            or document.parent_document_id is not None
+            or not document.published_hash
+        ):
+            return result
+        result["status"] = "confirmed"
+        used_sources = [document]
+        for source in [document, *await _supplements(db, document)]:
+            if not source.published_hash:
+                continue
+            rows = [
+                row
+                for row in (source.published_assessments or [])
+                if row["semester"] == term["semester"]
+            ]
+            if rows and source is not document:
+                used_sources.append(source)
+            result["assessments"].extend(_with_source(source, row) for row in rows)
+        result["stale"] = any(_source_stale(source) for source in used_sources)
+        return result
+
+
+async def lookup_curriculum(
+    group_id: str, discipline: str, lesson_date: date, *, plan_id=None, discipline_id=None
+) -> dict:
     result = {
         "status": "unmapped",
         "group_id": group_id,
@@ -759,25 +916,7 @@ async def lookup_curriculum(group_id: str, discipline: str, lesson_date: date) -
         if not document.published_hash:
             result["status"] = "needs_review" if document.pending_hash else "unavailable"
             return result
-        supplements = list(
-            (
-                await db.scalars(
-                    select(CurriculumDocument)
-                    .where(
-                        CurriculumDocument.parent_document_id == document.id,
-                        *(
-                            getattr(CurriculumDocument, field) == getattr(document, field)
-                            for field in _SCOPE_FIELDS
-                        ),
-                    )
-                    .options(
-                        defer(CurriculumDocument.source_pdf),
-                        defer(CurriculumDocument.published_pdf),
-                    )
-                    .order_by(CurriculumDocument.id)
-                )
-            ).all()
-        )
+        supplements = await _supplements(db, document)
         sources = [document, *supplements]
         course_name = _name(discipline)
         matched = [
@@ -787,6 +926,15 @@ async def lookup_curriculum(group_id: str, discipline: str, lesson_date: date) -
             for row in (source.published_assessments or [])
             if _name(row["discipline_name"]) == course_name
         ]
+        if not matched and (alias := _approved_alias(group_id, discipline, plan_id, discipline_id)):
+            canonical, source_sha = alias
+            matched = [
+                (source, row)
+                for source in sources
+                if source.published_hash == source_sha
+                for row in (source.published_assessments or [])
+                if _name(row["discipline_name"]) == canonical
+            ]
         identities = {(source.id, row["discipline_code"]) for source, row in matched}
         if len(identities) > 1:
             result["status"] = "needs_review"
@@ -814,18 +962,65 @@ async def lookup_curriculum(group_id: str, discipline: str, lesson_date: date) -
             review_pending=result["review_pending"] or bool(source.pending_hash),
         )
         result["status"] = "confirmed"
-        result["assessments"] = [
-            {
-                **row,
-                "source_url": source.source_url,
-                "source_title": source.title,
-                "source_document_id": source.id,
-                "source_sha256": source.published_hash,
-                "snapshot_url": f"/api/schedule/curriculum/documents/{source.id}/{source.published_hash}.pdf",
-            }
-            for source, row in matched
-        ]
+        result["assessments"] = [_with_source(source, row) for source, row in matched]
         return result
+
+
+def match_session_dates(assessments, schedule, start, end, *, group_id=None):
+    """Match published RUZ events only to an unambiguous planned form."""
+    kinds = {
+        "экзамен": "exam",
+        "зачет": "pass",
+        "зачет с оценкой": "graded_pass",
+        "дифференцированный зачет": "graded_pass",
+        "курсовая работа": "coursework",
+        "курсовой проект": "course_project",
+    }
+    by_title = defaultdict(list)
+    for row in assessments:
+        by_title[(_name(row["discipline_name"]), row["kind"])].append(row)
+
+    events = {}
+    for lesson in schedule:
+        day, title, kind = (lesson.get(key) for key in ("date", "discipline", "kindOfWork"))
+        if (
+            not all(isinstance(value, str) for value in (day, title, kind))
+            or not start <= day <= end
+        ):
+            continue
+        if lesson.get("deletion_mark") in (True, 1, "1", "true"):
+            continue
+        assessment_kind = kinds.get(_name(kind).replace("ё", "е"))
+        rows = by_title.get((_name(title), assessment_kind), [])
+        if not rows and (
+            alias := _approved_alias(
+                group_id, title, lesson.get("disciplineinplan"), lesson.get("disciplineOid")
+            )
+        ):
+            canonical, source_sha = alias
+            rows = [
+                row
+                for row in by_title.get((canonical, assessment_kind), [])
+                if row["source_sha256"] == source_sha
+            ]
+        if len(rows) != 1:
+            continue
+        row = rows[0]
+        begin = str(lesson.get("beginLesson") or "")[:5]
+        if not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", begin):
+            continue
+        room = str(lesson.get("auditorium") or lesson.get("auditorium_title") or "")
+        key = (day, begin, row["discipline_name"], row["kind"], room)
+        events[key] = {
+            "date": day,
+            "start": begin,
+            "room": room,
+            "discipline_name": row["discipline_name"],
+            "discipline_code": row["discipline_code"],
+            "kind": row["kind"],
+            "source_document_id": row["source_document_id"],
+        }
+    return [events[key] for key in sorted(events)]
 
 
 def _source_stale(document) -> bool:

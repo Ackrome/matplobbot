@@ -5,6 +5,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -335,6 +336,8 @@ class CachedSchedule(Base):
     entity_name = Column(String(255), nullable=True)
     schedule_data = Column(JSONB, nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    covered_start = Column(Date, nullable=True)
+    covered_end = Column(Date, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("entity_type", "entity_id", name="uq_cached_schedule_entity"),

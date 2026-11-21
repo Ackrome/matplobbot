@@ -730,6 +730,7 @@
 <link rel="stylesheet" href="/css/product_ui.css?v=20261009-6">
 <link rel="stylesheet" href="/css/calendar_sync.css?v=20261009-7">
 <link rel="stylesheet" href="/css/lesson_details.css?v=20261010-2">
+<link rel="stylesheet" href="/css/schedule_session.css?v=20261121-1">
 </head>
 <body class="schedule-page bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
     <!-- UNIVERSAL HEADER -->
@@ -832,11 +833,10 @@
                                                 onclick="toggleOfflinePanel(event)"
                                                 aria-controls="offlineDropdown"
                                                 aria-expanded="false"
+                                                aria-label="Доступно оффлайн"
+                                                data-i18n-aria-label="schedule.offline.available"
                                                 class="schedule-ghost-button group inline-flex h-[4.35rem] w-[4.35rem] items-center justify-center rounded-2xl shadow-sm">
-                                                <span class="relative flex h-3.5 w-3.5">
-                                                    <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                                                    <span class="relative inline-flex h-3.5 w-3.5 rounded-full bg-emerald-500"></span>
-                                                </span>
+                                                <span data-i18n="schedule.offline.cacheButton" class="text-xs font-bold">Кэш</span>
                                             </button>
                                             <div id="offlineDropdown"
                                                 role="dialog"
@@ -874,6 +874,7 @@
                                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7H3m0 0 3-3M3 7l3 3"></path><path stroke-linecap="round" stroke-linejoin="round" d="M16 17h5m0 0-3-3m3 3-3 3"></path><path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6a4 4 0 0 1 4 4v1"></path><path stroke-linecap="round" stroke-linejoin="round" d="M15 17H9a4 4 0 0 1-4-4v-1"></path></svg>
                                             <span data-i18n="schedule.calendar.openDrawer">Добавить в календарь</span>
                                         </button>
+                                        <button type="button" id="scheduleSessionOpen" hidden data-i18n="schedule.session.title" aria-haspopup="dialog" class="session-trigger schedule-ghost-button inline-flex min-h-12 items-center justify-center rounded-2xl px-4 py-3 text-sm font-bold shadow-sm">Сессия</button>
                                     </div>
                                 </div>
                             </div>
@@ -995,22 +996,42 @@
     </main>
     <div id="calendarSubscriptionBackdrop" class="hidden"></div>
     <section id="calendarSubscriptionSection" class="calendar-sync-modal hidden" aria-hidden="true" aria-labelledby="calendar-dialog-title"></section>
+    <dialog id="scheduleSession" class="session-dialog" aria-labelledby="scheduleSessionTitle">
+        <header class="session-header">
+            <div>
+                <p id="scheduleSessionGroup" class="session-group"></p>
+                <h2 id="scheduleSessionTitle" data-i18n="schedule.session.title">Сессия</h2>
+            </div>
+            <form method="dialog">
+                <button type="submit" class="session-close" data-i18n-aria-label="schedule.session.close" aria-label="Закрыть">×</button>
+            </form>
+        </header>
+        <div class="session-body">
+            <div id="scheduleSessionControls" class="session-controls" hidden>
+                <label for="scheduleSessionTerm" data-i18n="schedule.session.semester">Семестр</label>
+                <select id="scheduleSessionTerm" class="session-term"></select>
+            </div>
+            <p id="scheduleSessionStatus" class="session-status" role="status"></p>
+            <div id="scheduleSessionContent"></div>
+        </div>
+    </dialog>
 
     <script src="/js/runtime_config.js?v=20260821-6"></script>
     <script src="/js/ui_utils.js?v=2"></script>
     <script src="/js/telegram_webapp.js?v=20260821-6"></script>
-    <script src="/js/frontend_i18n.js?v=20261114-1"></script>
+    <script src="/js/frontend_i18n.js?v=20261121-1"></script>
 <script src="/js/product_ui.js?v=20261009-4"></script>
     <script src="/js/navbar.js?v=20261010-1"></script>
     <script src="/js/schedule_state.js?v=20260821-6"></script>
-    <script src="/js/schedule_api.js?v=20261010-2"></script>
+    <script src="/js/schedule_api.js?v=20261121-1"></script>
     <script src="/js/schedule_filters.js?v=20260821-6"></script>
     <script src="/js/schedule_render.js?v=20260924-2"></script>
-    <script src="/js/lesson_details.js?v=20261010-2"></script>
+    <script src="/js/lesson_details.js?v=20261121-1"></script>
     <script src="/js/schedule_history.js?v=20261114-1"></script>
-    <script src="/js/schedule.js?v=20261114-1"></script>
+    <script src="/js/schedule.js?v=20261121-1"></script>
+    <script src="/js/schedule_session.js?v=20261121-1"></script>
     <script src="/js/calendar_sync.js?v=20261114-1"></script>
-    <script src="/js/schedule_ux.js?v=20260831-10"></script>
+    <script src="/js/schedule_ux.js?v=20261121-1"></script>
     <script src="/js/schedule_planner.js?v=20261009-4"></script>
 <script src="/js/schedule_workspace.js?v=20261009-9"></script>
 </body>

@@ -75,6 +75,7 @@ const state = {
     totalActions: 0,
     proxyDiagnostics: null,
     ws: null,
+    wsOpening: false,
     wsConnected: false,
     wsBackoffMs: 1000,
     wsReconnects: 0,
@@ -1597,7 +1598,7 @@ function applyStatsPayload(payload) {
 }
 
 function scheduleWsReconnect() {
-    if (state.wsReconnectTimer !== null) return;
+    if (state.wsReconnectTimer !== null || localStorage.getItem("jwt_token") !== token) return;
 
     state.wsReconnects += 1;
     updateDiagnostics();
@@ -1611,8 +1612,8 @@ function scheduleWsReconnect() {
     }, waitMs);
 }
 
-function connectWebSocket() {
-    if (!token) return;
+async function connectWebSocket() {
+    if (!token || state.wsOpening || localStorage.getItem("jwt_token") !== token) return;
     if (
         state.ws &&
         (state.ws.readyState === WebSocket.CONNECTING || state.ws.readyState === WebSocket.OPEN)
@@ -1628,11 +1629,30 @@ function connectWebSocket() {
     const wsBase = window.getMpbWebSocketBase
         ? window.getMpbWebSocketBase()
         : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}`;
-    const wsUrl = `${wsBase}/ws/stats/total_actions?token=${encodeURIComponent(token)}`;
-
+    const path = "/ws/stats/total_actions";
     setConnectionState("connecting", t("stats.connection.connecting", "Connecting..."));
 
-    const socket = new WebSocket(wsUrl);
+    state.wsOpening = true;
+    let socket;
+    try {
+        const result = await fetchWithAuth("/auth/ws-ticket", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path }),
+            signal: AbortSignal.timeout(5000),
+        });
+        if (localStorage.getItem("jwt_token") !== token) return;
+        if (typeof result?.ticket !== "string" || !/^[0-9a-f]{64}$/.test(result.ticket)) {
+            throw new Error("Invalid live connection ticket");
+        }
+        socket = new WebSocket(`${wsBase}${path}`, ["matplobbot", `mpb-ticket.${result.ticket}`]);
+    } catch {
+        setConnectionState("warning", t("stats.connection.warning", "Connection error"));
+        scheduleWsReconnect();
+        return;
+    } finally {
+        state.wsOpening = false;
+    }
     state.ws = socket;
 
     socket.addEventListener("open", () => {

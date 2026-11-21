@@ -49,8 +49,12 @@
         });
     }
 
-    function loadCurriculumData({ group_id, discipline, lesson_date, signal }) {
+    function loadCurriculumData({ group_id, discipline, lesson_date, plan_id, discipline_id, signal }) {
         const params = new URLSearchParams({ group_id, discipline, lesson_date });
+        if (plan_id && discipline_id) {
+            params.set('plan_id', plan_id);
+            params.set('discipline_id', discipline_id);
+        }
         return requestJson(`${getBaseUrl()}/schedule/curriculum?${params}`, {
             signal, cache: "no-store",
         });

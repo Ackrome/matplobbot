@@ -113,7 +113,10 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
             ),
             TestClient(app) as client,
         ):
-            with client.websocket_connect("/ws/stats/total_actions") as websocket:
+            with client.websocket_connect(
+                "/ws/stats/total_actions", subprotocols=[ws_router.WS_PROTOCOL]
+            ) as websocket:
+                self.assertEqual(websocket.accepted_subprotocol, ws_router.WS_PROTOCOL)
                 self.assertEqual(websocket.receive_json(), initial_payload)
 
         self.assertFalse(ws_router.stats_manager.active_connections)
@@ -129,6 +132,7 @@ class TestAuthorizationGuards(unittest.IsolatedAsyncioTestCase):
         socket.client_state = ws_router.WebSocketState.CONNECTED
         manager = ws_router.ConnectionManager("deletion-test")
         await manager.connect(socket, {"id": 7, "role": "admin"}, admin_only=True)
+        socket.accept.assert_awaited_once_with(subprotocol=ws_router.WS_PROTOCOL)
         with patch.object(ws_router, "websocket_account_is_active", AsyncMock(return_value=False)):
             sent = await manager.send_personal_json({"private": "must not be sent"}, socket)
         self.assertFalse(sent)

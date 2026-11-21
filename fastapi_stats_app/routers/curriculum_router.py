@@ -1,16 +1,28 @@
 """Public cached assessment lookup and administrator-reviewed official PDF imports."""
 
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from shared_lib.services import curriculum_service as service
 from shared_lib.services.curriculum_documents import validate_official_document_url
+from shared_lib.services.schedule_freshness import (
+    ScheduleUnavailableError,
+    get_schedule_with_freshness,
+)
+from shared_lib.services.university_api import create_ruz_api_client
 
 from ..auth import require_admin
-from ..config import RATE_LIMIT_SCHEDULE_DATA
+from ..config import (
+    RATE_LIMIT_SCHEDULE_DATA,
+    SCHEDULE_INTERACTIVE_FRESHNESS_SECONDS,
+    SCHEDULE_INTERACTIVE_UPSTREAM_TIMEOUT_SECONDS,
+    SCHEDULE_REFRESH_FAILURE_COOLDOWN_SECONDS,
+    SCHEDULE_REFRESH_LOCK_TTL_SECONDS,
+)
 from ..rate_limit import enforce_rate_limit
 from .schedule_router import get_shared_http_session
 
@@ -104,9 +116,17 @@ async def get_course_assessments(
     group_id: str = Query(min_length=1, max_length=128),
     discipline: str = Query(min_length=1, max_length=500),
     lesson_date: date = Query(),
+    plan_id: int | None = Query(default=None, ge=1, le=2147483647),
+    discipline_id: int | None = Query(default=None, ge=1, le=2147483647),
 ):
     await enforce_rate_limit(request, scope="curriculum_lookup", settings=RATE_LIMIT_SCHEDULE_DATA)
-    return await service.lookup_curriculum(group_id.strip(), discipline.strip(), lesson_date)
+    return await service.lookup_curriculum(
+        group_id.strip(),
+        discipline.strip(),
+        lesson_date,
+        plan_id=plan_id,
+        discipline_id=discipline_id,
+    )
 
 
 @router.get("/schedule/curriculum/documents/{document_id}/{published_hash}.pdf")
@@ -114,6 +134,7 @@ async def reviewed_document(request: Request, document_id: int, published_hash: 
     await enforce_rate_limit(
         request, scope="curriculum_document", settings=RATE_LIMIT_SCHEDULE_DATA
     )
+
     data = await _result(service.get_curriculum_pdf(document_id, published_hash))
     return Response(
         data,
@@ -124,6 +145,63 @@ async def reviewed_document(request: Request, document_id: int, published_hash: 
             "Cache-Control": "public, max-age=3600, immutable",
         },
     )
+
+
+@router.get("/schedule/session")
+async def get_group_session(
+    request: Request,
+    group_id: str = Query(min_length=1, max_length=128),
+    semester: int | None = Query(default=None, ge=1, le=16),
+    reference_date: date | None = None,
+    include_dates: bool = False,
+    http_session=Depends(get_shared_http_session),
+):
+    await enforce_rate_limit(request, scope="curriculum_session", settings=RATE_LIMIT_SCHEDULE_DATA)
+    result = await service.lookup_curriculum_session(
+        group_id.strip(), reference_date or datetime.now(ZoneInfo("Europe/Moscow")).date(), semester
+    )
+    result["dates_status"] = "unchecked"
+    result["events"] = []
+    if not include_dates or result["status"] != "confirmed":
+        return result
+    start, end = result["term"]["start_date"], result["term"]["end_date"]
+    # Only a reviewed, bounded semester can induce a university request.
+    if not 0 <= (date.fromisoformat(end) - date.fromisoformat(start)).days <= 185:
+        return result
+    client = create_ruz_api_client(
+        http_session,
+        max_retries=1,
+        request_timeout_seconds=SCHEDULE_INTERACTIVE_UPSTREAM_TIMEOUT_SECONDS,
+    )
+    try:
+        schedule = await get_schedule_with_freshness(
+            client,
+            "group",
+            result["group_id"],
+            start,
+            end,
+            freshness_seconds=SCHEDULE_INTERACTIVE_FRESHNESS_SECONDS,
+            live_wait_seconds=3,
+            initial_live_wait_seconds=4,
+            lock_ttl_seconds=SCHEDULE_REFRESH_LOCK_TTL_SECONDS,
+            failure_cooldown_seconds=SCHEDULE_REFRESH_FAILURE_COOLDOWN_SECONDS,
+            require_coverage=True,
+        )
+    except (ScheduleUnavailableError, ConnectionError):
+        result["dates_status"] = "unavailable"
+        return result
+    bounds = schedule.covered_bounds
+    result["dates_status"] = (
+        "checked"
+        if bounds
+        and bounds[0] <= start <= end <= bounds[1]
+        and schedule.freshness in {"live", "fresh_cache"}
+        else "unavailable"
+    )
+    result["events"] = service.match_session_dates(
+        result["assessments"], schedule.schedule, start, end, group_id=result["group_id"]
+    )
+    return result
 
 
 @router.get("/curricula", dependencies=[Depends(require_admin)])

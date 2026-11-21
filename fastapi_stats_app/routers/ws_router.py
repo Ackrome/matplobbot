@@ -22,7 +22,14 @@ from shared_lib.database import (
 from shared_lib.models import WebAccount
 from shared_lib.redis_client import redis_client
 
-from ..auth import get_ws_user, require_ws_admin, resolve_account_role, session_is_active
+from ..auth import (
+    WS_PROTOCOL,
+    can_subscribe_user_updates,
+    get_ws_user,
+    require_ws_admin,
+    resolve_account_role,
+    session_is_active,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -66,7 +73,7 @@ class ConnectionManager:
     async def connect(
         self, websocket: WebSocket, user: dict, *, admin_only=False, target_user_id=None
     ):
-        await websocket.accept()
+        await websocket.accept(subprotocol=WS_PROTOCOL)
         self.active_connections.add(websocket)
         self.identities[websocket] = {
             "user": user,
@@ -157,10 +164,6 @@ last_sent_stats_data_str: str = ""
 last_checked_actions_count: int = -1
 STATS_MIN_POLL_SECONDS = 10
 STATS_MAX_IDLE_POLL_SECONDS = 15
-
-
-def can_subscribe_user_updates(user: dict, target_user_id: int) -> bool:
-    return user.get("role") == "admin" or user.get("telegram_id") == target_user_id
 
 
 async def periodic_stats_updater():

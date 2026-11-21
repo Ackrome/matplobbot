@@ -4,6 +4,7 @@ import asyncio
 import os
 import unittest
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 os.environ.setdefault("JWT_SECRET_KEY", "curriculum-api-test-secret-at-least-32-bytes")
@@ -342,6 +343,52 @@ class TestCurriculumAPI(unittest.TestCase):
             self.assertEqual({row["kind"] for row in lookup["assessments"]}, {"exam", "coursework"})
             snapshot = lookup["assessments"][0]["snapshot_url"]
             self.assertEqual(self.client.get(snapshot).content, original)
+            session_query = {"group_id": "test-group", "reference_date": "2026-10-09"}
+            with patch.object(api, "get_schedule_with_freshness", AsyncMock()) as fetch:
+                planned = self.client.get("/api/schedule/session", params=session_query).json()
+                fetch.assert_not_awaited()
+            self.assertEqual(planned["term"]["semester"], 7)
+            self.assertEqual(planned["dates_status"], "unchecked")
+            self.assertEqual(
+                {row["kind"] for row in planned["assessments"]}, {"exam", "coursework"}
+            )
+            assessment = {
+                "discipline": "Machine learning",
+                "date": "2027-01-18",
+                "beginLesson": "10:10",
+                "kindOfWork": "Экзамен",
+                "auditorium": "303",
+            }
+            lookup_schedule = AsyncMock(
+                return_value=SimpleNamespace(
+                    schedule=[
+                        assessment,
+                        {
+                            **assessment,
+                            "kindOfWork": "Консультация перед экзаменом",
+                            "date": "2027-01-17",
+                        },
+                        {**assessment, "discipline": "Machine learnin", "date": "2027-01-19"},
+                    ],
+                    freshness="live",
+                    covered_bounds=("2026-09-01", "2027-01-31"),
+                )
+            )
+            with patch.object(api, "get_schedule_with_freshness", lookup_schedule):
+                dated = self.client.get(
+                    "/api/schedule/session", params={**session_query, "include_dates": True}
+                ).json()
+                self.assertTrue(lookup_schedule.await_args.kwargs["require_coverage"])
+                self.assertEqual(dated["dates_status"], "checked")
+                self.assertEqual(
+                    [(row["date"], row["room"]) for row in dated["events"]], [("2027-01-18", "303")]
+                )
+                lookup_schedule.return_value.covered_bounds = None
+                partial = self.client.get(
+                    "/api/schedule/session", params={**session_query, "include_dates": True}
+                ).json()
+                self.assertEqual(partial["dates_status"], "unavailable")
+                self.assertEqual(partial["assessments"], planned["assessments"])
             spring_query = {
                 **query,
                 "lesson_date": "2027-02-02",

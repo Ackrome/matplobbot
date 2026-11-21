@@ -700,7 +700,9 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
         ):
             await jobs.check_for_schedule_updates(object(), ruz_api_client)
 
-        upsert_cache.assert_awaited_once_with("group", "123", schedule_data)
+        upsert_cache.assert_awaited_once_with(
+            "group", "123", schedule_data, coverage=jobs.get_semester_bounds()
+        )
         update_hashes.assert_awaited_once_with("group", "123", existing_hash)
 
     async def test_check_for_schedule_updates_commits_one_delivery_per_user(self):
@@ -934,7 +936,9 @@ class TestSchedulerJobs(unittest.IsolatedAsyncioTestCase):
         ruz_api_client.get_schedule.assert_awaited_once_with(
             "group", "162426", start="2026-08-25", finish="2027-01-31"
         )
-        upsert_cache.assert_awaited_once_with("group", "162426", schedule_data)
+        upsert_cache.assert_awaited_once_with(
+            "group", "162426", schedule_data, coverage=("2026-08-25", "2027-01-31")
+        )
 
     async def test_refresh_schedule_entity_ids_delegates_to_cache_refresh_service(self):
         ruz_api_client = SimpleNamespace()

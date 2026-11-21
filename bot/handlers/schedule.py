@@ -855,7 +855,10 @@ class ScheduleManager:
                 finish=sem_end,
             )
             await upsert_cached_schedule(
-                sub_data["sub_entity_type"], sub_data["sub_entity_id"], full_semester_schedule
+                sub_data["sub_entity_type"],
+                sub_data["sub_entity_id"],
+                full_semester_schedule,
+                coverage=(sem_start, sem_end),
             )
 
             start_date = datetime.now()
@@ -1050,8 +1053,7 @@ class ScheduleManager:
                 initial_text,
             ),
             name=(
-                "myschedule-message-refresh:"
-                f"{sub['entity_type']}:{sub['entity_id']}:{message_id}"
+                f"myschedule-message-refresh:{sub['entity_type']}:{sub['entity_id']}:{message_id}"
             ),
         )
         self._track_background_task(task)

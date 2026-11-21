@@ -253,8 +253,10 @@ class TestScheduleEntityIdRefresh(unittest.IsolatedAsyncioTestCase):
 
         upsert_cache.assert_has_awaits(
             [
-                call("group", "new-group-id", group_schedule),
-                call("person", "person-id", person_schedule),
+                call(
+                    "group", "new-group-id", group_schedule, coverage=("2026-08-25", "2027-01-31")
+                ),
+                call("person", "person-id", person_schedule, coverage=("2026-08-25", "2027-01-31")),
             ]
         )
         reassign_refs.assert_awaited_once_with("group", "old-group-id", "new-group-id", "PM23-1")
@@ -316,6 +318,8 @@ class TestScheduleEntityIdRefresh(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["refreshed"], 1)
         self.assertEqual(result["failed"], 0)
         self.assertEqual(result["items"][0]["lesson_count"], 0)
-        upsert_cache.assert_awaited_once_with("group", "group-id", [])
+        upsert_cache.assert_awaited_once_with(
+            "group", "group-id", [], coverage=("2026-08-25", "2027-01-31")
+        )
         expected_hash = hashlib.sha256(json.dumps([], sort_keys=True).encode()).hexdigest()
         update_hashes.assert_awaited_once_with("group", "group-id", expected_hash)

@@ -1,5 +1,10 @@
 # curriculum_service.py
 
+An approved alias connects a RUZ lesson to a published discipline when the
+group ID, plan ID, discipline ID, observed title and source PDF hash agree.
+Both lesson lookup and assessment date matching read the reviewed registry.
+[Registry maintenance](../data/wiki_curriculum_aliases.md)
+
 Stores official curriculum imports separately from administrator-reviewed assessment facts. It uses `CurriculumDocument` and `CurriculumGroup` from `shared_lib.models`, the shared SQLAlchemy session factory, and `curriculum_documents` for bounded official-host PDF downloads and parsing.
 
 ## Public operations and use

@@ -2814,3 +2814,36 @@ it does not train a max-margin SVM or solve the SVM quadratic program.
 If offline access is added later, update `service-worker.js` and its cache
 version together. Keep each visualization's colocated `wiki_*.md` file in sync
 with its public controls, dependencies and maintenance constraints.
+
+## Schedule, Studio and deployment reliability
+
+The timetable API reports `covered_bounds` alongside the requested
+`loaded_bounds`. Old snapshots can show saved classes while coverage is
+unverified. Requests outside the current semester use expiring Redis windows.
+Bot notifications and calendar subscriptions use the canonical semester
+snapshot. Table and list views distinguish unverified dates, dates hidden by
+filters and verified empty dates. Retry checks the open week.
+
+Choose **Session** from a group's timetable to list reviewed forms by semester.
+The first `GET /api/schedule/session` reads the curriculum. A second request
+checks the bound term in RUZ and attaches dates only to matching assessment
+types. Every planned form links to the reviewed PDF page. A scoped alias in
+`shared_lib/data/curriculum_aliases.json` requires reviewed group and RUZ
+identifiers and the current published document hash. The 2026/27 [PM24 and
+PM26 publication package](reports/curriculum-numeric-pipeline/pm24-pm26-2026-27.md)
+contains the source and group evidence.
+
+Studio stores draft versions by editing context. Reopening a file offers
+earlier local drafts individually. A successful save retires the recovered
+version only when its stored content still matches. The existing server
+revision comparison handles a recovered draft based on older text.
+
+The API exchanges authenticated sessions for short-lived, single-use
+WebSocket tickets scoped to one stream. Browser and smoke clients send the
+ticket through the WebSocket subprotocol header. Application and proxy logs
+mask or omit private calendar paths and credential-bearing requests.
+
+GitHub Actions follows the specific Jenkins queue item and build it submitted.
+Deployment passes after Jenkins reports success and archives smoke evidence
+for the matching source commit. The workflow summary links the queue item and
+build. Ambiguous submissions stop so a retry does not duplicate a deployment.

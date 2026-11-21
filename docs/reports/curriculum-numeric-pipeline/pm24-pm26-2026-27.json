@@ -1,0 +1,617 @@
+{
+  "version": 1,
+  "documents": [
+    {
+      "metadata": {
+        "title": "Прикладное машинное обучение — учебный план набора 2024",
+        "source_url": "https://www.fa.ru/upload/constructor/19c/moez0bhagwyvvpzxgntnpelhdyu0mnvu/UP.pdf",
+        "program": "01.03.02 Прикладная математика и информатика",
+        "profile": "Прикладное машинное обучение",
+        "campus": "Московский кампус",
+        "admission_year": 2024,
+        "study_form": "Очная",
+        "scan_layout": "fa_compact_v1"
+      },
+      "source_sha256": "e00a3c0c814cc6195f7cf6b035435b75e954f18751bfd64a9431d033977eecf4",
+      "pdf_file": "sources/plan-2024.pdf",
+      "assessments": [
+        {
+          "discipline_code": "Б.1.2.1.6",
+          "discipline_name": "Иностранный язык в профессиональной сфере",
+          "semester": 5,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.2.1.6: Зачёт, семестр 5."
+        },
+        {
+          "discipline_code": "Б.1.2.1.6",
+          "discipline_name": "Иностранный язык в профессиональной сфере",
+          "semester": 6,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.2.1.6: Экзамен, семестр 6."
+        },
+        {
+          "discipline_code": "Б.1.1.1.7",
+          "discipline_name": "Философия",
+          "semester": 5,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.1.7: Экзамен, семестр 5."
+        },
+        {
+          "discipline_code": "Б.1.1.1.8",
+          "discipline_name": "Информационное право",
+          "semester": 5,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.1.8: Экзамен, семестр 5."
+        },
+        {
+          "discipline_code": "Б.1.1.1.11",
+          "discipline_name": "Основы военной подготовки",
+          "semester": 5,
+          "kind": "graded_pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.1.11: Зачёт с оценкой, семестр 5."
+        },
+        {
+          "discipline_code": "Б.1.2.1.3",
+          "discipline_name": "Функциональный анализ",
+          "semester": 6,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.2.1.3: Зачёт, семестр 6."
+        },
+        {
+          "discipline_code": "Б.1.2.1.5",
+          "discipline_name": "Математическое и имитационное моделирование",
+          "semester": 6,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.2.1.5: Экзамен, семестр 6."
+        },
+        {
+          "discipline_code": "Б.1.2.1.8",
+          "discipline_name": "Технологии обработки больших данных",
+          "semester": 5,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.2.1.8: Экзамен, семестр 5."
+        },
+        {
+          "discipline_code": "Б.1.2.2.1.1",
+          "discipline_name": "Глубокое обучение",
+          "semester": 5,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.2.2.1.1: Экзамен, семестр 5."
+        },
+        {
+          "discipline_code": "Б.1.2.2.1.2",
+          "discipline_name": "Обработка текстов на естественных языках",
+          "semester": 6,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.2.2.1.2: Экзамен, семестр 6."
+        },
+        {
+          "discipline_code": "Б.1.2.2.1.3",
+          "discipline_name": "Рекомендательные системы и коллаборативная фильтрация",
+          "semester": 6,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.2.2.1.3: Экзамен, семестр 6."
+        },
+        {
+          "discipline_code": "Б.1.2.2.1.6",
+          "discipline_name": "Машинное зрение",
+          "semester": 6,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.2.2.1.6: Экзамен, семестр 6."
+        },
+        {
+          "discipline_code": "Б.1.2.2.1.7",
+          "discipline_name": "Машинное обучение в семантическом и сетевом анализе",
+          "semester": 6,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.2.2.1.7: Зачёт, семестр 6."
+        },
+        {
+          "discipline_code": "Б.1.2.2.1.7",
+          "discipline_name": "Машинное обучение в семантическом и сетевом анализе",
+          "semester": 6,
+          "kind": "coursework",
+          "page": 1,
+          "evidence": "С. 1, Б.1.2.2.1.7: Курсовая работа, семестр 6."
+        },
+        {
+          "discipline_code": "Б.1.2.2.1.8",
+          "discipline_name": "Методы оптимизации",
+          "semester": 5,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.2.2.1.8: Экзамен, семестр 5."
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.1.1",
+          "discipline_name": "Основы веб-разработки",
+          "semester": 6,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.2.2.2.1.1: Зачёт, семестр 6."
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.1.2",
+          "discipline_name": "Объектно-ориентированное программирование",
+          "semester": 6,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.2.2.2.1.2: Зачёт, семестр 6."
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.2.1",
+          "discipline_name": "Основы корпоративных информационных систем",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "С. 2, Б.1.2.2.2.2.1: Зачёт, семестр 6."
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.2.2",
+          "discipline_name": "Основы бухгалтерских информационных систем",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "С. 2, Б.1.2.2.2.2.2: Зачёт, семестр 6."
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.3.1",
+          "discipline_name": "Разработка эффективных вычислительных алгоритмов",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "С. 2, Б.1.2.2.2.3.1: Зачёт, семестр 6."
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.3.2",
+          "discipline_name": "Низкоуровневое программирование",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "С. 2, Б.1.2.2.2.3.2: Зачёт, семестр 6."
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.4.1",
+          "discipline_name": "Основы проектирования информационных систем",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "С. 2, Б.1.2.2.2.4.1: Зачёт, семестр 6."
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.5.1",
+          "discipline_name": "Методы визуализации данных",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "С. 2, Б.1.2.2.2.5.1: Зачёт, семестр 6."
+        },
+        {
+          "discipline_code": "Б.1.2.2.2.6.1",
+          "discipline_name": "Технологии параллельного программирования",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "С. 2, Б.1.2.2.2.6.1: Зачёт, семестр 6."
+        },
+        {
+          "discipline_code": "Б.2.3.1",
+          "discipline_name": "Учебно-научный семинар",
+          "semester": 6,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "С. 2, Б.2.3.1: Зачёт, семестр 6."
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "164377",
+          "group_name": "ПМ24-1",
+          "terms": [
+            {
+              "semester": 5,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            },
+            {
+              "semester": 6,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        },
+        {
+          "group_id": "164378",
+          "group_name": "ПМ24-2",
+          "terms": [
+            {
+              "semester": 5,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            },
+            {
+              "semester": 6,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        },
+        {
+          "group_id": "164379",
+          "group_name": "ПМ24-3",
+          "terms": [
+            {
+              "semester": 5,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            },
+            {
+              "semester": 6,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        },
+        {
+          "group_id": "164380",
+          "group_name": "ПМ24-4",
+          "terms": [
+            {
+              "semester": 5,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            },
+            {
+              "semester": 6,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        },
+        {
+          "group_id": "164381",
+          "group_name": "ПМ24-5",
+          "terms": [
+            {
+              "semester": 5,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            },
+            {
+              "semester": 6,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "title": "Прикладное машинное обучение — учебный план набора 2026",
+        "source_url": "https://www.fa.ru/upload/constructor/bab/kz6w05ci0g8kyx0ce4b290bmghokd2wm/uch_plan_PMiI_OP-PMO_PMO_2026.pdf",
+        "program": "01.03.02 Прикладная математика и информатика",
+        "profile": "Прикладное машинное обучение",
+        "campus": "Московский кампус",
+        "admission_year": 2026,
+        "study_form": "Очная",
+        "scan_layout": "fa_compact_v1"
+      },
+      "source_sha256": "520eb03ec15b90cf9a8675dac15e373522f4df96d7e68dea6e3aeb6e9f0d6bfe",
+      "pdf_file": "sources/plan-2026.pdf",
+      "assessments": [
+        {
+          "discipline_code": "Б.1.1.1.1",
+          "discipline_name": "Финансовый университет: история и современность",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.1.1: Зачёт, семестр 1."
+        },
+        {
+          "discipline_code": "Б.1.1.1.2",
+          "discipline_name": "История России",
+          "semester": 2,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.1.2: Экзамен, семестр 2."
+        },
+        {
+          "discipline_code": "Б.1.1.1.3",
+          "discipline_name": "Безопасность жизнедеятельности",
+          "semester": 2,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.1.3: Зачёт, семестр 2."
+        },
+        {
+          "discipline_code": "Б.1.1.1.4",
+          "discipline_name": "Физическая культура и спорт",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.1.4: Зачёт, семестр 1."
+        },
+        {
+          "discipline_code": "Б.1.1.1.5",
+          "discipline_name": "Иностранный язык",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.1.5: Зачёт, семестр 1."
+        },
+        {
+          "discipline_code": "Б.1.1.1.5",
+          "discipline_name": "Иностранный язык",
+          "semester": 2,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.1.5: Зачёт, семестр 2."
+        },
+        {
+          "discipline_code": "Б.1.1.1.9",
+          "discipline_name": "Экономическая теория",
+          "semester": 1,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.1.9: Экзамен, семестр 1."
+        },
+        {
+          "discipline_code": "Б.1.1.1.10",
+          "discipline_name": "Основы российской государственности",
+          "semester": 1,
+          "kind": "graded_pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.1.10: Зачёт с оценкой, семестр 1."
+        },
+        {
+          "discipline_code": "Б.1.1.2.1",
+          "discipline_name": "Математический анализ",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.2.1: Зачёт, семестр 1."
+        },
+        {
+          "discipline_code": "Б.1.1.2.1",
+          "discipline_name": "Математический анализ",
+          "semester": 2,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.2.1: Экзамен, семестр 2."
+        },
+        {
+          "discipline_code": "Б.1.1.2.2",
+          "discipline_name": "Дискретная математика",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.2.2: Зачёт, семестр 1."
+        },
+        {
+          "discipline_code": "Б.1.1.2.2",
+          "discipline_name": "Дискретная математика",
+          "semester": 2,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.2.2: Экзамен, семестр 2."
+        },
+        {
+          "discipline_code": "Б.1.1.2.3",
+          "discipline_name": "Теория вероятностей и математическая статистика",
+          "semester": 2,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.2.3: Экзамен, семестр 2."
+        },
+        {
+          "discipline_code": "Б.1.1.3.4",
+          "discipline_name": "Введение в специальность",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.3.4: Зачёт, семестр 1."
+        },
+        {
+          "discipline_code": "Б.1.1.3.5",
+          "discipline_name": "Алгоритмы и структуры данных в языке Python",
+          "semester": 1,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.3.5: Экзамен, семестр 1."
+        },
+        {
+          "discipline_code": "Б.1.1.3.5",
+          "discipline_name": "Алгоритмы и структуры данных в языке Python",
+          "semester": 2,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.3.5: Экзамен, семестр 2."
+        },
+        {
+          "discipline_code": "Б.1.1.3.6",
+          "discipline_name": "Практикум по программированию",
+          "semester": 1,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.3.6: Зачёт, семестр 1."
+        },
+        {
+          "discipline_code": "Б.1.1.3.6",
+          "discipline_name": "Практикум по программированию",
+          "semester": 2,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.3.6: Зачёт, семестр 2."
+        },
+        {
+          "discipline_code": "Б.1.1.3.7",
+          "discipline_name": "Обработка данных и моделирование в табличном редакторе",
+          "semester": 2,
+          "kind": "pass",
+          "page": 1,
+          "evidence": "С. 1, Б.1.1.3.7: Зачёт, семестр 2."
+        },
+        {
+          "discipline_code": "Б.1.2.1.1",
+          "discipline_name": "Технологии обработки данных",
+          "semester": 2,
+          "kind": "exam",
+          "page": 1,
+          "evidence": "С. 1, Б.1.2.1.1: Экзамен, семестр 2."
+        },
+        {
+          "discipline_code": "Б.2.3.1",
+          "discipline_name": "Учебно-научный семинар",
+          "semester": 2,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "С. 2, Б.2.3.1: Зачёт, семестр 2."
+        },
+        {
+          "discipline_code": "Б.4.1",
+          "discipline_name": "Элективные дисциплины по физической культуре и спорту",
+          "semester": 2,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "С. 2, Б.4.1: Зачёт, семестр 2."
+        },
+        {
+          "discipline_code": "Б.5.1",
+          "discipline_name": "Введение в искусственный интеллект",
+          "semester": 1,
+          "kind": "pass",
+          "page": 2,
+          "evidence": "С. 2, Б.5.1: Зачёт, семестр 1."
+        }
+      ],
+      "groups": [
+        {
+          "group_id": "165300",
+          "group_name": "ПМ26-1",
+          "terms": [
+            {
+              "semester": 1,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            },
+            {
+              "semester": 2,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        },
+        {
+          "group_id": "165301",
+          "group_name": "ПМ26-2",
+          "terms": [
+            {
+              "semester": 1,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            },
+            {
+              "semester": 2,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        },
+        {
+          "group_id": "165302",
+          "group_name": "ПМ26-3",
+          "terms": [
+            {
+              "semester": 1,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            },
+            {
+              "semester": 2,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        },
+        {
+          "group_id": "165303",
+          "group_name": "ПМ26-4",
+          "terms": [
+            {
+              "semester": 1,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            },
+            {
+              "semester": 2,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        },
+        {
+          "group_id": "165304",
+          "group_name": "ПМ26-5",
+          "terms": [
+            {
+              "semester": 1,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            },
+            {
+              "semester": 2,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        },
+        {
+          "group_id": "165305",
+          "group_name": "ПМ26-6",
+          "terms": [
+            {
+              "semester": 1,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            },
+            {
+              "semester": 2,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        },
+        {
+          "group_id": "165306",
+          "group_name": "ПМ26-7",
+          "terms": [
+            {
+              "semester": 1,
+              "start_date": "2026-09-01",
+              "end_date": "2027-01-25"
+            },
+            {
+              "semester": 2,
+              "start_date": "2027-02-02",
+              "end_date": "2027-06-28"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
